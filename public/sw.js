@@ -2,13 +2,12 @@
    ShredBlocks: Color Jam — Offline-First Service Worker (STOR-03)
    ========================================================================== */
 
-const CACHE_VERSION = 'shredblocks-v1.1.0';
+const CACHE_VERSION = 'shredblocks-v1.2.0';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 const APP_SHELL_URLS = [
   '/',
-  '/index.html',
   '/manifest.webmanifest',
   '/version.json',
   '/icon.svg',
@@ -20,14 +19,42 @@ const APP_SHELL_URLS = [
   '/apple-touch-icon.png',
 ];
 
+/**
+ * Strips the `redirected: true` flag from any fetched Response before caching or
+ * returning it for a `mode: 'navigate'` request. Per the WHATWG Fetch spec, top-level
+ * browser navigations use `redirect: 'manual'`, so returning a cached Response with
+ * `response.redirected === true` causes Chromium/Android WebAPK to briefly flash
+ * `ERR_FAILED` ("Can't reach this page") before retrying.
+ */
+async function stripRedirectFlag(response) {
+  if (!response || !response.redirected) {
+    return response;
+  }
+  const body = await response.clone().arrayBuffer();
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers),
+  });
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(SHELL_CACHE);
-      await cache.addAll(APP_SHELL_URLS);
 
-      // Pre-cache hashed /assets/* JS/CSS bundles referenced by /index.html on first install
-      const indexRes = await cache.match('/index.html');
+      await Promise.all(
+        APP_SHELL_URLS.map(async (url) => {
+          const res = await fetch(url, { cache: 'no-cache' });
+          if (res && res.ok) {
+            const cleanRes = await stripRedirectFlag(res);
+            await cache.put(url, cleanRes);
+          }
+        })
+      );
+
+      // Pre-cache hashed /assets/* JS/CSS bundles referenced by the root HTML shell on first install
+      const indexRes = await cache.match('/');
       if (indexRes) {
         try {
           const html = await indexRes.clone().text();
@@ -82,38 +109,41 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // 1. Navigation requests (HTML documents): Stale-While-Revalidate with guaranteed offline shell fallback
+  // 1. Navigation requests (HTML documents): Stale-While-Revalidate with guaranteed non-redirected shell
   if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
       (async () => {
         const shellCache = await caches.open(SHELL_CACHE);
-        const cachedIndex =
-          (await shellCache.match('/index.html')) || (await shellCache.match('/'));
+        const cachedRoot = await shellCache.match('/');
 
         const networkFetch = fetch(request)
           .then(async (response) => {
             if (response && response.ok) {
-              await shellCache.put('/index.html', response.clone());
+              const cleanResponse = await stripRedirectFlag(response);
+              await shellCache.put('/', cleanResponse.clone());
+              return cleanResponse;
             }
             return response;
           })
           .catch(() => null);
 
-        if (cachedIndex) {
+        if (cachedRoot) {
           event.waitUntil(networkFetch);
-          return cachedIndex;
+          return stripRedirectFlag(cachedRoot);
         }
 
         const networkResponse = await networkFetch;
-        if (networkResponse) return networkResponse;
+        if (networkResponse) return stripRedirectFlag(networkResponse);
 
-        return (
-          (await caches.match('/index.html')) ||
-          new Response('Offline - ShredBlocks App Shell', {
-            status: 503,
-            headers: { 'Content-Type': 'text/plain' },
-          })
-        );
+        const anyCachedShell = (await caches.match('/')) || (await caches.match('/index.html'));
+        if (anyCachedShell) {
+          return stripRedirectFlag(anyCachedShell);
+        }
+
+        return new Response('Offline - ShredBlocks App Shell', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain' },
+        });
       })()
     );
     return;
@@ -124,22 +154,24 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       const cached = await caches.match(request);
       if (cached) {
-        return cached;
+        return stripRedirectFlag(cached);
       }
 
       try {
         const response = await fetch(request);
         if (response && response.ok && response.type === 'basic') {
+          const cleanResponse = await stripRedirectFlag(response);
           const targetCacheName = APP_SHELL_URLS.includes(url.pathname)
             ? SHELL_CACHE
             : RUNTIME_CACHE;
           const cache = await caches.open(targetCacheName);
-          await cache.put(request, response.clone());
+          await cache.put(request, cleanResponse.clone());
+          return cleanResponse;
         }
         return response;
       } catch {
         const fallback = await caches.match(url.pathname);
-        if (fallback) return fallback;
+        if (fallback) return stripRedirectFlag(fallback);
         return new Response('', { status: 504, statusText: 'Offline' });
       }
     })()

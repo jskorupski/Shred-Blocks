@@ -3,7 +3,7 @@
   "name": "ShredBlocks: Color Jam",
   "short_name": "ShredBlocks",
   "description": "100% Free, Offline-First 3D Polyomino Color-Sort & Shredder Puzzle Game.",
-  "start_url": "/?source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

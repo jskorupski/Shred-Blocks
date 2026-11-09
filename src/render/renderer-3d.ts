@@ -742,7 +742,8 @@ export class Renderer3D {
   private initContext(): void {
     try {
       const gl = this.canvas.getContext('webgl2', {
-        alpha: false,
+        alpha: true,
+        premultipliedAlpha: false,
         depth: true,
         stencil: false,
         antialias: true,
@@ -1368,6 +1369,115 @@ export class Renderer3D {
     this.qualityGovernor.setActiveParticles(active);
   }
 
+  /**
+   * Spawns continuous GPU-instanced ambient sanctuary motes and ready-gate roller sparks (`IDLE-04`)
+   * when `reducedMotion === false` so the idle 3D courtyard feels alive and tactile.
+   */
+  private spawnAmbientCourtyardMotes(
+    board: BoardState,
+    options: RenderSceneOptions,
+    dtSec: number,
+    timeSec: number
+  ): void {
+    if (options.reducedMotion) return;
+    const isUltra = this.qualityGovernor.getActiveTier() === 'ULTRA_120';
+    const spawnIntervalSec = isUltra ? 0.095 : 0.18;
+    const maxAmbientCap = isUltra ? 54 : 26;
+
+    this.ambientMoteAccumSec = Math.min(0.5, this.ambientMoteAccumSec + dtSec);
+    if (this.ambientMoteAccumSec < spawnIntervalSec) return;
+
+    const pStyle = options.equippedParticle ?? 'micro_cubes';
+    let stepIndex = Math.floor(timeSec * 11.0);
+
+    while (this.ambientMoteAccumSec >= spawnIntervalSec) {
+      this.ambientMoteAccumSec -= spawnIntervalSec;
+      stepIndex++;
+      if (this.activeParticleCount >= maxAmbientCap) break;
+
+      const readyGates = board.gates.filter(
+        (g) => g.shutterOpen && g.shutterLockColor === 0 && g.iceCount <= 0
+      );
+
+      // Alternate between Gate Roller Intake Sparks and Floating Block/Courtyard Shimmer Motes
+      if (readyGates.length > 0 && stepIndex % 2 === 0) {
+        const gate = readyGates[stepIndex % readyGates.length];
+        const cId = getGateActiveColor(gate);
+        const [r, g, b] = this.getColorRgb(cId, Boolean(options.highContrast));
+        const isHoriz = gate.edge === 'TOP' || gate.edge === 'BOTTOM';
+        const spanFrac = 0.15 + ((stepIndex * 0.381966) % 0.7);
+        const along = gate.spanStart + gate.spanLength * spanFrac;
+        const gx = isHoriz
+          ? along
+          : gate.edge === 'LEFT'
+            ? -0.14
+            : board.cols + 0.14;
+        const gy = !isHoriz
+          ? along
+          : gate.edge === 'TOP'
+            ? -0.14
+            : board.rows + 0.14;
+        const [nx, ny] = getGateOutwardNormal(gate.edge);
+
+        const idx = this.particleWriteCursor * PARTICLE_STRIDE;
+        this.particleWriteCursor = (this.particleWriteCursor + 1) % MAX_PARTICLES;
+        this.particlePool[idx + 0] = gx;
+        this.particlePool[idx + 1] = gy;
+        this.particlePool[idx + 2] = 0.42;
+        this.particlePool[idx + 3] = -nx * 0.55 + Math.sin(timeSec * 3.7 + stepIndex) * 0.32;
+        this.particlePool[idx + 4] = -ny * 0.55 + Math.cos(timeSec * 3.1 + stepIndex) * 0.32;
+        this.particlePool[idx + 5] = 2.25 + (stepIndex % 3) * 0.22;
+        this.particlePool[idx + 6] = Math.min(1, r * 0.85 + 0.2);
+        this.particlePool[idx + 7] = Math.min(1, g * 0.85 + 0.2);
+        this.particlePool[idx + 8] = Math.min(1, b * 0.85 + 0.18);
+        this.particlePool[idx + 9] = pStyle === 'soap_bubbles' ? 0.105 : 0.082;
+        this.particlePool[idx + 10] = 0.001;
+        this.particlePool[idx + 11] = 0.62;
+        this.particlePool[idx + 12] = stepIndex * 0.9;
+        this.particlePool[idx + 13] = (stepIndex % 2 === 0 ? 1 : -1) * 5.2;
+      } else {
+        const activeBlocks = board.blocks.filter((blk) => blk.status === 'ACTIVE');
+        let mx = ((stepIndex * 1.6180339) % 1) * board.cols;
+        let my = ((stepIndex * 2.4142135) % 1) * board.rows;
+        let mr = 1.0;
+        let mg = 0.88;
+        let mb = 0.52;
+
+        if (activeBlocks.length > 0) {
+          const blk = activeBlocks[stepIndex % activeBlocks.length];
+          const shape = getShape(blk.shapeId);
+          const cell = shape.cells[stepIndex % shape.cells.length] ?? shape.cells[0];
+          const jitterX = 0.2 + ((stepIndex * 0.618) % 0.6);
+          const jitterY = 0.2 + ((stepIndex * 0.754) % 0.6);
+          mx = blk.x + cell[1] + jitterX;
+          my = blk.y + cell[0] + jitterY;
+          const cId = getActiveColor(blk.colorStack, blk.colorCursor);
+          const [br, bg, bb] = this.getColorRgb(cId, Boolean(options.highContrast));
+          mr = Math.min(1, br * 0.68 + 0.35);
+          mg = Math.min(1, bg * 0.68 + 0.32);
+          mb = Math.min(1, bb * 0.68 + 0.24);
+        }
+
+        const idx = this.particleWriteCursor * PARTICLE_STRIDE;
+        this.particleWriteCursor = (this.particleWriteCursor + 1) % MAX_PARTICLES;
+        this.particlePool[idx + 0] = mx;
+        this.particlePool[idx + 1] = my;
+        this.particlePool[idx + 2] = 0.62;
+        this.particlePool[idx + 3] = Math.cos(timeSec * 2.3 + stepIndex) * 0.35;
+        this.particlePool[idx + 4] = Math.sin(timeSec * 2.7 + stepIndex) * 0.35;
+        this.particlePool[idx + 5] = 2.45 + (stepIndex % 4) * 0.18;
+        this.particlePool[idx + 6] = mr;
+        this.particlePool[idx + 7] = mg;
+        this.particlePool[idx + 8] = mb;
+        this.particlePool[idx + 9] = pStyle === 'soap_bubbles' ? 0.11 : 0.086;
+        this.particlePool[idx + 10] = 0.001;
+        this.particlePool[idx + 11] = 0.68;
+        this.particlePool[idx + 12] = stepIndex * 1.2;
+        this.particlePool[idx + 13] = (stepIndex % 2 === 0 ? 1 : -1) * 4.4;
+      }
+    }
+  }
+
   private syncSnapshots(board: BoardState): void {
     this.lastBoardLevelId = board.levelId;
     this.lastSessionShredded = board.sessionBlocksShredded;
@@ -1599,7 +1709,9 @@ export class Renderer3D {
     }
 
     const dtSec = options.dtSec ?? 1 / 60;
+    const timeSec = options.timeSec ?? (performance.now() - this.startTimeMs) * 0.001;
     this.detectAutomaticShredEvents(board, options);
+    this.spawnAmbientCourtyardMotes(board, options, dtSec, timeSec);
     this.stepParticles(dtSec);
 
     const aspect =
@@ -1814,13 +1926,18 @@ export class Renderer3D {
     const pulse = 0.5 + 0.5 * Math.sin(timeSec * 6.0);
 
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(palette.bgClear[0], palette.bgClear[1], palette.bgClear[2], 1.0);
+    gl.clearColor(0.0, 0.0, 0.0, 0.0);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFuncSeparate(
+      gl.SRC_ALPHA,
+      gl.ONE_MINUS_SRC_ALPHA,
+      gl.ONE,
+      gl.ONE_MINUS_SRC_ALPHA
+    );
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     gl.useProgram(this.mainProgram);
@@ -1922,10 +2039,17 @@ export class Renderer3D {
         }
 
         const checker = (r + c) % 2 === 0 ? palette.floorTileA : palette.floorTileB;
-        const sheen =
-          !this.lastOptions.reducedMotion
-            ? Math.pow(Math.max(0, Math.sin(timeSec * 0.85 - (c + r) * 0.42)), 5) * 0.035
-            : 0;
+        const primaryWave = Math.pow(
+          Math.max(0, Math.sin(timeSec * 1.45 - (c * 0.58 + r * 0.46))),
+          3
+        );
+        const crossWave = Math.pow(
+          Math.max(0, Math.cos(timeSec * 1.05 + (c - r) * 0.52)),
+          4
+        );
+        const sheen = !this.lastOptions.reducedMotion
+          ? primaryWave * 0.078 + crossWave * 0.036
+          : 0;
         const pathColorId = (floorColor[idx] ?? 0) as ColorId;
 
         if (pathColorId > 0) {
@@ -1995,13 +2119,19 @@ export class Renderer3D {
             pb,
             1.0
           );
-          // 3D rotated architectural diamond capital plinth on top of the stone pillar
+          // 3D rotated architectural diamond capital plinth on top of the stone pillar (`IDLE-05`)
+          const pillarBobZ = !this.lastOptions.reducedMotion
+            ? Math.sin(timeSec * 2.8 + r * 0.9 + c * 1.1) * 0.024
+            : 0;
+          const pillarSpinZ = !this.lastOptions.reducedMotion
+            ? Math.PI * 0.25 + timeSec * 0.95
+            : Math.PI * 0.25;
           this.drawMesh(
             gl,
             ENVIRONMENT_MESHES.unitParticleCube,
             c + 0.5,
             r + 0.5,
-            0.652,
+            0.652 + pillarBobZ,
             0.38,
             0.38,
             0.056,
@@ -2010,10 +2140,21 @@ export class Renderer3D {
             Math.min(1, pb * 0.78 + 0.12),
             1.0,
             0,
-            Math.PI * 0.25,
+            pillarSpinZ,
             0
           );
-          this.drawAtlasBadge(gl, 'DIAMOND', c + 0.5, r + 0.5, 0.686, 0.36, 0.98, 0.86, 0.58, 0.95);
+          this.drawAtlasBadge(
+            gl,
+            'DIAMOND',
+            c + 0.5,
+            r + 0.5,
+            0.686 + pillarBobZ,
+            0.36,
+            0.98,
+            0.86,
+            0.58,
+            0.95
+          );
         }
       }
     }
@@ -2218,7 +2359,10 @@ export class Renderer3D {
           const nextColor = nextSpec.colorStack[0];
           const [nr, ng, nb] = this.getColorRgb(nextColor, highContrast);
 
-          // Framed floor spawn pad across nextSpec shape footprint (`R3D-08`)
+          // Framed floor spawn pad across nextSpec shape footprint (`R3D-08`, `IDLE-05`)
+          const genPulse = !this.lastOptions.reducedMotion
+            ? 0.5 + 0.5 * Math.sin(timeSec * 3.8 + gen.col * 0.9)
+            : 0.5;
           const spawnShape = getShape(nextSpec.shapeId);
           for (const [dr, dc] of spawnShape.cells) {
             const sc = gen.spawnCol + dc;
@@ -2236,7 +2380,7 @@ export class Renderer3D {
                 nr,
                 ng,
                 nb,
-                0.32,
+                0.24 + 0.22 * genPulse,
                 0,
                 0,
                 4
@@ -2244,13 +2388,16 @@ export class Renderer3D {
             }
           }
 
-          // 3D beveled colored preview block core emerging from the generator chimney
+          // 3D beveled colored preview block core emerging from the generator chimney (`IDLE-05`)
+          const previewBobZ = !this.lastOptions.reducedMotion
+            ? Math.sin(timeSec * 3.8 + gen.col) * 0.034
+            : 0;
           this.drawMesh(
             gl,
             ENVIRONMENT_MESHES.unitParticleCube,
             gen.col + 0.5,
             gen.row + 0.34,
-            0.735,
+            0.735 + previewBobZ,
             0.62,
             0.36,
             0.065,
@@ -2268,7 +2415,7 @@ export class Renderer3D {
               `CB_${nextColor}`,
               gen.col + 0.5,
               gen.row + 0.34,
-              0.774,
+              0.774 + previewBobZ,
               0.24,
               1.0,
               1.0,
@@ -2467,19 +2614,25 @@ export class Renderer3D {
         1.0
       );
 
-      // Spinning 3D Shredder Roller cylinder inside the gate channel (`BUG-05`: fast spin only when actively shredding or targeted by drag)
+      // Spinning 3D Shredder Roller cylinder + Breathing Threshold Floor Aura (`IDLE-03`)
       const gateReady =
         gate.shutterOpen && gate.shutterLockColor === 0 && gate.iceCount <= 0;
       const isGateActivelyShredding = this.activeVisualShreds.some(
         (a) => a.gateIndex === gate.index
       );
       const isGateDragTargeted = this.lastOptions.dragEligibleGateIndex === gate.index;
+      const gatePulse = !this.lastOptions.reducedMotion
+        ? 0.5 + 0.5 * Math.sin(timeSec * 3.8 + gate.index * 1.4)
+        : 0.5;
+      const rollerGlint = !this.lastOptions.reducedMotion && gateReady
+        ? 0.12 * gatePulse
+        : 0;
       const rollerSpeed =
         !gateReady || this.lastOptions.reducedMotion
           ? 0.0
           : isGateActivelyShredding || isGateDragTargeted
-            ? 5.8
-            : 0.72;
+            ? 6.4
+            : 2.45;
       const rollerSpin = gate.rollerPhase + timeSec * rollerSpeed;
       this.drawMesh(
         gl,
@@ -2488,15 +2641,62 @@ export class Renderer3D {
         rollerY,
         0.34,
         rollerLen * 0.92,
-        0.13,
-        0.13,
-        Math.min(1, gr * 0.85 + 0.18),
-        Math.min(1, gg * 0.85 + 0.18),
-        Math.min(1, gb * 0.85 + 0.18),
+        0.135,
+        0.135,
+        Math.min(1, gr * 0.85 + 0.18 + rollerGlint),
+        Math.min(1, gg * 0.85 + 0.18 + rollerGlint),
+        Math.min(1, gb * 0.85 + 0.18 + rollerGlint * 0.8),
         1.0,
         rollerSpin,
         rollerRotZ
       );
+
+      // Breathing Threshold Intake Floor Glow on ready gates (`IDLE-03`)
+      if (gateReady) {
+        const auraDepth = 0.42 + 0.12 * gatePulse;
+        let auraX = 0;
+        let auraY = 0;
+        let auraW = 1;
+        let auraH = 1;
+        if (gate.edge === 'TOP') {
+          auraX = gate.spanStart + 0.04;
+          auraY = 0.01;
+          auraW = gate.spanLength - 0.08;
+          auraH = auraDepth;
+        } else if (gate.edge === 'BOTTOM') {
+          auraX = gate.spanStart + 0.04;
+          auraY = rows - auraDepth - 0.01;
+          auraW = gate.spanLength - 0.08;
+          auraH = auraDepth;
+        } else if (gate.edge === 'LEFT') {
+          auraX = 0.01;
+          auraY = gate.spanStart + 0.04;
+          auraW = auraDepth;
+          auraH = gate.spanLength - 0.08;
+        } else {
+          auraX = cols - auraDepth - 0.01;
+          auraY = gate.spanStart + 0.04;
+          auraW = auraDepth;
+          auraH = gate.spanLength - 0.08;
+        }
+        this.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.overlayQuad,
+          auraX,
+          auraY,
+          0.007,
+          Math.max(0.2, auraW),
+          Math.max(0.2, auraH),
+          1.0,
+          Math.min(1, gr * 0.8 + 0.2),
+          Math.min(1, gg * 0.8 + 0.2),
+          Math.min(1, gb * 0.8 + 0.2),
+          0.14 + 0.16 * gatePulse,
+          0,
+          0,
+          4
+        );
+      }
 
       // Toggling Shutter Side-Posts & Status Bar (`R3D-08`)
       if (gate.togglesOnClear) {
@@ -2680,6 +2880,9 @@ export class Renderer3D {
           : rollerY + (gate.edge === 'TOP' ? -0.18 : 0.18);
         const barW = isHorizEdge ? 0.5 : 0.16;
         const barH = !isHorizEdge ? 0.5 : 0.16;
+        const pipBobZ = !this.lastOptions.reducedMotion
+          ? Math.sin(timeSec * 3.4 + q * 1.1 + gate.index * 0.8) * 0.025
+          : 0;
 
         // Dark housing bezel behind queued color bar
         this.drawMesh(
@@ -2687,7 +2890,7 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.unitParticleCube,
           px,
           py,
-          0.62,
+          0.62 + pipBobZ,
           barW + 0.08,
           barH + 0.08,
           0.11,
@@ -2702,7 +2905,7 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.unitParticleCube,
           px,
           py,
-          0.65,
+          0.65 + pipBobZ,
           barW,
           barH,
           0.12,
@@ -2712,7 +2915,18 @@ export class Renderer3D {
           1.0
         );
         if (colorblind) {
-          this.drawAtlasBadge(gl, `CB_${nextCol}`, px, py, 0.72, 0.15, 1.0, 1.0, 1.0, 0.96);
+          this.drawAtlasBadge(
+            gl,
+            `CB_${nextCol}`,
+            px,
+            py,
+            0.72 + pipBobZ,
+            0.15,
+            1.0,
+            1.0,
+            1.0,
+            0.96
+          );
         }
       }
     }
@@ -3129,6 +3343,38 @@ export class Renderer3D {
       gl.enable(gl.CULL_FACE);
     }
 
+    // Identify all idle movable blocks so we can cycle the Staggered Spotlight Double-Bounce Hop (`IDLE-02`)
+    const idleMovableBlockIds: number[] = [];
+    for (const blk of board.blocks) {
+      if (
+        blk.status === 'ACTIVE' &&
+        blk.iceCount === 0 &&
+        !blk.chained &&
+        blk.ropeColor === 0 &&
+        !draggedGroupIds.has(blk.id) &&
+        blk.liftAlpha <= 0.05
+      ) {
+        idleMovableBlockIds.push(blk.id);
+      }
+    }
+    const spotlightCycleSec = 1.75;
+    const spotlightHopWindowSec = 0.68;
+    const spotlightCycleIndex = Math.floor(timeSec / spotlightCycleSec);
+    const spotlightPhaseSec = timeSec - spotlightCycleIndex * spotlightCycleSec;
+    const spotlightBlockId =
+      !reducedMotion &&
+      !anyDragActive &&
+      idleMovableBlockIds.length > 0 &&
+      spotlightPhaseSec < spotlightHopWindowSec
+        ? idleMovableBlockIds[spotlightCycleIndex % idleMovableBlockIds.length]
+        : -1;
+    const spotlightHopT =
+      spotlightBlockId >= 0 ? spotlightPhaseSec / spotlightHopWindowSec : 0;
+    const spotlightHopEnv =
+      spotlightBlockId >= 0
+        ? Math.sin(spotlightHopT * Math.PI) * Math.abs(Math.sin(spotlightHopT * Math.PI * 2.0))
+        : 0;
+
     for (const block of board.blocks) {
       if (block.status === 'CLEARED') continue;
 
@@ -3139,16 +3385,43 @@ export class Renderer3D {
       const layersLeft = getLayersRemaining(block.colorStack, block.colorCursor);
 
       const isGrabbed = draggedGroupIds.has(block.id) || block.liftAlpha > 0.05;
-      const colorMul = isGrabbed ? 1.14 : anyDragActive ? 0.88 : 1.0;
+      const isIdleMovable =
+        !reducedMotion &&
+        !isGrabbed &&
+        block.iceCount === 0 &&
+        !block.chained &&
+        block.ropeColor === 0;
+      const isSpotlightHopping = isIdleMovable && block.id === spotlightBlockId;
+      const blockHopEnv = isSpotlightHopping ? spotlightHopEnv : 0;
+
+      // Diagonal harmonic wave across the courtyard (`IDLE-01`)
+      const wavePhase =
+        timeSec * 3.4 - (block.col * 0.72 + block.row * 0.58) + block.id * 0.55;
+      const wave01 = isIdleMovable ? 0.5 + 0.5 * Math.sin(wavePhase) : 0;
+
+      // Bomb blocks also throb with an urgent rhythmic heartbeat (`IDLE-05`)
+      const isBombBlock = !reducedMotion && block.bombMax > 0 && block.bombCount > 0;
+      const bombHeartbeat = isBombBlock
+        ? (0.5 + 0.5 * Math.sin(timeSec * (block.bombCount <= 4 ? 9.2 : 4.8) + block.id)) *
+          (block.bombCount <= 4 ? 0.052 : 0.028)
+        : 0;
+
+      const idleColorBoost = isIdleMovable
+        ? wave01 * 0.085 + blockHopEnv * 0.14
+        : bombHeartbeat * 1.4;
+      const colorMul = isGrabbed
+        ? 1.14
+        : anyDragActive
+          ? 0.88
+          : 1.0 + idleColorBoost;
       const r = Math.min(1, rawR * colorMul);
       const g = Math.min(1, rawG * colorMul);
       const b = Math.min(1, rawB * colorMul);
 
-      // Idle harmonic breathing on movable blocks + dynamic hover bob when grabbed (`Pitfall 5B`)
-      const idleBreathZ =
-        !reducedMotion && !isGrabbed && block.iceCount === 0 && !block.chained
-          ? Math.sin(timeSec * 2.5 + block.id * 0.85) * 0.011
-          : 0;
+      // Punchy 3D vertical buoyancy + Spotlight Double-Bounce Hop (`IDLE-01`, `IDLE-02`)
+      const idleBreathZ = isIdleMovable
+        ? wave01 * 0.088 + blockHopEnv * 0.135
+        : bombHeartbeat * 0.65;
       const grabHoverZ =
         !reducedMotion && isGrabbed
           ? Math.sin(timeSec * 7.2) * 0.022 * Math.min(1, block.liftAlpha)
@@ -3156,17 +3429,42 @@ export class Renderer3D {
       const zLift =
         Math.max(0, Math.min(1, block.liftAlpha)) * 0.46 + grabHoverZ + idleBreathZ;
 
-      // Knock-on scale bounce + grabbed scale pop (`PLAN-01`, `Pitfall 4A`: centroid-compensated)
+      // Knock-on scale bounce + grabbed scale pop + idle breathing scale (`IDLE-01`, `IDLE-02`)
       const bounceRem = this.blockBounceMap.get(block.id) ?? 0;
       const bouncePop =
         bounceRem > 0 && !reducedMotion
           ? Math.sin((1.0 - bounceRem / 0.34) * Math.PI) * 0.14
           : 0;
-      const scaleXY = 1.0 + 0.05 * Math.min(1, block.liftAlpha) + bouncePop;
-      const scaleZ = 1.0 + 0.06 * Math.min(1, block.liftAlpha) + bouncePop * 0.8;
+      const idleScaleXY = isIdleMovable
+        ? Math.sin(wavePhase) * 0.024 + blockHopEnv * 0.048
+        : bombHeartbeat;
+      const idleScaleZ = isIdleMovable
+        ? Math.sin(wavePhase) * 0.036 + blockHopEnv * 0.068
+        : bombHeartbeat;
+      const scaleXY =
+        1.0 + 0.05 * Math.min(1, block.liftAlpha) + bouncePop + idleScaleXY;
+      const scaleZ =
+        1.0 + 0.06 * Math.min(1, block.liftAlpha) + bouncePop * 0.8 + idleScaleZ;
 
-      let drawX = block.x;
-      let drawY = block.y;
+      // Axis-advertising micro-drift along free movement lanes (`IDLE-01`)
+      let idleDriftX = 0;
+      let idleDriftY = 0;
+      if (isIdleMovable) {
+        const hopWiggle = isSpotlightHopping
+          ? Math.sin(spotlightHopT * Math.PI * 4.0) * 0.038
+          : 0;
+        if (block.axisLock === 'H') {
+          idleDriftX = Math.sin(timeSec * 3.1 + block.id * 1.3) * 0.034 + hopWiggle;
+        } else if (block.axisLock === 'V') {
+          idleDriftY = Math.sin(timeSec * 3.1 + block.id * 1.3) * 0.034 + hopWiggle;
+        } else {
+          idleDriftX = Math.sin(timeSec * 2.4 + block.id * 1.1) * 0.018 + hopWiggle * 0.7;
+          idleDriftY = Math.cos(timeSec * 2.1 + block.id * 0.9) * 0.018;
+        }
+      }
+
+      let drawX = block.x + idleDriftX;
+      let drawY = block.y + idleDriftY;
 
       // Damped spring rebound / immobile block tap shake (`R3D-01`)
       if (block.reboundTimerMs > 0) {
@@ -3217,15 +3515,16 @@ export class Renderer3D {
         gl.uniform1i(this.uUseClipPlane, 0);
       }
 
-      // Dynamic floor drop shadow + energized selection rim halo when grabbed/lifted (`Feedback #4`)
-      if (block.liftAlpha > 0.02) {
+      // Dynamic floor drop shadow + energized selection rim halo when grabbed/lifted or spotlight-hopping (`Feedback #4`, `IDLE-02`)
+      const shadowAlpha = Math.max(block.liftAlpha, blockHopEnv * 0.56);
+      if (shadowAlpha > 0.02) {
         for (const [dr, dc] of shape.cells) {
           // Crisp offset drop shadow on floor
           this.drawMesh(
             gl,
             ENVIRONMENT_MESHES.overlayQuad,
-            drawX + dc + 0.12,
-            drawY + dr + 0.14,
+            drawX + dc + 0.12 * shadowAlpha,
+            drawY + dr + 0.14 * shadowAlpha,
             0.008,
             0.92,
             0.92,
@@ -3233,12 +3532,12 @@ export class Renderer3D {
             0.01,
             0.02,
             0.05,
-            0.46 * block.liftAlpha,
+            0.46 * shadowAlpha,
             0,
             0,
             4
           );
-          // Energized pulsing block-tinted selection rim halo around lifted block
+          // Energized pulsing block-tinted selection rim halo around lifted or spotlight-hopping block
           this.drawMesh(
             gl,
             ENVIRONMENT_MESHES.overlayQuad,
@@ -3251,7 +3550,7 @@ export class Renderer3D {
             Math.min(1, rawR * 0.65 + 0.35),
             Math.min(1, rawG * 0.65 + 0.35),
             Math.min(1, rawB * 0.65 + 0.35),
-            (0.42 + 0.22 * pulse) * block.liftAlpha,
+            (0.42 + 0.22 * pulse) * shadowAlpha,
             0,
             0,
             4
@@ -3801,17 +4100,27 @@ export class Renderer3D {
         );
       }
 
-      // 2) Payload / Modifier Badge (`bomb`, `hasKey`, `scissorColor`, `shutterGemColor`, `isStar`) via Sculpted 3D Medallion
+      // 2) Payload / Modifier Badge (`bomb`, `hasKey`, `scissorColor`, `shutterGemColor`, `isStar`) via Sculpted 3D Medallion (`IDLE-05`)
+      const payBobZ = !reducedMotion
+        ? Math.sin(timeSec * 3.6 + block.id * 0.9) * 0.024
+        : 0;
+      const payPulseScale = !reducedMotion
+        ? payScale * (1.0 + Math.sin(timeSec * 3.6 + block.id * 0.9) * 0.065)
+        : payScale;
+
       if (block.bombMax > 0 && block.bombCount > 0) {
         const urgent = block.bombCount <= 3 ? 0.65 + 0.35 * pulse : 1.0;
+        const bombMedScale = !reducedMotion
+          ? payScale * (1.0 + bombHeartbeat * 1.65)
+          : payScale;
         const twoDigit = block.bombCount >= 10;
         const bombBadgeZ = this.drawBadgeMedallion3D(
           gl,
           payCx,
           payCy,
-          zMedallionBase,
-          0.74 * payScale,
-          0.46 * payScale,
+          zMedallionBase + payBobZ * 0.6,
+          0.74 * bombMedScale,
+          0.46 * bombMedScale,
           r,
           g,
           b
@@ -3819,10 +4128,10 @@ export class Renderer3D {
         this.drawAtlasBadge(
           gl,
           'BADGE_BOMB',
-          payCx - (twoDigit ? 0.2 : 0.15) * payScale,
+          payCx - (twoDigit ? 0.2 : 0.15) * bombMedScale,
           payCy,
           bombBadgeZ,
-          (twoDigit ? 0.32 : 0.35) * payScale,
+          (twoDigit ? 0.32 : 0.35) * bombMedScale,
           1.0,
           0.86 * urgent,
           0.3 * urgent,
@@ -3831,10 +4140,10 @@ export class Renderer3D {
         this.drawNumberBadges(
           gl,
           block.bombCount,
-          payCx + (twoDigit ? 0.16 : 0.15) * payScale,
+          payCx + (twoDigit ? 0.16 : 0.15) * bombMedScale,
           payCy,
           bombBadgeZ + 0.002,
-          (twoDigit ? 0.3 : 0.35) * payScale,
+          (twoDigit ? 0.3 : 0.35) * bombMedScale,
           1.0,
           0.97,
           0.48
@@ -3844,9 +4153,9 @@ export class Renderer3D {
           gl,
           payCx,
           payCy,
-          zMedallionBase,
-          0.52 * payScale,
-          0.52 * payScale,
+          zMedallionBase + payBobZ,
+          0.52 * payPulseScale,
+          0.52 * payPulseScale,
           r,
           g,
           b
@@ -3857,7 +4166,7 @@ export class Renderer3D {
           payCx,
           payCy,
           keyBadgeZ,
-          0.48 * payScale,
+          0.48 * payPulseScale,
           1.0,
           0.9,
           0.32,
@@ -3869,9 +4178,9 @@ export class Renderer3D {
           gl,
           payCx,
           payCy,
-          zMedallionBase,
-          0.52 * payScale,
-          0.52 * payScale,
+          zMedallionBase + payBobZ,
+          0.52 * payPulseScale,
+          0.52 * payPulseScale,
           r,
           g,
           b
@@ -3882,7 +4191,7 @@ export class Renderer3D {
           payCx,
           payCy,
           scisBadgeZ,
-          0.48 * payScale,
+          0.48 * payPulseScale,
           sr,
           sg,
           sb,
@@ -3892,10 +4201,10 @@ export class Renderer3D {
           this.drawAtlasBadge(
             gl,
             `CB_${block.scissorColor}`,
-            payCx + 0.2 * payScale,
-            payCy + 0.18 * payScale,
+            payCx + 0.2 * payPulseScale,
+            payCy + 0.18 * payPulseScale,
             scisBadgeZ + 0.003,
-            0.22 * payScale,
+            0.22 * payPulseScale,
             1,
             1,
             1,
@@ -3908,9 +4217,9 @@ export class Renderer3D {
           gl,
           payCx,
           payCy,
-          zMedallionBase,
-          0.52 * payScale,
-          0.52 * payScale,
+          zMedallionBase + payBobZ,
+          0.52 * payPulseScale,
+          0.52 * payPulseScale,
           r,
           g,
           b
@@ -3921,7 +4230,7 @@ export class Renderer3D {
           payCx,
           payCy,
           gemBadgeZ,
-          0.48 * payScale,
+          0.48 * payPulseScale,
           gr,
           gg,
           gb,
@@ -3931,10 +4240,10 @@ export class Renderer3D {
           this.drawAtlasBadge(
             gl,
             `CB_${block.shutterGemColor}`,
-            payCx + 0.2 * payScale,
-            payCy + 0.18 * payScale,
+            payCx + 0.2 * payPulseScale,
+            payCy + 0.18 * payPulseScale,
             gemBadgeZ + 0.003,
-            0.22 * payScale,
+            0.22 * payPulseScale,
             1,
             1,
             1,
@@ -3946,9 +4255,9 @@ export class Renderer3D {
           gl,
           payCx,
           payCy,
-          zMedallionBase,
-          0.5 * payScale,
-          0.5 * payScale,
+          zMedallionBase + payBobZ,
+          0.5 * payPulseScale,
+          0.5 * payPulseScale,
           r,
           g,
           b
@@ -3959,7 +4268,7 @@ export class Renderer3D {
           payCx,
           payCy,
           starBadgeZ,
-          0.46 * payScale,
+          0.46 * payPulseScale,
           1.0,
           0.92,
           0.32,
@@ -4130,8 +4439,7 @@ export class Renderer3D {
       toJSON: () => ({}),
     } as DOMRect;
 
-    ctx.fillStyle = `rgb(${Math.round(palette.bgClear[0] * 255)}, ${Math.round(palette.bgClear[1] * 255)}, ${Math.round(palette.bgClear[2] * 255)})`;
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
 
     const project = (bx: number, by: number, bz: number) =>
       this.camera.boardToScreen(bx, by, bz, virtualRect, board.rows, board.cols);
@@ -4555,16 +4863,39 @@ export class Renderer3D {
     }
 
     // 8. Draw Blocks, Multi-Layer Inner Cores, Ropes, Chains, Ice & All Badges
+    const fallbackTimeSec = options.timeSec ?? (performance.now() - this.startTimeMs) * 0.001;
+    const fallbackReducedMotion = Boolean(options.reducedMotion);
     for (const block of board.blocks) {
       if (block.status === 'CLEARED') continue;
       const shape = getShape(block.shapeId);
       const cId: ColorId = getActiveColor(block.colorStack, block.colorCursor);
       const entry = COLOR_PALETTE[cId] ?? COLOR_PALETTE[1];
       const layersLeft = getLayersRemaining(block.colorStack, block.colorCursor);
-      const z = BLOCK_TOP_Z + block.liftAlpha * BLOCK_LIFT_DELTA_Z;
+      const isIdleMovable =
+        !fallbackReducedMotion &&
+        block.liftAlpha <= 0.05 &&
+        block.iceCount === 0 &&
+        !block.chained &&
+        block.ropeColor === 0;
+      const wave01 = isIdleMovable
+        ? 0.5 +
+          0.5 *
+            Math.sin(
+              fallbackTimeSec * 3.4 - (block.col * 0.72 + block.row * 0.58) + block.id * 0.55
+            )
+        : 0;
+      const z = BLOCK_TOP_Z + block.liftAlpha * BLOCK_LIFT_DELTA_Z + wave01 * 0.088;
 
-      let drawX = block.x;
-      let drawY = block.y;
+      let drawX =
+        block.x +
+        (isIdleMovable && block.axisLock === 'H'
+          ? Math.sin(fallbackTimeSec * 3.1 + block.id * 1.3) * 0.034
+          : 0);
+      let drawY =
+        block.y +
+        (isIdleMovable && block.axisLock === 'V'
+          ? Math.sin(fallbackTimeSec * 3.1 + block.id * 1.3) * 0.034
+          : 0);
       if (block.reboundTimerMs > 0) {
         block.reboundTimerMs = Math.max(0, block.reboundTimerMs - dtMs);
         const reboundT = block.reboundTimerMs / 200;

@@ -1,6 +1,6 @@
 # AGENTS.md — Agentic Engineering Guide for ShredBlocks: Color Jam
 
-Welcome, Agent! This document is the authoritative engineering handbook for autonomous coding agents and human developers working on **ShredBlocks: Color Jam** (`https://shredblocks.skorupski.org`). Read this file **before** modifying any code, levels, shaders, styles, or test harnesses.
+Welcome, Agent! This document is the authoritative engineering handbook for autonomous coding agents and human developers working on **ShredBlocks: Color Jam**. Read this file **before** modifying any code, levels, shaders, styles, or test harnesses.
 
 ---
 
@@ -16,15 +16,15 @@ Every change to the codebase must preserve these invariants:
      - Power-ups unlock gradually (`UNDO: L1`, `FREEZE/Hint: L2`, `HAMMER: L8`, `ROCKET: L18`, `VACUUM: L30`) with 5 distinct rarity tiers (`COMMON`, `UNCOMMON`, `RARE`, `EPIC`, `LEGENDARY`) and rarity-scaled coin refill prices (`60 / 80 / 140 / 220 / 350 Coins`).
      - Chest rewards (`pickRarityWeightedBooster` in [`src/storage/save-manager.ts`](src/storage/save-manager.ts)) must never drop locked boosters and must weight drops by rarity (`42% / 30% / 16% / 8% / 4%` for Shredder Chests) so `EPIC`/`LEGENDARY` power-ups remain genuinely scarce and rewarding while Free Level Skip (`0 Coins`) prevents any player lock-out.
    - **Destructive Boosters Clear Undo Stack (`F-08` / `MECH-10`)**: Executing `HAMMER`, `ROCKET`, or `VACUUM` must clear `this.undoStack` so consumed inventory boosters cannot be refunded or exploited via Undo.
-2. **Strict Process & Port Hygiene on macOS (Mac mini Protection)**:
-   - **Never leak orphan Vite or Chromium processes.**
-   - Always spawn `./node_modules/.bin/vite` directly in scripts and Playwright configs—**never** wrap Vite in `npx vite` (which spawns an intermediate `npm exec` child process that survives `proc.kill()`).
-   - Never run multiple dev/preview servers concurrently. Playwright uses strict port `4178` ([`playwright.config.ts`](playwright.config.ts)), and the visual screenshot harness uses strict port `4179` ([`scripts/visual-harness.ts`](scripts/visual-harness.ts)).
+2. **Local Process, Browser & Port Lifecycle Hygiene**:
+   - **Never leak orphan dev servers (Vite) or headless browser (Chromium) processes.**
+   - Always spawn `./node_modules/.bin/vite` directly in scripts and Playwright configs—**never** wrap Vite in `npx vite` (which spawns an intermediate `npm exec` child process that can survive `proc.kill()`).
+   - Never run multiple dev/preview servers concurrently on conflicting ports. Playwright uses strict port `4178` ([`playwright.config.ts`](playwright.config.ts)), and the visual screenshot harness uses strict port `4179` ([`scripts/visual-harness.ts`](scripts/visual-harness.ts)).
    - Always check `if (proc.exitCode !== null)` inside server-readiness polling loops so port conflicts or sandbox `EPERM` errors fail immediately instead of hanging for 15 seconds.
    - Always register `process.on('exit' | 'SIGINT' | 'SIGTERM')` handlers and tear down child servers in `try / finally` blocks with `SIGTERM` followed by a `SIGKILL` fallback.
-   - **Reliable LAN HTTPS Preview Server SOP (`vite.lan.config.ts`)**:
-     - To launch an interactive preview server accessible over both localhost and the local Wi-Fi/LAN network (with self-healing RSA-2048 TLS certificate auto-provisioning in `.certs/key.pem` & `.certs/cert.pem`), spawn `./node_modules/.bin/vite --config vite.lan.config.ts` directly via `run_command` with `IsDaemon: true` (`BypassSandbox: false`). It binds `0.0.0.0:8443` (`strictPort: true`) in `< 150ms`.
-     - To tear down the LAN preview server cleanly, call `manage_task` with `Action: 'kill'` on the daemon `TaskId` (never wrap Vite in `npx` or `npm run`, which would leave orphan child processes).
+   - **LAN HTTPS Preview Server SOP (`vite.lan.config.ts`)**:
+     - To launch an interactive preview server accessible over both localhost and the local Wi-Fi/LAN network (with self-healing RSA-2048 TLS certificate auto-provisioning in `.certs/key.pem` & `.certs/cert.pem`), spawn `./node_modules/.bin/vite --config vite.lan.config.ts` directly (`IsDaemon: true`, `BypassSandbox: false`). It binds `0.0.0.0:8443` (`strictPort: true`) in `< 150ms`.
+     - To tear down the LAN preview server cleanly, terminate the daemon task directly (never wrap Vite in `npx` or `npm run`, which can leave orphan child processes).
 3. **Solver-Verified Level Solvability & Fun-First Difficulty Ramping (`UX-03`, `F-02`–`F-05`, `RAMP-01`–`RAMP-05`)**:
    - Every curated campaign level (`1..300` in [`src/levels/catalog.ts`](src/levels/catalog.ts)) and seeded procedural Endless level (`301+` in [`src/levels/generator.ts`](src/levels/generator.ts)) **must be 100% solvable without boosters** as verified by `solveBoard()` in [`src/levels/solver.ts`](src/levels/solver.ts), with zero overlapping occupied cells in its initial state.
    - **First-Move Safety Invariant (`UX-03`)**: On levels `1..30`, every legal first move must lead to a solvable board state (`verifyFirstMoveSafety()`).
@@ -47,6 +47,9 @@ Every change to the codebase must preserve these invariants:
    - **Cross-Platform PWA Launcher Icons (`public/icon*.{svg,png}` & `scripts/generate-icons.ts`)**:
      - **Maskable Icon Safe-Zone Rule (`purpose: "maskable"`)**: `public/icon-maskable.svg`, `public/icon-maskable-192.png`, and `public/icon-maskable-512.png` must use a **100% full-bleed** Twilight Sanctuary sky gradient + concentric circular astrolabe rings and keep all 3D block/gate foreground elements inside the central 80% W3C safe circle (`cx=256, cy=256, r<=190`) with **zero inner rectangular border**, preventing "box-inside-a-squircle" clipping on Samsung One UI and Android Pixel launchers.
      - **iOS / iPadOS Home Screen (`public/apple-touch-icon.png`)**: Must be a `180×180` opaque full-bleed PNG (iOS Safari ignores SVG `apple-touch-icon` links and applies its own native squircle corner mask).
+     - **Service Worker Redirect Hygiene (`public/sw.js`)**: Never cache or return a `Response` with `response.redirected === true` for top-level navigation requests (`request.mode === 'navigate'`), as Chromium rejects redirected cached responses on manual-redirect navigations (`ERR_FAILED`). Always normalize responses via `stripRedirectFlag()` and pre-cache `/` as the canonical HTML shell.
+   - **Living Sanctuary Courtyard Idle & Passive Animation System (`IDLE-01`–`IDLE-06`)**:
+     - When `reducedMotion === false` and no block is being dragged, the 3D gameboard must feel visibly alive: movable blocks breathe in a diagonal harmonic wave (`+0.085 Z` lift + `±2.4%` centroid scale pulse + axis-aligned slide drift), cycle through a staggered spotlight double-bounce hop (`+0.13 Z` + floor drop shadow), ready Exit Gates project a pulsing threshold floor aura with `2.4 rad/s` glinting rollers, 3D obstacle medallions/pillar diamonds/generators/bombs animate continuously, and ambient GPU-instanced courtyard motes & gate sparks rise across the tray.
    - **Anti-"Default-LLM-UI" Rules**:
      - Never use raw unstyled `#0f172a` Tailwind boxes, neon SaaS cards, or native unstyled `<input type="checkbox">`.
      - Never use the `🪙` Unicode coin emoji (which renders as a grey rock on macOS/iOS Apple Color Emoji); use `.coin-emblem` CSS gold medallions or clean `Coins` text.
@@ -122,3 +125,11 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
 
 - **Browser Support**: Baseline Widely Available + progressive enhancement (`@supports (background: linear-gradient(in oklab, white, black))` for `in oklab` / `in oklch` gradients, `"devicePixelContentBoxSize" in ResizeObserverEntry.prototype` with `devicePixelRatio` fallback).
 - Consult [`docs/ARCHITECTURE_AND_RULES.md`](docs/ARCHITECTURE_AND_RULES.md) for deep-dive specifications of the 18 mechanics, coordinate systems, and shader pipelines.
+
+---
+
+## 5. Upstream Instance & Hosting Configuration (Optional — Trim or Customize on Fork)
+
+If you fork this repository for your own deployment or a different hosting provider, only these upstream-specific settings reference the canonical deployment environment and can be freely modified or removed:
+- **Upstream Production Domain (`https://shredblocks.skorupski.org`)**: Referenced in [`index.html`](index.html) (`canonical` / `og:url` metadata) and [`src/storage/save-manager.ts`](src/storage/save-manager.ts) (`buildShareUrl()` fallback when not running on `localhost` or LAN).
+- **Cloudflare Workers Static Assets / Pages (`wrangler.jsonc`)**: Optional config for `npx wrangler deploy`; the `npm run build` output in `dist/` is a standard zero-backend static bundle compatible with any static web host.

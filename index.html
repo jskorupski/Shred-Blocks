@@ -290,16 +290,30 @@
             fill="none"
             aria-hidden="true"
           >
-            <circle cx="300" cy="300" r="282" stroke="currentColor" stroke-width="1" stroke-dasharray="3 6" />
-            <circle cx="300" cy="300" r="256" stroke="currentColor" stroke-width="1.2" />
-            <rect x="119" y="119" width="362" height="362" stroke="currentColor" stroke-width="1" transform="rotate(45 300 300)" />
-            <rect x="119" y="119" width="362" height="362" stroke="currentColor" stroke-width="0.8" />
-            <line x1="300" y1="6" x2="300" y2="594" stroke="currentColor" stroke-width="0.8" stroke-opacity="0.5" />
-            <line x1="6" y1="300" x2="594" y2="300" stroke="currentColor" stroke-width="0.8" stroke-opacity="0.5" />
-            <polygon points="300,10 306,22 300,34 294,22" fill="currentColor" />
-            <polygon points="300,566 306,578 300,590 294,578" fill="currentColor" />
-            <polygon points="10,300 22,306 34,300 22,294" fill="currentColor" />
-            <polygon points="566,300 578,306 590,300 578,294" fill="currentColor" />
+            <g class="ornament-outer-wheel">
+              <circle cx="300" cy="300" r="288" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 8" stroke-opacity="0.88" />
+              <circle cx="300" cy="300" r="270" stroke="currentColor" stroke-width="1.8" stroke-opacity="0.92" />
+              <circle cx="300" cy="300" r="244" stroke="currentColor" stroke-width="1.2" stroke-dasharray="10 6" stroke-opacity="0.72" />
+              <rect x="108" y="108" width="384" height="384" stroke="currentColor" stroke-width="1.4" stroke-opacity="0.78" transform="rotate(45 300 300)" />
+              <rect x="108" y="108" width="384" height="384" stroke="currentColor" stroke-width="1.2" stroke-opacity="0.68" />
+              <polygon points="300,4 309,24 300,42 291,24" fill="currentColor" fill-opacity="0.95" />
+              <polygon points="300,558 309,576 300,596 291,576" fill="currentColor" fill-opacity="0.95" />
+              <polygon points="4,300 24,309 42,300 24,291" fill="currentColor" fill-opacity="0.95" />
+              <polygon points="558,300 576,309 596,300 576,291" fill="currentColor" fill-opacity="0.95" />
+              <circle cx="94" cy="94" r="6" fill="currentColor" fill-opacity="0.85" />
+              <circle cx="506" cy="94" r="6" fill="currentColor" fill-opacity="0.85" />
+              <circle cx="94" cy="506" r="6" fill="currentColor" fill-opacity="0.85" />
+              <circle cx="506" cy="506" r="6" fill="currentColor" fill-opacity="0.85" />
+            </g>
+            <g class="ornament-inner-star">
+              <circle cx="300" cy="300" r="218" stroke="currentColor" stroke-width="1.4" stroke-opacity="0.78" />
+              <rect x="146" y="146" width="308" height="308" stroke="currentColor" stroke-width="1.3" stroke-opacity="0.74" transform="rotate(22.5 300 300)" />
+              <rect x="146" y="146" width="308" height="308" stroke="currentColor" stroke-width="1.3" stroke-opacity="0.74" transform="rotate(67.5 300 300)" />
+              <line x1="300" y1="18" x2="300" y2="582" stroke="currentColor" stroke-width="1.1" stroke-opacity="0.58" />
+              <line x1="18" y1="300" x2="582" y2="300" stroke="currentColor" stroke-width="1.1" stroke-opacity="0.58" />
+              <line x1="100" y1="100" x2="500" y2="500" stroke="currentColor" stroke-width="1.0" stroke-opacity="0.48" />
+              <line x1="500" y1="100" x2="100" y2="500" stroke="currentColor" stroke-width="1.0" stroke-opacity="0.48" />
+            </g>
           </svg>
           <canvas id="game-canvas" aria-label="3D Polyomino Puzzle Board"></canvas>
 

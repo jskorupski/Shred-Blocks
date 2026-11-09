@@ -1,6 +1,6 @@
 # ShredBlocks: Color Jam — Architecture, Invariants & Extension Rules
 
-This document provides the deep-dive technical specification for **ShredBlocks: Color Jam** (`https://shredblocks.skorupski.org`), designed for both human engineers and autonomous coding agents extending or maintaining the codebase.
+This document provides the deep-dive technical specification for **ShredBlocks: Color Jam**, designed for both human engineers and autonomous coding agents extending or maintaining the codebase.
 
 ---
 

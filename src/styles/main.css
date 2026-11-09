@@ -1107,15 +1107,25 @@ body {
   top: 50%;
   left: 50%;
   translate: -50% -50%;
-  rotate: 0deg;
-  scale: 1;
-  width: min(99dvw, 65dvh, 656px);
-  height: min(99dvw, 65dvh, 656px);
-  color: rgba(246, 213, 168, 0.28);
+  width: min(98dvw, 66dvh, 660px);
+  height: min(98dvw, 66dvh, 660px);
+  color: rgba(246, 202, 128, 0.48);
+  filter: drop-shadow(0 0 12px rgba(246, 189, 96, 0.28));
   pointer-events: none;
   z-index: 1;
-  animation: astrolabeSpin 96s linear infinite;
+}
 
+.sacred-geometry-ornament .ornament-outer-wheel {
+  transform-origin: 300px 300px;
+  animation: astrolabeSpin 34s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+.sacred-geometry-ornament .ornament-inner-star {
+  transform-origin: 300px 300px;
+  animation: astrolabeSpinReverse 46s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
@@ -1123,10 +1133,19 @@ body {
 
 @keyframes astrolabeSpin {
   from {
-    rotate: 0deg;
+    transform: rotate(0deg);
   }
   to {
-    rotate: 360deg;
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes astrolabeSpinReverse {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
   }
 }
 
@@ -1137,8 +1156,9 @@ body {
   height: min(94dvw, 60dvh, 620px);
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-lg);
-  border: 2px solid rgba(246, 213, 168, 0.42);
-  box-shadow: 0 18px 42px rgba(10, 7, 22, 0.62), inset 0 2px 0 rgba(255, 244, 228, 0.25);
+  border: none;
+  background: transparent;
+  filter: drop-shadow(0 20px 34px rgba(8, 5, 20, 0.68));
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -2271,17 +2291,16 @@ dialog::backdrop {
 
 .title-crest-astrolabe .astrolabe-ring-outer {
   transform-origin: 90px 90px;
-  animation: titleAstrolabeSpin 42s linear infinite;
+  animation: titleAstrolabeSpin 24s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 .title-crest-astrolabe .astrolabe-star-group {
   transform-origin: 90px 90px;
-  animation: titleAstrolabeSpinReverse 56s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .title-crest-astrolabe .astrolabe-ring-outer,
-  .title-crest-astrolabe .astrolabe-star-group {
+  animation: titleAstrolabeSpinReverse 32s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
 }
@@ -2410,6 +2429,25 @@ dialog::backdrop {
   width: 100%;
 }
 
+@keyframes titleHeroPulse {
+  0%,
+  100% {
+    filter: brightness(1);
+    box-shadow:
+      0 5px 0 var(--accent-primary-lip),
+      0 10px 24px rgba(46, 196, 182, 0.32),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.42);
+  }
+  50% {
+    filter: brightness(1.09);
+    box-shadow:
+      0 5px 0 var(--accent-primary-lip),
+      0 12px 30px rgba(46, 196, 182, 0.56),
+      0 0 16px rgba(246, 202, 128, 0.36),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.54);
+  }
+}
+
 .btn-title-hero {
   width: 100%;
   min-height: 50px;
@@ -2421,6 +2459,10 @@ dialog::backdrop {
     0 5px 0 var(--accent-primary-lip),
     0 10px 24px rgba(46, 196, 182, 0.32),
     inset 0 1.5px 0 rgba(255, 255, 255, 0.42);
+  animation: titleHeroPulse 2.4s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 .title-nav-grid {
