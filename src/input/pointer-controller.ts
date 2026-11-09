@@ -69,6 +69,8 @@ export interface BoardInputCallbacks {
   onShortcutAction?: (action: 'UNDO' | 'RESTART' | 'FREEZE' | 'HAMMER' | 'ROCKET' | 'VACUUM') => void;
   /** Called whenever hover/selection/targeting state changes */
   onHoverChanged?: (state: HoverState) => void;
+  /** Optional guard returning whether keyboard/pointer board controls are currently active */
+  isBoardInteractive?: () => boolean;
   /** Called during drag updates */
   onBoardChanged?: () => void;
 }
@@ -735,6 +737,12 @@ export class BoardInputController {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
+    if (this.callbacks.isBoardInteractive && !this.callbacks.isBoardInteractive()) {
+      return;
+    }
+    if (this.canvas.closest?.('[hidden], [inert]')) {
+      return;
+    }
     const target = e.target as HTMLElement | null;
     if (
       target &&

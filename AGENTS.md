@@ -39,6 +39,14 @@ Every change to the codebase must preserve these invariants:
      - Never cover a block's top face with flat dark `overlayQuad` strips or black rectangular sticker icons.
      - Axis-Locked blocks (`axisLock: 'H' | 'V'`) must use **3D beveled side-flange guide rails** (`railBeamMesh` tinted with block-harmonized `entry.lipHex` + warm champagne metallic cap) leaving the top circular studs 100% uncovered, paired with sculpted 3D circular/octagonal badge medallions (`drawBadgeMedallion3D` in [`src/render/atlas-3d.ts`](src/render/atlas-3d.ts)).
      - Early-stage 3D Move Guides must render as a hollow 3D beveled perimeter frame (`drawHollowMoveGuideFrame`) so the underlying block remains clearly visible and clickable.
+   - **Sacred-Geometry Title Screen & Adaptive Player Flows (`#title-overlay`)**:
+     - Launches over the live 3D courtyard backdrop (`#screen-game.title-backdrop-mode`) with a rotating Sacred-Geometry Astrolabe & Sunburst crest.
+     - **New Player Flow (`A2` — FTUE)**: Brand-new players (`isNewPlayerSave(save) === true`) see **`▶ BEGIN JOURNEY`** as the primary CTA (plus `Restore Save` and `Settings` utility pills) and go **straight into Level 1 (`First Shred`)** without menu overload.
+     - **Returning Player Flow (`A3`)**: Returning players (`isNewPlayerSave(save) === false`) see their current Chapter badge, Level subtitle, and `Stars / Coins / Streak` progress plaque alongside **`▶ CONTINUE · LEVEL N`**, plus quick **`Sanctuary Map`** (`#btn-title-map`) and **`Themes Studio`** (`#btn-title-themes`) navigation buttons.
+     - Tapping the ShredBlocks brand crest (`#btn-home-title`) on `#screen-home` re-opens `#title-overlay` at any time.
+   - **Cross-Platform PWA Launcher Icons (`public/icon*.{svg,png}` & `scripts/generate-icons.ts`)**:
+     - **Maskable Icon Safe-Zone Rule (`purpose: "maskable"`)**: `public/icon-maskable.svg`, `public/icon-maskable-192.png`, and `public/icon-maskable-512.png` must use a **100% full-bleed** Twilight Sanctuary sky gradient + concentric circular astrolabe rings and keep all 3D block/gate foreground elements inside the central 80% W3C safe circle (`cx=256, cy=256, r<=190`) with **zero inner rectangular border**, preventing "box-inside-a-squircle" clipping on Samsung One UI and Android Pixel launchers.
+     - **iOS / iPadOS Home Screen (`public/apple-touch-icon.png`)**: Must be a `180×180` opaque full-bleed PNG (iOS Safari ignores SVG `apple-touch-icon` links and applies its own native squircle corner mask).
    - **Anti-"Default-LLM-UI" Rules**:
      - Never use raw unstyled `#0f172a` Tailwind boxes, neon SaaS cards, or native unstyled `<input type="checkbox">`.
      - Never use the `🪙` Unicode coin emoji (which renders as a grey rock on macOS/iOS Apple Color Emoji); use `.coin-emblem` CSS gold medallions or clean `Coins` text.
@@ -72,13 +80,14 @@ Every change to the codebase must preserve these invariants:
 | [`src/storage/save-code.ts`](src/storage/save-code.ts) | `SB1-<base64url>-<crc32hex>` compact save encoder/decoder and strict schema validator. |
 | [`src/storage/qr-svg.ts`](src/storage/qr-svg.ts) | Pure TypeScript ISO/IEC 18004 QR Code Version 1–10 Mode-Byte ECC-L SVG generator. |
 | [`public/sw.js`](public/sw.js) | Offline-first PWA Service Worker with versioned cache cleanup and user-prompted `SKIP_WAITING`. |
+| [`scripts/generate-icons.ts`](scripts/generate-icons.ts) | Cross-platform PWA icon rasterizer (`icon-192.png`, `icon-512.png`, `icon-maskable-192.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) and multi-OS launcher mask verification sheet generator. |
 | [`vite.lan.config.ts`](vite.lan.config.ts) | Self-healing LAN HTTPS preview server configuration (`0.0.0.0:8443`, auto-generates `.certs/key.pem` & `.certs/cert.pem`). |
 
 ---
 
-## 3. Mandatory Verification Workflow Before Concluding Any Task
+## 3. Mandatory Verification & Multi-Agent Adversarial Review Workflow
 
-Whenever you modify code, levels, or styles, execute this exact sequence:
+Whenever you modify code, levels, icons, or styles, execute this exact sequence before concluding:
 
 1. **Unit & 300-Level Solver Suite**:
    ```bash
@@ -94,12 +103,18 @@ Whenever you modify code, levels, or styles, execute this exact sequence:
    ```bash
    npm run test:e2e
    ```
-   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising real pointer drag-and-drop, keyboard controls, all 5 boosters, and all 18 obstacle mechanics.
-4. **Multi-Viewport Visual Screenshot Harness (when touching UI/CSS/3D rendering)**:
+   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (New & Returning Player flows), real pointer drag-and-drop, keyboard controls, all 5 boosters, and all 18 obstacle mechanics.
+4. **Multi-Viewport Visual Screenshot & Launcher Icon Harness (when touching UI/CSS/3D rendering/icons)**:
    ```bash
    npm run verify:visual
+   ./node_modules/.bin/tsx scripts/generate-icons.ts
    ```
-   Captures 28 screenshots across `360×640`, `390×844`, `768×1024`, and `1440×900` and verifies zero orphan server/browser processes afterward.
+   Captures 31+ screenshots across `360×640`, `390×844`, `768×1024`, and `1440×900` plus the cross-platform launcher icon mask sheet (`29-launcher-icons-preview.png`) and verifies zero orphan server/browser processes afterward.
+5. **Multi-Level Subagent Adversarial Audit & UX Sign-Off (MANDATORY FOR UI / UX / GAMEPLAY UPDATES)**:
+   - Every non-trivial UI, UX, icon, or gameplay change must be independently audited by dedicated subagents (`invoke_subagent` / `send_message`):
+     1. **Visual Aesthetics & UX Design Critic**: Inspects the rendered multi-viewport screenshots (`00-title-screen-new-player-mobile.png`, `30-title-screen-returning-player-mobile.png`, `01-home-roadmap-mobile.png`, `02-level-001-gameplay-mobile.png`, `29-launcher-icons-preview.png`, etc.) for Sacred-Geometry Architectural Sanctuary cohesion, typography, hierarchy, navigation clarity, and zero clipping/overlap across mobile, tablet, and desktop.
+     2. **Gameplay Mechanics & Playtest Auditor**: Audits interactive flows (New vs. Returning player onboarding, 1-tap Map/Title navigation, progressive power-up unlocking & rarity scarcity, solver-verified level ramping, and E2E playtest coverage).
+   - Address all P0/P1/P2 findings raised by the review subagents and re-verify before presenting the final result to the user.
 
 ---
 

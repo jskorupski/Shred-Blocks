@@ -2,7 +2,7 @@
    ShredBlocks: Color Jam — Offline-First Service Worker (STOR-03)
    ========================================================================== */
 
-const CACHE_VERSION = 'shredblocks-v1.0.0';
+const CACHE_VERSION = 'shredblocks-v1.1.0';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -13,6 +13,11 @@ const APP_SHELL_URLS = [
   '/version.json',
   '/icon.svg',
   '/icon-maskable.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {

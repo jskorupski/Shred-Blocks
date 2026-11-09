@@ -119,8 +119,16 @@ async function runVisualHarness(): Promise<void> {
     });
 
     await mobilePage.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await mobilePage.waitForTimeout(150);
+
+    // 00. Sacred-Geometry Title Screen — Brand-New Player FTUE (Mobile Portrait 390x844)
+    await mobilePage.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '00-title-screen-new-player-mobile.png'),
+    });
 
     // 01. Home Roadmap (Mobile Portrait 390x844)
+    await mobilePage.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home'));
+    await mobilePage.waitForTimeout(100);
     await mobilePage.screenshot({
       path: join(ARTIFACT_SCRATCH_DIR, '01-home-roadmap-mobile.png'),
     });
@@ -180,6 +188,19 @@ async function runVisualHarness(): Promise<void> {
     await mobilePage.waitForTimeout(150);
     await mobilePage.screenshot({
       path: join(ARTIFACT_SCRATCH_DIR, '07-dialog-victory-mobile.png'),
+    });
+
+    // 30. Sacred-Geometry Title Screen — Returning Player Flow (Mobile Portrait 390x844)
+    await mobilePage.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.closeAllModals();
+      window.__SHREDBLOCKS_DEBUG__.openTitleScreen();
+    });
+    await mobilePage.waitForTimeout(150);
+    await mobilePage.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '30-title-screen-returning-player-mobile.png'),
+    });
+    await mobilePage.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('game');
     });
 
     // 08. Failure / Retry Modal
@@ -286,6 +307,8 @@ async function runVisualHarness(): Promise<void> {
     compactPage.on('pageerror', (err) => errors.push(`COMPACT_PAGEERROR: ${err.message}`));
 
     await compactPage.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await compactPage.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home'));
+    await compactPage.waitForTimeout(100);
     // 17. Compact Mobile Home Roadmap (360x640)
     await compactPage.screenshot({
       path: join(ARTIFACT_SCRATCH_DIR, '17-compact-360x640-home-roadmap.png'),
@@ -314,6 +337,8 @@ async function runVisualHarness(): Promise<void> {
     tabletPage.on('pageerror', (err) => errors.push(`TABLET_PAGEERROR: ${err.message}`));
 
     await tabletPage.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await tabletPage.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home'));
+    await tabletPage.waitForTimeout(100);
     // 19. Tablet Portrait Home Roadmap (768x1024)
     await tabletPage.screenshot({
       path: join(ARTIFACT_SCRATCH_DIR, '19-tablet-768x1024-home-roadmap.png'),
@@ -342,6 +367,13 @@ async function runVisualHarness(): Promise<void> {
     desktopPage.on('pageerror', (err) => errors.push(`DESKTOP_PAGEERROR: ${err.message}`));
 
     await desktopPage.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(150);
+    // 31. Desktop Widescreen Title Screen (1440x900)
+    await desktopPage.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '31-desktop-1440x900-title-screen.png'),
+    });
+    await desktopPage.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home'));
+    await desktopPage.waitForTimeout(100);
     // 21. Desktop Widescreen Home Roadmap (1440x900)
     await desktopPage.screenshot({
       path: join(ARTIFACT_SCRATCH_DIR, '21-desktop-1440x900-home-roadmap.png'),

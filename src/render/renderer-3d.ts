@@ -1222,7 +1222,7 @@ export class Renderer3D {
   }
 
   /**
-   * Triggers a multi-wave celebratory 3D confetti & golden shockwave fountain across the monument
+   * Triggers a multi-wave celebratory 3D confetti & golden shockwave fountain across the sanctuary
    * courtyard when a level is won.
    */
   public spawnVictoryCelebrationBurst(board: BoardState): void {

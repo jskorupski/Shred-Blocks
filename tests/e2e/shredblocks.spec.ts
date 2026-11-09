@@ -51,6 +51,21 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     });
 
     await page.goto('/');
+    // Verify Sacred-Geometry Title Screen launches in New Player mode over the live 3D board
+    await expect(page.locator('#title-overlay')).toBeVisible();
+    await expect(page.locator('#title-crest-heading')).toHaveText('ShredBlocks');
+    await expect(page.locator('#title-new-player-tagline')).toBeVisible();
+    await expect(page.locator('#title-returning-nav')).toBeHidden();
+    await expect(page.locator('#btn-title-play')).toHaveText('▶ BEGIN JOURNEY');
+
+    // Tapping '▶ BEGIN JOURNEY' launches a brand-new player straight into Level 1 (A2 FTUE)
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#title-overlay')).toBeHidden();
+    await expect(page.locator('#screen-game')).toBeVisible();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 1');
+
+    // Tapping '‹ Map' (#btn-hud-home) navigates to the 300-Level Sanctuary Map (#screen-home)
+    await page.locator('#btn-hud-home').click();
     await expect(page.locator('#screen-home')).toBeVisible();
     await expect(page.locator('.brand-title').first()).toHaveText('ShredBlocks');
     await expect(page.locator('#stat-coins')).toHaveText('250');
@@ -98,7 +113,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     });
 
     await page.goto('/');
-    await page.locator('#btn-play-current').click();
+    await page.locator('#btn-title-play').click();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
 
@@ -147,6 +162,19 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     const saveAfterL2 = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave());
     expect(saveAfterL2.highestLevelUnlocked).toBe(3);
 
+    // Return to Sanctuary Map via Victory Modal '‹ Map' button, then tap Brand Crest (#btn-home-title)
+    // to verify Returning Player Title Screen flow (A3: '▶ CONTINUE · LEVEL 3' + Map & Themes buttons)
+    await page.locator('#btn-victory-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    await page.locator('#btn-home-title').click();
+    await expect(page.locator('#title-overlay')).toBeVisible();
+    await expect(page.locator('#title-returning-summary')).toBeVisible();
+    await expect(page.locator('#title-returning-nav')).toBeVisible();
+    await expect(page.locator('#btn-title-play')).toHaveText('▶ CONTINUE · LEVEL 3');
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#title-overlay')).toBeHidden();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 3');
+
     expect(errors).toEqual([]);
   });
 
@@ -157,6 +185,8 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
 
     await page.goto('/');
+    await page.locator('#btn-title-play').click();
+    await page.locator('#btn-hud-home').click();
     // Jump to Level 3 via Direct Level Jump UI
     await page.locator('#level-jump-input').fill('3');
     await page.locator('#btn-level-jump').click();
@@ -327,6 +357,8 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     });
     await context.setOffline(true);
     await page.reload();
+    await expect(page.locator('#title-overlay')).toBeVisible();
+    await page.locator('#btn-title-map').click();
     await expect(page.locator('#screen-home')).toBeVisible();
     await context.setOffline(false);
 
@@ -340,7 +372,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
 
     await page.goto('/');
-    await page.locator('#btn-play-current').click();
+    await page.locator('#btn-title-play').click();
     await expect(page.locator('#screen-game')).toBeVisible();
 
     // 1. Level 11: Axis-Locked Blocks + Unlock Banner visibility (MECH-03)

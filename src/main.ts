@@ -70,6 +70,9 @@ export interface ShredBlocksDebugBridge {
   activateBooster: (type: BoosterType) => void;
   openModal: (id: ModalId) => void;
   closeAllModals: () => void;
+  openTitleScreen: () => void;
+  dismissTitleScreen: (targetScreen?: 'game' | 'home' | 'themes') => void;
+  isTitleScreenOpen: () => boolean;
   previewSaveImport: (code: string) => boolean;
   getTelemetry: () => PerfTelemetry;
   run120HzBenchmark: (frames?: number) => Promise<Benchmark120HzResult>;
@@ -202,6 +205,7 @@ export class ShredBlocksApp {
 
   private board: BoardState;
   private activeScreen: 'home' | 'game' | 'themes' = 'home';
+  private titleOverlayOpen = true;
   private activeRoadmapRange = 'all';
   private undoStack: BoardState[] = [];
   private preRestartSnapshot: BoardState | null = null;
@@ -265,8 +269,15 @@ export class ShredBlocksApp {
       onExecuteBooster: (type, target) => {
         return this.executeTargetedBooster(type, target);
       },
+      isBoardInteractive: () => {
+        return (
+          this.activeScreen === 'game' &&
+          !this.titleOverlayOpen &&
+          !this.isAnyModalOpen()
+        );
+      },
       onShortcutAction: (action) => {
-        if (this.activeScreen !== 'game') return;
+        if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
         if (action === 'RESTART') {
           this.restartCurrentLevel();
         } else {
@@ -306,17 +317,19 @@ export class ShredBlocksApp {
     this.renderRoadmap();
     this.renderThemesStudio();
     this.loadLevel(startLevelId, false, false);
+    this.openTitleScreen();
 
     void this.saveManager.init().then((reconciled) => {
       this.saveInitialized = true;
       if (
         reconciled.writeSeq > bootWriteSeq &&
-        this.activeScreen === 'home' &&
+        (this.activeScreen === 'home' || this.titleOverlayOpen) &&
         reconciled.currentLevelId !== this.board.levelId
       ) {
         this.loadLevel(reconciled.currentLevelId, false, false);
       }
       this.syncAllUiFromSave();
+      this.syncTitleOverlayDom();
       this.checkUrlHashForSaveImport();
     });
 
@@ -946,7 +959,7 @@ export class ShredBlocksApp {
       this.lastRafMs = nowMs;
 
       this.stepSimulation(dtSec);
-      if (this.activeScreen === 'game') {
+      if (this.activeScreen === 'game' || this.titleOverlayOpen) {
         this.renderNow(dtSec, nowMs * 0.001);
       }
 
@@ -969,8 +982,9 @@ export class ShredBlocksApp {
       }
     }
 
-    // Pause timers when not in game screen, when a modal is open, or during Booster Targeting (UX-04)
+    // Pause timers when not in game screen, when title overlay or modal is open, or during Booster Targeting (UX-04)
     if (
+      this.titleOverlayOpen ||
       this.activeScreen !== 'game' ||
       this.levelOutcomeHandled ||
       !this.board.timerRunning ||
@@ -1035,6 +1049,7 @@ export class ShredBlocksApp {
 
     let autoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null = null;
     if (
+      !this.titleOverlayOpen &&
       hover.activeBlockId === null &&
       hover.inputMode === 'DRAG' &&
       !this.board.hintMove &&
@@ -1081,18 +1096,95 @@ export class ShredBlocksApp {
   // UI SYNCHRONIZATION & SCREENS
   // ===========================================================================
 
-  public switchScreen(screen: 'home' | 'game' | 'themes'): void {
-    this.activeScreen = screen;
+  public isNewPlayerSave(save: SavePayloadV1 = this.saveManager.getPayload()): boolean {
+    return (
+      save.highestLevelUnlocked <= 1 &&
+      save.currentLevelId <= 1 &&
+      save.totalMovesCommitted === 0 &&
+      save.totalBlocksShredded === 0 &&
+      Object.keys(save.levelRecords).length === 0 &&
+      save.unlockedSkins.length <= 1 &&
+      save.unlockedTrays.length <= 1 &&
+      save.unlockedParticles.length <= 1
+    );
+  }
 
+  private syncTitleOverlayDom(): void {
+    const titleEl = document.getElementById('title-overlay');
     const homeEl = document.getElementById('screen-home');
     const gameEl = document.getElementById('screen-game');
     const themesEl = document.getElementById('screen-themes');
     const tabBarEl = document.getElementById('menu-tab-bar');
 
-    if (homeEl) homeEl.hidden = screen !== 'home';
-    if (gameEl) gameEl.hidden = screen !== 'game';
-    if (themesEl) themesEl.hidden = screen !== 'themes';
-    if (tabBarEl) tabBarEl.hidden = screen === 'game';
+    if (this.titleOverlayOpen) {
+      if (titleEl) titleEl.hidden = false;
+      if (homeEl) {
+        homeEl.hidden = true;
+        homeEl.inert = true;
+      }
+      if (themesEl) {
+        themesEl.hidden = true;
+        themesEl.inert = true;
+      }
+      if (tabBarEl) {
+        tabBarEl.hidden = true;
+        tabBarEl.inert = true;
+      }
+      if (gameEl) {
+        gameEl.hidden = false;
+        gameEl.inert = true;
+        gameEl.classList.add('title-backdrop-mode');
+      }
+      return;
+    }
+
+    if (titleEl) titleEl.hidden = true;
+    if (homeEl) {
+      homeEl.hidden = this.activeScreen !== 'home';
+      homeEl.inert = false;
+    }
+    if (themesEl) {
+      themesEl.hidden = this.activeScreen !== 'themes';
+      themesEl.inert = false;
+    }
+    if (tabBarEl) {
+      tabBarEl.hidden = this.activeScreen === 'game';
+      tabBarEl.inert = false;
+    }
+    if (gameEl) {
+      gameEl.hidden = this.activeScreen !== 'game';
+      gameEl.inert = false;
+      gameEl.classList.remove('title-backdrop-mode');
+    }
+  }
+
+  public openTitleScreen(): void {
+    this.titleOverlayOpen = true;
+    const save = this.saveManager.getPayload();
+    const targetLevelId = Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
+    if (this.board.levelId !== targetLevelId) {
+      this.loadLevel(targetLevelId, false, false);
+    }
+    this.syncAllUiFromSave();
+    this.syncTitleOverlayDom();
+    this.renderer.resize();
+    this.renderNow();
+  }
+
+  public dismissTitleScreen(targetScreen: 'game' | 'home' | 'themes' = 'game'): void {
+    this.titleOverlayOpen = false;
+    this.switchScreen(targetScreen);
+    if (targetScreen === 'game' && this.board.movesCommitted === 0) {
+      const spec = getLevelSpec(this.board.levelId);
+      this.showUnlockNoteIfPresent(spec.unlockNote ?? BOOSTER_DEBUT_NOTES[this.board.levelId]);
+      this.lastPointerActivityMs = performance.now();
+    }
+  }
+
+  public switchScreen(screen: 'home' | 'game' | 'themes'): void {
+    this.activeScreen = screen;
+    this.titleOverlayOpen = false;
+    this.syncTitleOverlayDom();
 
     document
       .getElementById('tab-btn-home')
@@ -1178,6 +1270,40 @@ export class ShredBlocksApp {
     }
     if (tabPlayLabel) {
       tabPlayLabel.textContent = `Play Lvl ${targetSpec.id}`;
+    }
+
+    // Sacred-Geometry Title Crest Overlay (Adaptive New vs. Returning Player State)
+    const isNewPlayer = this.isNewPlayerSave(save);
+    const titleNewTagline = document.getElementById('title-new-player-tagline');
+    const titleReturningSummary = document.getElementById('title-returning-summary');
+    const titleReturningNav = document.getElementById('title-returning-nav');
+    const titleChapterBadge = document.getElementById('title-chapter-badge');
+    const titleLevelSubtitle = document.getElementById('title-level-subtitle');
+    const titleStatStars = document.getElementById('title-stat-stars');
+    const titleStatCoins = document.getElementById('title-stat-coins');
+    const titleStatStreak = document.getElementById('title-stat-streak');
+    const titlePlayBtn = document.getElementById('btn-title-play');
+    const titleSyncLabel = document.getElementById('title-sync-label');
+
+    if (titleNewTagline) titleNewTagline.hidden = !isNewPlayer;
+    if (titleReturningSummary) titleReturningSummary.hidden = isNewPlayer;
+    if (titleReturningNav) titleReturningNav.hidden = isNewPlayer;
+    if (titleChapterBadge) {
+      titleChapterBadge.textContent = `${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`;
+    }
+    if (titleLevelSubtitle) {
+      titleLevelSubtitle.textContent = `Level ${targetSpec.id} — ${targetSpec.name}`;
+    }
+    if (titleStatStars) titleStatStars.textContent = String(save.totalStars);
+    if (titleStatCoins) titleStatCoins.textContent = String(save.coins);
+    if (titleStatStreak) titleStatStreak.textContent = String(save.winStreak);
+    if (titlePlayBtn) {
+      titlePlayBtn.textContent = isNewPlayer
+        ? '▶ BEGIN JOURNEY'
+        : `▶ CONTINUE · LEVEL ${targetSpec.id}`;
+    }
+    if (titleSyncLabel) {
+      titleSyncLabel.textContent = isNewPlayer ? 'Restore Save' : 'Backup & Sync';
     }
 
     // Settings Checkboxes & Selects
@@ -1955,6 +2081,40 @@ export class ShredBlocksApp {
   // ===========================================================================
 
   private bindDomEvents(): void {
+    // Sacred-Geometry Title Crest Overlay Actions
+    document.getElementById('btn-title-play')?.addEventListener('click', () => {
+      this.sound.playButtonTap();
+      const save = this.saveManager.getPayload();
+      const targetId = this.isNewPlayerSave(save)
+        ? 1
+        : Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
+      if (this.board.levelId !== targetId) {
+        this.loadLevel(targetId, true);
+      } else {
+        this.dismissTitleScreen('game');
+      }
+    });
+    document.getElementById('btn-title-map')?.addEventListener('click', () => {
+      this.sound.playButtonTap();
+      this.dismissTitleScreen('home');
+    });
+    document.getElementById('btn-title-themes')?.addEventListener('click', () => {
+      this.sound.playButtonTap();
+      this.dismissTitleScreen('themes');
+    });
+    document.getElementById('btn-title-sync')?.addEventListener('click', () => {
+      this.sound.playButtonTap();
+      this.openModal('save-transfer');
+    });
+    document.getElementById('btn-title-settings')?.addEventListener('click', () => {
+      this.sound.playButtonTap();
+      this.openModal('pause');
+    });
+    document.getElementById('btn-home-title')?.addEventListener('click', () => {
+      this.sound.playButtonTap();
+      this.openTitleScreen();
+    });
+
     // Bottom Navigation Tabs
     document.getElementById('tab-btn-home')?.addEventListener('click', () => {
       this.sound.playButtonTap();
@@ -2156,9 +2316,15 @@ export class ShredBlocksApp {
     document.getElementById('btn-pause-resume')?.addEventListener('click', () => {
       this.sound.playButtonTap();
       this.closeAllModals();
+      if (this.titleOverlayOpen) {
+        this.dismissTitleScreen('game');
+      }
     });
     document.getElementById('btn-pause-restart')?.addEventListener('click', () => {
       this.closeAllModals();
+      if (this.titleOverlayOpen) {
+        this.dismissTitleScreen('game');
+      }
       this.restartCurrentLevel();
     });
     document.getElementById('btn-pause-skip')?.addEventListener('click', () => {
@@ -2411,6 +2577,15 @@ export class ShredBlocksApp {
       },
       closeAllModals: () => {
         this.closeAllModals();
+      },
+      openTitleScreen: () => {
+        this.openTitleScreen();
+      },
+      dismissTitleScreen: (targetScreen = 'game') => {
+        this.dismissTitleScreen(targetScreen);
+      },
+      isTitleScreenOpen: () => {
+        return this.titleOverlayOpen;
       },
       previewSaveImport: (code: string) => {
         return this.previewSaveImport(code);

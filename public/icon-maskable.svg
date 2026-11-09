@@ -1,11 +1,113 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" fill="#0F172A"/>
-  <rect x="76" y="76" width="360" height="360" rx="68" fill="#1E293B" stroke="#475569" stroke-width="10"/>
-  <rect x="116" y="128" width="132" height="132" rx="24" fill="#F42C38"/>
-  <circle cx="182" cy="194" r="28" fill="#FF7E75"/>
-  <rect x="264" y="128" width="132" height="264" rx="24" fill="#2074F8"/>
-  <circle cx="330" cy="194" r="28" fill="#6EB4FF"/>
-  <circle cx="330" cy="326" r="28" fill="#6EB4FF"/>
-  <rect x="116" y="276" width="132" height="116" rx="24" fill="#FFC400"/>
-  <circle cx="182" cy="334" r="26" fill="#FFE885"/>
+  <defs>
+    <!-- Full-Bleed Twilight Architectural Sanctuary Sky Gradient -->
+    <linearGradient id="sanctuarySky" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#17122B"/>
+      <stop offset="48%" stop-color="#2D204E"/>
+      <stop offset="82%" stop-color="#4B2F61"/>
+      <stop offset="100%" stop-color="#6B3E63"/>
+    </linearGradient>
+
+    <!-- Warm Golden Sanctuary Sunburst Glow -->
+    <radialGradient id="sunburstGlow" cx="50%" cy="48%" r="52%">
+      <stop offset="0%" stop-color="#F6BD60" stop-opacity="0.36"/>
+      <stop offset="58%" stop-color="#E07A5F" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#17122B" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Coral-Red 3D Block Gradients -->
+    <linearGradient id="coralFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF786E"/>
+      <stop offset="100%" stop-color="#E83142"/>
+    </linearGradient>
+    <linearGradient id="coralStud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFA39B"/>
+      <stop offset="100%" stop-color="#F04352"/>
+    </linearGradient>
+
+    <!-- Amber-Gold 3D Block Gradients -->
+    <linearGradient id="goldFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE678"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="goldStud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF3B0"/>
+      <stop offset="100%" stop-color="#FBBF24"/>
+    </linearGradient>
+
+    <!-- Teal-Azure 3D Domino Block Gradients -->
+    <linearGradient id="azureFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5CE1E6"/>
+      <stop offset="100%" stop-color="#1D7AFC"/>
+    </linearGradient>
+    <linearGradient id="azureStud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9BF2F5"/>
+      <stop offset="100%" stop-color="#3894FF"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter for 3D Blocks -->
+    <filter id="blockShadow" x="-16%" y="-12%" width="132%" height="136%">
+      <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#090614" flood-opacity="0.62"/>
+    </filter>
+  </defs>
+
+  <!-- 100% Full-Bleed Sanctuary Sky (Zero inner square border to clash with OS squircle/circle masks) -->
+  <rect width="512" height="512" fill="url(#sanctuarySky)"/>
+  <rect width="512" height="512" fill="url(#sunburstGlow)"/>
+
+  <!-- Concentric Sacred-Geometry Astrolabe Rings (Harmonizes with circle, squircle & rounded-square masks) -->
+  <g stroke="#F6BD60" fill="none">
+    <circle cx="256" cy="256" r="186" stroke-width="2" stroke-opacity="0.24" stroke-dasharray="6 9"/>
+    <circle cx="256" cy="256" r="160" stroke-width="1.8" stroke-opacity="0.28"/>
+    <rect x="148" y="148" width="216" height="216" rx="16" stroke-width="1.6" stroke-opacity="0.2" transform="rotate(45 256 256)"/>
+  </g>
+
+  <!-- Foreground Artwork Vertically & Horizontally Centered Inside 80% W3C Maskable Safe Zone -->
+  <g transform="translate(0, 10)">
+    <!-- Shredded Micro-Cube Sparks -->
+    <rect x="202" y="64" width="11" height="11" rx="3" fill="#FF8A80" transform="rotate(-18 207 69)"/>
+    <rect x="251" y="59" width="12" height="12" rx="3.5" fill="#FFE678" transform="rotate(22 257 65)"/>
+    <rect x="299" y="65" width="11" height="11" rx="3" fill="#5CE1E6" transform="rotate(14 304 70)"/>
+
+    <!-- Top Shredder Gate Bar -->
+    <g filter="url(#blockShadow)">
+      <rect x="150" y="92" width="212" height="34" rx="17" fill="#8C1D28"/>
+      <rect x="150" y="87" width="212" height="32" rx="16" fill="url(#coralFace)" stroke="#FFD6A5" stroke-width="2.5" stroke-opacity="0.68"/>
+      <circle cx="184" cy="103" r="6.5" fill="#FFF8F0"/>
+      <circle cx="213" cy="103" r="6.5" fill="#FFF8F0"/>
+      <circle cx="242" cy="103" r="6.5" fill="#FFF8F0"/>
+      <circle cx="270" cy="103" r="6.5" fill="#FFF8F0"/>
+      <circle cx="299" cy="103" r="6.5" fill="#FFF8F0"/>
+      <circle cx="328" cy="103" r="6.5" fill="#FFF8F0"/>
+    </g>
+
+    <!-- 1. Top-Left Coral-Red 3D Block (1x1) -->
+    <g filter="url(#blockShadow)">
+      <rect x="112" y="150" width="132" height="122" rx="28" fill="#8F1522"/>
+      <rect x="112" y="134" width="132" height="120" rx="28" fill="url(#coralFace)"/>
+      <rect x="117" y="139" width="122" height="110" rx="24" fill="none" stroke="#FFC2BC" stroke-width="2.5" stroke-opacity="0.52"/>
+      <circle cx="178" cy="199" r="29" fill="#9E1926"/>
+      <circle cx="178" cy="193" r="29" fill="url(#coralStud)" stroke="#FFDAD6" stroke-width="2.2" stroke-opacity="0.65"/>
+    </g>
+
+    <!-- 2. Bottom-Left Amber-Gold 3D Block (1x1) -->
+    <g filter="url(#blockShadow)">
+      <rect x="112" y="290" width="132" height="116" rx="28" fill="#9E5808"/>
+      <rect x="112" y="274" width="132" height="114" rx="28" fill="url(#goldFace)"/>
+      <rect x="117" y="279" width="122" height="104" rx="24" fill="none" stroke="#FFF6CC" stroke-width="2.5" stroke-opacity="0.6"/>
+      <circle cx="178" cy="336" r="28" fill="#B46509"/>
+      <circle cx="178" cy="330" r="28" fill="url(#goldStud)" stroke="#FFFBEB" stroke-width="2.2" stroke-opacity="0.72"/>
+    </g>
+
+    <!-- 3. Right Teal-Azure 3D Vertical Domino Block (1x2) -->
+    <g filter="url(#blockShadow)">
+      <rect x="264" y="150" width="136" height="256" rx="30" fill="#0D4296"/>
+      <rect x="264" y="134" width="136" height="254" rx="30" fill="url(#azureFace)"/>
+      <rect x="269" y="139" width="126" height="244" rx="26" fill="none" stroke="#C4F9FC" stroke-width="2.5" stroke-opacity="0.55"/>
+      <circle cx="332" cy="200" r="30" fill="#0F4EB0"/>
+      <circle cx="332" cy="194" r="30" fill="url(#azureStud)" stroke="#E0FCFF" stroke-width="2.2" stroke-opacity="0.68"/>
+      <circle cx="332" cy="328" r="30" fill="#0F4EB0"/>
+      <circle cx="332" cy="322" r="30" fill="url(#azureStud)" stroke="#E0FCFF" stroke-width="2.2" stroke-opacity="0.68"/>
+    </g>
+  </g>
 </svg>

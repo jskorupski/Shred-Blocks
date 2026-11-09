@@ -1,44 +1,135 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1E293B"/>
-      <stop offset="100%" stop-color="#0F172A"/>
+    <!-- Twilight Architectural Sanctuary Sky Gradient -->
+    <linearGradient id="sanctuarySky" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#17122B"/>
+      <stop offset="48%" stop-color="#2D204E"/>
+      <stop offset="82%" stop-color="#4B2F61"/>
+      <stop offset="100%" stop-color="#6B3E63"/>
     </linearGradient>
-    <linearGradient id="redTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FF6B63"/>
-      <stop offset="100%" stop-color="#F42C38"/>
+
+    <!-- Warm Golden Sanctuary Sunburst Glow -->
+    <radialGradient id="sunburstGlow" cx="50%" cy="46%" r="54%">
+      <stop offset="0%" stop-color="#F6BD60" stop-opacity="0.34"/>
+      <stop offset="55%" stop-color="#E07A5F" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#17122B" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Outer Squircle Champagne-Gold Architectural Rim -->
+    <linearGradient id="goldRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFEAD0" stop-opacity="0.72"/>
+      <stop offset="50%" stop-color="#F6BD60" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#9B72CF" stop-opacity="0.38"/>
     </linearGradient>
-    <linearGradient id="blueTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#58A6FF"/>
-      <stop offset="100%" stop-color="#2074F8"/>
+
+    <!-- Coral-Red 3D Block Gradients -->
+    <linearGradient id="coralFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF786E"/>
+      <stop offset="100%" stop-color="#E83142"/>
     </linearGradient>
-    <linearGradient id="goldTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFE46B"/>
-      <stop offset="100%" stop-color="#FFC400"/>
+    <linearGradient id="coralStud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFA39B"/>
+      <stop offset="100%" stop-color="#F04352"/>
     </linearGradient>
+
+    <!-- Amber-Gold 3D Block Gradients -->
+    <linearGradient id="goldFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE678"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="goldStud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF3B0"/>
+      <stop offset="100%" stop-color="#FBBF24"/>
+    </linearGradient>
+
+    <!-- Teal-Azure 3D Domino Block Gradients -->
+    <linearGradient id="azureFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5CE1E6"/>
+      <stop offset="100%" stop-color="#1D7AFC"/>
+    </linearGradient>
+    <linearGradient id="azureStud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9BF2F5"/>
+      <stop offset="100%" stop-color="#3894FF"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter for 3D Blocks -->
+    <filter id="blockShadow" x="-16%" y="-12%" width="132%" height="136%">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#090614" flood-opacity="0.62"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect x="44" y="44" width="424" height="424" rx="84" fill="#0B1120" stroke="#334155" stroke-width="12"/>
-  <!-- Top Shredder Gate -->
-  <rect x="136" y="34" width="240" height="32" rx="12" fill="#F42C38"/>
-  <circle cx="176" cy="50" r="7" fill="#FFF"/>
-  <circle cx="216" cy="50" r="7" fill="#FFF"/>
-  <circle cx="256" cy="50" r="7" fill="#FFF"/>
-  <circle cx="296" cy="50" r="7" fill="#FFF"/>
-  <circle cx="336" cy="50" r="7" fill="#FFF"/>
-  <!-- Red L-Block -->
-  <path d="M96 112 h140 a24 24 0 0 1 24 24 v116 h-164 a24 24 0 0 1 -24 -24 v-92 a24 24 0 0 1 24 -24 z" fill="#A8141E" transform="translate(0,18)"/>
-  <path d="M96 112 h140 a24 24 0 0 1 24 24 v92 a24 24 0 0 1 -24 24 h-140 a24 24 0 0 1 -24 -24 v-92 a24 24 0 0 1 24 -24 z" fill="url(#redTop)"/>
-  <circle cx="132" cy="180" r="26" fill="#FF7E75" stroke="#C81D27" stroke-width="4"/>
-  <circle cx="204" cy="180" r="26" fill="#FF7E75" stroke="#C81D27" stroke-width="4"/>
-  <!-- Blue Vertical Block -->
-  <rect x="284" y="130" width="132" height="276" rx="28" fill="#0E4499"/>
-  <rect x="284" y="112" width="132" height="276" rx="28" fill="url(#blueTop)"/>
-  <circle cx="350" cy="180" r="28" fill="#6EB4FF" stroke="#1558C0" stroke-width="4"/>
-  <circle cx="350" cy="316" r="28" fill="#6EB4FF" stroke="#1558C0" stroke-width="4"/>
-  <!-- Gold Block -->
-  <rect x="72" y="294" width="188" height="112" rx="26" fill="#B88200"/>
-  <rect x="72" y="276" width="188" height="112" rx="26" fill="url(#goldTop)"/>
-  <circle cx="130" cy="332" r="26" fill="#FFE885" stroke="#D49B00" stroke-width="4"/>
-  <circle cx="202" cy="332" r="26" fill="#FFE885" stroke="#D49B00" stroke-width="4"/>
+
+  <!-- Outer Squircle Sanctuary Plinth -->
+  <rect x="6" y="6" width="500" height="500" rx="112" fill="url(#sanctuarySky)"/>
+  <rect x="6" y="6" width="500" height="500" rx="112" fill="url(#sunburstGlow)"/>
+
+  <!-- Sacred-Geometry Astrolabe Watermark -->
+  <g stroke="#F6BD60" fill="none">
+    <circle cx="256" cy="256" r="206" stroke-width="2.2" stroke-opacity="0.24" stroke-dasharray="6 10"/>
+    <circle cx="256" cy="256" r="176" stroke-width="2" stroke-opacity="0.28"/>
+    <rect x="132" y="132" width="248" height="248" rx="18" stroke-width="1.8" stroke-opacity="0.18"/>
+    <rect x="132" y="132" width="248" height="248" rx="18" stroke-width="1.8" stroke-opacity="0.22" transform="rotate(45 256 256)"/>
+  </g>
+
+  <!-- Top Perimeter Shredder Gate & Flying Voxel Sparks -->
+  <g filter="url(#blockShadow)">
+    <!-- Brass Gate Brackets -->
+    <rect x="128" y="60" width="256" height="44" rx="22" fill="#8C1D28"/>
+    <rect x="128" y="54" width="256" height="42" rx="21" fill="url(#coralFace)" stroke="#FFD6A5" stroke-width="3" stroke-opacity="0.65"/>
+    <!-- Shredder Roller Teeth -->
+    <circle cx="168" cy="75" r="8.5" fill="#FFF8F0"/>
+    <circle cx="203" cy="75" r="8.5" fill="#FFF8F0"/>
+    <circle cx="238" cy="75" r="8.5" fill="#FFF8F0"/>
+    <circle cx="274" cy="75" r="8.5" fill="#FFF8F0"/>
+    <circle cx="309" cy="75" r="8.5" fill="#FFF8F0"/>
+    <circle cx="344" cy="75" r="8.5" fill="#FFF8F0"/>
+  </g>
+  <!-- Shredded Micro-Cube Sparks -->
+  <rect x="192" y="28" width="14" height="14" rx="4" fill="#FF8A80" transform="rotate(-18 199 35)"/>
+  <rect x="250" y="22" width="16" height="16" rx="4" fill="#FFE678" transform="rotate(22 258 30)"/>
+  <rect x="308" y="30" width="13" height="13" rx="3.5" fill="#5CE1E6" transform="rotate(14 314 36)"/>
+
+  <!-- 1. Top-Left Coral-Red 3D Block (1x1) -->
+  <g filter="url(#blockShadow)">
+    <!-- 3D Extruded Bottom Lip -->
+    <rect x="88" y="138" width="152" height="144" rx="34" fill="#8F1522"/>
+    <!-- Beveled Top Face -->
+    <rect x="88" y="118" width="152" height="142" rx="34" fill="url(#coralFace)"/>
+    <!-- Inner Specular Chamfer Rim -->
+    <rect x="94" y="123" width="140" height="132" rx="29" fill="none" stroke="#FFC2BC" stroke-width="3" stroke-opacity="0.52"/>
+    <!-- 3D Circular Stud Shadow + Cap -->
+    <circle cx="164" cy="194" r="35" fill="#9E1926"/>
+    <circle cx="164" cy="187" r="35" fill="url(#coralStud)" stroke="#FFDAD6" stroke-width="2.5" stroke-opacity="0.65"/>
+  </g>
+
+  <!-- 2. Bottom-Left Amber-Gold 3D Block (1x1) -->
+  <g filter="url(#blockShadow)">
+    <!-- 3D Extruded Bottom Lip -->
+    <rect x="88" y="308" width="152" height="136" rx="34" fill="#9E5808"/>
+    <!-- Beveled Top Face -->
+    <rect x="88" y="288" width="152" height="134" rx="34" fill="url(#goldFace)"/>
+    <!-- Inner Specular Chamfer Rim -->
+    <rect x="94" y="293" width="140" height="124" rx="29" fill="none" stroke="#FFF6CC" stroke-width="3" stroke-opacity="0.6"/>
+    <!-- 3D Circular Stud Shadow + Cap -->
+    <circle cx="164" cy="360" r="34" fill="#B46509"/>
+    <circle cx="164" cy="353" r="34" fill="url(#goldStud)" stroke="#FFFBEB" stroke-width="2.5" stroke-opacity="0.72"/>
+  </g>
+
+  <!-- 3. Right Teal-Azure 3D Vertical Domino Block (1x2) -->
+  <g filter="url(#blockShadow)">
+    <!-- 3D Extruded Bottom Lip -->
+    <rect x="266" y="138" width="158" height="306" rx="36" fill="#0D4296"/>
+    <!-- Beveled Top Face -->
+    <rect x="266" y="118" width="158" height="304" rx="36" fill="url(#azureFace)"/>
+    <!-- Inner Specular Chamfer Rim -->
+    <rect x="272" y="123" width="146" height="294" rx="31" fill="none" stroke="#C4F9FC" stroke-width="3" stroke-opacity="0.55"/>
+    <!-- Top 3D Circular Stud -->
+    <circle cx="345" cy="196" r="36" fill="#0F4EB0"/>
+    <circle cx="345" cy="189" r="36" fill="url(#azureStud)" stroke="#E0FCFF" stroke-width="2.5" stroke-opacity="0.68"/>
+    <!-- Bottom 3D Circular Stud -->
+    <circle cx="345" cy="350" r="36" fill="#0F4EB0"/>
+    <circle cx="345" cy="343" r="36" fill="url(#azureStud)" stroke="#E0FCFF" stroke-width="2.5" stroke-opacity="0.68"/>
+  </g>
+
+  <!-- Outer Squircle Architectural Border Overlay -->
+  <rect x="6" y="6" width="500" height="500" rx="112" fill="none" stroke="url(#goldRim)" stroke-width="8"/>
 </svg>
