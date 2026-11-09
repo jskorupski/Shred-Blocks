@@ -186,18 +186,16 @@ npm run verify:visual
 
 ---
 
-## ☁️ Deploying to Cloudflare Pages
+## ☁️ Deploying to Cloudflare (Workers Static Assets & Pages)
 
-This project is pre-configured for zero-config static deployment on **Cloudflare Pages** (including immutable asset caching and instant Service Worker/HTML cache revalidation via [`public/_headers`](public/_headers)):
+This project is pre-configured for zero-config deployment on **Cloudflare Workers & Pages** via [`wrangler.jsonc`](wrangler.jsonc) and [`public/_headers`](public/_headers):
 
-1. In the **Cloudflare Dashboard**, navigate to **Workers & Pages** $\rightarrow$ **Create** $\rightarrow$ **Pages** $\rightarrow$ **Connect to Git** and select [`jskorupski/Shred-Blocks`](https://github.com/jskorupski/Shred-Blocks).
+1. In the **Cloudflare Dashboard**, navigate to **Workers & Pages** $\rightarrow$ **Create** $\rightarrow$ **Connect to Git** and select [`jskorupski/Shred-Blocks`](https://github.com/jskorupski/Shred-Blocks).
 2. Configure the build settings:
    - **Production branch**: `main`
-   - **Framework preset**: `Vite`
    - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-   - **Environment variables (optional)**: `NODE_VERSION = 20`
-3. Attach your custom domain (`shredblocks.skorupski.org`) under **Custom domains**. Cloudflare Pages automatically serves [`public/_headers`](public/_headers) from the built `dist/` root so `/assets/*` are cached immutably (`max-age=31536000, immutable`) while `/`, `/index.html`, `/sw.js`, `/manifest.webmanifest`, and `/version.json` revalidate on every deploy.
+   - **Deploy command (Workers Builds)**: `npx wrangler deploy` (reads [`wrangler.jsonc`](wrangler.jsonc) and serves `./dist` with SPA not-found handling) — or **Build output directory**: `dist` for classic Pages.
+3. Attach your custom domain (`shredblocks.skorupski.org`) under **Custom domains / Routes**.
 
 ---
 
