@@ -2,7 +2,7 @@
    ShredBlocks: Color Jam — Offline-First Service Worker (STOR-03)
    ========================================================================== */
 
-const CACHE_VERSION = 'shredblocks-v1.2.0';
+const CACHE_VERSION = 'shredblocks-v1.2.1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
