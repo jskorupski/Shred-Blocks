@@ -208,6 +208,7 @@ export class ShredBlocksApp {
   private board: BoardState;
   private activeScreen: 'home' | 'game' | 'themes' = 'home';
   private titleOverlayOpen = true;
+  private blueprintMix = 1.0;
   private activeRoadmapRange = 'all';
   private undoStack: BoardState[] = [];
   private preRestartSnapshot: BoardState | null = null;
@@ -978,6 +979,18 @@ export class ShredBlocksApp {
   }
 
   private stepSimulation(dtSec: number): void {
+    // Smoothly transition Sacred-Geometry Astrolabe Wall-Scroll Diagram (`blueprintMix: 1.0 -> 0.0`)
+    // into the full 3D tactile board when entering gameplay from the Title Screen
+    if (this.titleOverlayOpen) {
+      this.blueprintMix = 1.0;
+    } else if (this.blueprintMix > 0) {
+      if (this.saveManager.getPayload().settings.reducedMotion) {
+        this.blueprintMix = 0;
+      } else {
+        this.blueprintMix = Math.max(0, this.blueprintMix - dtSec / 0.72);
+      }
+    }
+
     // Decay rebound animations on blocks
     for (const b of this.board.blocks) {
       if (b.reboundTimerMs > 0) {
@@ -1086,6 +1099,7 @@ export class ShredBlocksApp {
       highContrast: save.settings.highContrast,
       reducedMotion: save.settings.reducedMotion,
       qualityTier: save.settings.qualityTier,
+      blueprintMix: this.titleOverlayOpen ? 1.0 : Math.pow(this.blueprintMix, 1.5),
       dtSec,
       timeSec,
     };
@@ -1167,6 +1181,7 @@ export class ShredBlocksApp {
 
   public openTitleScreen(): void {
     this.titleOverlayOpen = true;
+    this.blueprintMix = 1.0;
     const save = this.saveManager.getPayload();
     const targetLevelId = Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
     if (this.board.levelId !== targetLevelId) {

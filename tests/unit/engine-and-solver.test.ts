@@ -109,6 +109,51 @@ describe('Swept Collision Physics & F-04 Clamping / Floor-Path Exemption', () =>
     expect(res.leadX).toBeGreaterThan(2.5);
   });
 
+  it('prevents corner-bevel channel ping-pong / vibration when holding or jittering diagonally near an open crossroads', () => {
+    const spec: LevelSpec = {
+      id: 9021,
+      name: 'Diagonal Hysteresis Stability Test',
+      difficulty: 'NORMAL',
+      rows: 5,
+      cols: 5,
+      pillars: [[2, 2]],
+      blocks: [{ id: 1, shapeId: '1x1', row: 1, col: 1, colorStack: [1] }],
+      gates: [{ edge: 'RIGHT', spanStart: 1, spanLength: 2, colorQueue: [1] }],
+    };
+    const board = createBoardState(spec);
+
+    // Move diagonally into the 0.30 x 0.30 corner bevel zone around (col=1, row=1)
+    const first = sweepBlockToTarget(board, 1, 1.24, 1.26);
+    // Block should choose the dominant Y channel cleanly (x=1.0, y=1.26)
+    expect(first.leadX).toBeCloseTo(1.0, 4);
+    expect(first.leadY).toBeCloseTo(1.26, 4);
+
+    // Repeatedly call sweepBlockToTarget at the same or slightly jittering diagonal pointer coords:
+    // The block must stay locked in the Y channel and NEVER flip-flop to (1.24, 1.0)!
+    const jitterTargets: Array<[number, number]> = [
+      [1.24, 1.26],
+      [1.25, 1.25],
+      [1.26, 1.23],
+      [1.23, 1.25],
+      [1.24, 1.26],
+    ];
+    for (const [tx, ty] of jitterTargets) {
+      const next = sweepBlockToTarget(board, 1, tx, ty);
+      expect(next.leadX).toBeCloseTo(1.0, 4);
+      expect(next.leadY).toBeCloseTo(ty, 4);
+    }
+
+    // Only when the user pulls deliberately past the hysteresis threshold along X (e.g. tx=1.40, ty=1.22)
+    // should the block cleanly switch to the X channel and stay there without oscillating back.
+    const switched = sweepBlockToTarget(board, 1, 1.42, 1.22);
+    expect(switched.leadY).toBeCloseTo(1.0, 4);
+    expect(switched.leadX).toBeCloseTo(1.42, 4);
+
+    const holdSwitched = sweepBlockToTarget(board, 1, 1.25, 1.24);
+    expect(holdSwitched.leadY).toBeCloseTo(1.0, 4);
+    expect(holdSwitched.leadX).toBeCloseTo(1.25, 4);
+  });
+
   it('exempts a block’s current integer footprint on a mismatched colorful floor path after peeling (F-04)', () => {
     const spec: LevelSpec = {
       id: 903,

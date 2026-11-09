@@ -98,6 +98,8 @@ export interface RenderSceneOptions {
   qualityTier?: QualityTier;
   dtSec?: number;
   timeSec?: number;
+  /** `0.0` = full 3D tactile gameplay, `1.0` = Sacred-Geometry Astrolabe Wall-Scroll Diagram preview */
+  blueprintMix?: number;
   autoGuideMove?: {
     blockId: number;
     targetRow: number;
@@ -307,6 +309,7 @@ uniform vec3 u_scale;
 uniform float u_rotX;
 uniform float u_rotZ;
 uniform vec4 u_uvRect;
+uniform float u_blueprintMix;
 
 out vec3 v_worldPos;
 out vec3 v_localPos;
@@ -331,13 +334,19 @@ void main() {
     n = vec3(n.x * cz - n.y * sz, n.x * sz + n.y * cz, n.z);
   }
 
-  vec3 worldPos = p + u_translate;
-  v_worldPos = worldPos;
+  vec3 rawWorldPos = p + u_translate;
+  v_worldPos = rawWorldPos;
   v_localPos = p;
   v_normal = normalize(n);
   v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
 
-  gl_Position = u_viewProj * vec4(worldPos, 1.0);
+  // In Sacred-Geometry Wall-Scroll Preview Mode (u_blueprintMix = 1.0), compress Z relief
+  // so the board lies flat like an etched celestial astrolabe parchment diagram, then extrudes
+  // smoothly into full 3D relief (0.22 -> 1.0) when the player starts the level.
+  float zRelief = mix(1.0, 0.22, u_blueprintMix);
+  vec3 stagePos = vec3(rawWorldPos.x, rawWorldPos.y, rawWorldPos.z * zRelief);
+
+  gl_Position = u_viewProj * vec4(stagePos, 1.0);
 }
 `;
 
@@ -357,6 +366,8 @@ uniform int u_useClipPlane;
 uniform int u_useTexture;
 uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay
 uniform sampler2D u_atlas;
+uniform float u_blueprintMix;
+uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
 
 out vec4 outColor;
 
@@ -378,13 +389,23 @@ void main() {
       discard;
     }
     if (u_materialStyle == 4) {
-      outColor = vec4(texel.rgb * u_color.rgb, texel.a * u_color.a);
+      vec3 badgeRgb = texel.rgb * u_color.rgb;
+      if (u_blueprintMix > 0.001) {
+        float bLum = dot(badgeRgb, vec3(0.299, 0.587, 0.114));
+        vec3 goldBadge = mix(vec3(0.76, 0.58, 0.32), vec3(1.0, 0.90, 0.68), bLum);
+        badgeRgb = mix(badgeRgb, goldBadge, u_blueprintMix);
+      }
+      outColor = vec4(badgeRgb, texel.a * u_color.a * mix(1.0, 0.86, u_blueprintMix));
       return;
     }
   }
 
   if (u_materialStyle == 4) {
-    outColor = u_color;
+    vec3 flatRgb = u_color.rgb;
+    if (u_blueprintMix > 0.001) {
+      flatRgb = mix(flatRgb, vec3(0.95, 0.77, 0.44), u_blueprintMix * 0.85);
+    }
+    outColor = vec4(flatRgb, u_color.a * mix(1.0, 0.62, u_blueprintMix));
     return;
   }
 
@@ -424,6 +445,86 @@ void main() {
   float heightShade = clamp((v_localPos.z - 0.54) * 1.45, -0.08, 0.14);
   float studRim = (v_localPos.z > 0.565 && N.z < 0.96 && N.z > 0.05) ? (0.16 * max(dot(N, L1), -0.35)) : 0.0;
   vec3 lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim);
+
+  if (u_blueprintMix > 0.001) {
+    // Sacred-Geometry Astrolabe Wall-Scroll Diagram Mode:
+    // Transforms the 3D board into an illuminated nocturnal parchment & gilded brass architectural
+    // blueprint matching the counter-rotating sacred-geometry astrolabe rings behind the board.
+    float maxC = max(u_color.r, max(u_color.g, u_color.b));
+    float minC = min(u_color.r, min(u_color.g, u_color.b));
+    float sat = maxC - minC;
+    float isPiece = smoothstep(0.14, 0.30, sat);
+
+    vec2 relCenter = v_worldPos.xy - u_boardInfo.xy;
+    float distCenter = length(relCenter);
+    float radialGlow = clamp(1.0 - distCenter * 0.14, 0.0, 1.0);
+
+    vec3 scrollPaper = mix(
+      vec3(0.11, 0.085, 0.195),
+      vec3(0.165, 0.125, 0.265),
+      radialGlow
+    );
+    float paperGrain =
+      sin(v_worldPos.x * 38.0 + sin(v_worldPos.y * 29.0)) *
+      cos(v_worldPos.y * 41.0 + sin(v_worldPos.x * 23.0)) * 0.015;
+    scrollPaper += vec3(paperGrain);
+
+    // Delicate architectural ink-wash for colored blocks & exit gates (28% hue + warm vellum)
+    vec3 warmPieceHue = mix(u_color.rgb, vec3(0.96, 0.78, 0.48), 0.26);
+    vec3 pieceWash = mix(scrollPaper + vec3(0.035, 0.025, 0.055), warmPieceHue, 0.29);
+    vec3 scrollFill = mix(scrollPaper, pieceWash, isPiece);
+
+    // 1. 3D Bevel, Chamfer & Circular Stud Rim Drafting Contours
+    float bevelInk = smoothstep(0.95, 0.56, abs(N.z)) * mix(0.46, 0.92, isPiece);
+    float studOutline = (v_localPos.z > 0.56 && N.z < 0.965) ? 0.95 : 0.0;
+
+    // 2. Crisp World-Grid Blueprint Sub-Divisions & Inner Block Framing Rules
+    vec2 cellUv = fract(v_worldPos.xy);
+    float borderDist = min(min(cellUv.x, 1.0 - cellUv.x), min(cellUv.y, 1.0 - cellUv.y));
+    float gridDraftLine = (1.0 - smoothstep(0.014, 0.042, borderDist)) * mix(0.30, 0.64, isPiece);
+    float innerFrameRule =
+      (1.0 - smoothstep(0.007, 0.022, abs(borderDist - 0.115))) * isPiece * 0.50;
+    float cornerCross =
+      (1.0 - smoothstep(0.01, 0.028, min(cellUv.x, 1.0 - cellUv.x))) *
+      (1.0 - smoothstep(0.06, 0.14, min(cellUv.y, 1.0 - cellUv.y))) +
+      (1.0 - smoothstep(0.01, 0.028, min(cellUv.y, 1.0 - cellUv.y))) *
+      (1.0 - smoothstep(0.06, 0.14, min(cellUv.x, 1.0 - cellUv.x)));
+    float floorTicks = clamp(cornerCross, 0.0, 1.0) * (1.0 - isPiece) * 0.36;
+
+    // 3. Fine 45-Degree Architectural Pen Cross-Hatching
+    float hatchA = sin((v_worldPos.x + v_worldPos.y) * 52.0);
+    float hatchB = sin((v_worldPos.x - v_worldPos.y) * 52.0);
+    float penHatch =
+      smoothstep(0.76, 0.96, hatchA) * mix(0.07, 0.32, isPiece) +
+      smoothstep(0.84, 0.98, hatchB) * 0.15 * isPiece;
+
+    // 4. Sacred-Geometry Astrolabe Concentric Rings & 12-Spoke Compass Rays Across the Board
+    float angle = atan(relCenter.y, relCenter.x);
+    float ringWave = sin(distCenter * 8.37758 - u_boardInfo.z * 0.45);
+    float astrolabeRing = smoothstep(0.92, 0.992, ringWave) * 0.28;
+    float compassSpoke =
+      smoothstep(0.965, 0.997, cos(angle * 12.0 + u_boardInfo.z * 0.14)) *
+      smoothstep(0.25, 1.4, distCenter) * 0.18;
+
+    float inkStrength = clamp(
+      max(bevelInk, studOutline) +
+      gridDraftLine +
+      innerFrameRule +
+      floorTicks +
+      penHatch +
+      astrolabeRing +
+      compassSpoke,
+      0.0,
+      1.0
+    );
+
+    vec3 baseGold = mix(vec3(0.96, 0.74, 0.38), warmPieceHue, isPiece * 0.28);
+    vec3 brightGold = vec3(1.0, 0.94, 0.78);
+    vec3 goldInk = mix(baseGold, brightGold, clamp(inkStrength * 0.7, 0.0, 1.0));
+
+    vec3 scrollDiagram = mix(scrollFill, goldInk, inkStrength);
+    lit = mix(lit, scrollDiagram, u_blueprintMix);
+  }
 
   outColor = vec4(clamp(lit, 0.0, 1.0), u_color.a);
 }
@@ -572,6 +673,8 @@ export class Renderer3D {
   private uUseTexture: WebGLUniformLocation | null = null;
   private uMaterialStyle: WebGLUniformLocation | null = null;
   private uAtlas: WebGLUniformLocation | null = null;
+  private uBlueprintMix: WebGLUniformLocation | null = null;
+  private uBoardInfo: WebGLUniformLocation | null = null;
 
   // Uniform locations for particle program
   private uPartViewProj: WebGLUniformLocation | null = null;
@@ -914,6 +1017,8 @@ export class Renderer3D {
     this.uUseTexture = gl.getUniformLocation(mainProg, 'u_useTexture');
     this.uMaterialStyle = gl.getUniformLocation(mainProg, 'u_materialStyle');
     this.uAtlas = gl.getUniformLocation(mainProg, 'u_atlas');
+    this.uBlueprintMix = gl.getUniformLocation(mainProg, 'u_blueprintMix');
+    this.uBoardInfo = gl.getUniformLocation(mainProg, 'u_boardInfo');
 
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
     this.uPartStyle = gl.getUniformLocation(partProg, 'u_particleStyle');
@@ -1940,11 +2045,14 @@ export class Renderer3D {
     );
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+    const blueprintMix = Math.max(0, Math.min(1, options.blueprintMix ?? 0));
     gl.useProgram(this.mainProgram);
     gl.uniformMatrix4fv(this.uViewProj, false, this.camera.getViewProjectionMatrix(false));
     gl.uniform1i(this.uUseClipPlane, 0);
     gl.uniform4f(this.uClipPlane, 0, 0, 1, 0);
     gl.uniform3f(this.uCapColor, 0.2, 0.2, 0.2);
+    gl.uniform1f(this.uBlueprintMix, blueprintMix);
+    gl.uniform3f(this.uBoardInfo, board.cols * 0.5, board.rows * 0.5, timeSec);
 
     if (this.atlasTexture) {
       gl.activeTexture(gl.TEXTURE0);
@@ -1970,7 +2078,9 @@ export class Renderer3D {
     // =========================================================================
     // PASS 4: GPU-INSTANCED 3D SHREDDER PARTICLES PASS
     // =========================================================================
-    this.renderPass4Particles(gl, options.equippedParticle ?? 'micro_cubes');
+    if (blueprintMix < 0.65) {
+      this.renderPass4Particles(gl, options.equippedParticle ?? 'micro_cubes');
+    }
   }
 
   private renderPass1Environment(
@@ -3271,6 +3381,7 @@ export class Renderer3D {
     const matStyle = this.getMaterialStyleCode(skinId);
     const dtMs = dtSec * 1000;
     const reducedMotion = Boolean(options.reducedMotion);
+    const live3DMix = Math.max(0, 1.0 - (options.blueprintMix ?? 0) * 0.92);
 
     // Identify all blocks in the currently grabbed/dragged group (`Pitfall 4B`)
     const draggedGroupIds = new Set<number>();
@@ -3419,9 +3530,10 @@ export class Renderer3D {
       const b = Math.min(1, rawB * colorMul);
 
       // Gentle 3D vertical buoyancy + Spotlight Double-Bounce Hop (`IDLE-01`, `IDLE-02`)
-      const idleBreathZ = isIdleMovable
-        ? wave01 * 0.038 + blockHopEnv * 0.052
-        : bombHeartbeat * 0.5;
+      // Scaled by `live3DMix` so blocks lie still as an etched scroll diagram on the Title Screen
+      const idleBreathZ =
+        (isIdleMovable ? wave01 * 0.038 + blockHopEnv * 0.052 : bombHeartbeat * 0.5) *
+        live3DMix;
       const grabHoverZ =
         !reducedMotion && isGrabbed
           ? Math.sin(timeSec * 7.2) * 0.022 * Math.min(1, block.liftAlpha)
@@ -3435,12 +3547,12 @@ export class Renderer3D {
         bounceRem > 0 && !reducedMotion
           ? Math.sin((1.0 - bounceRem / 0.34) * Math.PI) * 0.14
           : 0;
-      const idleScaleXY = isIdleMovable
-        ? Math.sin(wavePhase) * 0.01 + blockHopEnv * 0.018
-        : bombHeartbeat;
-      const idleScaleZ = isIdleMovable
-        ? Math.sin(wavePhase) * 0.015 + blockHopEnv * 0.025
-        : bombHeartbeat;
+      const idleScaleXY =
+        (isIdleMovable ? Math.sin(wavePhase) * 0.01 + blockHopEnv * 0.018 : bombHeartbeat) *
+        live3DMix;
+      const idleScaleZ =
+        (isIdleMovable ? Math.sin(wavePhase) * 0.015 + blockHopEnv * 0.025 : bombHeartbeat) *
+        live3DMix;
       const scaleXY =
         1.0 + 0.05 * Math.min(1, block.liftAlpha) + bouncePop + idleScaleXY;
       const scaleZ =
@@ -3449,14 +3561,14 @@ export class Renderer3D {
       // Subtle axis-advertising micro-drift along free movement lanes (`IDLE-01`)
       let idleDriftX = 0;
       let idleDriftY = 0;
-      if (isIdleMovable) {
+      if (isIdleMovable && live3DMix > 0.1) {
         const hopWiggle = isSpotlightHopping
           ? Math.sin(spotlightHopT * Math.PI * 4.0) * 0.014
           : 0;
         if (block.axisLock === 'H') {
-          idleDriftX = Math.sin(timeSec * 2.0 + block.id * 1.3) * 0.008 + hopWiggle;
+          idleDriftX = (Math.sin(timeSec * 2.0 + block.id * 1.3) * 0.008 + hopWiggle) * live3DMix;
         } else if (block.axisLock === 'V') {
-          idleDriftY = Math.sin(timeSec * 2.0 + block.id * 1.3) * 0.008 + hopWiggle;
+          idleDriftY = (Math.sin(timeSec * 2.0 + block.id * 1.3) * 0.008 + hopWiggle) * live3DMix;
         }
       }
 

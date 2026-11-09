@@ -334,9 +334,11 @@ export function sweepBlockToTarget(
   if (lock === 'V') desiredDx = 0;
 
   const manhattanDist = Math.abs(desiredDx - curDx) + Math.abs(desiredDy - curDy);
-  const steps = Math.max(1, Math.min(48, Math.ceil(manhattanDist / MAX_SWEEP_SUBSTEP)));
+  const steps = Math.max(2, Math.min(48, Math.ceil(manhattanDist / MAX_SWEEP_SUBSTEP) + 2));
 
   let capturedGateIndex = -1;
+  let channelSwitchedInSweep = false;
+  const BEVEL_SWITCH_HYSTERESIS = 0.08;
 
   const computeSubstepDelta = (
     curVal: number,
@@ -385,16 +387,27 @@ export function sweepBlockToTarget(
           xProgressed = true;
         }
       }
-      // Corner Bevel Assist into Y if X is finished or blocked and within 0.30 cells of an integer column
-      const curOffX = Math.abs(curDx - Math.round(curDx));
-      if (!xProgressed && lock !== 'H' && Math.abs(remY) > 1e-5 && curOffX <= CORNER_BEVEL_THRESHOLD) {
-        const snapDx = Math.round(curDx);
+      // Corner Bevel Assist into Y if X is finished or blocked and within 0.30 cells of an integer column.
+      // Uses Schmitt-trigger hysteresis (`BEVEL_SWITCH_HYSTERESIS`) so diagonal hold/jitter near a corner
+      // never ping-pongs between the X and Y channels.
+      const snapDx = Math.round(curDx);
+      const curOffX = Math.abs(curDx - snapDx);
+      const pullXFromSnap = Math.abs(desiredDx - snapDx);
+      if (
+        !xProgressed &&
+        !channelSwitchedInSweep &&
+        lock !== 'H' &&
+        curOffX <= CORNER_BEVEL_THRESHOLD &&
+        Math.abs(remY) > Math.max(curOffX, pullXFromSnap) + BEVEL_SWITCH_HYSTERESIS
+      ) {
         if (isContinuousOffsetValid(board, group, snapDx, curDy, curDx, curDy)) {
           const dY = computeSubstepDelta(curDy, remY, 0);
           const retryY = sweepSingleAxisWithClamp(board, group, snapDx, curDy, 'Y', dY);
           if (Math.abs(retryY.dy - curDy) > 1e-4) {
             curDx = retryY.dx;
             curDy = retryY.dy;
+            desiredDx = snapDx;
+            channelSwitchedInSweep = true;
           }
         }
       }
@@ -410,16 +423,26 @@ export function sweepBlockToTarget(
           yProgressed = true;
         }
       }
-      // Corner Bevel Assist into X if Y is finished or blocked and within 0.30 cells of an integer row
-      const curOffY = Math.abs(curDy - Math.round(curDy));
-      if (!yProgressed && lock !== 'V' && Math.abs(remX) > 1e-5 && curOffY <= CORNER_BEVEL_THRESHOLD) {
-        const snapDy = Math.round(curDy);
+      // Corner Bevel Assist into X if Y is finished or blocked and within 0.30 cells of an integer row.
+      // Uses Schmitt-trigger hysteresis (`BEVEL_SWITCH_HYSTERESIS`) to prevent channel oscillation.
+      const snapDy = Math.round(curDy);
+      const curOffY = Math.abs(curDy - snapDy);
+      const pullYFromSnap = Math.abs(desiredDy - snapDy);
+      if (
+        !yProgressed &&
+        !channelSwitchedInSweep &&
+        lock !== 'V' &&
+        curOffY <= CORNER_BEVEL_THRESHOLD &&
+        Math.abs(remX) > Math.max(curOffY, pullYFromSnap) + BEVEL_SWITCH_HYSTERESIS
+      ) {
         if (isContinuousOffsetValid(board, group, curDx, snapDy, curDx, curDy)) {
           const dX = computeSubstepDelta(curDx, remX, 0);
           const retryX = sweepSingleAxisWithClamp(board, group, curDx, snapDy, 'X', dX);
           if (Math.abs(retryX.dx - curDx) > 1e-4) {
             curDx = retryX.dx;
             curDy = retryX.dy;
+            desiredDy = snapDy;
+            channelSwitchedInSweep = true;
           }
         }
       }

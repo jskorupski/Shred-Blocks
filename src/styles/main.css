@@ -78,6 +78,7 @@ body {
     );
   color: var(--text-primary);
   line-height: 1.45;
+  overflow: hidden;
   overscroll-behavior: none;
 }
 
@@ -139,6 +140,8 @@ body {
    ========================================================================== */
 
 #app-shell {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -148,6 +151,7 @@ body {
   padding-left: var(--safe-left);
   padding-right: var(--safe-right);
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .screen {
@@ -687,6 +691,7 @@ body {
 .roadmap-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.45rem 0.85rem 1.25rem;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
@@ -1388,6 +1393,7 @@ body {
 .themes-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.75rem 0.85rem 1.25rem;
   display: flex;
   flex-direction: column;
@@ -2174,6 +2180,16 @@ dialog::backdrop {
   display: none !important;
 }
 
+#screen-game.title-backdrop-mode {
+  pointer-events: none;
+  touch-action: none;
+}
+
+#screen-game.title-backdrop-mode .sacred-geometry-ornament {
+  color: rgba(246, 202, 128, 0.58);
+  filter: drop-shadow(0 0 16px rgba(246, 189, 96, 0.36));
+}
+
 #screen-game.title-backdrop-mode .game-stage-wrapper {
   padding-top: calc(4.1rem + var(--safe-top));
   padding-bottom: calc(8.9rem + var(--safe-bottom));
@@ -2203,7 +2219,15 @@ dialog::backdrop {
       rgba(15, 11, 28, 0.04) 68%,
       rgba(12, 9, 24, 0.72) 100%
     );
-  overflow-y: auto;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.title-overlay button {
+  touch-action: manipulation;
 }
 
 .title-crest-banner {

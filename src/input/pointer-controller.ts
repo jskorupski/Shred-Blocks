@@ -404,6 +404,7 @@ export class BoardInputController {
     for (const b of group) {
       this.groupStartCoords.set(b.id, { row: b.row, col: b.col });
       b.liftAlpha = 1;
+      b.reboundTimerMs = 0;
     }
 
     this.callbacks.sound?.playPickup();
