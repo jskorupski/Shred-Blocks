@@ -10,6 +10,12 @@
   "background_color": "#151226",
   "theme_color": "#151226",
   "categories": ["games", "puzzle"],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://shredblocks.skorupski.org/manifest.webmanifest"
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",

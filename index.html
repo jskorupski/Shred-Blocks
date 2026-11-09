@@ -650,33 +650,30 @@
             Slide tactile 3D blocks across the floating courtyard into matching perimeter shredder gates.
           </p>
 
-          <!-- Returning Player Progress Plaque (A3: Chapter + Stars/Coins/Streak) -->
+          <!-- Returning Player Progress Plaque (A3: Compact Single-Bar Chapter + Stars/Coins/Streak) -->
           <div id="title-returning-summary" class="title-returning-plaque" hidden>
-            <div class="title-plaque-chapter">
-              <span id="title-chapter-badge" class="title-chapter-badge">
-                CHAPTER I · SANCTUARY COURTYARD
-              </span>
+            <span id="title-chapter-badge" class="title-chapter-badge">
+              CHAPTER I · SANCTUARY COURTYARD
+            </span>
+            <div class="title-plaque-main-row">
               <span id="title-level-subtitle" class="title-level-subtitle">
                 Level 1 — First Shred
               </span>
-            </div>
-            <div class="title-plaque-stats" role="group" aria-label="Saved Progress Summary">
-              <div class="title-stat-pill">
-                <span class="star-emblem" aria-hidden="true">★</span>
-                <span id="title-stat-stars">0</span>
-                <span class="title-stat-unit">Stars</span>
-              </div>
-              <div class="title-stat-pill">
-                <span class="coin-emblem" aria-hidden="true"></span>
-                <span id="title-stat-coins">250</span>
-                <span class="title-stat-unit">Coins</span>
-              </div>
-              <div class="title-stat-pill">
-                <svg class="econ-svg-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 2L15.5 9.5L22 12L15.5 14.5L12 22L8.5 14.5L2 12L8.5 9.5L12 2Z" />
-                </svg>
-                <span id="title-stat-streak">0</span>
-                <span class="title-stat-unit">Streak</span>
+              <div class="title-plaque-stats" role="group" aria-label="Saved Progress Summary">
+                <div class="title-stat-pill" title="Total Stars">
+                  <span class="star-emblem" aria-hidden="true">★</span>
+                  <span id="title-stat-stars">0</span>
+                </div>
+                <div class="title-stat-pill" title="Coins">
+                  <span class="coin-emblem" aria-hidden="true"></span>
+                  <span id="title-stat-coins">250</span>
+                </div>
+                <div class="title-stat-pill" title="Win Streak">
+                  <svg class="econ-svg-icon" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2L15.5 9.5L22 12L15.5 14.5L12 22L8.5 14.5L2 12L8.5 9.5L12 2Z" />
+                  </svg>
+                  <span id="title-stat-streak">0</span>
+                </div>
               </div>
             </div>
           </div>
@@ -692,59 +689,75 @@
             </button>
           </div>
 
-          <!-- Returning Player Secondary Navigation ('Sanctuary Map' & 'Themes Studio') -->
-          <div id="title-returning-nav" class="title-nav-grid" hidden>
-            <button
-              type="button"
-              id="btn-title-map"
-              class="btn-tactile btn-secondary title-nav-btn"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polygon points="12,3 21,9 21,20 3,20 3,9" />
-                <path d="M9 20v-6h6v6" />
-              </svg>
-              <span>Sanctuary Map</span>
-            </button>
-            <button
-              type="button"
-              id="btn-title-themes"
-              class="btn-tactile btn-secondary title-nav-btn"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polygon points="12,2 22,12 12,22 2,12" />
-                <polygon points="12,7 17,12 12,17 7,12" fill="currentColor" fill-opacity="0.28" />
-              </svg>
-              <span>Themes Studio</span>
-            </button>
-          </div>
+          <!-- Unified Single-Row Quick-Action & Utility Dock -->
+          <div class="title-dock-bar">
+            <div id="title-returning-nav" class="title-nav-grid" hidden>
+              <button
+                type="button"
+                id="btn-title-map"
+                class="title-utility-pill title-nav-pill"
+                title="Open 300-Level Sanctuary Map"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polygon points="12,3 21,9 21,20 3,20 3,9" />
+                  <path d="M9 20v-6h6v6" />
+                </svg>
+                <span>Map</span>
+              </button>
+              <button
+                type="button"
+                id="btn-title-themes"
+                class="title-utility-pill title-nav-pill"
+                title="Open Themes Studio"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polygon points="12,2 22,12 12,22 2,12" />
+                  <polygon points="12,7 17,12 12,17 7,12" fill="currentColor" fill-opacity="0.28" />
+                </svg>
+                <span>Themes</span>
+              </button>
+            </div>
 
-          <!-- Subtle Utility Footer ('Restore / Sync Save' & 'Settings') -->
-          <div id="title-utility-row" class="title-utility-row">
-            <button
-              type="button"
-              id="btn-title-sync"
-              class="title-utility-pill"
-              title="Backup or Restore Save Code"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="4" y="4" width="16" height="16" rx="3" />
-                <circle cx="12" cy="12" r="3.5" />
-                <path d="M12 4v4.5M12 15.5V20" />
-              </svg>
-              <span id="title-sync-label">Restore Save</span>
-            </button>
-            <button
-              type="button"
-              id="btn-title-settings"
-              class="title-utility-pill"
-              title="Audio, Visuals &amp; Accessibility Settings"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3.2" />
-                <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
-              </svg>
-              <span>Settings</span>
-            </button>
+            <div id="title-utility-row" class="title-utility-row">
+              <button
+                type="button"
+                id="btn-title-sync"
+                class="title-utility-pill"
+                title="Backup or Restore Save Code"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="4" y="4" width="16" height="16" rx="3" />
+                  <circle cx="12" cy="12" r="3.5" />
+                  <path d="M12 4v4.5M12 15.5V20" />
+                </svg>
+                <span id="title-sync-label">Restore Save</span>
+              </button>
+              <button
+                type="button"
+                id="btn-title-settings"
+                class="title-utility-pill"
+                title="Audio, Visuals &amp; Accessibility Settings"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2" />
+                  <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
+                </svg>
+                <span>Settings</span>
+              </button>
+              <button
+                type="button"
+                id="btn-title-install"
+                class="title-utility-pill title-install-pill"
+                title="Install App for Offline Full-Screen Play"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 3v12" />
+                  <path d="m7 11 5 5 5-5" />
+                  <path d="M4 19h16" />
+                </svg>
+                <span>Install</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>

@@ -198,6 +198,8 @@ const PARTICLE_CATALOG: ReadonlyArray<{ id: ParticleStyleId; name: string; desc:
 ];
 
 export class ShredBlocksApp {
+  private static readonly PWA_INSTALLED_STORAGE_KEY = 'shredblocks_pwa_installed_v1';
+
   public readonly saveManager: SaveManager;
   public readonly sound: SoundEngine;
   public readonly renderer: Renderer3D;
@@ -225,6 +227,7 @@ export class ShredBlocksApp {
   private pendingImportPayload: SavePayloadV1 | null = null;
   private pendingImportRawCode: string | null = null;
   private deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
+  private pwaInstalledDetected = false;
   private waitingServiceWorker: ServiceWorker | null = null;
 
   constructor() {
@@ -1135,6 +1138,7 @@ export class ShredBlocksApp {
         gameEl.inert = true;
         gameEl.classList.add('title-backdrop-mode');
       }
+      this.renderer.resize();
       return;
     }
 
@@ -1155,6 +1159,9 @@ export class ShredBlocksApp {
       gameEl.hidden = this.activeScreen !== 'game';
       gameEl.inert = false;
       gameEl.classList.remove('title-backdrop-mode');
+    }
+    if (this.activeScreen === 'game') {
+      this.renderer.resize();
     }
   }
 
@@ -1303,8 +1310,9 @@ export class ShredBlocksApp {
         : `▶ CONTINUE · LEVEL ${targetSpec.id}`;
     }
     if (titleSyncLabel) {
-      titleSyncLabel.textContent = isNewPlayer ? 'Restore Save' : 'Backup & Sync';
+      titleSyncLabel.textContent = isNewPlayer ? 'Restore Save' : 'Sync';
     }
+    this.syncInstallUiVisibility();
 
     // Settings Checkboxes & Selects
     const setChecked = (id: string, val: boolean) => {
@@ -2110,6 +2118,9 @@ export class ShredBlocksApp {
       this.sound.playButtonTap();
       this.openModal('pause');
     });
+    document.getElementById('btn-title-install')?.addEventListener('click', () => {
+      void this.handleInstallAction();
+    });
     document.getElementById('btn-home-title')?.addEventListener('click', () => {
       this.sound.playButtonTap();
       this.openTitleScreen();
@@ -2146,8 +2157,7 @@ export class ShredBlocksApp {
     });
 
     document.getElementById('btn-install-header')?.addEventListener('click', () => {
-      this.sound.playButtonTap();
-      this.openModal('install');
+      void this.handleInstallAction();
     });
 
     // Roadmap Filter Chips
@@ -2463,7 +2473,10 @@ export class ShredBlocksApp {
     document.getElementById('btn-trigger-native-install')?.addEventListener('click', async () => {
       if (!this.deferredInstallPrompt) return;
       await this.deferredInstallPrompt.prompt();
-      await this.deferredInstallPrompt.userChoice;
+      const choice = await this.deferredInstallPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        this.markPwaInstalled();
+      }
       this.deferredInstallPrompt = null;
       this.closeAllModals();
     });
@@ -2473,11 +2486,117 @@ export class ShredBlocksApp {
     });
   }
 
+  public isPwaInstalled(): boolean {
+    if (typeof window === 'undefined') return false;
+    const standaloneMedia =
+      window.matchMedia?.(
+        '(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)'
+      ).matches ?? false;
+    const iosStandalone = Boolean(
+      (window.navigator as Navigator & { standalone?: boolean }).standalone
+    );
+    const twaReferrer =
+      typeof document !== 'undefined' && document.referrer.startsWith('android-app://');
+
+    if (standaloneMedia || iosStandalone || twaReferrer) {
+      this.pwaInstalledDetected = true;
+      try {
+        window.localStorage.setItem(ShredBlocksApp.PWA_INSTALLED_STORAGE_KEY, '1');
+      } catch {
+        // Ignore storage errors
+      }
+      return true;
+    }
+
+    try {
+      if (window.localStorage.getItem(ShredBlocksApp.PWA_INSTALLED_STORAGE_KEY) === '1') {
+        return true;
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
+    return this.pwaInstalledDetected;
+  }
+
+  private markPwaInstalled(): void {
+    this.pwaInstalledDetected = true;
+    try {
+      window.localStorage.setItem(ShredBlocksApp.PWA_INSTALLED_STORAGE_KEY, '1');
+    } catch {
+      // Ignore storage errors
+    }
+    this.syncInstallUiVisibility();
+  }
+
+  private syncInstallUiVisibility(): void {
+    const installed = this.isPwaInstalled();
+    const headerInstallBtn = document.getElementById('btn-install-header');
+    const titleInstallBtn = document.getElementById('btn-title-install');
+    if (headerInstallBtn) headerInstallBtn.hidden = installed;
+    if (titleInstallBtn) titleInstallBtn.hidden = installed;
+  }
+
+  private async handleInstallAction(): Promise<void> {
+    this.sound.playButtonTap();
+    if (this.deferredInstallPrompt) {
+      try {
+        await this.deferredInstallPrompt.prompt();
+        const choice = await this.deferredInstallPrompt.userChoice;
+        this.deferredInstallPrompt = null;
+        if (choice.outcome === 'accepted') {
+          this.markPwaInstalled();
+          this.closeAllModals();
+        }
+        return;
+      } catch {
+        // Fall through to install guide modal
+      }
+    }
+    this.openModal('install');
+  }
+
   private setupPwaAndServiceWorker(): void {
+    this.syncInstallUiVisibility();
+
     window.addEventListener('beforeinstallprompt', (e: Event) => {
       e.preventDefault();
       this.deferredInstallPrompt = e as BeforeInstallPromptEvent;
+      this.syncInstallUiVisibility();
     });
+
+    window.addEventListener('appinstalled', () => {
+      this.deferredInstallPrompt = null;
+      this.markPwaInstalled();
+      this.closeAllModals();
+      this.showGameToast('📲 ShredBlocks installed to your device!');
+    });
+
+    try {
+      window
+        .matchMedia('(display-mode: standalone)')
+        .addEventListener('change', () => this.syncInstallUiVisibility());
+    } catch {
+      // Ignore on legacy browsers
+    }
+
+    const navWithRelated = navigator as Navigator & {
+      getInstalledRelatedApps?: () => Promise<
+        Array<{ id?: string; platform?: string; url?: string }>
+      >;
+    };
+    if (typeof navWithRelated.getInstalledRelatedApps === 'function') {
+      void navWithRelated
+        .getInstalledRelatedApps()
+        .then((apps) => {
+          if (Array.isArray(apps) && apps.length > 0) {
+            this.markPwaInstalled();
+          }
+        })
+        .catch(() => {
+          // Ignore unsupported or cross-origin frame errors
+        });
+    }
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
