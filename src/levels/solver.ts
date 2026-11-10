@@ -323,8 +323,8 @@ class MinPriorityQueue {
   pop(): SearchNode | undefined {
     if (this.heap.length === 0) return undefined;
     const top = this.heap[0];
-    const last = this.heap.pop()!;
-    if (this.heap.length > 0) {
+    const last = this.heap.pop();
+    if (last !== undefined && this.heap.length > 0) {
       this.heap[0] = last;
       this.sinkDown(0);
     }
@@ -571,7 +571,8 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
   let expandedNodes = 0;
 
   while (open.length > 0 && expandedNodes < maxExpandedNodes) {
-    const current = open.pop()!;
+    const current = open.pop();
+    if (!current) break;
     expandedNodes++;
 
     const moves = generateMacroMoves(current.board);

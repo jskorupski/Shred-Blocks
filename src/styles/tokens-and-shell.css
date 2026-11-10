@@ -79,6 +79,7 @@ body {
 
 [hidden],
 .hidden {
+  /* biome-ignore lint/complexity/noImportantStyles: HTML [hidden] attribute and .hidden utility must override component display flex/grid rules */
   display: none !important;
 }
 

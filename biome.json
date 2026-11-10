@@ -43,21 +43,7 @@
         "noUnusedVariables": "error"
       },
       "style": {
-        "noNonNullAssertion": "off",
-        "useTemplate": "off",
-        "noDescendingSpecificity": "off"
-      },
-      "suspicious": {
-        "noExplicitAny": "off",
-        "noAssignInExpressions": "off"
-      },
-      "complexity": {
-        "noForEach": "off",
-        "noImportantStyles": "off"
-      },
-      "a11y": {
-        "useKeyWithClickEvents": "off",
-        "noSvgWithoutTitle": "off"
+        "noNonNullAssertion": "error"
       }
     }
   }

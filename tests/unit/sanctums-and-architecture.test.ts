@@ -203,8 +203,8 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(stasisMove1.moved).toBe(true);
     expect(stasisBoard.barriers[0].open).toBe(false);
     // Key 2 unlocked Room 0's Block 2 (id=2), NOT locked Room 1's Block 11 (id=11)!
-    expect(stasisBoard.blocks.find((b) => b.id === 2)!.chained).toBe(false);
-    expect(stasisBoard.blocks.find((b) => b.id === 11)!.chained).toBe(true);
+    expect(stasisBoard.blocks.find((b) => b.id === 2)?.chained).toBe(false);
+    expect(stasisBoard.blocks.find((b) => b.id === 11)?.chained).toBe(true);
     // Locked Room 1's TOP gate kept its iceCount=2 and shutterOpen=true in stasis!
     expect(stasisBoard.gates[1].iceCount).toBe(2);
     expect(stasisBoard.gates[1].shutterOpen).toBe(true);
@@ -254,7 +254,8 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     // Generator in sealed Room 1 did NOT spawn during createBoardState while Room 1 was locked
     expect(boosterShieldBoard.generators[0].queueCursor).toBe(0);
     // Non-convex PLUS_5 at (0, 0) resolves to Room 1 even if [0, 0] is a pillar
-    const plusBlock = boosterShieldBoard.blocks.find((b) => b.id === 20)!;
+    const plusBlock = boosterShieldBoard.blocks.find((b) => b.id === 20);
+    if (!plusBlock) throw new Error('Expected plusBlock id=20');
     expect(getBlockRoomId(boosterShieldBoard, plusBlock)).toBe(1);
     expect(isBlockInLockedRoom(boosterShieldBoard, plusBlock)).toBe(true);
 

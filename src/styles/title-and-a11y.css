@@ -7,7 +7,7 @@
 #screen-game.title-backdrop-mode .booster-dock,
 #screen-game.title-backdrop-mode #unlock-toast,
 #screen-game.title-backdrop-mode #booster-target-banner {
-  display: none !important;
+  display: none;
 }
 
 #screen-game.title-backdrop-mode {
@@ -26,9 +26,9 @@
 }
 
 #screen-game.title-backdrop-mode #game-canvas {
-  border-color: transparent !important;
-  box-shadow: none !important;
-  background: transparent !important;
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
 }
 
 .title-overlay {
@@ -335,7 +335,7 @@
 }
 
 .title-nav-grid[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .title-utility-row {
@@ -375,7 +375,7 @@
 }
 
 .title-utility-pill[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .title-nav-pill {
@@ -448,7 +448,9 @@ body.reduced-motion .astrolabe-star-group,
 body.reduced-motion .btn-title-hero,
 body.reduced-motion .level-node-card.current-level,
 body.reduced-motion .booster-btn.targeting {
+  /* biome-ignore lint/complexity/noImportantStyles: Reduced-motion accessibility toggle must unconditionally halt all keyframe animations */
   animation: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Reduced-motion accessibility toggle must unconditionally halt all CSS transitions */
   transition: none !important;
 }
 
@@ -470,7 +472,7 @@ body.high-contrast {
 }
 
 body.high-contrast .top-economy-bar,
-body.high-contrast .hud-top-bar,
+body.high-contrast #screen-game .hud-top-bar,
 body.high-contrast .hud-bottom-dock,
 body.high-contrast .bottom-tab-bar,
 body.high-contrast .dialog-card,

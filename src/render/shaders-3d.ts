@@ -407,11 +407,14 @@ export function compileShader(gl: WebGL2RenderingContext, type: number, source: 
 }
 
 export function createMeshHandle(gl: WebGL2RenderingContext, mesh: MeshData): GLMeshHandle {
-  const vao = gl.createVertexArray()!;
-  const posBuffer = gl.createBuffer()!;
-  const normBuffer = gl.createBuffer()!;
-  const uvBuffer = gl.createBuffer()!;
-  const indexBuffer = gl.createBuffer()!;
+  const vao = gl.createVertexArray();
+  const posBuffer = gl.createBuffer();
+  const normBuffer = gl.createBuffer();
+  const uvBuffer = gl.createBuffer();
+  const indexBuffer = gl.createBuffer();
+  if (!vao || !posBuffer || !normBuffer || !uvBuffer || !indexBuffer) {
+    throw new Error('Failed to allocate WebGL2 mesh buffers');
+  }
 
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);

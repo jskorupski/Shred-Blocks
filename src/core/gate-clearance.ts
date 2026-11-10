@@ -382,7 +382,9 @@ export function resolveClearCascade(
   let safetyCounter = 0;
   while (pendingQueue.length > 0 && safetyCounter < 64) {
     safetyCounter++;
-    const { block, gateIndex } = pendingQueue.shift()!;
+    const nextItem = pendingQueue.shift();
+    if (!nextItem) break;
+    const { block, gateIndex } = nextItem;
     if (block.status !== 'ACTIVE') continue;
 
     const gate = gateIndex >= 0 ? board.gates[gateIndex] : undefined;

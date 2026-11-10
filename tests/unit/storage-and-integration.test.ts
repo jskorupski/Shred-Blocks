@@ -51,7 +51,7 @@ function createMemoryStorage(): Storage {
       store.clear();
     },
     getItem(key: string) {
-      return store.has(key) ? store.get(key)! : null;
+      return store.get(key) ?? null;
     },
     key(index: number) {
       return Array.from(store.keys())[index] ?? null;
@@ -232,7 +232,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(reconciled.currentLevelId).toBe(12);
 
       // Verify localStorage was healed with the newer IndexedDB payload
-      const healedLocal = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY)!) as SavePayloadV1;
+      const healedLocal = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY) ?? '{}') as SavePayloadV1;
       expect(healedLocal.writeSeq).toBe(9);
       expect(healedLocal.coins).toBe(950);
     });
@@ -312,9 +312,9 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       // 1-tap restorePreImportBackup restores the pre-import state with incremented writeSeq
       const restored = manager.restorePreImportBackup();
       expect(restored).not.toBeNull();
-      expect(restored!.coins).toBe(afterSkip.coins);
-      expect(restored!.highestLevelUnlocked).toBe(2);
-      expect(restored!.writeSeq).toBeGreaterThan(afterImport.writeSeq);
+      expect(restored?.coins).toBe(afterSkip.coins);
+      expect(restored?.highestLevelUnlocked).toBe(2);
+      expect(restored?.writeSeq).toBeGreaterThan(afterImport.writeSeq);
 
       // Also verify importSaveJson
       const afterJsonImport = manager.importSaveJson(JSON.stringify(incoming));
@@ -405,8 +405,8 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       // With 1.30x Voronoi priority weight (0.703 / 1.30 = 0.541 < 0.643), the 1x1 monomino wins!
       const picked = pickBlockAtBoardPoint(board, 2.05, 1.96);
       expect(picked).not.toBeNull();
-      expect(picked!.id).toBe(2);
-      expect(picked!.shapeId).toBe('1x1');
+      expect(picked?.id).toBe(2);
+      expect(picked?.shapeId).toBe('1x1');
     });
 
     it('targets non-convex blocks with Hammer via BoardInputController', () => {

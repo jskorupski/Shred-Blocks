@@ -508,7 +508,8 @@ export class ShredBlocksApp implements AppViewContext {
       this.saveManager.spendBooster('UNDO');
     }
 
-    const previous = this.undoStack.pop()!;
+    const previous = this.undoStack.pop();
+    if (!previous) return;
     this.board = previous;
     this.levelOutcomeHandled = false;
     this.lastPointerActivityMs = performance.now();

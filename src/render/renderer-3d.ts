@@ -668,7 +668,8 @@ export class Renderer3D implements RenderPassContext {
   }
 
   private renderWebGL2(board: BoardState, options: RenderSceneOptions, dtSec = 1 / 60): void {
-    const gl = this.gl!;
+    const gl = this.gl;
+    if (!gl) return;
     const trayId = options.equippedTray ?? 'industrial_slate';
     const skinId = options.equippedSkin ?? 'smooth_bevel';
     const highContrast = Boolean(options.highContrast);
