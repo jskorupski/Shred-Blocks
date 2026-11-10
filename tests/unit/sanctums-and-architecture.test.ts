@@ -378,6 +378,25 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(getLevelSpec(256).blocks.length).toBeGreaterThanOrEqual(9);
   });
 
+  it('VIEWPORT-01 & PWA-UPDATE-01: enforces zero-cutoff viewport geometry rules (no viewport-fit=cover, container-query board stage, and in-flow PWA update ribbon)', () => {
+    const repoRoot = path.resolve(process.cwd());
+    const indexHtml = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+    expect(indexHtml).not.toContain('viewport-fit=cover');
+
+    const tokensCss = fs.readFileSync(path.join(repoRoot, 'src/styles/tokens-and-shell.css'), 'utf8');
+    expect(tokensCss).toContain('--app-height');
+    expect(tokensCss).toContain('height: var(--app-height, 100%)');
+
+    const gameCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-game.css'), 'utf8');
+    expect(gameCss).toContain('container-type: size');
+    expect(gameCss).toContain('98cqh');
+    expect(gameCss).not.toContain('min-height: 250px');
+
+    const dialogsCss = fs.readFileSync(path.join(repoRoot, 'src/styles/dialogs.css'), 'utf8');
+    expect(dialogsCss).toContain('.pwa-update-badge');
+    expect(dialogsCss).not.toContain('bottom: calc(4.2rem + var(--safe-bottom))');
+  });
+
   it('ARCH-ERGONOMICS-01: enforces single-call agentic file-size limits (<= 800 lines and <= 45,000 bytes) across all repository source, style, test, script, and doc files', () => {
     const repoRoot = path.resolve(process.cwd());
     const trackedExtensions = new Set(['.ts', '.css', '.html', '.md', '.js', '.json', '.jsonc', '.svg']);

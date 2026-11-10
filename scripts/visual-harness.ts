@@ -577,13 +577,44 @@ async function runVisualHarness(): Promise<void> {
       path: join(ARTIFACT_SCRATCH_DIR, '34-level-025-twin-sanctum-title-scroll-mobile.png'),
     });
 
+    // 43. Title Screen with Contextual In-Flow Sanctuary Update Ribbon (`PWA-UPDATE-01`)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setPwaUpdateBannerVisible(true);
+    });
+    await mobileL11Page.waitForTimeout(140);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '43-title-screen-pwa-update-ribbon-mobile.png'),
+    });
+
+    // 44. Sanctuary Map (#screen-home) with Contextual In-Flow Sanctuary Update Ribbon (`PWA-UPDATE-01`)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home');
+      window.__SHREDBLOCKS_DEBUG__.setPwaUpdateBannerVisible(true);
+    });
+    await mobileL11Page.waitForTimeout(140);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '44-home-map-pwa-update-ribbon-mobile.png'),
+    });
+
+    // 45. Android WebAPK 472x986 Level 29 (`Neon Crucible`) Zero-Cutoff Verification (`VIEWPORT-01`)
+    await mobileL11Page.setViewportSize({ width: 472, height: 986 });
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setPwaUpdateBannerVisible(false);
+      window.__SHREDBLOCKS_DEBUG__.setPlayMode('TIMED');
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(29);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '45-level-029-android-472x986-no-cutoff-mobile.png'),
+    });
+
     await mobileL11Ctx.close();
 
     if (errors.length > 0) {
       throw new Error(`Visual harness encountered runtime errors:\n${errors.join('\n')}`);
     }
 
-    console.log('✅ Captured all 39 multi-viewport visual verification screenshots cleanly with 0 errors.');
+    console.log('✅ Captured all 42 multi-viewport visual verification screenshots cleanly with 0 errors.');
   } finally {
     if (browser) {
       await browser.close().catch(() => {});

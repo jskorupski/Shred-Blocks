@@ -242,8 +242,9 @@
 /* Center 3D Board Stage */
 .board-stage {
   position: relative;
-  flex: 1 1 auto;
-  min-height: 250px;
+  flex: 1 1 0%;
+  min-height: 0;
+  container-type: size;
   width: 100%;
   display: flex;
   align-items: center;
@@ -269,6 +270,13 @@
   filter: drop-shadow(0 0 12px rgba(246, 189, 96, 0.28));
   pointer-events: none;
   z-index: 1;
+}
+
+@supports (width: 100cqw) {
+  .sacred-geometry-ornament {
+    width: min(96cqw, 96cqh, 660px);
+    height: min(96cqw, 96cqh, 660px);
+  }
 }
 
 .sacred-geometry-ornament .ornament-outer-wheel {
@@ -321,6 +329,13 @@
   user-select: none;
   -webkit-user-select: none;
   display: block;
+}
+
+@supports (width: 100cqw) {
+  #game-canvas {
+    width: min(98cqw, calc(98cqh * var(--board-aspect)), calc(660px * var(--board-aspect)));
+    max-height: min(98cqh, 660px);
+  }
 }
 
 /* Floating Banners Over 3D Stage */
@@ -545,4 +560,20 @@
   background: rgba(18, 14, 34, 0.78);
   border: 1px solid rgba(246, 213, 168, 0.3);
   color: #cbb8df;
+}
+
+@media (max-width: 520px), (max-height: 740px) {
+  .booster-dock {
+    gap: 0.34rem;
+    padding: 0.38rem 0.48rem calc(0.45rem + var(--safe-bottom));
+  }
+  .booster-btn {
+    min-height: 54px;
+    min-width: 0;
+    padding: 0.24rem 0.14rem;
+  }
+  .booster-icon {
+    width: 24px;
+    height: 24px;
+  }
 }

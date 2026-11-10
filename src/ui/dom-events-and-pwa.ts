@@ -467,8 +467,150 @@ export async function handleInstallActionImpl(app: AppViewContext): Promise<void
   app.openModal('install');
 }
 
+export const SW_UPDATE_THROTTLE_MS = 60_000;
+export const SW_COLD_BOOT_AUTO_UPDATE_WINDOW_MS = 1_600;
+export const SW_LONG_IDLE_AUTO_UPDATE_MS = 30 * 60 * 1000;
+
+export function syncViewportGeometryImpl(app: AppViewContext): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const docEl = document.documentElement;
+  const clientH = docEl.clientHeight || window.innerHeight || 0;
+  const innerH = window.innerHeight || clientH;
+  const vv = window.visualViewport;
+  const vvH = vv && vv.height > 0 ? vv.height : innerH;
+  const vvOffsetTop = vv && vv.offsetTop > 0 ? Math.round(vv.offsetTop) : 0;
+
+  let effectiveHeight = Math.round(Math.min(clientH, innerH, vvH));
+  const isMobileOrStandalone =
+    app.isPwaInstalled() || (window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false);
+  const screenH = window.screen?.height ?? 0;
+  const availH = window.screen?.availHeight ?? 0;
+  if (
+    isMobileOrStandalone &&
+    screenH > 0 &&
+    availH > 0 &&
+    effectiveHeight >= screenH - 4 &&
+    availH < effectiveHeight &&
+    screenH - availH <= 96
+  ) {
+    effectiveHeight = Math.min(effectiveHeight, availH);
+  }
+
+  if (effectiveHeight > 0) {
+    docEl.style.setProperty('--app-height', `${effectiveHeight}px`);
+  }
+  docEl.style.setProperty('--vv-offset-top', `${vvOffsetTop}px`);
+
+  if (app.activeScreen === 'game' || app.titleOverlayOpen) {
+    app.renderer.resize();
+  }
+}
+
+export function syncPwaUpdateBannerImpl(app: AppViewContext): void {
+  const toast = document.getElementById('pwa-update-toast');
+  if (!toast) return;
+
+  const shouldShow = app.pwaUpdateAvailable && !app.pwaUpdateDismissedInSession;
+  if (app.titleOverlayOpen) {
+    const titleOverlay = document.getElementById('title-overlay');
+    const crestBanner = titleOverlay?.querySelector('.title-crest-banner');
+    if (titleOverlay && crestBanner && toast.previousElementSibling !== crestBanner) {
+      crestBanner.after(toast);
+    }
+    toast.hidden = !shouldShow;
+    return;
+  }
+
+  if (app.activeScreen === 'home') {
+    const homeDash = document.querySelector('.home-dashboard');
+    if (homeDash && toast.parentElement !== homeDash) {
+      homeDash.prepend(toast);
+    }
+    toast.hidden = !shouldShow;
+    return;
+  }
+
+  // Never show update banner during active gameplay (#screen-game) or Themes Studio
+  toast.hidden = true;
+}
+
+export function checkForPwaUpdateImpl(app: AppViewContext, force = false): void {
+  if (!app.titleOverlayOpen && app.activeScreen === 'game') {
+    return;
+  }
+  const reg = app.swRegistration;
+  if (reg?.waiting && navigator.serviceWorker?.controller) {
+    app.waitingServiceWorker = reg.waiting;
+    app.pwaUpdateAvailable = true;
+  }
+  app.syncPwaUpdateBanner();
+
+  if (!reg) return;
+  const now = Date.now();
+  if (!force && now - app.lastSwUpdateCheckMs < SW_UPDATE_THROTTLE_MS) {
+    return;
+  }
+  app.lastSwUpdateCheckMs = now;
+  void reg.update().catch(() => {
+    // Ignore offline or restricted environment update errors
+  });
+}
+
+function shouldAutoApplyWaitingWorker(app: AppViewContext): boolean {
+  if (app.board.movesCommitted > 0 || app.isAnyModalOpen()) {
+    return false;
+  }
+  const isUntouchedColdBootOnTitle =
+    app.titleOverlayOpen &&
+    !app.hasUserInteracted &&
+    typeof performance !== 'undefined' &&
+    performance.now() <= SW_COLD_BOOT_AUTO_UPDATE_WINDOW_MS;
+  const isLongIdleResumeOnMenu =
+    (app.titleOverlayOpen || app.activeScreen === 'home') &&
+    app.lastBackgroundedAtMs > 0 &&
+    Date.now() - app.lastBackgroundedAtMs >= SW_LONG_IDLE_AUTO_UPDATE_MS;
+  return isUntouchedColdBootOnTitle || isLongIdleResumeOnMenu;
+}
+
 export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
+  app.syncViewportGeometry();
   app.syncInstallUiVisibility();
+  app.syncPwaUpdateBanner();
+
+  const onViewportChange = () => app.syncViewportGeometry();
+  window.addEventListener('resize', onViewportChange, { passive: true });
+  window.addEventListener('orientationchange', onViewportChange, { passive: true });
+  window.visualViewport?.addEventListener('resize', onViewportChange, { passive: true });
+  window.visualViewport?.addEventListener('scroll', onViewportChange, { passive: true });
+
+  const markInteracted = () => {
+    app.hasUserInteracted = true;
+  };
+  window.addEventListener('pointerdown', markInteracted, { once: true, passive: true });
+  window.addEventListener('keydown', markInteracted, { once: true, passive: true });
+
+  let refreshing = false;
+  let swActivationApproved = false;
+  const triggerWaitingWorkerActivation = () => {
+    if (!app.waitingServiceWorker) return;
+    swActivationApproved = true;
+    app.waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      app.lastBackgroundedAtMs = Date.now();
+      return;
+    }
+    app.syncViewportGeometry();
+    if (app.titleOverlayOpen || app.activeScreen === 'home') {
+      if (app.waitingServiceWorker && shouldAutoApplyWaitingWorker(app)) {
+        triggerWaitingWorkerActivation();
+        return;
+      }
+      app.checkForPwaUpdate(false);
+    }
+  });
 
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     e.preventDefault();
@@ -484,9 +626,10 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
   });
 
   try {
-    window
-      .matchMedia('(display-mode: standalone)')
-      .addEventListener('change', () => app.syncInstallUiVisibility());
+    window.matchMedia('(display-mode: standalone)').addEventListener('change', () => {
+      app.syncInstallUiVisibility();
+      app.syncViewportGeometry();
+    });
   } catch {
     // Ignore on legacy browsers
   }
@@ -507,14 +650,26 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
       });
   }
 
+  const handleWaitingWorkerReady = (worker: ServiceWorker) => {
+    app.waitingServiceWorker = worker;
+    app.pwaUpdateAvailable = true;
+    app.pwaUpdateDismissedInSession = false;
+    if (shouldAutoApplyWaitingWorker(app)) {
+      triggerWaitingWorkerActivation();
+      return;
+    }
+    app.syncPwaUpdateBanner();
+  };
+
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+    const registerSw = () => {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
+          app.swRegistration = reg;
+          app.lastSwUpdateCheckMs = Date.now();
           if (reg.waiting && navigator.serviceWorker.controller) {
-            app.waitingServiceWorker = reg.waiting;
-            showPwaUpdateToastImpl();
+            handleWaitingWorkerReady(reg.waiting);
           }
 
           reg.addEventListener('updatefound', () => {
@@ -522,8 +677,7 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
             if (!newWorker) return;
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                app.waitingServiceWorker = newWorker;
-                showPwaUpdateToastImpl();
+                handleWaitingWorkerReady(newWorker);
               }
             });
           });
@@ -531,33 +685,31 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
         .catch(() => {
           // Ignore SW errors in restricted test environments
         });
-    });
+    };
 
-    let refreshing = false;
-    let userRequestedSwUpdate = false;
+    if (document.readyState === 'complete') {
+      registerSw();
+    } else {
+      window.addEventListener('load', registerSw, { once: true });
+    }
+
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!userRequestedSwUpdate || refreshing) return;
+      if (!swActivationApproved || refreshing) return;
       refreshing = true;
       window.location.reload();
     });
-
-    document.getElementById('btn-pwa-update-now')?.addEventListener('click', () => {
-      if (app.waitingServiceWorker) {
-        userRequestedSwUpdate = true;
-        app.waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
-      }
-      const toast = document.getElementById('pwa-update-toast');
-      if (toast) toast.hidden = true;
-    });
   }
 
-  document.getElementById('btn-pwa-update-dismiss')?.addEventListener('click', () => {
-    const toast = document.getElementById('pwa-update-toast');
-    if (toast) toast.hidden = true;
+  document.getElementById('btn-pwa-update-now')?.addEventListener('click', () => {
+    app.sound.playButtonTap();
+    app.pwaUpdateAvailable = false;
+    app.syncPwaUpdateBanner();
+    triggerWaitingWorkerActivation();
   });
-}
 
-export function showPwaUpdateToastImpl(): void {
-  const toast = document.getElementById('pwa-update-toast');
-  if (toast) toast.hidden = false;
+  document.getElementById('btn-pwa-update-dismiss')?.addEventListener('click', () => {
+    app.sound.playButtonTap();
+    app.pwaUpdateDismissedInSession = true;
+    app.syncPwaUpdateBanner();
+  });
 }

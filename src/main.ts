@@ -31,11 +31,14 @@ import {
 import { ensureDialogsMounted } from './ui/dialogs-template';
 import {
   bindDomEventsImpl,
+  checkForPwaUpdateImpl,
   handleInstallActionImpl,
   isPwaInstalledImpl,
   markPwaInstalledImpl,
   setupPwaAndServiceWorkerImpl,
   syncInstallUiVisibilityImpl,
+  syncPwaUpdateBannerImpl,
+  syncViewportGeometryImpl,
 } from './ui/dom-events-and-pwa';
 import {
   buildRenderOptionsImpl,
@@ -107,7 +110,13 @@ export class ShredBlocksApp implements AppViewContext {
   public pendingImportRawCode: string | null = null;
   public deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
   public pwaInstalledDetected = false;
+  public swRegistration: ServiceWorkerRegistration | null = null;
   public waitingServiceWorker: ServiceWorker | null = null;
+  public pwaUpdateAvailable = false;
+  public pwaUpdateDismissedInSession = false;
+  public lastSwUpdateCheckMs = 0;
+  public lastBackgroundedAtMs = 0;
+  public hasUserInteracted = false;
 
   constructor() {
     ensureDialogsMounted();
@@ -729,6 +738,15 @@ export class ShredBlocksApp implements AppViewContext {
   }
   public syncInstallUiVisibility(): void {
     syncInstallUiVisibilityImpl(this);
+  }
+  public syncViewportGeometry(): void {
+    syncViewportGeometryImpl(this);
+  }
+  public syncPwaUpdateBanner(): void {
+    syncPwaUpdateBannerImpl(this);
+  }
+  public checkForPwaUpdate(force = false): void {
+    checkForPwaUpdateImpl(this, force);
   }
   public handleInstallAction(): Promise<void> {
     return handleInstallActionImpl(this);

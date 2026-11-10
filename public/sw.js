@@ -109,14 +109,17 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // 1. Navigation requests (HTML documents): Stale-While-Revalidate with guaranteed non-redirected shell
+  // 1. Navigation requests (HTML documents): Offline-First Atomic Shell with network fallback
   if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
       (async () => {
         const shellCache = await caches.open(SHELL_CACHE);
         const cachedRoot = await shellCache.match('/');
+        if (cachedRoot) {
+          return stripRedirectFlag(cachedRoot);
+        }
 
-        const networkFetch = fetch(request)
+        const networkResponse = await fetch(request)
           .then(async (response) => {
             if (response?.ok) {
               const cleanResponse = await stripRedirectFlag(response);
@@ -127,12 +130,6 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => null);
 
-        if (cachedRoot) {
-          event.waitUntil(networkFetch);
-          return stripRedirectFlag(cachedRoot);
-        }
-
-        const networkResponse = await networkFetch;
         if (networkResponse) return stripRedirectFlag(networkResponse);
 
         const anyCachedShell = (await caches.match('/')) || (await caches.match('/index.html'));

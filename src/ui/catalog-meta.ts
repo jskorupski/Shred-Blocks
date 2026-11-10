@@ -41,6 +41,7 @@ export interface ShredBlocksDebugBridge {
   openTitleScreen: () => void;
   dismissTitleScreen: (targetScreen?: 'game' | 'home' | 'themes') => void;
   isTitleScreenOpen: () => boolean;
+  setPwaUpdateBannerVisible: (visible: boolean) => void;
   previewSaveImport: (code: string) => boolean;
   getTelemetry: () => PerfTelemetry;
   run120HzBenchmark: (frames?: number) => Promise<Benchmark120HzResult>;
@@ -213,7 +214,13 @@ export interface AppViewContext {
   pendingImportRawCode: string | null;
   deferredInstallPrompt: BeforeInstallPromptEvent | null;
   pwaInstalledDetected: boolean;
+  swRegistration: ServiceWorkerRegistration | null;
   waitingServiceWorker: ServiceWorker | null;
+  pwaUpdateAvailable: boolean;
+  pwaUpdateDismissedInSession: boolean;
+  lastSwUpdateCheckMs: number;
+  lastBackgroundedAtMs: number;
+  hasUserInteracted: boolean;
   loadLevel(levelId: number, switchToGameScreen?: boolean, persistLevel?: boolean): void;
   restartCurrentLevel(): void;
   skipCurrentLevel(): void;
@@ -228,6 +235,9 @@ export interface AppViewContext {
   syncTitleOverlayDom(): void;
   syncBoosterTargetingBanner(hoverState: HoverState): void;
   syncInstallUiVisibility(): void;
+  syncViewportGeometry(): void;
+  syncPwaUpdateBanner(): void;
+  checkForPwaUpdate(force?: boolean): void;
   renderRoadmap(): void;
   renderThemesStudio(): void;
   renderNow(dtSec?: number, timeSec?: number): void;

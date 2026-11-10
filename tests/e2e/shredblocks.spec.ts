@@ -102,6 +102,45 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 11');
 
+    // PWA-UPDATE-01 & VIEWPORT-01: Verify in-flow App Update Notification Banner & zero UI cutoff across browser & Android WebAPK viewports
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPwaUpdateBannerVisible(true));
+    await expect(page.locator('#pwa-update-toast')).toBeHidden();
+    await page.locator('#btn-hud-home').click();
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+    await page.locator('#btn-home-title').click();
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+    const titleToastCheck = await page.evaluate(() => {
+      const t = document.getElementById('pwa-update-toast')?.getBoundingClientRect();
+      const b = document.querySelector('.title-crest-banner')?.getBoundingClientRect();
+      const c = document.querySelector('.title-crest-card')?.getBoundingClientRect();
+      return Boolean(t && b && c && t.top >= b.bottom - 1 && t.bottom <= c.top + 1);
+    });
+    expect(titleToastCheck).toBe(true);
+    await page.locator('#btn-pwa-update-dismiss').click();
+    await expect(page.locator('#pwa-update-toast')).toBeHidden();
+
+    await page.setViewportSize({ width: 472, height: 1024 });
+    const webApkOk = await page.evaluate(() => {
+      window.localStorage.setItem('shredblocks_pwa_installed_v1', '1');
+      Object.defineProperty(window.screen, 'height', { value: 1024, configurable: true });
+      Object.defineProperty(window.screen, 'availHeight', { value: 986, configurable: true });
+      window.dispatchEvent(new Event('resize'));
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(29);
+      const hud = document.querySelector('.hud-top-bar')?.getBoundingClientRect();
+      const canvas = document.getElementById('game-canvas')?.getBoundingClientRect();
+      const dock = document.getElementById('booster-dock')?.getBoundingClientRect();
+      return Boolean(
+        hud &&
+          canvas &&
+          dock &&
+          hud.top >= 0 &&
+          canvas.top >= hud.bottom - 1 &&
+          dock.top >= canvas.bottom - 1 &&
+          dock.bottom <= 986.5
+      );
+    });
+    expect(webApkOk).toBe(true);
+
     expect(errors).toEqual([]);
   });
 

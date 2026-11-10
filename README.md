@@ -28,7 +28,7 @@
   - **Zen Mode (Default)**: Untimed, meditative puzzle solving where move efficiency earns **1–3 Stars**.
   - **Timed Rush**: Optional arcade countdown clock for speedrunners.
 - **💚 100% Fair & Player-Friendly**: Unlimited lives, **3 Free Undos** on every level attempt, and **Free Level Skip (`0 Coins`)** anytime you want to move past a stage.
-- **📱 Offline-First PWA**: Installs directly to your iOS, Android, or Desktop home screen and runs 100% offline after the first visit.
+- **📱 Offline-First PWA & Contextual Updates**: Installs directly to your iOS, Android, or Desktop home screen and runs 100% offline after the first visit, with zero-cutoff container-query viewport sizing (`VIEWPORT-01`) across browser & standalone modes and non-overlapping Sanctuary Update Ribbons on the Title & Map screens (`PWA-UPDATE-01`).
 - **🔄 Zero-Account Cross-Device Sync**: Transfer your progress between phone, tablet, and desktop via a compact Save Code, shareable Sync Link, offline QR Code, or JSON backup.
 
 ---

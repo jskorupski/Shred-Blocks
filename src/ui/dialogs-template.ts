@@ -398,17 +398,24 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
       </div>
     </dialog>
 
-    <!-- Non-destructive PWA Update Toast (STOR-03) -->
+    <!-- Contextual In-Flow App Update Notification Banner (STOR-03 / PWA-UPDATE-01) -->
     <div id="pwa-update-toast" class="pwa-update-toast" role="status" aria-live="polite" hidden>
-      <span>✨ A new version of ShredBlocks is ready!</span>
+      <div class="pwa-update-meta">
+        <span class="pwa-update-badge"><span class="pwa-update-dot" aria-hidden="true"></span>NEW</span>
+        <span class="pwa-update-label">App Update Ready</span>
+      </div>
       <div class="pwa-toast-actions">
-        <button type="button" id="btn-pwa-update-now" class="btn-tactile btn-primary btn-compact">
-          Update Now
+        <button
+          type="button"
+          id="btn-pwa-update-now"
+          class="btn-tactile btn-warning btn-compact pwa-btn-update"
+        >
+          ↻ Update
         </button>
         <button
           type="button"
           id="btn-pwa-update-dismiss"
-          class="btn-tactile btn-secondary btn-compact"
+          class="btn-tactile btn-secondary btn-compact pwa-btn-later"
         >
           Later
         </button>

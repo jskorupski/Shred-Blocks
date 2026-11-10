@@ -299,6 +299,11 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
     openTitleScreen: () => app.openTitleScreen(),
     dismissTitleScreen: (targetScreen = 'game') => app.dismissTitleScreen(targetScreen),
     isTitleScreenOpen: () => app.titleOverlayOpen,
+    setPwaUpdateBannerVisible: (visible: boolean) => {
+      app.pwaUpdateAvailable = visible;
+      app.pwaUpdateDismissedInSession = false;
+      app.syncPwaUpdateBanner();
+    },
     previewSaveImport: (code: string) => app.previewSaveImport(code),
     getTelemetry: () => app.renderer.getTelemetry(),
     run120HzBenchmark: (frames = 120) => app.renderer.run120HzBenchmark(frames, app.board),
@@ -356,6 +361,8 @@ export function openTitleScreenImpl(app: AppViewContext): void {
   }
   app.syncAllUiFromSave();
   app.syncTitleOverlayDom();
+  app.syncPwaUpdateBanner();
+  app.checkForPwaUpdate(false);
   app.renderer.resize();
   app.renderNow();
 }
@@ -377,12 +384,14 @@ export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 
   app.activeScreen = screen;
   app.titleOverlayOpen = false;
   app.syncTitleOverlayDom();
+  app.syncPwaUpdateBanner();
 
   document.getElementById('tab-btn-home')?.classList.toggle('active', screen === 'home');
   document.getElementById('tab-btn-themes')?.classList.toggle('active', screen === 'themes');
 
   if (screen === 'home') {
     app.renderRoadmap();
+    app.checkForPwaUpdate(false);
   } else if (screen === 'themes') {
     app.renderThemesStudio();
   } else if (screen === 'game') {
