@@ -29,7 +29,7 @@
   - **Timed Rush**: Optional arcade countdown clock for speedrunners.
 - **💚 100% Fair & Player-Friendly**: Unlimited lives, **3 Free Undos** on every level attempt, and **Free Level Skip (`0 Coins`)** anytime you want to move past a stage.
 - **📱 Offline-First PWA & Contextual Updates**: Installs directly to your iOS, Android, or Desktop home screen and runs 100% offline after the first visit, with zero-cutoff container-query viewport sizing (`VIEWPORT-01`) across browser & standalone modes and non-overlapping Sanctuary Update Ribbons on the Title & Map screens (`PWA-UPDATE-01`).
-- **🔄 Zero-Account Cross-Device Sync**: Transfer your progress between phone, tablet, and desktop via a compact Save Code, shareable Sync Link, offline QR Code, or JSON backup.
+- **🔄 Zero-Account Cross-Device Sync & Infinite Progression**: Local progress is persisted across dual-layer `localStorage` + `IndexedDB` storage and transfers seamlessly between phone, tablet, and desktop—even across thousands of Infinite Endless stages—via a compact `SB1-...` Save Code, shareable Sync Link, offline QR Code, or JSON backup.
 
 ---
 
@@ -43,6 +43,7 @@
 | :--- | :--- |
 | **Touch / Mouse** | Press and drag any block along open lanes; pull into a matching perimeter gate to shred mid-drag. |
 | **Keyboard** | `Tab` / `Shift+Tab` to select a block · `Arrow Keys` or `WASD` to slide 1 cell · `Escape` to cancel or close modals. |
+| **Browser Navigation** | Native browser **Back / Forward** navigation across Title, Map, Gameplay, Modals, and Themes (state-only so offline PWA caching stays 100% intact). |
 | **Accessibility** | Built-in toggles in **Settings** for **Colorblind Symbols** (`▨ ● ▲ ■ ★ ◆ ✚ ⬢ ♥ ═` on dark high-contrast medallions), **High-Contrast Palette** (compatible with all custom skins & board trays), and **Low Motion**. |
 
 ---
@@ -73,13 +74,13 @@ npm run dev:lan
 # Run Biome TypeScript & CSS linter/formatter check (< 150ms)
 npm run lint
 
-# Run Vitest unit & 300-level BFS solver verification suite (< 4.0s, 45 tests)
+# Run Vitest unit & 300-level BFS solver verification suite (< 4.0s, 46 tests)
 npm run test:unit
 
-# Run Playwright E2E interactive browser playtest suite
+# Run Playwright E2E interactive browser playtest suite (14 tests across Desktop & Mobile)
 npm run test:e2e
 
-# Capture 39 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
+# Capture 42 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
 npm run verify:visual
 ```
 </details>
@@ -128,7 +129,7 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
   - **Row / Col Rocket (`EPIC`, Lvl 18)**: Blasts one layer across an entire row (`↔`) or column (`↕`) in any unlocked chamber (while leaving Sealed Mystery Vaults intact until unsealed).
   - **Color Vacuum (`LEGENDARY`, Lvl 30)**: Sweeps every unlocked block of a chosen color off the board at once.
 - **Themes Studio (`15 Unlockable Cosmetics`)**: Spend earned Coins (`150 Coins` each) on **5 Block Skins** (*Classic Studs*, *Smooth Bevel*, *Gummy Jelly*, *Carved Wood*, *Neon Cyber*), **5 Board Trays** (*Industrial Slate*, *Warm Birch*, *Midnight Arcade*, *Frosted Quartz*, *Mint Studio*), and **5 Shred Particle Styles** (*Micro-Cubes*, *Star Confetti*, *Pixel Sparks*, *Soap Bubbles*, *Lightning Bolts*)—all 100% compatible with High-Contrast and Colorblind Symbol modes.
-- **Sacred-Geometry Cave-Wall Etching Title Preview & Progressive Sanctuary Trail**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a weathered cave-wall stone etching (`u_blueprintMix = 1.0`) that smoothly materializes into bold tactile 3D when you begin playing. Opening the Sanctuary Map (`#screen-home`) automatically focuses on your active stage along a golden stepping-stone trail and previews your next upcoming Power-Up or Mechanic Awakening.
+- **Ancient Stone Ruin Title Backdrop & Progressive Sanctuary Map**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a static, monochrome weathered ancient stone ruin (`u_blueprintMix = 1.0`) devoid of HUD clutter or labels—awakening smoothly into vibrant, living 3D reality when you begin playing. Opening the Sanctuary Map (`#screen-home`) automatically focuses on your active stage along a golden stepping-stone trail, previews your next upcoming Power-Up or Mechanic Awakening, and windows **Infinite Endless Mode (`Level 301+`)** stages with direct `Lvl #` stage jumping up to `999,999`.
 
 ---
 
@@ -141,7 +142,7 @@ The entire application—including the 3D WebGL2 renderer, polyomino physics, BF
 | **3D Renderer & Shaders** | Custom WebGL2 pipeline with transparent courtyard framing, procedural 3D polyomino meshes, mipmapped texture atlas, GPU-instanced 3D particles (`2048` instances), adaptive `120Hz`/`60Hz` quality governor, and `Canvas2D` fallback | [`src/render/renderer-3d.ts`](src/render/renderer-3d.ts), [`src/render/mesh-generator.ts`](src/render/mesh-generator.ts), [`src/render/atlas-3d.ts`](src/render/atlas-3d.ts) |
 | **Physics & Gate Engine** | Swept orthogonal grid raycast with `0.30`-cell corner bevel assist, gate aperture & axis-lock checks, mid-drag gate capture, and isolated post-shred cascades | [`src/core/physics.ts`](src/core/physics.ts), [`src/core/gate-clearance.ts`](src/core/gate-clearance.ts), [`src/core/board.ts`](src/core/board.ts) |
 | **Campaign, Generator & Solver** | 300 campaign levels, deterministic `Mulberry32` reverse-move generator (`Level 301+`), and State-Space BFS/A\* solver & hint engine | [`src/levels/catalog.ts`](src/levels/catalog.ts), [`src/levels/generator.ts`](src/levels/generator.ts), [`src/levels/solver.ts`](src/levels/solver.ts) |
-| **Sacred-Geometry UI & Offline Storage** | Self-hosted `Fraunces` & `Plus Jakarta Sans` variable `.woff2` typography, 3-plane chiseled tactile UI, procedural Web Audio API synthesizer, dual-slot `localStorage` persistence, `SB1-...` save codec, pure-TS ISO 18004 QR SVG generator, and offline Service Worker | [`src/styles/tokens-and-shell.css`](src/styles/tokens-and-shell.css), [`src/audio/synth.ts`](src/audio/synth.ts), [`src/storage/save-manager.ts`](src/storage/save-manager.ts), [`public/sw.js`](public/sw.js) |
+| **Sacred-Geometry UI & Offline Storage** | Self-hosted `Fraunces` & `Plus Jakarta Sans` variable `.woff2` typography, 3-plane chiseled tactile UI with unified cross-screen semantic button colors, non-URL `History` stack navigation, procedural Web Audio API synthesizer, dual-layer `localStorage` + `IndexedDB` persistence, 53-bit `SB1-...` save codec, pure-TS ISO 18004 QR SVG generator, and offline Service Worker | [`src/styles/tokens-and-shell.css`](src/styles/tokens-and-shell.css), [`src/audio/synth.ts`](src/audio/synth.ts), [`src/storage/save-manager.ts`](src/storage/save-manager.ts), [`public/sw.js`](public/sw.js) |
 
 <details>
 <summary><strong>🗺️ View System Architecture Diagram & Deep-Dive Docs</strong></summary>
@@ -176,8 +177,8 @@ flowchart TD
   end
 
   subgraph Storage["Offline Persistence & Sync (src/storage/)"]
-    Save["save-manager.ts (Dual-Slot LocalStorage + Economy)"]
-    Code["save-code.ts (SB1 Base64URL + CRC32)"]
+    Save["save-manager.ts (Dual-Layer localStorage + IndexedDB)"]
+    Code["save-code.ts (53-Bit SB1 Binary + LZ77 + CRC32)"]
     QR["qr-svg.ts (Zero-Dependency ISO 18004 QR SVG)"]
   end
 
@@ -213,5 +214,5 @@ This repository includes an optional [`wrangler.jsonc`](wrangler.jsonc) and [`pu
 ## 🔒 Privacy & License
 
 - **Zero Telemetry or Tracking**: No analytics scripts, no third-party cookies, and no external network calls.
-- **100% Local & Portable Save State**: Progress is stored locally on your device (`localStorage`) and can be backed up or transferred anytime via Save Code, QR Code, or JSON export.
+- **100% Local & Portable Save State**: Progress is stored locally on your device (`localStorage` + `IndexedDB`) and can be backed up or transferred anytime via Save Code, QR Code, or JSON export.
 - **License**: Released under the [MIT License](LICENSE).
