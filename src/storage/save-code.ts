@@ -1,7 +1,30 @@
-import type { SavePayloadV1 } from '../core/types';
+import type { ParticleStyleId, QualityTier, SavePayloadV1, SkinId, TrayId } from '../core/types';
 
 export const CODEC_HEADER_RAW_UTF8 = 0x00;
 export const CODEC_HEADER_LZ77_V1 = 0x01;
+
+const SKIN_IDS: ReadonlyArray<SkinId> = [
+  'classic_studs',
+  'smooth_bevel',
+  'gummy_jelly',
+  'carved_wood',
+  'neon_cyber',
+];
+const TRAY_IDS: ReadonlyArray<TrayId> = [
+  'industrial_slate',
+  'warm_birch',
+  'midnight_arcade',
+  'frosted_quartz',
+  'mint_studio',
+];
+const PARTICLE_IDS: ReadonlyArray<ParticleStyleId> = [
+  'micro_cubes',
+  'star_confetti',
+  'pixel_sparks',
+  'soap_bubbles',
+  'lightning_bolts',
+];
+const QUALITY_TIERS: ReadonlyArray<QualityTier> = ['AUTO', 'ULTRA_120', 'BALANCED_60'];
 
 export class SaveCodeError extends Error {
   public readonly code:
@@ -271,21 +294,67 @@ function writeVarint(out: number[], value: number): void {
 }
 
 /**
- * Packs a validated `SavePayloadV1` into a hybrid JSON-header + binary-column stream (STOR-01 V2).
- * Reduces 300-level campaign saves by ~3.5x-7.5x so QR codes (Version <= 40, 2953 bytes) never overflow.
+ * Packs a validated `SavePayloadV1` into a pure binary varint + columnar stream (`0x02` magic byte).
+ * Shrinks save codes to ~64 chars (new player) and ~185-550 chars (300-level campaign).
  */
 function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8Array {
+  const out: number[] = [0x02];
+  writeVarint(out, payload.writeSeq);
+  const ts = Math.max(0, Math.floor(payload.updatedAt || 0));
+  writeVarint(out, Math.floor(ts / 1000));
+  writeVarint(out, ts % 1000);
+  writeVarint(out, payload.highestLevelUnlocked);
+  writeVarint(out, payload.currentLevelId);
+  writeVarint(out, payload.coins);
+  writeVarint(out, payload.totalStars);
+  writeVarint(out, payload.winStreak);
+  writeVarint(out, payload.bestWinStreak);
+  writeVarint(out, payload.totalBlocksShredded);
+  writeVarint(out, payload.totalMovesCommitted);
+  writeVarint(out, payload.shredderChestProgress);
+  writeVarint(out, payload.milestoneChestLevel);
+
+  const b = payload.boosters;
+  writeVarint(out, b.UNDO || 0);
+  writeVarint(out, b.FREEZE || 0);
+  writeVarint(out, b.HAMMER || 0);
+  writeVarint(out, b.ROCKET || 0);
+  writeVarint(out, b.VACUUM || 0);
+
+  out.push(payload.unlockedSkins.length);
+  for (const s of payload.unlockedSkins) out.push(Math.max(0, SKIN_IDS.indexOf(s)));
+  out.push(payload.unlockedTrays.length);
+  for (const t of payload.unlockedTrays) out.push(Math.max(0, TRAY_IDS.indexOf(t)));
+  out.push(payload.unlockedParticles.length);
+  for (const pt of payload.unlockedParticles) out.push(Math.max(0, PARTICLE_IDS.indexOf(pt)));
+
+  out.push(Math.max(0, SKIN_IDS.indexOf(payload.equippedSkin)));
+  out.push(Math.max(0, TRAY_IDS.indexOf(payload.equippedTray)));
+  out.push(Math.max(0, PARTICLE_IDS.indexOf(payload.equippedParticle)));
+
+  const st = payload.settings;
+  const sFlags =
+    (st.playMode === 'ZEN' ? 1 : 0) |
+    (st.sfxEnabled ? 2 : 0) |
+    (st.musicEnabled ? 4 : 0) |
+    (st.hapticsEnabled ? 8 : 0) |
+    (st.colorblindSymbols ? 16 : 0) |
+    (st.highContrast ? 32 : 0) |
+    (st.reducedMotion ? 64 : 0);
+  out.push(sFlags, Math.max(0, QUALITY_TIERS.indexOf(st.qualityTier)));
+
   const ids = Object.keys(payload.levelRecords)
     .map(Number)
     .filter((n) => Number.isFinite(n) && n >= 1)
     .sort((a, b) => a - b);
   const maxTelemetryEntries = qrCompact ? 60 : 400;
   const telemetryCutoffIdx = Math.max(0, ids.length - maxTelemetryEntries);
+  writeVarint(out, ids.length);
+  writeVarint(out, telemetryCutoffIdx);
 
-  const cols: number[] = [];
   let prevId = 0;
   for (let i = 0; i < ids.length; i++) {
-    writeVarint(cols, ids[i] - prevId);
+    writeVarint(out, ids[i] - prevId);
     prevId = ids[i];
   }
   for (let i = 0; i < ids.length; i += 2) {
@@ -302,85 +371,93 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
         ((r1.skipped === true ? 1 : 0) << 2) |
         (Math.min(3, Math.max(0, Math.floor(r1.stars || 0))) & 3);
     }
-    cols.push((n0 << 4) | n1);
+    out.push((n0 << 4) | n1);
   }
   for (let i = telemetryCutoffIdx; i < ids.length; i++) {
-    writeVarint(cols, Math.max(0, Math.round(payload.levelRecords[ids[i]].bestMoves || 0)));
+    writeVarint(out, Math.max(0, Math.round(payload.levelRecords[ids[i]].bestMoves || 0)));
   }
   for (let i = telemetryCutoffIdx; i < ids.length; i++) {
     const t = Math.max(0, payload.levelRecords[ids[i]].bestTimeSec || 0);
     const tenths = Math.round(t * 10);
     const encodedTime = tenths % 10 === 0 ? (Math.round(t) << 1) | 0 : (tenths << 1) | 1;
-    writeVarint(cols, encodedTime);
+    writeVarint(out, encodedTime);
   }
 
-  const s = payload.settings;
-  const b = payload.boosters;
-  const headerJson = JSON.stringify([
-    2,
-    payload.writeSeq,
-    payload.updatedAt,
-    payload.highestLevelUnlocked,
-    payload.currentLevelId,
-    payload.coins,
-    payload.totalStars,
-    payload.winStreak,
-    payload.bestWinStreak,
-    payload.totalBlocksShredded,
-    payload.totalMovesCommitted,
-    payload.shredderChestProgress,
-    payload.milestoneChestLevel,
-    [b.UNDO || 0, b.FREEZE || 0, b.HAMMER || 0, b.ROCKET || 0, b.VACUUM || 0],
-    payload.unlockedSkins,
-    payload.unlockedTrays,
-    payload.unlockedParticles,
-    payload.equippedSkin,
-    payload.equippedTray,
-    payload.equippedParticle,
-    [
-      s.playMode === 'ZEN' ? 1 : 0,
-      s.sfxEnabled ? 1 : 0,
-      s.musicEnabled ? 1 : 0,
-      s.hapticsEnabled ? 1 : 0,
-      s.colorblindSymbols ? 1 : 0,
-      s.highContrast ? 1 : 0,
-      s.reducedMotion ? 1 : 0,
-      s.qualityTier,
-    ],
-    ids.length,
-    telemetryCutoffIdx,
-  ]);
-  const headerBytes = new TextEncoder().encode(headerJson);
-  const out = new Uint8Array(headerBytes.length + 1 + cols.length);
-  out.set(headerBytes, 0);
-  out[headerBytes.length] = 0x0a;
-  out.set(cols, headerBytes.length + 1);
-  return out;
+  return Uint8Array.from(out);
 }
 
-function unpackCompactSaveBytes(rawBytes: Uint8Array, nlIdx: number): SavePayloadV1 {
-  const headerText = new TextDecoder('utf-8', { fatal: true }).decode(rawBytes.subarray(0, nlIdx));
-  const h = JSON.parse(headerText) as unknown[];
-  if (!Array.isArray(h) || h[0] !== 2 || h.length < 23) {
-    throw new SaveCodeError('INVALID_SCHEMA', 'Malformed V2 compact save header.');
+function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
+  if (rawBytes.length < 20 || rawBytes[0] !== 0x02) {
+    throw new SaveCodeError('INVALID_SCHEMA', 'Unsupported or corrupted binary save payload.');
   }
 
-  const cols = rawBytes.subarray(nlIdx + 1);
-  let pos = 0;
+  let pos = 1;
+  const readByte = (): number => {
+    if (pos >= rawBytes.length) {
+      throw new SaveCodeError('DECOMPRESSION_FAILED', 'Unexpected end of binary save stream.');
+    }
+    return rawBytes[pos++];
+  };
   const readVarint = (): number => {
     let val = 0;
     let shift = 0;
-    while (pos < cols.length) {
-      const byte = cols[pos++];
+    while (pos < rawBytes.length) {
+      const byte = rawBytes[pos++];
       val |= (byte & 0x7f) << shift;
       if ((byte & 0x80) === 0) return val >>> 0;
       shift += 7;
     }
-    throw new SaveCodeError('DECOMPRESSION_FAILED', 'Truncated varint in compact save columns.');
+    throw new SaveCodeError('DECOMPRESSION_FAILED', 'Truncated varint in binary save stream.');
   };
 
-  const recordCount = Math.max(0, Number(h[21]) || 0);
-  const telemetryCutoffIdx = Math.max(0, Math.min(recordCount, Number(h[22]) || 0));
+  const writeSeq = readVarint();
+  const updatedAtSec = readVarint();
+  const updatedAtMs = readVarint();
+  const updatedAt = updatedAtSec * 1000 + updatedAtMs;
+  const highestLevelUnlocked = readVarint();
+  const currentLevelId = readVarint();
+  const coins = readVarint();
+  const totalStars = readVarint();
+  const winStreak = readVarint();
+  const bestWinStreak = readVarint();
+  const totalBlocksShredded = readVarint();
+  const totalMovesCommitted = readVarint();
+  const shredderChestProgress = readVarint();
+  const milestoneChestLevel = readVarint();
+
+  const boosters = {
+    UNDO: readVarint(),
+    FREEZE: readVarint(),
+    HAMMER: readVarint(),
+    ROCKET: readVarint(),
+    VACUUM: readVarint(),
+  };
+
+  const skinCount = readByte();
+  const unlockedSkins: SkinId[] = [];
+  for (let i = 0; i < skinCount; i++) {
+    unlockedSkins.push(SKIN_IDS[readByte()] ?? 'classic_studs');
+  }
+  const trayCount = readByte();
+  const unlockedTrays: TrayId[] = [];
+  for (let i = 0; i < trayCount; i++) {
+    unlockedTrays.push(TRAY_IDS[readByte()] ?? 'industrial_slate');
+  }
+  const particleCount = readByte();
+  const unlockedParticles: ParticleStyleId[] = [];
+  for (let i = 0; i < particleCount; i++) {
+    unlockedParticles.push(PARTICLE_IDS[readByte()] ?? 'micro_cubes');
+  }
+
+  const equippedSkin = SKIN_IDS[readByte()] ?? 'classic_studs';
+  const equippedTray = TRAY_IDS[readByte()] ?? 'industrial_slate';
+  const equippedParticle = PARTICLE_IDS[readByte()] ?? 'micro_cubes';
+
+  const sFlags = readByte();
+  const qualityTier = QUALITY_TIERS[readByte()] ?? 'AUTO';
+
+  const recordCount = readVarint();
+  const telemetryCutoffIdx = Math.min(recordCount, readVarint());
   const ids: number[] = [];
   let prevId = 0;
   for (let i = 0; i < recordCount; i++) {
@@ -389,12 +466,9 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array, nlIdx: number): SavePayloa
   }
 
   const nibbleByteCount = Math.ceil(recordCount / 2);
-  if (pos + nibbleByteCount > cols.length) {
-    throw new SaveCodeError('DECOMPRESSION_FAILED', 'Truncated star nibbles in compact save stream.');
-  }
   const nibbles: number[] = [];
   for (let i = 0; i < nibbleByteCount; i++) {
-    const byte = cols[pos++];
+    const byte = readByte();
     nibbles.push((byte >>> 4) & 0x0f, byte & 0x0f);
   }
 
@@ -422,46 +496,37 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array, nlIdx: number): SavePayloa
       : { stars, bestMoves, bestTimeSec, skipped: isSkipped };
   }
 
-  const bArr = (Array.isArray(h[13]) ? h[13] : [3, 3, 2, 1, 1]) as number[];
-  const sArr = (Array.isArray(h[20]) ? h[20] : [1, 1, 1, 1, 0, 0, 0, 'AUTO']) as unknown[];
-
   return validateSavePayloadV1({
     schemaVersion: 1,
     appId: 'shredblocks-color-jam',
-    writeSeq: Number(h[1]),
-    updatedAt: Number(h[2]),
-    highestLevelUnlocked: Number(h[3]),
-    currentLevelId: Number(h[4]),
-    coins: Number(h[5]),
-    totalStars: Number(h[6]),
-    winStreak: Number(h[7]),
-    bestWinStreak: Number(h[8]),
-    totalBlocksShredded: Number(h[9]),
-    totalMovesCommitted: Number(h[10]),
-    shredderChestProgress: Number(h[11]),
-    milestoneChestLevel: Number(h[12]),
-    boosters: {
-      UNDO: Number(bArr[0]) || 0,
-      FREEZE: Number(bArr[1]) || 0,
-      HAMMER: Number(bArr[2]) || 0,
-      ROCKET: Number(bArr[3]) || 0,
-      VACUUM: Number(bArr[4]) || 0,
-    },
-    unlockedSkins: h[14] as SavePayloadV1['unlockedSkins'],
-    unlockedTrays: h[15] as SavePayloadV1['unlockedTrays'],
-    unlockedParticles: h[16] as SavePayloadV1['unlockedParticles'],
-    equippedSkin: h[17] as SavePayloadV1['equippedSkin'],
-    equippedTray: h[18] as SavePayloadV1['equippedTray'],
-    equippedParticle: h[19] as SavePayloadV1['equippedParticle'],
+    writeSeq,
+    updatedAt,
+    highestLevelUnlocked,
+    currentLevelId,
+    coins,
+    totalStars,
+    winStreak,
+    bestWinStreak,
+    totalBlocksShredded,
+    totalMovesCommitted,
+    shredderChestProgress,
+    milestoneChestLevel,
+    boosters,
+    unlockedSkins,
+    unlockedTrays,
+    unlockedParticles,
+    equippedSkin,
+    equippedTray,
+    equippedParticle,
     settings: {
-      playMode: Number(sArr[0]) === 1 ? 'ZEN' : 'TIMED',
-      sfxEnabled: Boolean(sArr[1]),
-      musicEnabled: Boolean(sArr[2]),
-      hapticsEnabled: Boolean(sArr[3]),
-      colorblindSymbols: Boolean(sArr[4]),
-      highContrast: Boolean(sArr[5]),
-      reducedMotion: Boolean(sArr[6]),
-      qualityTier: (sArr[7] as SavePayloadV1['settings']['qualityTier']) || 'AUTO',
+      playMode: (sFlags & 1) !== 0 ? 'ZEN' : 'TIMED',
+      sfxEnabled: (sFlags & 2) !== 0,
+      musicEnabled: (sFlags & 4) !== 0,
+      hapticsEnabled: (sFlags & 8) !== 0,
+      colorblindSymbols: (sFlags & 16) !== 0,
+      highContrast: (sFlags & 32) !== 0,
+      reducedMotion: (sFlags & 64) !== 0,
+      qualityTier,
     },
     levelRecords,
   });
@@ -481,8 +546,7 @@ export function encodeSaveCode(payload: SavePayloadV1, options?: { qrCompact?: b
 }
 
 /**
- * Decodes and verifies a `SB1-<base64url>-<crc32hex8>` save code (also accepting legacy
- * `SB1:` / `SB0:` / `SB0-` prefixes and whitespace/newlines when pasted).
+ * Decodes and verifies a `SB1-<base64url>-<crc32hex8>` save code.
  */
 export function decodeSaveCode(rawInput: string): SavePayloadV1 {
   const cleaned = rawInput.trim().replace(/\s+/g, '');
@@ -490,15 +554,12 @@ export function decodeSaveCode(rawInput: string): SavePayloadV1 {
     throw new SaveCodeError('EMPTY_CODE', 'Save code is empty.');
   }
 
-  // Normalize prefix (accept SB1-, SB1:, SB0-, SB0:)
-  let body = '';
-  if (/^(SB1|SB0)[-:]/i.test(cleaned)) {
-    body = cleaned.slice(4);
-  } else {
-    throw new SaveCodeError('INVALID_PREFIX', 'Save code must start with "SB1-" (or legacy "SB0:").');
+  if (!/^SB1-/i.test(cleaned)) {
+    throw new SaveCodeError('INVALID_PREFIX', 'Save code must start with "SB1-".');
   }
+  const body = cleaned.slice(4);
 
-  const lastSep = Math.max(body.lastIndexOf('-'), body.lastIndexOf(':'));
+  const lastSep = body.lastIndexOf('-');
   if (lastSep <= 0 || lastSep >= body.length - 1) {
     throw new SaveCodeError('INVALID_FORMAT', 'Save code is missing its 8-character CRC32 checksum suffix.');
   }
@@ -519,22 +580,6 @@ export function decodeSaveCode(rawInput: string): SavePayloadV1 {
   }
 
   const framedBytes = base64UrlToBytes(b64Payload);
-  const utf8Bytes = decompressFramedBytes(framedBytes);
-
-  if (utf8Bytes.length > 2 && utf8Bytes[0] === 0x5b) {
-    const nlIdx = utf8Bytes.indexOf(0x0a);
-    if (nlIdx > 0) {
-      return unpackCompactSaveBytes(utf8Bytes, nlIdx);
-    }
-  }
-
-  let parsed: unknown;
-  try {
-    const jsonText = new TextDecoder('utf-8', { fatal: true }).decode(utf8Bytes);
-    parsed = JSON.parse(jsonText);
-  } catch {
-    throw new SaveCodeError('INVALID_SCHEMA', 'Decompressed save payload is not valid JSON.');
-  }
-
-  return validateSavePayloadV1(parsed);
+  const rawBytes = decompressFramedBytes(framedBytes);
+  return unpackCompactSaveBytes(rawBytes);
 }

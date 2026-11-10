@@ -91,7 +91,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(decoded).toEqual(original);
     });
 
-    it('round-trips a full 200-level populated SavePayloadV1 and supports legacy SB0: prefix + whitespace', () => {
+    it('round-trips a full 200-level populated SavePayloadV1 and tolerates embedded whitespace', () => {
       const fullSave: SavePayloadV1 = createDefaultSavePayload();
       fullSave.writeSeq = 420;
       fullSave.highestLevelUnlocked = 201;
@@ -117,22 +117,14 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       }
 
       const sb1Code = encodeSaveCode(fullSave);
+      expect(sb1Code.length).toBeLessThan(200);
       const decodedDirect = decodeSaveCode(sb1Code);
       expect(decodedDirect).toEqual(fullSave);
       expect(Object.keys(decodedDirect.levelRecords).length).toBe(200);
 
-      // Verify legacy SB0: prefix and embedded newlines/whitespace
-      const legacyCodeWithWhitespace = `  \n SB0:${sb1Code.slice(4).slice(0, 40)}\n  ${sb1Code.slice(44)} \t `;
-      const decodedLegacy = decodeSaveCode(legacyCodeWithWhitespace);
-      expect(decodedLegacy).toEqual(fullSave);
-
-      // Verify backwards-compatibility with legacy V1 raw JSON + LZ77 save codes
-      const v1RawBytes = compressLz77(new TextEncoder().encode(JSON.stringify(fullSave)));
-      let v1Bin = '';
-      for (const b of v1RawBytes) v1Bin += String.fromCharCode(b);
-      const v1B64 = btoa(v1Bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-      const v1Code = `SB1-${v1B64}-${computeCrc32Hex(v1B64)}`;
-      expect(decodeSaveCode(v1Code)).toEqual(fullSave);
+      // Verify embedded newlines/whitespace are stripped cleanly when pasted
+      const codeWithWhitespace = `  \n ${sb1Code.slice(0, 40)}\n  ${sb1Code.slice(40)} \t `;
+      expect(decodeSaveCode(codeWithWhitespace)).toEqual(fullSave);
     });
 
     it('supports raw UTF-8 codec header (0x00) in decompressFramedBytes', () => {
@@ -171,13 +163,15 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(() => decodeSaveCode('   ')).toThrowError(/empty/i);
       expect(() => decodeSaveCode('XYZ-1234-deadbeef')).toThrowError(/SB1-/i);
 
-      // Valid prefix + recomputed CRC over invalid schema JSON
-      const badJsonBytes = compressLz77(new TextEncoder().encode(JSON.stringify({ schemaVersion: 99 })));
+      // Valid prefix + recomputed CRC over unsupported binary payload magic byte
+      const badBytes = compressLz77(new Uint8Array([0x99, 0x01, 0x02]));
       let bin = '';
-      for (const b of badJsonBytes) bin += String.fromCharCode(b);
+      for (const b of badBytes) bin += String.fromCharCode(b);
       const b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
       const crc = computeCrc32Hex(b64);
-      expect(() => decodeSaveCode(`SB1-${b64}-${crc}`)).toThrowError(/Unsupported schemaVersion/i);
+      expect(() => decodeSaveCode(`SB1-${b64}-${crc}`)).toThrowError(
+        /Unsupported or corrupted binary save payload/i
+      );
     });
   });
 

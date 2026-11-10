@@ -151,7 +151,7 @@ export function createDefaultSavePayload(): SavePayloadV1 {
 }
 
 /**
- * Extracts a `SB1-...` (or legacy `SB0:...`) save code from a URL hash string like `#import=SB1-...`.
+ * Extracts a `SB1-...` save code from a URL hash string like `#import=SB1-...`.
  */
 export function extractImportCodeFromHash(
   hash = typeof window !== 'undefined' ? window.location.hash : ''
@@ -160,10 +160,10 @@ export function extractImportCodeFromHash(
   const trimmed = hash.startsWith('#') ? hash.slice(1) : hash;
   const params = new URLSearchParams(trimmed);
   const fromParam = params.get('import');
-  if (fromParam && /^(SB1|SB0)[-:]/i.test(fromParam.trim())) {
+  if (fromParam && /^SB1-/i.test(fromParam.trim())) {
     return fromParam.trim();
   }
-  const match = trimmed.match(/(?:^|&)import=((?:SB1|SB0)[-:][A-Za-z0-9\-_:]+)/i);
+  const match = trimmed.match(/(?:^|&)import=(SB1-[A-Za-z0-9\-_]+)/i);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -495,7 +495,7 @@ export class SaveManager {
     }
     const fullCode = this.exportSaveCode({ qrCompact });
     const code = !qrCompact && fullCode.length > 900 ? this.exportSaveCode({ qrCompact: true }) : fullCode;
-    return `${resolvedBase}#import=${encodeURIComponent(code)}`;
+    return `${resolvedBase}#import=${code}`;
   }
 
   /**
