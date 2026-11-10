@@ -1,0 +1,602 @@
+import { findEligibleGateForBlockAt } from "../core/gate-clearance";
+import { getBlockRoomId, isBlockInLockedRoom } from "../core/physics";
+import type { RenderSceneOptions } from "../render/renderer-3d";
+import { getActiveColor } from "../core/polyomino";
+import {
+  COLOR_PALETTE,
+  type BlockState,
+  type BoosterType,
+  type SavePayloadV1,
+} from "../core/types";
+import type { HoverState } from "../input/pointer-controller";
+import { getLevelSpec } from "../levels/catalog";
+import {
+  BOOSTER_RARITY,
+  BOOSTER_UNLOCK_LEVEL,
+  isBoosterUnlocked,
+  type LevelWinRewardSummary,
+} from "../storage/save-manager";
+import {
+  BOOSTER_DISPLAY_NAMES,
+  getChapterMetaForLevel,
+  UI_BOOSTER_PRICES,
+  type AppViewContext,
+} from "./catalog-meta";
+
+export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinRewardSummary): void {
+  const titleEl = document.getElementById('victory-title');
+  const subtitleEl = document.getElementById('victory-subtitle');
+  const starsEl = document.getElementById('victory-stars');
+  const movesEl = document.getElementById('victory-moves');
+  const coinsTotalEl = document.getElementById('victory-coins-total');
+  const breakdownEl = document.getElementById('victory-coins-breakdown');
+  const chestFanfareEl = document.getElementById('victory-chest-fanfare');
+  const shredTextEl = document.getElementById('victory-shred-chest-text');
+  const shredFillEl = document.getElementById('victory-shred-chest-fill');
+  const milestoneTextEl = document.getElementById('victory-milestone-chest-text');
+  const milestoneFillEl = document.getElementById('victory-milestone-chest-fill');
+
+  const save = app.saveManager.getPayload();
+
+  if (titleEl) {
+    titleEl.textContent = `🎉 Level ${app.board.levelId} Cleared!`;
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent =
+      summary.starsEarned === 3
+        ? 'Flawless 3-Star Shredder Mastery!'
+        : summary.starsEarned === 2
+          ? 'Great Job! Clear in fewer moves for 3 Stars!'
+          : 'Level Complete!';
+  }
+  if (starsEl) {
+    const slots: HTMLSpanElement[] = [];
+    for (let i = 0; i < 3; i++) {
+      const span = document.createElement('span');
+      const isEarned = i < summary.starsEarned;
+      span.className = isEarned ? 'star-slot earned' : 'star-slot unearned';
+      span.textContent = isEarned ? '⭐' : '☆';
+      slots.push(span);
+    }
+    starsEl.replaceChildren(...slots);
+  }
+  if (movesEl) {
+    movesEl.textContent = `${app.board.movesCommitted} / Par ${app.board.parMoves}`;
+  }
+  if (coinsTotalEl) {
+    coinsTotalEl.textContent = `+${summary.totalCoinsEarned} Coins`;
+  }
+  if (breakdownEl) {
+    const parts: string[] = [
+      summary.isFirstClear
+        ? `First Clear: +${summary.baseCoins}`
+        : `Replay Bonus: +${summary.baseCoins}`,
+    ];
+    if (summary.starCoins > 0) parts.push(`New Stars: +${summary.starCoins}`);
+    if (summary.streakCoins > 0) parts.push(`Streak: +${summary.streakCoins}`);
+    if (summary.chestCoins > 0) parts.push(`Chests: +${summary.chestCoins}`);
+    breakdownEl.textContent = parts.join(' • ');
+  }
+  const shredChestProg = Math.min(100, Math.max(0, save.shredderChestProgress % 100));
+  const milestoneStep = Math.max(0, save.highestLevelUnlocked - 1) % 10;
+  if (shredTextEl) {
+    shredTextEl.textContent = `${shredChestProg} / 100`;
+  }
+  if (shredFillEl) {
+    shredFillEl.style.width = `${shredChestProg}%`;
+  }
+  if (milestoneTextEl) {
+    milestoneTextEl.textContent = `${milestoneStep} / 10`;
+  }
+  if (milestoneFillEl) {
+    milestoneFillEl.style.width = `${Math.max(10, milestoneStep * 10)}%`;
+  }
+  if (chestFanfareEl) {
+    const chestNotes: string[] = [];
+    if (summary.shredderChestsOpened > 0) {
+      const rewardPart =
+        summary.rewardedBoosters.length > 0
+          ? summary.rewardedBoosters
+              .map((b) => `+1 ${BOOSTER_DISPLAY_NAMES[b]} [${BOOSTER_RARITY[b]}]`)
+              .join(', ')
+          : 'Free Booster';
+      chestNotes.push(`⚙️ Shredder Chest Opened! (+100 Coins & ${rewardPart})`);
+    }
+    if (summary.milestoneChestOpened) {
+      const lastBooster = summary.rewardedBoosters[summary.rewardedBoosters.length - 1];
+      const rewardPart = lastBooster
+        ? `+1 ${BOOSTER_DISPLAY_NAMES[lastBooster]} [${BOOSTER_RARITY[lastBooster]}]`
+        : 'Free Booster';
+      chestNotes.push(`🏆 Milestone Chest Opened! (+150 Coins & ${rewardPart})`);
+    }
+    if (chestNotes.length > 0) {
+      chestFanfareEl.textContent = chestNotes.join(' | ');
+      chestFanfareEl.hidden = false;
+    } else {
+      chestFanfareEl.hidden = true;
+    }
+  }
+}
+
+export function handleLevelFailureImpl(app: AppViewContext, reason: 'TIME_OUT' | 'BOMB_EXPLODED'): void {
+  app.sound.playLossBuzzer();
+  app.saveManager.recordLevelLoss();
+
+  const titleEl = document.getElementById('failure-title');
+  const reasonEl = document.getElementById('failure-reason');
+  const continueBtn = document.getElementById('btn-continue-level');
+
+  if (titleEl) {
+    titleEl.textContent = reason === 'BOMB_EXPLODED' ? '💣 Bomb Exploded!' : "⏰ Time's Up!";
+  }
+  if (reasonEl) {
+    reasonEl.textContent =
+      reason === 'BOMB_EXPLODED'
+        ? 'A countdown bomb reached zero! Defuse all bombs (+8 moves/sec) to keep playing, retry for free, or skip ahead.'
+        : 'You ran out of time in Timed Rush! Add +15 seconds, switch to Zen Mode, retry for free, or skip ahead.';
+  }
+  if (continueBtn) {
+    continueBtn.textContent =
+      reason === 'BOMB_EXPLODED'
+        ? '➕ Defuse Bombs (50 Coins)'
+        : '➕ Add +15 Seconds (50 Coins)';
+  }
+
+  app.openModal('failure');
+}
+
+export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockState): void {
+  if (isBlockInLockedRoom(app.board, block)) {
+    const roomId = getBlockRoomId(app.board, block);
+    const bar = app.board.barriers.find((b) => !b.open && b.unlocksRoomId === roomId);
+    if (bar && bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0) {
+      app.showGameToast('⛩️ Chamber Sealed! Shred a block with a 🔑 Key to open the Portcullis');
+    } else if (bar && bar.shredsRemaining > 0) {
+      app.showGameToast(
+        `⛩️ Chamber Sealed! Shred ${bar.shredsRemaining} more block(s) to open the Portcullis`
+      );
+    } else {
+      app.showGameToast('⛩️ Chamber Sealed! Open the Portcullis Barrier first');
+    }
+    return;
+  }
+
+  const activeColor = getActiveColor(block.colorStack, block.colorCursor);
+  if (activeColor === 0) {
+    app.showGameToast('🪨 Stone Block — permanent obstacle that never moves');
+  } else if (block.iceCount > 0) {
+    app.showGameToast(`❄️ Frozen! Shred ${block.iceCount} more block(s) to thaw`);
+  } else if (block.chained) {
+    app.showGameToast('🔒 Chained! Shred a block carrying a 🔑 Key to unlock');
+  } else if (block.ropeColor > 0) {
+    const cName = COLOR_PALETTE[block.ropeColor]?.name ?? 'matching';
+    app.showGameToast(`🪢 Tied with ${cName} Rope! Shred matching ✂️ Scissors first`);
+  }
+}
+
+export function syncBoosterTargetingBannerImpl(hoverState: HoverState): void {
+  const banner = document.getElementById('booster-target-banner');
+  const textEl = document.getElementById('booster-target-text');
+  const axisBtn = document.getElementById('btn-rocket-axis');
+
+  const hammerBtn = document.getElementById('btn-booster-hammer');
+  const rocketBtn = document.getElementById('btn-booster-rocket');
+  const vacuumBtn = document.getElementById('btn-booster-vacuum');
+
+  hammerBtn?.classList.toggle('active-targeting', hoverState.inputMode === 'TARGET_HAMMER');
+  rocketBtn?.classList.toggle('active-targeting', hoverState.inputMode === 'TARGET_ROCKET');
+  vacuumBtn?.classList.toggle('active-targeting', hoverState.inputMode === 'TARGET_VACUUM');
+
+  if (!banner || !textEl || !axisBtn) return;
+
+  if (hoverState.inputMode === 'DRAG') {
+    banner.hidden = true;
+    return;
+  }
+
+  banner.hidden = false;
+  const unlockToast = document.getElementById('unlock-toast');
+  if (unlockToast) {
+    unlockToast.hidden = true;
+  }
+  if (hoverState.inputMode === 'TARGET_HAMMER') {
+    textEl.textContent = '🔨 Tap any block, crate, or locked gate to smash';
+    axisBtn.hidden = true;
+  } else if (hoverState.inputMode === 'TARGET_ROCKET') {
+    textEl.textContent = `🚀 Tap any cell to blast its entire ${hoverState.rocketAxis === 'ROW' ? 'ROW' : 'COLUMN'}`;
+    axisBtn.hidden = false;
+    axisBtn.textContent =
+      hoverState.rocketAxis === 'ROW' ? 'Axis: ↔ ROW' : 'Axis: ↕ COL';
+  } else if (hoverState.inputMode === 'TARGET_VACUUM') {
+    textEl.textContent = '🧲 Tap any unlocked colored block to vacuum all matching blocks';
+    axisBtn.hidden = true;
+  }
+}
+
+export function isNewPlayerSaveImpl(app: AppViewContext, save: SavePayloadV1 = app.saveManager.getPayload()): boolean {
+  return (
+    save.highestLevelUnlocked <= 1 &&
+    save.currentLevelId <= 1 &&
+    save.totalMovesCommitted === 0 &&
+    save.totalBlocksShredded === 0 &&
+    Object.keys(save.levelRecords).length === 0 &&
+    save.unlockedSkins.length <= 1 &&
+    save.unlockedTrays.length <= 1 &&
+    save.unlockedParticles.length <= 1
+  );
+}
+
+export function syncTitleOverlayDomImpl(app: AppViewContext): void {
+  const titleEl = document.getElementById('title-overlay');
+  const homeEl = document.getElementById('screen-home');
+  const gameEl = document.getElementById('screen-game');
+  const themesEl = document.getElementById('screen-themes');
+  const tabBarEl = document.getElementById('menu-tab-bar');
+
+  if (app.titleOverlayOpen) {
+    if (titleEl) titleEl.hidden = false;
+    if (homeEl) {
+      homeEl.hidden = true;
+      homeEl.inert = true;
+    }
+    if (themesEl) {
+      themesEl.hidden = true;
+      themesEl.inert = true;
+    }
+    if (tabBarEl) {
+      tabBarEl.hidden = true;
+      tabBarEl.inert = true;
+    }
+    if (gameEl) {
+      gameEl.hidden = false;
+      gameEl.inert = true;
+      gameEl.classList.add('title-backdrop-mode');
+    }
+    app.renderer.resize();
+    return;
+  }
+
+  if (titleEl) titleEl.hidden = true;
+  if (homeEl) {
+    homeEl.hidden = app.activeScreen !== 'home';
+    homeEl.inert = false;
+  }
+  if (themesEl) {
+    themesEl.hidden = app.activeScreen !== 'themes';
+    themesEl.inert = false;
+  }
+  if (tabBarEl) {
+    tabBarEl.hidden = app.activeScreen === 'game';
+    tabBarEl.inert = false;
+  }
+  if (gameEl) {
+    gameEl.hidden = app.activeScreen !== 'game';
+    gameEl.inert = false;
+    gameEl.classList.remove('title-backdrop-mode');
+  }
+  if (app.activeScreen === 'game') {
+    app.renderer.resize();
+  }
+}
+
+export function syncAllUiFromSaveImpl(app: AppViewContext): void {
+  const save = app.saveManager.getPayload();
+
+  app.sound.updateSettings({
+    sfxEnabled: save.settings.sfxEnabled,
+    musicEnabled: save.settings.musicEnabled,
+    hapticsEnabled: save.settings.hapticsEnabled,
+  });
+  app.renderer.setQualityPreference(save.settings.qualityTier);
+
+  document.body.classList.toggle('high-contrast', Boolean(save.settings.highContrast));
+  document.body.classList.toggle('colorblind-mode', Boolean(save.settings.colorblindSymbols));
+  document.body.classList.toggle('reduced-motion', Boolean(save.settings.reducedMotion));
+
+  // Header Economy Pills
+  const coinsEl = document.getElementById('stat-coins');
+  const starsEl = document.getElementById('stat-stars');
+  const streakEl = document.getElementById('stat-streak');
+  const themesCoinsEl = document.getElementById('themes-coins-display');
+
+  if (coinsEl) coinsEl.textContent = String(save.coins);
+  if (starsEl) starsEl.textContent = String(save.totalStars);
+  if (streakEl) streakEl.textContent = String(save.winStreak);
+  if (themesCoinsEl) themesCoinsEl.textContent = String(save.coins);
+
+  // Chests Progress
+  const shredChestProg = Math.min(100, Math.max(0, save.shredderChestProgress % 100));
+  const shredText = document.getElementById('shredder-chest-text');
+  const shredFill = document.getElementById('shredder-chest-fill');
+  if (shredText) shredText.textContent = `${shredChestProg} / 100`;
+  if (shredFill) shredFill.style.width = `${shredChestProg}%`;
+
+  const nextMilestone = Math.ceil(Math.max(1, save.highestLevelUnlocked) / 10) * 10;
+  const milestoneStep = ((save.highestLevelUnlocked - 1) % 10) * 10;
+  const mileText = document.getElementById('milestone-chest-text');
+  const mileFill = document.getElementById('milestone-chest-fill');
+  if (mileText) mileText.textContent = `Level ${nextMilestone}`;
+  if (mileFill) mileFill.style.width = `${Math.max(10, milestoneStep)}%`;
+
+  // Hero Launch Card
+  const targetLevelId = Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
+  const targetSpec = getLevelSpec(targetLevelId);
+  const chapterMeta = getChapterMetaForLevel(targetLevelId);
+  const heroChapterTag = document.getElementById('hero-chapter-tag');
+  const heroDiff = document.getElementById('hero-badge-difficulty');
+  const heroHeading = document.getElementById('hero-level-heading');
+  const heroNote = document.getElementById('hero-level-note');
+  const playBtn = document.getElementById('btn-play-current');
+  const tabPlayLabel = document.getElementById('tab-play-label');
+
+  if (heroChapterTag) {
+    heroChapterTag.textContent = `${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`;
+  }
+  if (heroDiff) {
+    heroDiff.textContent = targetSpec.difficulty.replace('_', ' ');
+    heroDiff.className = `badge-difficulty diff-${targetSpec.difficulty.toLowerCase()}`;
+  }
+  if (heroHeading) {
+    heroHeading.textContent = `Level ${targetSpec.id} — ${targetSpec.name}`;
+  }
+  if (heroNote) {
+    heroNote.textContent =
+      targetSpec.unlockNote ??
+      `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`;
+  }
+  if (playBtn) {
+    playBtn.textContent = `▶ PLAY LEVEL ${targetSpec.id}`;
+  }
+  if (tabPlayLabel) {
+    tabPlayLabel.textContent = `Play Lvl ${targetSpec.id}`;
+  }
+
+  // Sacred-Geometry Title Crest Overlay (Adaptive New vs. Returning Player State)
+  const isNewPlayer = app.isNewPlayerSave(save);
+  const titleNewTagline = document.getElementById('title-new-player-tagline');
+  const titleReturningSummary = document.getElementById('title-returning-summary');
+  const titleReturningNav = document.getElementById('title-returning-nav');
+  const titleChapterBadge = document.getElementById('title-chapter-badge');
+  const titleLevelSubtitle = document.getElementById('title-level-subtitle');
+  const titleStatStars = document.getElementById('title-stat-stars');
+  const titleStatCoins = document.getElementById('title-stat-coins');
+  const titleStatStreak = document.getElementById('title-stat-streak');
+  const titlePlayBtn = document.getElementById('btn-title-play');
+  const titleSyncLabel = document.getElementById('title-sync-label');
+
+  if (titleNewTagline) titleNewTagline.hidden = !isNewPlayer;
+  if (titleReturningSummary) titleReturningSummary.hidden = isNewPlayer;
+  if (titleReturningNav) titleReturningNav.hidden = isNewPlayer;
+  if (titleChapterBadge) {
+    titleChapterBadge.textContent = `${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`;
+  }
+  if (titleLevelSubtitle) {
+    titleLevelSubtitle.textContent = `Level ${targetSpec.id} — ${targetSpec.name}`;
+  }
+  if (titleStatStars) titleStatStars.textContent = String(save.totalStars);
+  if (titleStatCoins) titleStatCoins.textContent = String(save.coins);
+  if (titleStatStreak) titleStatStreak.textContent = String(save.winStreak);
+  if (titlePlayBtn) {
+    titlePlayBtn.textContent = isNewPlayer
+      ? '▶ BEGIN JOURNEY'
+      : `▶ CONTINUE · LEVEL ${targetSpec.id}`;
+  }
+  if (titleSyncLabel) {
+    titleSyncLabel.textContent = isNewPlayer ? 'Restore Save' : 'Sync';
+  }
+  app.syncInstallUiVisibility();
+
+  // Settings Checkboxes & Selects
+  const setChecked = (id: string, val: boolean) => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (el) el.checked = val;
+  };
+  setChecked('toggle-sfx', save.settings.sfxEnabled);
+  setChecked('toggle-music', save.settings.musicEnabled);
+  setChecked('toggle-haptics', save.settings.hapticsEnabled);
+  setChecked('toggle-colorblind', save.settings.colorblindSymbols);
+  setChecked('toggle-high-contrast', save.settings.highContrast);
+  setChecked('toggle-reduced-motion', save.settings.reducedMotion);
+
+  const tierSelect = document.getElementById(
+    'select-quality-tier'
+  ) as HTMLSelectElement | null;
+  if (tierSelect) {
+    tierSelect.value = save.settings.qualityTier;
+  }
+
+  const hudSfxBtn = document.getElementById('btn-hud-sfx');
+  const hudMusicBtn = document.getElementById('btn-hud-music');
+  if (hudSfxBtn) hudSfxBtn.textContent = save.settings.sfxEnabled ? '🔊' : '🔇';
+  if (hudMusicBtn) hudMusicBtn.textContent = save.settings.musicEnabled ? '🎵' : '🔕';
+
+  app.syncInGameHud();
+}
+
+export function syncInGameHudImpl(app: AppViewContext): void {
+  const save = app.saveManager.getPayload();
+  const playMode = save.settings.playMode;
+
+  const titleEl = document.getElementById('hud-level-title');
+  const diffEl = document.getElementById('hud-difficulty-badge');
+  const coinsInline = document.getElementById('hud-coins-inline');
+  const shredInline = document.getElementById('hud-shred-inline');
+  const modeLabel = document.getElementById('hud-mode-label');
+  const movesPill = document.getElementById('hud-moves-pill');
+  const timerPill = document.getElementById('hud-timer-pill');
+
+  if (titleEl) {
+    titleEl.textContent = `Level ${app.board.levelId} — ${app.board.name}`;
+  }
+  if (diffEl) {
+    diffEl.textContent = app.board.difficulty.replace('_', ' ');
+    diffEl.className = `badge-difficulty diff-${app.board.difficulty.toLowerCase()}`;
+  }
+  if (coinsInline) {
+    coinsInline.textContent = `${save.coins}`;
+  }
+  if (shredInline) {
+    const prog = (save.shredderChestProgress + app.board.sessionBlocksShredded) % 100;
+    shredInline.textContent = `${prog}/100`;
+  }
+  if (modeLabel) {
+    modeLabel.textContent = playMode === 'ZEN' ? 'Zen Mode' : 'Timed Rush';
+  }
+  if (movesPill) {
+    movesPill.textContent = `Moves: ${app.board.movesCommitted} / Par ${app.board.parMoves}`;
+  }
+  if (timerPill) {
+    timerPill.hidden = playMode !== 'TIMED';
+  }
+  app.syncTimerPillOnly();
+
+  const svgHint = document.getElementById('svg-booster-hint');
+  const svgFreeze = document.getElementById('svg-booster-freeze');
+  const freezeLabel = document.getElementById('label-booster-freeze');
+  if (svgHint) svgHint.toggleAttribute('hidden', playMode !== 'ZEN');
+  if (svgFreeze) svgFreeze.toggleAttribute('hidden', playMode === 'ZEN');
+  if (freezeLabel) freezeLabel.textContent = playMode === 'ZEN' ? 'Hint' : 'Freeze';
+
+  // Boosters Dock Badges, Rarity Accents & Progressive Level Unlocking (ECON-01 / ECON-02)
+  const effectiveLevel = Math.max(app.board.levelId, save.highestLevelUnlocked);
+
+  const syncBoosterSlot = (btnId: string, badgeId: string, type: BoosterType) => {
+    const btnEl = document.getElementById(btnId);
+    const badgeEl = document.getElementById(badgeId);
+    const unlocked = isBoosterUnlocked(type, effectiveLevel);
+    const rarity = BOOSTER_RARITY[type].toLowerCase();
+
+    if (btnEl) {
+      btnEl.classList.remove(
+        'rarity-common',
+        'rarity-uncommon',
+        'rarity-rare',
+        'rarity-epic',
+        'rarity-legendary'
+      );
+      btnEl.classList.add(`rarity-${rarity}`);
+      btnEl.classList.toggle('locked-booster', !unlocked);
+      btnEl.setAttribute('data-rarity', BOOSTER_RARITY[type]);
+    }
+
+    if (!badgeEl) return;
+
+    if (!unlocked) {
+      badgeEl.textContent = `Lvl ${BOOSTER_UNLOCK_LEVEL[type]}`;
+      badgeEl.className = 'booster-badge badge-locked';
+      return;
+    }
+
+    if (type === 'UNDO' && app.freeUndosRemaining > 0) {
+      badgeEl.textContent = `FREE (${app.freeUndosRemaining})`;
+      badgeEl.className = 'booster-badge badge-free';
+      return;
+    }
+
+    const count = save.boosters[type] ?? 0;
+    if (count > 0) {
+      badgeEl.textContent = String(count);
+      badgeEl.className = `booster-badge badge-rarity-${rarity}`;
+    } else {
+      badgeEl.textContent = `${UI_BOOSTER_PRICES[type]} Coins`;
+      badgeEl.className = 'booster-badge badge-coin';
+    }
+  };
+
+  syncBoosterSlot('btn-booster-undo', 'badge-booster-undo', 'UNDO');
+  syncBoosterSlot('btn-booster-freeze', 'badge-booster-freeze', 'FREEZE');
+  syncBoosterSlot('btn-booster-hammer', 'badge-booster-hammer', 'HAMMER');
+  syncBoosterSlot('btn-booster-rocket', 'badge-booster-rocket', 'ROCKET');
+  syncBoosterSlot('btn-booster-vacuum', 'badge-booster-vacuum', 'VACUUM');
+}
+
+export function syncTimerPillOnlyImpl(app: AppViewContext): void {
+  const timerPill = document.getElementById('hud-timer-pill');
+  if (!timerPill || timerPill.hidden) return;
+
+  const totalSec = Math.max(0, Math.ceil(app.board.timeRemainingSec));
+  const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
+  const secs = String(totalSec % 60).padStart(2, '0');
+
+  if (app.board.freezeRemainingSec > 0) {
+    timerPill.textContent = `❄️ ${mins}:${secs} (${Math.ceil(app.board.freezeRemainingSec)}s)`;
+    timerPill.className = 'tabular-metric timer-pill frozen';
+  } else {
+    timerPill.textContent = `⏱ ${mins}:${secs}`;
+    timerPill.className =
+      totalSec <= 15
+        ? 'tabular-metric timer-pill urgent'
+        : 'tabular-metric timer-pill';
+  }
+}
+
+export function buildRenderOptionsImpl(
+  app: AppViewContext,
+  dtSec = 1 / 60,
+  timeSec?: number
+): RenderSceneOptions {
+  const save = app.saveManager.getPayload();
+  const hover = app.inputController.getHoverState();
+  const activeBlockId = hover.activeBlockId ?? app.board.hintMove?.blockId ?? null;
+
+  let dragTargetRow: number | null = null;
+  let dragTargetCol: number | null = null;
+  let dragEligibleGateIndex: number | null = null;
+
+  if (hover.activeBlockId !== null) {
+    const blk = app.board.blocks.find((b) => b.id === hover.activeBlockId);
+    if (blk) {
+      dragTargetRow = Math.round(blk.y);
+      dragTargetCol = Math.round(blk.x);
+      const gIdx = findEligibleGateForBlockAt(app.board, blk, dragTargetRow, dragTargetCol);
+      if (gIdx >= 0) dragEligibleGateIndex = gIdx;
+    }
+  } else if (app.board.hintMove) {
+    dragTargetRow = app.board.hintMove.targetRow;
+    dragTargetCol = app.board.hintMove.targetCol;
+    if (app.board.hintMove.exitsGateIndex >= 0) {
+      dragEligibleGateIndex = app.board.hintMove.exitsGateIndex;
+    }
+  }
+
+  let autoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null = null;
+  if (
+    !app.titleOverlayOpen &&
+    hover.activeBlockId === null &&
+    hover.inputMode === "DRAG" &&
+    !app.board.hintMove &&
+    !app.levelOutcomeHandled &&
+    app.cachedAutoGuideMove
+  ) {
+    const isImmediateOnboardingOrAxisDebut =
+      (app.board.levelId <= 5 || app.board.levelId === 11) && app.board.movesCommitted === 0;
+    const isIdleEarlyOrShowcase =
+      (app.board.levelId <= 30 || app.currentLevelHasUnlockNote) &&
+      performance.now() - app.lastPointerActivityMs >= 4000;
+    if (isImmediateOnboardingOrAxisDebut || isIdleEarlyOrShowcase) {
+      autoGuideMove = app.cachedAutoGuideMove;
+    }
+  }
+
+  return {
+    draggedBlockId: activeBlockId,
+    dragTargetRow,
+    dragTargetCol,
+    dragEligibleGateIndex,
+    autoGuideMove,
+    inputMode: hover.inputMode,
+    rocketAxis: hover.rocketAxis,
+    hoverRow: hover.hoverRow >= 0 ? hover.hoverRow : null,
+    hoverCol: hover.hoverCol >= 0 ? hover.hoverCol : null,
+    equippedSkin: save.equippedSkin,
+    equippedTray: save.equippedTray,
+    equippedParticle: save.equippedParticle,
+    colorblindSymbols: save.settings.colorblindSymbols,
+    highContrast: save.settings.highContrast,
+    reducedMotion: save.settings.reducedMotion,
+    qualityTier: save.settings.qualityTier,
+    blueprintMix: app.titleOverlayOpen ? 1.0 : Math.pow(app.blueprintMix, 1.5),
+    dtSec,
+    timeSec,
+  };
+}
