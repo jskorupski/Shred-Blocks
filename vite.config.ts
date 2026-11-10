@@ -88,6 +88,15 @@ function pwaAutoVersionPlugin(): Plugin {
   };
 }
 
+/**
+ * Anti-clickjacking frame guard (`SAVE-SEC-01`), mirroring `public/_headers` in production so local
+ * dev/preview behave identically. `frame-ancestors` is ignored in `<meta>` CSP, so it must be a header.
+ */
+export const FRAME_GUARD_HEADERS = {
+  'Content-Security-Policy': "frame-ancestors 'self'",
+  'X-Frame-Options': 'SAMEORIGIN',
+};
+
 export default defineConfig({
   base: '/',
   plugins: [pwaAutoVersionPlugin()],
@@ -102,10 +111,12 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 4173,
     strictPort: true,
+    headers: FRAME_GUARD_HEADERS,
   },
   preview: {
     host: '127.0.0.1',
     port: 4173,
     strictPort: true,
+    headers: FRAME_GUARD_HEADERS,
   },
 });

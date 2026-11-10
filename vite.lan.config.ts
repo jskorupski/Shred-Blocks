@@ -42,6 +42,12 @@ function ensureLanHttpsCerts(): { key: unknown; cert: unknown } {
 
 const httpsConfig = ensureLanHttpsCerts();
 
+/** Same anti-clickjacking frame guard as `public/_headers` / `vite.config.ts` (`SAVE-SEC-01`). */
+const FRAME_GUARD_HEADERS = {
+  'Content-Security-Policy': "frame-ancestors 'self'",
+  'X-Frame-Options': 'SAMEORIGIN',
+};
+
 export default defineConfig({
   base: '/',
   server: {
@@ -49,11 +55,13 @@ export default defineConfig({
     port: 8443,
     strictPort: true,
     https: httpsConfig as Record<string, never>,
+    headers: FRAME_GUARD_HEADERS,
   },
   preview: {
     host: '0.0.0.0',
     port: 8443,
     strictPort: true,
     https: httpsConfig as Record<string, never>,
+    headers: FRAME_GUARD_HEADERS,
   },
 });
