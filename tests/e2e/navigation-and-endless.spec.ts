@@ -238,12 +238,29 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     expect(frameA).not.toBe(frameB);
 
     // Clicking Play smoothly fades mystic relic -> normal 3D gameplay (0 < mix < 1 mid-transition -> 0 settled)
+    // while the RELIC-AWAKEN-01 burst (stone shards + smoke + embers + glow halo) fires on frame 1.
+    const titleCanvasRect = await page.locator('#game-canvas').boundingBox();
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#title-overlay')).toBeHidden();
     await page.waitForTimeout(120);
-    const midTransitionMix = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBlueprintMix());
-    expect(midTransitionMix).toBeGreaterThan(0);
-    expect(midTransitionMix).toBeLessThan(1);
+    const midTransition = await page.evaluate(() => {
+      const canvas = document.getElementById('game-canvas');
+      return {
+        mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
+        particles: window.__SHREDBLOCKS_DEBUG__.getTelemetry().activeParticles,
+        burstClass: document.getElementById('screen-game')?.classList.contains('relic-awakening-burst'),
+        canvasAnim: canvas ? window.getComputedStyle(canvas).animationName : '',
+      };
+    });
+    expect(midTransition.mix).toBeGreaterThan(0);
+    expect(midTransition.mix).toBeLessThan(1);
+    expect(midTransition.particles).toBeGreaterThan(60);
+    expect(midTransition.burstClass).toBe(true);
+    expect(midTransition.canvasAnim).toBe('relicAwakeningBloom');
+    // TITLE-TRANSITION-01: the burst halo is filter-only, so the canvas never shifts
+    const midCanvasRect = await page.locator('#game-canvas').boundingBox();
+    expect(Math.abs((midCanvasRect?.y ?? 0) - (titleCanvasRect?.y ?? 0))).toBeLessThan(1);
+    expect(Math.abs((midCanvasRect?.width ?? 0) - (titleCanvasRect?.width ?? 0))).toBeLessThan(1);
 
     await page.waitForTimeout(820);
     const settledGameState = await page.evaluate(() => {
@@ -252,12 +269,14 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
       return {
         mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
         hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
+        burstClass: document.getElementById('screen-game')?.classList.contains('relic-awakening-burst'),
         canvasFilter: cs ? cs.filter : '',
         canvasAnim: cs ? cs.animationName : '',
       };
     });
     expect(settledGameState.mix).toBe(0);
     expect(settledGameState.hasBackdropClass).toBe(false);
+    expect(settledGameState.burstClass).toBe(false);
     expect(settledGameState.canvasAnim).toBe('none');
     expect(settledGameState.canvasFilter).not.toBe(titleState.canvasFilter);
 

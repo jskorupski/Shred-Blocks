@@ -441,10 +441,23 @@ export function dismissTitleScreenImpl(
   targetScreen: 'game' | 'home' | 'themes' = 'game',
   animateAwakening = true
 ): void {
-  if (targetScreen !== 'game' || !animateAwakening || app.saveManager.getPayload().settings.reducedMotion) {
+  const wasTitleOpen = app.titleOverlayOpen;
+  const awaken =
+    wasTitleOpen &&
+    targetScreen === 'game' &&
+    animateAwakening &&
+    !app.saveManager.getPayload().settings.reducedMotion;
+  if (!awaken) {
     app.blueprintMix = 0;
   }
   app.switchScreen(targetScreen);
+  if (awaken) {
+    // Relic Awakening Transformation (RELIC-AWAKEN-01): stone shatters into smoke, shards & glow
+    app.blueprintMix = Math.min(app.blueprintMix, 0.995);
+    app.renderer.spawnRelicAwakeningBurst(app.board);
+    document.getElementById('screen-game')?.classList.add('relic-awakening-burst');
+    app.sound.playRelicAwaken();
+  }
   if (targetScreen === 'game' && app.board.movesCommitted === 0) {
     const spec = getLevelSpec(app.board.levelId);
     app.showUnlockNoteIfPresent(spec.unlockNote ?? BOOSTER_DEBUT_NOTES[app.board.levelId]);
@@ -456,6 +469,9 @@ export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 
   const wasTitleOpen = app.titleOverlayOpen;
   app.activeScreen = screen;
   app.titleOverlayOpen = false;
+  // Any screen switch (direct loadLevel, Map, Themes) cancels a running relic-awakening halo;
+  // dismissTitleScreenImpl re-adds it right after when launching gameplay from the Title Screen.
+  document.getElementById('screen-game')?.classList.remove('relic-awakening-burst');
   if (screen !== 'game') {
     app.blueprintMix = 0;
   }

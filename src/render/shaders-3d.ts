@@ -475,6 +475,14 @@ void main() {
     );
 
     lit = mix(lit, stoneArtifact, u_blueprintMix);
+    // Relic Awakening surge (RELIC-AWAKEN-01): only while transitioning (0 < mix < 1), never on the
+    // idle Title Screen (mix == 1). A radial transmutation wave + fissure flare sweeps the board.
+    float awaken = (1.0 - u_blueprintMix) * step(u_blueprintMix, 0.998);
+    float waveDist = normDist - awaken * 1.7;
+    float wave = exp(-waveDist * waveDist * 38.0) * smoothstep(0.0, 0.06, awaken);
+    float flare = sin(clamp(awaken * 1.4, 0.0, 1.0) * 3.14159265);
+    vec3 awakenTint = mix(vec3(1.0, 0.8, 0.42), mysticColor, 0.35);
+    lit += awakenTint * (wave * 0.4 + crackGlow * flare * 0.45) * step(0.001, awaken);
     // Keep opaque 3D stone geometry 100% solid (blueprintAlpha = 1.0) so plinth, floor, walls,
     // and blocks never alpha-bleed through one another like a ghosted rendering error.
     blueprintAlpha = 1.0;
@@ -499,6 +507,8 @@ uniform int u_particleStyle; // 0=micro_cubes, 1=star_confetti, 2=pixel_sparks, 
 out vec3 v_normal;
 out vec3 v_color;
 out vec3 v_localPos;
+flat out float v_archetype; // 0=style particle, 1=stone shard, 2=smoke puff (RELIC-AWAKEN-01)
+flat out float v_life;
 
 void main() {
   float angle = a_instColorRot.w;
@@ -507,6 +517,33 @@ void main() {
 
   vec3 p = a_position;
   vec3 n = a_normal;
+  float w = a_instPosScale.w;
+  v_archetype = w <= -10.0 ? 2.0 : (w < 0.0 ? 1.0 : 0.0);
+  v_life = a_instColorRot.w;
+  v_color = a_instColorRot.rgb;
+  v_localPos = a_position;
+
+  if (v_archetype > 1.5) {
+    // Camera-facing billboard smoke puff (camera pitch ~78deg: up = (0, -0.978, 0.208))
+    float sz = -w - 10.0;
+    vec3 worldPos = a_instPosScale.xyz + vec3(p.x, -0.978 * p.y, 0.208 * p.y) * sz * 2.0;
+    v_normal = vec3(0.0, 0.21, 0.97);
+    gl_Position = u_viewProj * vec4(worldPos, 1.0);
+    return;
+  }
+  if (v_archetype > 0.5) {
+    // Irregular fractured stone slab with full 3-axis tumble
+    p = vec3(p.x * 1.32, p.y * 0.92, p.z * 0.72) * (-w);
+    float ax = angle * 1.3;
+    float ca = cos(ax);
+    float sa = sin(ax);
+    p = vec3(p.x, p.y * ca - p.z * sa, p.y * sa + p.z * ca);
+    n = vec3(n.x, n.y * ca - n.z * sa, n.y * sa + n.z * ca);
+    p = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
+    v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
+    gl_Position = u_viewProj * vec4(p + a_instPosScale.xyz, 1.0);
+    return;
+  }
 
   if (u_particleStyle == 1) {
     // star_confetti: flat fluttering ribbon wafers
@@ -535,8 +572,6 @@ void main() {
 
   vec3 worldPos = rotated + a_instPosScale.xyz;
   v_normal = n;
-  v_color = a_instColorRot.rgb;
-  v_localPos = a_position;
 
   gl_Position = u_viewProj * vec4(worldPos, 1.0);
 }
@@ -549,6 +584,8 @@ precision highp int;
 in vec3 v_normal;
 in vec3 v_color;
 in vec3 v_localPos;
+flat in float v_archetype;
+flat in float v_life;
 
 uniform int u_particleStyle; // 0=micro_cubes, 1=star_confetti, 2=pixel_sparks, 3=soap_bubbles, 4=lightning_bolts
 
@@ -559,6 +596,29 @@ void main() {
   vec3 L = normalize(vec3(-0.3, -0.5, 0.8));
   vec3 V = normalize(vec3(0.0, 0.21, 0.97));
   float light = 0.62 + max(dot(N, L), 0.0) * 0.45;
+
+  if (v_archetype > 1.5) {
+    // Soft volumetric smoke/dust puff: radial falloff, smooth fade-in + fade-out, warm inner glow
+    float r = length(v_localPos.xy) * 2.0;
+    float puff = smoothstep(1.0, 0.1, r);
+    float fade = smoothstep(1.0, 0.86, v_life) * smoothstep(0.0, 0.55, v_life);
+    vec3 col = v_color * (0.86 + 0.28 * (1.0 - r)) + vec3(0.98, 0.82, 0.5) * 0.2 * fade * (1.0 - r);
+    float a = puff * fade * 0.58;
+    if (a < 0.004) discard;
+    outColor = vec4(clamp(col, 0.0, 1.0), a);
+    return;
+  }
+  if (v_archetype > 0.5) {
+    // Chiseled weathered stone shard with glowing golden-jade fracture edges (where 2+ faces meet)
+    vec3 lp = abs(v_localPos);
+    float edgeCount = smoothstep(0.34, 0.47, lp.x) + smoothstep(0.34, 0.47, lp.y) + smoothstep(0.34, 0.47, lp.z);
+    float edge = smoothstep(1.25, 1.9, edgeCount);
+    float grit = sin(v_localPos.x * 37.0) * cos(v_localPos.y * 41.0) * 0.05;
+    vec3 stone = v_color * (light + grit);
+    vec3 glow = mix(vec3(1.0, 0.8, 0.36), vec3(0.32, 0.96, 0.82), step(0.5, fract(v_color.r * 13.0)));
+    outColor = vec4(clamp(mix(stone, glow, edge * 0.7), 0.0, 1.0), 1.0);
+    return;
+  }
 
   if (u_particleStyle == 1) {
     // star_confetti: glossy metallic foil sheen

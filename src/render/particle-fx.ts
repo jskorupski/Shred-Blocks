@@ -12,9 +12,11 @@ import {
 import {
   INSTANCE_STRIDE,
   MAX_PARTICLES,
+  MAX_SMOKE_PUFFS,
   PARTICLE_STRIDE,
   type RenderPassContext,
   type RenderSceneOptions,
+  SMOKE_SCALE_OFFSET,
 } from './render-types';
 
 /**
@@ -260,6 +262,7 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
     }
   }
 
+  let activeSmoke = 0;
   for (let i = 0; i < MAX_PARTICLES; i++) {
     const idx = i * PARTICLE_STRIDE;
     const age = rctx.particlePool[idx + 10];
@@ -267,26 +270,56 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
     if (age <= 0 || age >= maxAge) continue;
 
     const nextAge = age + dt;
-    if (nextAge >= maxAge || active >= maxActive) {
+    if (nextAge >= maxAge || active + activeSmoke >= maxActive) {
       rctx.particlePool[idx + 10] = 0;
       continue;
     }
 
+    const baseScale = rctx.particlePool[idx + 9];
+    const isSmoke = baseScale <= -SMOKE_SCALE_OFFSET;
+    const isShard = !isSmoke && baseScale < 0;
     rctx.particlePool[idx + 10] = nextAge;
     rctx.particlePool[idx + 0] += rctx.particlePool[idx + 3] * dt;
     rctx.particlePool[idx + 1] += rctx.particlePool[idx + 4] * dt;
     rctx.particlePool[idx + 2] += rctx.particlePool[idx + 5] * dt;
-    // Gravity
-    rctx.particlePool[idx + 5] -= 6.8 * dt;
+    if (isSmoke) {
+      // Buoyant billowing smoke: horizontal drag + gentle upward drift (`RELIC-AWAKEN-01`)
+      const drag = Math.max(0, 1 - 2.2 * dt);
+      rctx.particlePool[idx + 3] *= drag;
+      rctx.particlePool[idx + 4] *= drag;
+      rctx.particlePool[idx + 5] = rctx.particlePool[idx + 5] * Math.max(0, 1 - 1.6 * dt) + 0.35 * dt;
+    } else {
+      // Gravity (stone shards fall a little heavier for a crisp tumbling arc)
+      rctx.particlePool[idx + 5] -= (isShard ? 8.4 : 6.8) * dt;
+    }
     rctx.particlePool[idx + 12] += rctx.particlePool[idx + 13] * dt;
 
     const lifeRatio = 1.0 - nextAge / maxAge;
-    const scale = rctx.particlePool[idx + 9] * (0.35 + 0.65 * lifeRatio);
+    if (isSmoke) {
+      if (activeSmoke >= MAX_SMOKE_PUFFS) continue;
+      const puffRadius = -baseScale - SMOKE_SCALE_OFFSET;
+      const sIdx = activeSmoke * INSTANCE_STRIDE;
+      rctx.smokeInstanceData[sIdx + 0] = rctx.particlePool[idx + 0];
+      rctx.smokeInstanceData[sIdx + 1] = rctx.particlePool[idx + 1];
+      rctx.smokeInstanceData[sIdx + 2] = rctx.particlePool[idx + 2];
+      rctx.smokeInstanceData[sIdx + 3] = -(SMOKE_SCALE_OFFSET + puffRadius * (0.55 + 1.4 * (1 - lifeRatio)));
+      rctx.smokeInstanceData[sIdx + 4] = rctx.particlePool[idx + 6];
+      rctx.smokeInstanceData[sIdx + 5] = rctx.particlePool[idx + 7];
+      rctx.smokeInstanceData[sIdx + 6] = rctx.particlePool[idx + 8];
+      rctx.smokeInstanceData[sIdx + 7] = lifeRatio;
+      activeSmoke++;
+      continue;
+    }
+    const scale = isShard
+      ? baseScale * (0.3 + 0.7 * Math.sqrt(lifeRatio))
+      : baseScale * (0.35 + 0.65 * lifeRatio);
 
     const outIdx = active * INSTANCE_STRIDE;
     rctx.particleInstanceData[outIdx + 0] = rctx.particlePool[idx + 0];
     rctx.particleInstanceData[outIdx + 1] = rctx.particlePool[idx + 1];
-    rctx.particleInstanceData[outIdx + 2] = Math.max(-0.1, rctx.particlePool[idx + 2]);
+    rctx.particleInstanceData[outIdx + 2] = isShard
+      ? rctx.particlePool[idx + 2]
+      : Math.max(-0.1, rctx.particlePool[idx + 2]);
     rctx.particleInstanceData[outIdx + 3] = scale;
     rctx.particleInstanceData[outIdx + 4] = rctx.particlePool[idx + 6];
     rctx.particleInstanceData[outIdx + 5] = rctx.particlePool[idx + 7];
@@ -296,7 +329,8 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
   }
 
   rctx.activeParticleCount = active;
-  rctx.qualityGovernor.setActiveParticles(active);
+  rctx.activeSmokeCount = activeSmoke;
+  rctx.qualityGovernor.setActiveParticles(active + activeSmoke);
 }
 
 export function getRoomVisualStateImpl(
@@ -510,6 +544,7 @@ export function detectAutomaticShredEventsImpl(
       rctx.boardShakeTimer = 0;
       rctx.particlePool.fill(0);
       rctx.activeParticleCount = 0;
+      rctx.activeSmokeCount = 0;
     }
     return;
   }

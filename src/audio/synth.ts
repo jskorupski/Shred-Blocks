@@ -582,6 +582,37 @@ export class SoundEngine {
     playButtonTapVoice(ctx, this.sfxGain);
   }
 
+  /**
+   * 12. Relic Awakening (`RELIC-AWAKEN-01`, Title Screen -> Gameplay):
+   * Soft crumbling stone whoosh (low-pass noise swell) + rising shimmering C-major bell chime.
+   */
+  public playRelicAwaken(): void {
+    this.triggerHaptic([14, 24, 10], 56);
+    if (!this.sfxEnabled) return;
+    const ctx = this.ensureContext();
+    const sfxGain = this.sfxGain;
+    if (!ctx || !sfxGain) return;
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+
+    const now = ctx.currentTime;
+    this.playFilteredNoiseBurst(now, 0.42, 520, 0.14);
+    this.playFilteredNoiseBurst(now + 0.04, 0.5, 1900, 0.05);
+    [523.25, 783.99, 1046.5, 1567.98].forEach((freq, idx) => {
+      const t = now + 0.05 + idx * 0.055;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.11, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      osc.connect(gain);
+      gain.connect(sfxGain);
+      osc.start(t);
+      osc.stop(t + 0.58);
+    });
+  }
+
   private playFilteredNoiseBurst(
     startTime: number,
     durationSec: number,

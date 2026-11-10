@@ -414,6 +414,9 @@ export function renderPass2ReticleAndPromptsImpl(
   pulse: number
 ): void {
   if ((options.blueprintMix ?? 0) > 0.45) {
+    // Stone-relic mode: no gameplay UI, but RELIC-AWAKEN-01 glow shockwaves still sweep the board
+    // during the Play transition (never on the idle Title Screen where mix === 1).
+    if ((options.blueprintMix ?? 0) < 0.999) renderShockwaveRings(rctx, gl);
     return;
   }
   // 2A. Active Drag Floor Target Reticle & Gate Alignment Beam (`UX-01`)
@@ -753,6 +756,10 @@ export function renderPass2ReticleAndPromptsImpl(
   }
 
   // 2D. Expanding 3D Knock-On & Shredding Shockwave Rings (`rctx.activeShockwaves`, `R3D-08`)
+  renderShockwaveRings(rctx, gl);
+}
+
+function renderShockwaveRings(rctx: RenderPassContext, gl: WebGL2RenderingContext): void {
   if (rctx.activeShockwaves.length > 0) {
     gl.depthMask(false);
     gl.disable(gl.CULL_FACE);

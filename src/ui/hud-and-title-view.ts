@@ -256,6 +256,7 @@ export function syncTitleOverlayDomImpl(app: AppViewContext): void {
       gameEl.hidden = false;
       gameEl.inert = true;
       gameEl.classList.add('title-backdrop-mode');
+      gameEl.classList.remove('relic-awakening-burst');
     }
     app.renderer.resize();
     return;
@@ -659,6 +660,9 @@ export function stepSimulationImpl(app: AppViewContext, dtSec: number): void {
       app.blueprintMix = 0;
     } else {
       app.blueprintMix = Math.max(0, app.blueprintMix - dtSec / 0.72);
+    }
+    if (app.blueprintMix === 0) {
+      document.getElementById('screen-game')?.classList.remove('relic-awakening-burst');
     }
   }
 

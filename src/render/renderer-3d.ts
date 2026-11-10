@@ -32,6 +32,7 @@ import {
   renderPass2ReticleAndPromptsImpl,
 } from './pass2-barriers-and-reticles';
 import { renderPass3BlocksImpl } from './pass3-block-shells';
+import { renderPass4ParticlesImpl, spawnRelicAwakeningBurstImpl } from './relic-awakening-fx';
 import {
   drawAtlasBadgeImpl,
   drawBadgeMedallion3DImpl,
@@ -41,6 +42,7 @@ import {
   HIGH_CONTRAST_TRAY_PALETTES,
   INSTANCE_STRIDE,
   MAX_PARTICLES,
+  MAX_SMOKE_PUFFS,
   PARTICLE_STRIDE,
   QualityGovernor,
   type RenderPassContext,
@@ -109,7 +111,9 @@ export class Renderer3D implements RenderPassContext {
   // Pre-allocated 2,048 particle pool (zero per-frame GC allocations)
   public readonly particlePool = new Float32Array(MAX_PARTICLES * PARTICLE_STRIDE);
   public readonly particleInstanceData = new Float32Array(MAX_PARTICLES * INSTANCE_STRIDE);
+  public readonly smokeInstanceData = new Float32Array(MAX_SMOKE_PUFFS * INSTANCE_STRIDE);
   public activeParticleCount = 0;
+  public activeSmokeCount = 0;
   public particleWriteCursor = 0;
 
   // Automatic state diff tracking for automatic shred particle bursts, knock-on shockwaves, and bounces
@@ -484,6 +488,10 @@ export class Renderer3D implements RenderPassContext {
     spawnVictoryCelebrationBurstImpl(this, board);
   }
 
+  public spawnRelicAwakeningBurst(board: BoardState): void {
+    spawnRelicAwakeningBurstImpl(this, board);
+  }
+
   public spawnBlockShredBurst(
     board: BoardState,
     block: BlockState,
@@ -734,10 +742,24 @@ export class Renderer3D implements RenderPassContext {
     renderPass3BlocksImpl(this, gl, board, options, skinId, highContrast, colorblind, pulse, timeSec, dtSec);
 
     // =========================================================================
-    // PASS 4: GPU-INSTANCED 3D SHREDDER PARTICLES PASS
+    // PASS 4: GPU-INSTANCED 3D SHREDDER PARTICLES PASS (+ RELIC-AWAKEN-01 shards & smoke)
     // =========================================================================
-    if (blueprintMix < 0.65) {
-      this.renderPass4Particles(gl, options.equippedParticle ?? 'micro_cubes');
+    // Hidden only while the Title Screen relic is fully stone (`blueprintMix === 1`), so the
+    // awakening burst renders from the very first frame after Play is tapped.
+    if (blueprintMix < 0.999) {
+      renderPass4ParticlesImpl(
+        this,
+        gl,
+        {
+          program: this.particleProgram,
+          vao: this.particleVao,
+          instanceBuffer: this.particleInstanceBuffer,
+          indexCount: this.particleIndexCount,
+          uViewProj: this.uPartViewProj,
+          uStyle: this.uPartStyle,
+        },
+        this.getParticleStyleCode(options.equippedParticle ?? 'micro_cubes')
+      );
     }
   }
 
@@ -747,36 +769,6 @@ export class Renderer3D implements RenderPassContext {
     if (style === 'soap_bubbles') return 3;
     if (style === 'lightning_bolts') return 4;
     return 0;
-  }
-
-  private renderPass4Particles(
-    gl: WebGL2RenderingContext,
-    particleStyle: ParticleStyleId = 'micro_cubes'
-  ): void {
-    if (this.activeParticleCount <= 0 || !this.particleVao || !this.particleInstanceBuffer) {
-      return;
-    }
-
-    gl.useProgram(this.particleProgram);
-    gl.uniformMatrix4fv(this.uPartViewProj, false, this.camera.getViewProjectionMatrix(false));
-    gl.uniform1i(this.uPartStyle, this.getParticleStyleCode(particleStyle));
-
-    gl.bindVertexArray(this.particleVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.particleInstanceBuffer);
-    gl.bufferSubData(
-      gl.ARRAY_BUFFER,
-      0,
-      this.particleInstanceData.subarray(0, this.activeParticleCount * INSTANCE_STRIDE)
-    );
-
-    gl.drawElementsInstanced(
-      gl.TRIANGLES,
-      this.particleIndexCount,
-      gl.UNSIGNED_SHORT,
-      0,
-      this.activeParticleCount
-    );
-    gl.bindVertexArray(null);
   }
 
   public dispose(): void {

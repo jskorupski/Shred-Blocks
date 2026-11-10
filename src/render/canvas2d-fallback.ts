@@ -769,7 +769,7 @@ export function renderCanvas2DFallbackImpl(
     const pg = Math.round(rctx.particleInstanceData[base + 5] * 255);
     const pb = Math.round(rctx.particleInstanceData[base + 6] * 255);
     const pt = project(px, py, pz);
-    const rad = Math.max(2, pScale * 28);
+    const rad = Math.max(2, Math.abs(pScale) * 28); // stone shards encode negative scale
     ctx.fillStyle = `rgb(${pr}, ${pg}, ${pb})`;
     ctx.fillRect(pt.x - rad * 0.5, pt.y - rad * 0.5, rad, rad);
   }
