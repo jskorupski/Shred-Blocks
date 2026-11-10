@@ -44,7 +44,6 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   ) => {
     const banner = document.createElement('div');
     banner.className = 'roadmap-chapter-banner';
-    banner.setAttribute('role', 'presentation');
 
     const leftDiv = document.createElement('div');
     leftDiv.className = 'chapter-banner-meta';
@@ -71,11 +70,252 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     return banner;
   };
 
+  interface StageNodeBuildInfo {
+    btn: HTMLButtonElement;
+    isCurrent: boolean;
+    isCompleted: boolean;
+    isSkipped: boolean;
+    isUnlocked: boolean;
+    earnedStars: number;
+  }
+
+  const buildLevelNode = (
+    spec: ReturnType<typeof getLevelSpec>,
+    isEndlessNode: boolean
+  ): StageNodeBuildInfo => {
+    const record = save.levelRecords[spec.id];
+    const earnedStars = Math.max(0, record?.stars ?? 0);
+    const hasClearedStars = earnedStars > 0;
+    const isSkipped = Boolean(record?.skipped && !hasClearedStars);
+    const isCurrent = spec.id === save.currentLevelId;
+    const isUnlocked =
+      spec.id <= unlockedMax ||
+      hasClearedStars ||
+      isSkipped ||
+      (isEndlessNode && app.activeRoadmapRange === 'endless');
+    const isCompleted = hasClearedStars && !isCurrent;
+    const milestoneNote = !isEndlessNode ? (spec.unlockNote ?? BOOSTER_DEBUT_NOTES[spec.id]) : undefined;
+    const isMilestone = Boolean(milestoneNote);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    if (isCurrent) {
+      btn.setAttribute('aria-current', 'step');
+    }
+    btn.dataset.levelId = String(spec.id);
+    btn.className = [
+      'level-node-card',
+      `tier-${spec.difficulty.toLowerCase()}`,
+      isCurrent ? 'current-level' : '',
+      isCompleted ? 'completed-level' : '',
+      isSkipped && !isCurrent ? 'skipped-level' : '',
+      isUnlocked && !isCurrent && !isCompleted && !isSkipped ? 'unlocked-level' : '',
+      isMilestone ? 'milestone-node' : '',
+      !isUnlocked ? 'locked-level' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    // Left linked-path step medallion (purely decorative; accessible status is in text spans)
+    const markerSpan = document.createElement('span');
+    markerSpan.className = 'node-step-marker';
+    markerSpan.setAttribute('aria-hidden', 'true');
+    markerSpan.textContent = isCurrent ? '▶' : isCompleted ? '✓' : isSkipped ? '»' : isUnlocked ? '•' : '🔒';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'node-content';
+
+    const topRow = document.createElement('div');
+    topRow.className = 'node-top-row';
+
+    const leftCluster = document.createElement('div');
+    leftCluster.className = 'node-left-cluster';
+
+    const numSpan = document.createElement('span');
+    numSpan.className = 'node-level-num';
+    numSpan.textContent = isCurrent ? `✦ STAGE #${spec.id}` : isEndlessNode ? `♾️ #${spec.id}` : `#${spec.id}`;
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'node-name';
+    const archPrefix =
+      spec.barriers && spec.barriers.length > 0
+        ? '⛩️ '
+        : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
+          ? '🏛️ '
+          : '';
+    nameDiv.textContent = `${archPrefix}${spec.name}`;
+
+    leftCluster.append(numSpan);
+    if (!isCurrent) {
+      leftCluster.append(nameDiv);
+    }
+
+    const rightCluster = document.createElement('div');
+    rightCluster.className = 'node-right-cluster';
+
+    const badgeSpan = document.createElement('span');
+    badgeSpan.className = `badge-difficulty diff-${spec.difficulty.toLowerCase()}`;
+    badgeSpan.textContent = spec.difficulty.replace('_', ' ');
+    rightCluster.append(badgeSpan);
+
+    if (isCompleted) {
+      const doneFlag = document.createElement('span');
+      doneFlag.className = 'node-flag-badge flag-completed';
+      doneFlag.textContent = '✓ Cleared';
+      rightCluster.append(doneFlag);
+    }
+
+    let starDisplay = isUnlocked ? '☆☆☆' : '🔒';
+    if (hasClearedStars) {
+      starDisplay = '★'.repeat(earnedStars) + '☆'.repeat(3 - earnedStars);
+    } else if (isSkipped) {
+      starDisplay = isCurrent ? '☆☆☆' : 'Skipped';
+    }
+
+    const starsSpan = document.createElement('span');
+    starsSpan.className = `node-stars${isSkipped && !isCurrent ? ' stars-skipped' : ''}`;
+    starsSpan.textContent = starDisplay;
+    rightCluster.append(starsSpan);
+
+    topRow.append(leftCluster, rightCluster);
+    contentDiv.appendChild(topRow);
+
+    if (isCurrent) {
+      const currentSubRow = document.createElement('div');
+      currentSubRow.className = 'node-current-title-row';
+      const playCue = document.createElement('span');
+      playCue.className = 'node-play-cue';
+      playCue.setAttribute('aria-hidden', 'true');
+      playCue.textContent = 'Play ›';
+      currentSubRow.append(nameDiv, playCue);
+      contentDiv.appendChild(currentSubRow);
+    }
+
+    if (milestoneNote) {
+      const noteDiv = document.createElement('div');
+      noteDiv.className = 'node-unlock-note';
+      noteDiv.textContent = `✦ ${milestoneNote}`;
+      contentDiv.appendChild(noteDiv);
+    }
+
+    btn.append(markerSpan, contentDiv);
+
+    btn.addEventListener('click', () => {
+      if (!isUnlocked) {
+        app.sound.playWallClack();
+        app.showGameToast(`🔒 Clear or Skip up to Level ${spec.id} to unlock!`);
+        return;
+      }
+      app.sound.playButtonTap();
+      app.loadLevel(spec.id, true);
+    });
+
+    return {
+      btn,
+      isCurrent,
+      isCompleted: hasClearedStars,
+      isSkipped,
+      isUnlocked,
+      earnedStars,
+    };
+  };
+
+  const appendStageGroups = (specs: Array<ReturnType<typeof getLevelSpec>>, isEndlessGroup: boolean) => {
+    let idx = 0;
+    while (idx < specs.length) {
+      const firstId = specs[idx].id;
+      const bucketKey = Math.floor((firstId - 1) / 5);
+      const groupSpecs: Array<ReturnType<typeof getLevelSpec>> = [];
+      while (idx < specs.length && Math.floor((specs[idx].id - 1) / 5) === bucketKey) {
+        groupSpecs.push(specs[idx]);
+        idx++;
+      }
+
+      const startId = groupSpecs[0].id;
+      const endId = groupSpecs[groupSpecs.length - 1].id;
+      const builtNodes = groupSpecs.map((s) => buildLevelNode(s, isEndlessGroup));
+
+      const clearedCount = builtNodes.filter((n) => n.isCompleted).length;
+      const skippedCount = builtNodes.filter((n) => n.isSkipped && !n.isCompleted).length;
+      const unlockedCount = builtNodes.filter((n) => n.isUnlocked).length;
+      const hasCurrent = builtNodes.some((n) => n.isCurrent);
+      const groupStars = builtNodes.reduce((sum, n) => sum + n.earnedStars, 0);
+      const maxGroupStars = builtNodes.length * 3;
+      const allCleared = clearedCount === builtNodes.length;
+      const allLocked = unlockedCount === 0;
+
+      const groupEl = document.createElement('div');
+      groupEl.className = [
+        'roadmap-stage-group',
+        allCleared ? 'stage-group-cleared' : '',
+        hasCurrent ? 'stage-group-active' : '',
+        allLocked ? 'stage-group-locked' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      groupEl.setAttribute('role', 'group');
+      groupEl.setAttribute(
+        'aria-label',
+        startId === endId ? `Stage ${startId}` : `Stages ${startId} to ${endId}`
+      );
+
+      const headerEl = document.createElement('div');
+      headerEl.className = 'stage-group-header';
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'stage-group-title';
+      titleSpan.textContent =
+        startId === endId
+          ? `${isEndlessGroup ? 'ENDLESS STAGE' : 'STAGE'} ${startId}`
+          : `${isEndlessGroup ? 'ENDLESS STAGES' : 'STAGES'} ${startId}–${endId}`;
+
+      const summarySpan = document.createElement('span');
+      if (allCleared) {
+        summarySpan.className = 'stage-group-summary summary-cleared';
+        summarySpan.textContent = `✓ ${clearedCount}/${builtNodes.length} Cleared · ★ ${groupStars}/${maxGroupStars}`;
+      } else if (allLocked) {
+        summarySpan.className = 'stage-group-summary summary-locked';
+        summarySpan.textContent = '🔒 Locked';
+      } else {
+        summarySpan.className = 'stage-group-summary summary-progress';
+        const parts = [`${clearedCount}/${builtNodes.length} Cleared`];
+        if (skippedCount > 0) {
+          parts.push(`${skippedCount} Skipped`);
+        }
+        if (groupStars > 0) {
+          parts.push(`★ ${groupStars}/${maxGroupStars}`);
+        }
+        summarySpan.textContent = parts.join(' · ');
+      }
+
+      headerEl.append(titleSpan, summarySpan);
+
+      const trackEl = document.createElement('div');
+      trackEl.className = 'stage-group-track';
+      trackEl.setAttribute('role', 'presentation');
+      for (const node of builtNodes) {
+        trackEl.appendChild(node.btn);
+      }
+
+      groupEl.append(headerEl, trackEl);
+      fragment.appendChild(groupEl);
+    }
+  };
+
+  let chapterBatch: Array<ReturnType<typeof getLevelSpec>> = [];
   let lastChapterNum = '';
+
+  const flushChapterBatch = () => {
+    if (chapterBatch.length > 0) {
+      appendStageGroups(chapterBatch, false);
+      chapterBatch = [];
+    }
+  };
 
   for (const spec of levelsToShow) {
     const ch = getChapterMetaForLevel(spec.id);
     if (ch.chapterNum !== lastChapterNum) {
+      flushChapterBatch();
       lastChapterNum = ch.chapterNum;
       let chStars = 0;
       for (let lid = ch.startLevel; lid <= ch.endLevel; lid++) {
@@ -91,86 +331,9 @@ export function renderRoadmapImpl(app: AppViewContext): void {
         )
       );
     }
-
-    const isUnlocked = spec.id <= unlockedMax;
-    const isCurrent = spec.id === save.currentLevelId;
-    const isCompleted = isUnlocked && !isCurrent && spec.id < save.currentLevelId;
-    const record = save.levelRecords[spec.id];
-    const milestoneNote = spec.unlockNote ?? BOOSTER_DEBUT_NOTES[spec.id];
-    const isMilestone = Boolean(milestoneNote);
-
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.setAttribute('role', 'listitem');
-    btn.dataset.levelId = String(spec.id);
-    btn.className = [
-      'level-node-card',
-      `tier-${spec.difficulty.toLowerCase()}`,
-      isCurrent ? 'current-level' : '',
-      isCompleted ? 'completed-level' : '',
-      isMilestone ? 'milestone-node' : '',
-      !isUnlocked ? 'locked-level' : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    let starDisplay = isUnlocked ? '☆☆☆' : '🔒';
-    if (record) {
-      if (record.skipped && record.stars === 0) {
-        starDisplay = 'Skipped';
-      } else if (record.stars > 0) {
-        starDisplay = '★'.repeat(record.stars) + '☆'.repeat(3 - record.stars);
-      }
-    }
-
-    const topRow = document.createElement('div');
-    topRow.className = 'node-top-row';
-
-    const numSpan = document.createElement('span');
-    numSpan.className = 'node-level-num';
-    numSpan.textContent = isCurrent ? `✦ STAGE #${spec.id}` : `#${spec.id}`;
-
-    const badgeSpan = document.createElement('span');
-    badgeSpan.className = `badge-difficulty diff-${spec.difficulty.toLowerCase()}`;
-    badgeSpan.textContent = spec.difficulty.replace('_', ' ');
-
-    const starsSpan = document.createElement('span');
-    starsSpan.className = 'node-stars';
-    starsSpan.textContent = starDisplay;
-
-    topRow.append(numSpan, badgeSpan, starsSpan);
-
-    const nameDiv = document.createElement('div');
-    nameDiv.className = 'node-name';
-    const archPrefix =
-      spec.barriers && spec.barriers.length > 0
-        ? '⛩️ '
-        : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
-          ? '🏛️ '
-          : '';
-    nameDiv.textContent = `${archPrefix}${spec.name}`;
-
-    btn.append(topRow, nameDiv);
-
-    if (milestoneNote) {
-      const noteDiv = document.createElement('div');
-      noteDiv.className = 'node-unlock-note';
-      noteDiv.textContent = `✦ ${milestoneNote}`;
-      btn.appendChild(noteDiv);
-    }
-
-    btn.addEventListener('click', () => {
-      if (!isUnlocked) {
-        app.sound.playWallClack();
-        app.showGameToast(`🔒 Clear or Skip up to Level ${spec.id} to unlock!`);
-        return;
-      }
-      app.sound.playButtonTap();
-      app.loadLevel(spec.id, true);
-    });
-
-    fragment.appendChild(btn);
+    chapterBatch.push(spec);
   }
+  flushChapterBatch();
 
   // Append Procedural Endless Mastery Nodes (Windowed so 50,000+ levels render in < 5ms)
   if (app.activeRoadmapRange === 'all' || app.activeRoadmapRange === 'endless') {
@@ -222,97 +385,34 @@ export function renderRoadmapImpl(app: AppViewContext): void {
           )
         );
       }
+      const endlessSpecs: Array<ReturnType<typeof getLevelSpec>> = [];
       for (let eid = wStart; eid <= wEnd; eid++) {
-        const spec = getLevelSpec(eid);
-        const isUnlocked = eid <= unlockedMax || app.activeRoadmapRange === 'endless';
-        const isCurrent = eid === save.currentLevelId;
-        const isCompleted = isUnlocked && !isCurrent && eid < unlockedMax;
-        const record = save.levelRecords[eid];
-
-        let starDisplay = isUnlocked ? '☆☆☆' : '🔒';
-        if (record) {
-          if (record.skipped && record.stars === 0) {
-            starDisplay = 'Skipped';
-          } else if (record.stars > 0) {
-            starDisplay = '★'.repeat(record.stars) + '☆'.repeat(3 - record.stars);
-          }
-        }
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.setAttribute('role', 'listitem');
-        btn.dataset.levelId = String(eid);
-        btn.className = [
-          'level-node-card',
-          `tier-${spec.difficulty.toLowerCase()}`,
-          isCurrent ? 'current-level' : '',
-          isCompleted ? 'completed-level' : '',
-          !isUnlocked ? 'locked-level' : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
-
-        const topRow = document.createElement('div');
-        topRow.className = 'node-top-row';
-
-        const numSpan = document.createElement('span');
-        numSpan.className = 'node-level-num';
-        numSpan.textContent = isCurrent ? `✦ STAGE #${eid}` : `♾️ #${eid}`;
-
-        const badgeSpan = document.createElement('span');
-        badgeSpan.className = `badge-difficulty diff-${spec.difficulty.toLowerCase()}`;
-        badgeSpan.textContent = spec.difficulty.replace('_', ' ');
-
-        const starsSpan = document.createElement('span');
-        starsSpan.className = 'node-stars';
-        starsSpan.textContent = starDisplay;
-
-        topRow.append(numSpan, badgeSpan, starsSpan);
-
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'node-name';
-        const endlessPrefix =
-          spec.barriers && spec.barriers.length > 0
-            ? '⛩️ '
-            : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
-              ? '🏛️ '
-              : '';
-        nameDiv.textContent = `${endlessPrefix}${spec.name}`;
-
-        btn.append(topRow, nameDiv);
-
-        btn.addEventListener('click', () => {
-          if (!isUnlocked) {
-            app.sound.playWallClack();
-            app.showGameToast(`🔒 Clear or Skip up to Level ${eid} to unlock!`);
-            return;
-          }
-          app.sound.playButtonTap();
-          app.loadLevel(eid, true);
-        });
-
-        fragment.appendChild(btn);
+        endlessSpecs.push(getLevelSpec(eid));
       }
+      appendStageGroups(endlessSpecs, true);
       prevEnd = wEnd;
     }
   }
 
   container.replaceChildren(fragment);
 
-  // Auto-focus the player's Current Sanctuary Stage in the scrollable map trail
-  // when beyond Level 1 so the map opens directly to their active journey progression.
-  if (app.activeRoadmapRange === 'all' && save.currentLevelId > 1) {
+  // Auto-focus the player's Current Sanctuary Stage in the scrollable linked path
+  // (or reset to top when viewing Level 1 or a filter range without the active stage).
+  const currentNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
+  if (currentNode && save.currentLevelId > 1) {
     const scrollCurrentStageIntoView = () => {
-      const currentNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
-      if (currentNode && container.clientHeight > 0) {
+      const activeNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
+      if (activeNode && container.clientHeight > 0) {
         const containerRect = container.getBoundingClientRect();
-        const nodeRect = currentNode.getBoundingClientRect();
+        const nodeRect = activeNode.getBoundingClientRect();
         const relativeTop = nodeRect.top - containerRect.top + container.scrollTop;
-        container.scrollTop = Math.max(0, Math.round(relativeTop - container.clientHeight * 0.14));
+        container.scrollTop = Math.max(0, Math.round(relativeTop - container.clientHeight * 0.16));
       }
     };
     scrollCurrentStageIntoView();
     requestAnimationFrame(scrollCurrentStageIntoView);
+  } else {
+    container.scrollTop = 0;
   }
 }
 

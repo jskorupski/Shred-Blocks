@@ -292,4 +292,172 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     expect(errors).toEqual([]);
   });
+
+  test('MAP-LINKED-PATH-01: renders 5-stage grouped linked path, distinguishes Completed vs Skipped states, auto-scrolls to current stage, and preserves responsive UX across viewports', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await page.goto('/');
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#screen-game')).toBeVisible();
+
+    // Create a realistic mixed progression up to Stage #12:
+    // - Completed: #1 (3★), #3 (2★), #5 (3★), #6..#10 (all 3★ -> fully cleared group!)
+    // - Skipped: #2 ( via real HUD Skip button below + seeded #4, #11 )
+    // - Current: #12
+    await page.locator('#btn-skip-hud').click(); // Real UI skip on Level 1 first to verify live Skip wiring
+    await expect(page.locator('#hud-level-title')).toContainText('Level 2');
+
+    const mixedSaveJson = await page.evaluate(() => {
+      const clone = JSON.parse(JSON.stringify(window.__SHREDBLOCKS_DEBUG__.getSave()));
+      clone.highestLevelUnlocked = 12;
+      clone.currentLevelId = 12;
+      clone.levelRecords = {
+        1: { stars: 3, bestMoves: 2, bestTimeSec: 8, skipped: false },
+        2: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true },
+        3: { stars: 2, bestMoves: 5, bestTimeSec: 14, skipped: false },
+        4: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true },
+        5: { stars: 3, bestMoves: 4, bestTimeSec: 12, skipped: false },
+        6: { stars: 3, bestMoves: 5, bestTimeSec: 15, skipped: false },
+        7: { stars: 3, bestMoves: 6, bestTimeSec: 16, skipped: false },
+        8: { stars: 3, bestMoves: 6, bestTimeSec: 18, skipped: false },
+        9: { stars: 3, bestMoves: 7, bestTimeSec: 19, skipped: false },
+        10: { stars: 3, bestMoves: 6, bestTimeSec: 17, skipped: false },
+        11: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true },
+      };
+      clone.totalStars = 23;
+      return JSON.stringify(clone);
+    });
+
+    await page.evaluate((jsonStr) => {
+      window.__SHREDBLOCKS_DEBUG__.previewSaveImport(jsonStr);
+    }, mixedSaveJson);
+    await page.locator('#btn-confirm-import').click();
+    await page.locator('#btn-save-transfer-close').click();
+
+    // Navigate to Sanctuary Map (#screen-home)
+    await page.locator('#btn-hud-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+
+    // 1. Verify auto-scroll brought active Stage #12 directly into the visible #roadmap-list viewport
+    const autoScrollCheck = await page.evaluate(() => {
+      const list = document.getElementById('roadmap-list');
+      const current = list?.querySelector<HTMLElement>('.level-node-card.current-level');
+      if (!list || !current) return null;
+      const lr = list.getBoundingClientRect();
+      const cr = current.getBoundingClientRect();
+      return {
+        scrollTop: list.scrollTop,
+        scrollHeight: list.scrollHeight,
+        clientHeight: list.clientHeight,
+        currentLevelId: current.dataset.levelId,
+        ariaCurrent: current.getAttribute('aria-current'),
+        isVisibleInScrollPort: cr.top >= lr.top - 2 && cr.bottom <= lr.bottom + 2,
+      };
+    });
+    expect(autoScrollCheck).not.toBeNull();
+    expect(autoScrollCheck?.currentLevelId).toBe('12');
+    expect(autoScrollCheck?.ariaCurrent).toBe('step');
+    expect(autoScrollCheck?.scrollTop).toBeGreaterThan(80);
+    expect(autoScrollCheck?.scrollHeight).toBeGreaterThan((autoScrollCheck?.clientHeight ?? 0) * 3);
+    expect(autoScrollCheck?.isVisibleInScrollPort).toBe(true);
+
+    // 2. Scroll to top and verify 5-stage visual grouping & strict top-to-bottom linked-path ordering
+    await page.evaluate(() => {
+      const list = document.getElementById('roadmap-list');
+      if (list) list.scrollTop = 0;
+    });
+
+    const firstThreeGroups = page.locator('#roadmap-list .roadmap-stage-group');
+    await expect(firstThreeGroups.nth(0)).toContainText('STAGES 1–5');
+    await expect(firstThreeGroups.nth(0)).toContainText('3/5 Cleared · 2 Skipped · ★ 8/15');
+    await expect(firstThreeGroups.nth(1)).toHaveClass(/stage-group-cleared/);
+    await expect(firstThreeGroups.nth(1)).toContainText('STAGES 6–10');
+    await expect(firstThreeGroups.nth(1)).toContainText('✓ 5/5 Cleared · ★ 15/15');
+    await expect(firstThreeGroups.nth(2)).toHaveClass(/stage-group-active/);
+    await expect(firstThreeGroups.nth(2)).toContainText('STAGES 11–15');
+
+    // Verify Completed (#1) vs Skipped (#2) visual states & strict vertical step progression
+    const stateComparison = await page.evaluate(() => {
+      const n1 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="1"]');
+      const n2 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="2"]');
+      const n12 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="12"]');
+      const n14 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="14"]');
+      if (!n1 || !n2 || !n12 || !n14) return null;
+      const cs1 = window.getComputedStyle(n1);
+      const cs2 = window.getComputedStyle(n2);
+      const firstGroup = document.querySelector('.roadmap-stage-group');
+      const group1Nodes = Array.from(
+        firstGroup ? firstGroup.querySelectorAll<HTMLElement>('.level-node-card') : []
+      );
+      let strictlyVertical = group1Nodes.length === 5;
+      for (let i = 0; i < group1Nodes.length - 1; i++) {
+        if (
+          group1Nodes[i].getBoundingClientRect().bottom >
+          group1Nodes[i + 1].getBoundingClientRect().top + 1
+        ) {
+          strictlyVertical = false;
+        }
+      }
+      return {
+        n1Completed: n1.classList.contains('completed-level') && !n1.classList.contains('skipped-level'),
+        n1Text: n1.textContent ?? '',
+        n1Opacity: Number(cs1.opacity),
+        n2Skipped: n2.classList.contains('skipped-level') && !n2.classList.contains('completed-level'),
+        n2Text: n2.textContent ?? '',
+        n2Opacity: Number(cs2.opacity),
+        distinctBg: cs1.backgroundImage !== cs2.backgroundImage,
+        n14Locked: n14.classList.contains('locked-level'),
+        strictlyVertical,
+      };
+    });
+    expect(stateComparison?.n1Completed).toBe(true);
+    expect(stateComparison?.n1Text).toContain('✓ Cleared');
+    expect(stateComparison?.n1Text).toContain('★★★');
+    expect(stateComparison?.n1Opacity).toBe(1);
+    expect(stateComparison?.n2Skipped).toBe(true);
+    expect(stateComparison?.n2Text).toContain('Skipped');
+    expect(stateComparison?.n2Text).not.toContain('✓ Cleared');
+    expect(stateComparison?.n2Opacity).toBeLessThan(0.85);
+    expect(stateComparison?.n2Opacity).toBeGreaterThan(0.55);
+    expect(stateComparison?.distinctBg).toBe(true);
+    expect(stateComparison?.n14Locked).toBe(true);
+    expect(stateComparison?.strictlyVertical).toBe(true);
+
+    // 3. Verify responsive layout & zero horizontal overflow across compact mobile, standard mobile, tablet, and desktop
+    for (const vp of [
+      { width: 360, height: 640 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(vp);
+      const vpMetrics = await page.evaluate(() => {
+        const list = document.getElementById('roadmap-list');
+        const group = list?.querySelector<HTMLElement>('.roadmap-stage-group');
+        return {
+          noDocOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+          noListHOverflow: list ? list.scrollWidth <= list.clientWidth + 1 : false,
+          canScrollVertically: list ? list.scrollHeight > list.clientHeight + 50 : false,
+          groupFits: group && list ? group.getBoundingClientRect().width <= list.clientWidth + 1 : false,
+        };
+      });
+      expect(vpMetrics).toEqual({
+        noDocOverflow: true,
+        noListHOverflow: true,
+        canScrollVertically: true,
+        groupFits: true,
+      });
+    }
+
+    // 4. Verify clicking Skipped Stage #2 cleanly opens Level 2 so players can replay & clear skipped stages!
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.level-node-card[data-level-id="2"]').click();
+    await expect(page.locator('#screen-game')).toBeVisible();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 2');
+
+    expect(errors).toEqual([]);
+  });
 });

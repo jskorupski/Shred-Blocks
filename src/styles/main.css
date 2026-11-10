@@ -1,6 +1,7 @@
 /* ShredBlocks: Color Jam — Sacred-Geometry Stylesheet Entry Point */
 @import "./tokens-and-shell.css";
 @import "./screen-home.css";
+@import "./roadmap-path.css";
 @import "./screen-game.css";
 @import "./themes-and-nav.css";
 @import "./dialogs.css";

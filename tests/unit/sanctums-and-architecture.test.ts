@@ -419,8 +419,14 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(titleCss).toContain('var(--font-logo)');
 
     const homeCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-home.css'), 'utf8');
-    expect(homeCss).toContain('.level-node-card:not(.current-level) .badge-difficulty');
-    expect(homeCss).toContain('.level-node-card.milestone-node:not(.current-level)');
+    const roadmapPathCss = fs.readFileSync(path.join(repoRoot, 'src/styles/roadmap-path.css'), 'utf8');
+    expect(homeCss).toContain('.roadmap-chapter-banner');
+    expect(roadmapPathCss).toContain('.roadmap-stage-group');
+    expect(roadmapPathCss).toContain('.stage-group-track::before');
+    expect(roadmapPathCss).toContain('.level-node-card.completed-level');
+    expect(roadmapPathCss).toContain('.level-node-card.skipped-level');
+    expect(roadmapPathCss).toContain('.level-node-card:not(.current-level) .badge-difficulty');
+    expect(roadmapPathCss).toContain('.level-node-card.milestone-node:not(.current-level)');
 
     const shadersTs = fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8');
     expect(shadersTs).toContain('float zRelief = mix(1.0, 0.22, u_blueprintMix)');
