@@ -300,7 +300,101 @@ export function validateSavePayloadV1(candidate: unknown): SavePayloadV1 {
     throw new SaveCodeError('INVALID_SCHEMA', 'Missing levelRecords in save payload.');
   }
 
-  return obj as SavePayloadV1;
+  return sanitizeSavePayload(obj);
+}
+
+/** Highest addressable level (`MAX_ENDLESS_LEVEL` in `src/ui/catalog-meta.ts`). */
+const MAX_SAVE_LEVEL = 999_999;
+const MAX_SAVE_COUNTER = 1_000_000_000_000;
+
+function clampNum(v: unknown, min: number, max: number, fallback: number, integer = true): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback;
+  const n = integer ? Math.floor(v) : v;
+  return Math.min(max, Math.max(min, n));
+}
+
+function pickEnum<T extends string>(v: unknown, allowed: ReadonlyArray<T>, fallback: T): T {
+  return typeof v === 'string' && (allowed as ReadonlyArray<string>).includes(v) ? (v as T) : fallback;
+}
+
+function pickEnumList<T extends string>(v: unknown, allowed: ReadonlyArray<T>, fallback: T): T[] {
+  const list = Array.isArray(v) ? v.filter((x): x is T => pickEnum(x, allowed, fallback) === x) : [];
+  const unique = [...new Set(list)];
+  return unique.length > 0 ? unique : [fallback];
+}
+
+function pickBool(v: unknown, fallback: boolean): boolean {
+  return typeof v === 'boolean' ? v : fallback;
+}
+
+/**
+ * Untrusted-input hardening (`SAVE-SEC-01`): rebuilds the payload from a strict whitelist so imported
+ * data (URL `#import=`, pasted codes, JSON files, storage) can never carry unknown keys (`__proto__`,
+ * `constructor`), non-enum strings, non-finite numbers, or out-of-range values into app state.
+ */
+function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
+  const b = (obj.boosters ?? {}) as Partial<Record<string, unknown>>;
+  const s = (obj.settings ?? {}) as Partial<Record<string, unknown>>;
+  const highest = clampNum(obj.highestLevelUnlocked, 1, MAX_SAVE_LEVEL, 1);
+  const unlockedSkins = pickEnumList(obj.unlockedSkins, SKIN_IDS, 'classic_studs');
+  const unlockedTrays = pickEnumList(obj.unlockedTrays, TRAY_IDS, 'industrial_slate');
+  const unlockedParticles = pickEnumList(obj.unlockedParticles, PARTICLE_IDS, 'micro_cubes');
+
+  const levelRecords: SavePayloadV1['levelRecords'] = {};
+  for (const [key, rec] of Object.entries(obj.levelRecords ?? {})) {
+    const id = Number(key);
+    if (!Number.isInteger(id) || id < 1 || id > MAX_SAVE_LEVEL) continue;
+    if (!rec || typeof rec !== 'object') continue;
+    const r = rec as unknown as Record<string, unknown>;
+    const clean: SavePayloadV1['levelRecords'][number] = {
+      stars: clampNum(r.stars, 0, 3, 0),
+      bestMoves: clampNum(r.bestMoves, 0, MAX_SAVE_COUNTER, 0),
+      bestTimeSec: clampNum(r.bestTimeSec, 0, MAX_SAVE_COUNTER, 0, false),
+    };
+    if (typeof r.skipped === 'boolean') clean.skipped = r.skipped;
+    levelRecords[id] = clean;
+  }
+
+  return {
+    schemaVersion: 1,
+    appId: 'shredblocks-color-jam',
+    writeSeq: clampNum(obj.writeSeq, 0, Number.MAX_SAFE_INTEGER, 0),
+    updatedAt: clampNum(obj.updatedAt, 0, Number.MAX_SAFE_INTEGER, 0),
+    highestLevelUnlocked: highest,
+    currentLevelId: clampNum(obj.currentLevelId, 1, MAX_SAVE_LEVEL, highest),
+    coins: clampNum(obj.coins, 0, MAX_SAVE_COUNTER, 0),
+    totalStars: clampNum(obj.totalStars, 0, MAX_SAVE_COUNTER, 0),
+    winStreak: clampNum(obj.winStreak, 0, MAX_SAVE_COUNTER, 0),
+    bestWinStreak: clampNum(obj.bestWinStreak, 0, MAX_SAVE_COUNTER, 0),
+    totalBlocksShredded: clampNum(obj.totalBlocksShredded, 0, MAX_SAVE_COUNTER, 0),
+    totalMovesCommitted: clampNum(obj.totalMovesCommitted, 0, MAX_SAVE_COUNTER, 0),
+    shredderChestProgress: clampNum(obj.shredderChestProgress, 0, MAX_SAVE_COUNTER, 0),
+    milestoneChestLevel: clampNum(obj.milestoneChestLevel, 0, MAX_SAVE_LEVEL, 0),
+    boosters: {
+      UNDO: clampNum(b.UNDO, 0, MAX_SAVE_COUNTER, 0),
+      FREEZE: clampNum(b.FREEZE, 0, MAX_SAVE_COUNTER, 0),
+      HAMMER: clampNum(b.HAMMER, 0, MAX_SAVE_COUNTER, 0),
+      ROCKET: clampNum(b.ROCKET, 0, MAX_SAVE_COUNTER, 0),
+      VACUUM: clampNum(b.VACUUM, 0, MAX_SAVE_COUNTER, 0),
+    },
+    unlockedSkins,
+    unlockedTrays,
+    unlockedParticles,
+    equippedSkin: pickEnum(obj.equippedSkin, unlockedSkins, unlockedSkins[0]),
+    equippedTray: pickEnum(obj.equippedTray, unlockedTrays, unlockedTrays[0]),
+    equippedParticle: pickEnum(obj.equippedParticle, unlockedParticles, unlockedParticles[0]),
+    settings: {
+      playMode: pickEnum(s.playMode, ['ZEN', 'TIMED'] as const, 'ZEN'),
+      sfxEnabled: pickBool(s.sfxEnabled, true),
+      musicEnabled: pickBool(s.musicEnabled, true),
+      hapticsEnabled: pickBool(s.hapticsEnabled, true),
+      colorblindSymbols: pickBool(s.colorblindSymbols, false),
+      highContrast: pickBool(s.highContrast, false),
+      reducedMotion: pickBool(s.reducedMotion, false),
+      qualityTier: pickEnum(s.qualityTier, QUALITY_TIERS, 'AUTO'),
+    },
+    levelRecords,
+  };
 }
 
 function writeVarint(out: number[], value: number): void {

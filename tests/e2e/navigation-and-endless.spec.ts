@@ -312,6 +312,52 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     expect(errors).toEqual([]);
   });
 
+  test('SAVE-SEC-01: hostile #import= URLs never execute code, never mutate the save, and the CSP reports zero violations', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    const dialogs: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    page.on('dialog', async (d) => {
+      dialogs.push(d.message());
+      await d.dismiss();
+    });
+    await page.addInitScript(() => {
+      (window as unknown as { __cspViolations: string[] }).__cspViolations = [];
+      document.addEventListener('securitypolicyviolation', (e) => {
+        (window as unknown as { __cspViolations: string[] }).__cspViolations.push(e.violatedDirective);
+      });
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#title-overlay')).toBeVisible();
+    const before = await page.evaluate(() => JSON.stringify(window.__SHREDBLOCKS_DEBUG__.getSave()));
+
+    const hostile = [
+      '#import=SB1-%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E-deadbeef',
+      '#import=SB1-PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg-00000000',
+      '#import=javascript:alert(document.domain)',
+    ];
+    for (const hash of hostile) {
+      await page.goto(`/${hash}`);
+      await page.waitForTimeout(250);
+      const state = await page.evaluate(() => ({
+        save: JSON.stringify(window.__SHREDBLOCKS_DEBUG__.getSave()),
+        diffVisible: !(document.getElementById('import-diff-panel')?.hidden ?? true),
+        injectedImg: document.querySelectorAll('img[src="x"], script:not([src])').length,
+        csp: (window as unknown as { __cspViolations: string[] }).__cspViolations,
+      }));
+      expect(state.diffVisible).toBe(false);
+      expect(state.injectedImg).toBe(0);
+      expect(state.csp).toEqual([]);
+      expect(JSON.parse(state.save).coins).toBe(JSON.parse(before).coins);
+      expect(JSON.parse(state.save).highestLevelUnlocked).toBe(JSON.parse(before).highestLevelUnlocked);
+    }
+
+    expect(dialogs).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
   test('MAP-LINKED-PATH-01: renders 5-stage grouped linked path, distinguishes Completed vs Skipped states, auto-scrolls to current stage, and preserves responsive UX across viewports', async ({
     page,
   }) => {

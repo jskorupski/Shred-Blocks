@@ -74,10 +74,10 @@ npm run dev:lan
 # Run Biome TypeScript & CSS linter/formatter check (< 150ms)
 npm run lint
 
-# Run Vitest unit & 300-level BFS solver verification suite (< 4.0s, 46 tests)
+# Run Vitest unit & 300-level BFS solver verification suite (< 4.0s, 50 tests)
 npm run test:unit
 
-# Run Playwright E2E interactive browser playtest suite (18 tests across Desktop & Mobile)
+# Run Playwright E2E interactive browser playtest suite (20 tests across Desktop & Mobile)
 npm run test:e2e
 
 # Capture 42 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
