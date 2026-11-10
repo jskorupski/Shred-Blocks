@@ -122,11 +122,11 @@ export function refreshSaveTransferModalImpl(app: AppViewContext): void {
 
   if (qrContainer) {
     try {
-      const shareUrl = app.saveManager.buildShareUrl();
+      const shareUrl = app.saveManager.buildShareUrl(undefined, true);
       qrContainer.innerHTML = generateQrSvg(shareUrl);
     } catch {
       try {
-        qrContainer.innerHTML = generateQrSvg(code);
+        qrContainer.innerHTML = generateQrSvg(app.saveManager.exportSaveCode({ qrCompact: true }));
       } catch {
         qrContainer.textContent = 'QR code unavailable for this payload size.';
       }

@@ -464,8 +464,8 @@ export class SaveManager {
   /**
    * Encodes the current save state as a compact `SB1-...` save code string.
    */
-  public exportSaveCode(): string {
-    return encodeSaveCode(this.payload);
+  public exportSaveCode(options?: { qrCompact?: boolean }): string {
+    return encodeSaveCode(this.payload, options);
   }
 
   /**
@@ -473,7 +473,7 @@ export class SaveManager {
    * Preserves local/LAN origins (`localhost`, `127.0.0.1`, `192.168.*`, `10.*`, `.local`) for
    * local & Wi-Fi testing, and uses canonical `https://shredblocks.skorupski.org/` in production.
    */
-  public buildShareUrl(baseUrl?: string): string {
+  public buildShareUrl(baseUrl?: string, qrCompact = false): string {
     let resolvedBase = baseUrl;
     if (!resolvedBase) {
       if (typeof window !== 'undefined' && window.location) {
@@ -493,7 +493,8 @@ export class SaveManager {
         resolvedBase = 'https://shredblocks.skorupski.org/';
       }
     }
-    const code = this.exportSaveCode();
+    const fullCode = this.exportSaveCode({ qrCompact });
+    const code = !qrCompact && fullCode.length > 900 ? this.exportSaveCode({ qrCompact: true }) : fullCode;
     return `${resolvedBase}#import=${encodeURIComponent(code)}`;
   }
 

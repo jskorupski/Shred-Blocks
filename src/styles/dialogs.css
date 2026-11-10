@@ -450,9 +450,16 @@ dialog::backdrop {
 }
 
 .qr-box {
-  width: 112px;
-  height: 112px;
+  width: 120px;
+  height: 120px;
   background: #ffffff;
+  color: #0f172a;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
   padding: 4px;
   flex-shrink: 0;

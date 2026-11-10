@@ -467,35 +467,28 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     });
     await page.locator('#btn-pause-close').click();
 
-    // WebGL2 Canvas Pixel-Diff Verification on Custom Theme (`neon_cyber` + `warm_birch` on Level 25):
-    // Proves that toggling High Contrast and Colorblind Symbols on a non-default custom skin + custom tray
-    // produces measurably distinct WebGL2 rendered frames (preventing silent shader/depth-clipping regressions).
+    // WebGL2 Canvas Pixel-Diff Verification on Custom Theme (`neon_cyber` + `warm_birch` on Level 25)
     await page.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.loadLevel(25);
-      window.__SHREDBLOCKS_DEBUG__.setTheme('neon_cyber', 'warm_birch', 'pixel_sparks');
-      window.__SHREDBLOCKS_DEBUG__.setReducedMotion(true);
-      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
-      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.loadLevel(25);
+      dbg.setTheme('neon_cyber', 'warm_birch', 'pixel_sparks');
+      dbg.setReducedMotion(true);
+      dbg.setHighContrast(false);
+      dbg.setColorblindMode(false);
     });
     const canvasShotNormal = await page.locator('#game-canvas').screenshot();
-
-    await page.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setHighContrast(true);
-    });
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setHighContrast(true));
     const canvasShotHC = await page.locator('#game-canvas').screenshot();
     expect(canvasShotNormal.equals(canvasShotHC)).toBe(false);
-
-    await page.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(true);
-    });
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setColorblindMode(true));
     const canvasShotHCCB = await page.locator('#game-canvas').screenshot();
     expect(canvasShotHC.equals(canvasShotHCCB)).toBe(false);
-
     await page.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
-      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
-      window.__SHREDBLOCKS_DEBUG__.setReducedMotion(false);
-      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.setHighContrast(false);
+      dbg.setColorblindMode(false);
+      dbg.setReducedMotion(false);
+      dbg.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
     });
     await page.locator('#btn-pause').click();
     await page.locator('#btn-pause-home').click();
@@ -507,11 +500,18 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     expect(saveCode.startsWith('SB1-')).toBe(true);
     await expect(page.locator('#qr-code-container svg')).toBeVisible();
 
-    // Test Preview Import -> Confirm Overwrite -> Undo Last Import (Restore Pre-Import Backup)
-    await page.locator('#save-code-input').fill(saveCode);
+    // Test 350-level Preview Import -> Confirm Overwrite -> Verify QR SVG still renders -> Undo Last Import
+    const bigSaveJson = await page.evaluate(() => {
+      const s = window.__SHREDBLOCKS_DEBUG__.getSave();
+      s.highestLevelUnlocked = 351;
+      for (let i = 1; i <= 350; i++) s.levelRecords[i] = { stars: 3, bestMoves: 9, bestTimeSec: 24 };
+      return JSON.stringify(s);
+    });
+    await page.locator('#save-code-input').fill(bigSaveJson);
     await page.locator('#btn-preview-import').click();
     await expect(page.locator('#import-diff-panel')).toBeVisible();
     await page.locator('#btn-confirm-import').click();
+    await expect(page.locator('#qr-code-container svg')).toBeVisible();
     await expect(page.locator('#btn-restore-backup')).toBeVisible();
     await page.locator('#btn-restore-backup').click();
     await expect(page.locator('#save-transfer-status')).toContainText('Restored pre-import');
@@ -519,9 +519,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
 
     // Wait for Service Worker registration & test Offline Airplane Mode reload
     await page.evaluate(async () => {
-      if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.ready;
-      }
+      if ('serviceWorker' in navigator) await navigator.serviceWorker.ready;
     });
     await context.setOffline(true);
     await page.reload();

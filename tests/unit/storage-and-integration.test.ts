@@ -125,6 +125,14 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       const legacyCodeWithWhitespace = `  \n SB0:${sb1Code.slice(4).slice(0, 40)}\n  ${sb1Code.slice(44)} \t `;
       const decodedLegacy = decodeSaveCode(legacyCodeWithWhitespace);
       expect(decodedLegacy).toEqual(fullSave);
+
+      // Verify backwards-compatibility with legacy V1 raw JSON + LZ77 save codes
+      const v1RawBytes = compressLz77(new TextEncoder().encode(JSON.stringify(fullSave)));
+      let v1Bin = '';
+      for (const b of v1RawBytes) v1Bin += String.fromCharCode(b);
+      const v1B64 = btoa(v1Bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      const v1Code = `SB1-${v1B64}-${computeCrc32Hex(v1B64)}`;
+      expect(decodeSaveCode(v1Code)).toEqual(fullSave);
     });
 
     it('supports raw UTF-8 codec header (0x00) in decompressFramedBytes', () => {
@@ -201,6 +209,29 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(svg.includes('shape-rendering="crispEdges"')).toBe(true);
       expect(svg.includes('<path d="M')).toBe(true);
       expect(svg.endsWith('</svg>')).toBe(true);
+
+      // Verify full 300-level campaign and 1,000-level Endless saves always fit inside QR capacity and round-trip cleanly
+      const massiveSave = createDefaultSavePayload();
+      massiveSave.highestLevelUnlocked = 1001;
+      massiveSave.currentLevelId = 1001;
+      for (let lvl = 1; lvl <= 1000; lvl++) {
+        massiveSave.levelRecords[lvl] = {
+          stars: ((lvl * 7) % 3) + 1,
+          bestMoves: 6 + ((lvl * 13) % 28),
+          bestTimeSec: 15 + ((lvl * 19) % 75),
+          skipped: lvl % 17 === 0,
+        };
+      }
+      const qrCode1000 = encodeSaveCode(massiveSave, { qrCompact: true });
+      const qrUrl1000 = `https://shredblocks.skorupski.org/#import=${encodeURIComponent(qrCode1000)}`;
+      expect(qrUrl1000.length).toBeLessThan(1600);
+      const svg1000 = generateQrSvg(qrUrl1000);
+      expect(svg1000.startsWith('<svg ')).toBe(true);
+      const decoded1000 = decodeSaveCode(qrCode1000);
+      expect(Object.keys(decoded1000.levelRecords).length).toBe(1000);
+      expect(decoded1000.levelRecords[1].stars).toBe(massiveSave.levelRecords[1].stars);
+      expect(decoded1000.levelRecords[300].stars).toBe(massiveSave.levelRecords[300].stars);
+      expect(decoded1000.levelRecords[1000]).toEqual(massiveSave.levelRecords[1000]);
     });
   });
 
