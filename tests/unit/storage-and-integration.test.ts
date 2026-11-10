@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SoundEngine } from '../../src/audio/synth';
+import { playRelicAwakenVoice } from '../../src/audio/synth-voices';
 import { createBoardState } from '../../src/core/board';
 import {
   COLOR_PALETTE,
@@ -560,8 +561,94 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
         sound.playWinFanfare();
         sound.playLossBuzzer();
         sound.playButtonTap();
+        sound.playRelicAwaken();
       }).not.toThrow();
       sound.destroy();
+    });
+
+    it('RELIC-AWAKEN-01 audio: synthesizes low-frequency rumbling boom + warm swept whoosh/swish with zero harsh or high-pitched chime oscillators', () => {
+      const oscFreqs: number[] = [];
+      const filterConfigs: Array<{ type: string; freq: number; q: number }> = [];
+      const initialGains: number[] = [];
+
+      const makeParam = (record?: (v: number) => void) => ({
+        value: 0,
+        setValueAtTime: (v: number) => record?.(v),
+        linearRampToValueAtTime: (v: number) => record?.(v),
+        exponentialRampToValueAtTime: (v: number) => record?.(v),
+      });
+
+      const mockDest = {} as GainNode;
+      const mockCtx = {
+        currentTime: 1.0,
+        sampleRate: 44100,
+        createBuffer: (_ch: number, len: number) => ({
+          getChannelData: () => new Float32Array(len),
+        }),
+        createBufferSource: () => ({
+          buffer: null,
+          playbackRate: makeParam(),
+          connect: () => {},
+          start: () => {},
+          stop: () => {},
+        }),
+        createOscillator: () => ({
+          type: 'sine',
+          frequency: makeParam((f) => oscFreqs.push(f)),
+          detune: makeParam(),
+          connect: () => {},
+          start: () => {},
+          stop: () => {},
+        }),
+        createBiquadFilter: () => {
+          const cfg = { type: 'lowpass', freq: 0, q: 1 };
+          filterConfigs.push(cfg);
+          return {
+            set type(t: string) {
+              cfg.type = t;
+            },
+            get type() {
+              return cfg.type;
+            },
+            frequency: makeParam((f) => {
+              cfg.freq = Math.max(cfg.freq, f);
+            }),
+            Q: makeParam((q) => {
+              cfg.q = q;
+            }),
+            connect: () => {},
+          };
+        },
+        createGain: () => {
+          let recordedFirst = false;
+          return {
+            gain: makeParam((v) => {
+              if (!recordedFirst) {
+                recordedFirst = true;
+                initialGains.push(v);
+              }
+            }),
+            connect: () => {},
+          };
+        },
+      } as unknown as AudioContext;
+
+      playRelicAwakenVoice(mockCtx, mockDest);
+
+      // Every tonal oscillator stays in deep bass / low baritone (<= 170 Hz) — zero high bell/ding pings!
+      expect(oscFreqs.length).toBeGreaterThanOrEqual(5);
+      expect(Math.max(...oscFreqs)).toBeLessThanOrEqual(170);
+      expect(Math.min(...oscFreqs)).toBeLessThanOrEqual(45);
+
+      // Includes lowpass warmth ceiling + swept bandpass whoosh/swish with gentle non-resonant Q <= 1.0
+      expect(filterConfigs.some((f) => f.type === 'lowpass' && f.freq <= 1300)).toBe(true);
+      expect(filterConfigs.filter((f) => f.type === 'bandpass').length).toBeGreaterThanOrEqual(2);
+      expect(Math.max(...filterConfigs.map((f) => f.q))).toBeLessThanOrEqual(1.0);
+
+      // All voice envelopes start near silence (0.0001) except the static master bus gain (0.86) -> zero clicks!
+      const voiceInitialGains = initialGains.filter((g) => g < 0.5);
+      expect(voiceInitialGains.length).toBeGreaterThanOrEqual(6);
+      expect(Math.max(...voiceInitialGains)).toBeLessThanOrEqual(0.001);
     });
   });
 

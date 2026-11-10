@@ -264,6 +264,160 @@ export function playButtonTapVoice(ctx: AudioContext, sfxGain: GainNode): void {
   osc.stop(now + 0.025);
 }
 
+/**
+ * Relic Awakening (`RELIC-AWAKEN-01`, Title Screen -> Gameplay):
+ * Warm, non-harsh mystic stone detonation: deep sub-bass rumbling boom (`112 -> 38 Hz`),
+ * rolling earthy low-pass rumble, and dual-band warm pink-noise whoosh + airy swish
+ * through a flat `1280 Hz` Butterworth warmth ceiling (zero bells, dings, or harsh highs).
+ */
+export function playRelicAwakenVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  const now = ctx.currentTime;
+  const totalDur = 0.88;
+
+  // Velvet master bus: 1280 Hz Butterworth lowpass (Q = 0.5) guarantees zero harsh highs or clipping
+  const masterFilter = ctx.createBiquadFilter();
+  masterFilter.type = 'lowpass';
+  masterFilter.frequency.setValueAtTime(1280, now);
+  masterFilter.Q.setValueAtTime(0.5, now);
+
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(0.86, now);
+  masterFilter.connect(masterGain);
+  masterGain.connect(sfxGain);
+
+  // Shared 1-pole warm pink/brown noise buffer with feathered cosine edges (click-free)
+  const sampleCount = Math.max(1, Math.floor(ctx.sampleRate * totalDur));
+  const noiseBuffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
+  const data = noiseBuffer.getChannelData(0);
+  const edgeSamples = Math.max(1, Math.floor(ctx.sampleRate * 0.024));
+  let lpState = 0;
+  for (let i = 0; i < sampleCount; i++) {
+    const white = Math.random() * 2 - 1;
+    lpState = 0.84 * lpState + 0.16 * white;
+    let env = 1;
+    if (i < edgeSamples) {
+      env = 0.5 * (1 - Math.cos((Math.PI * i) / edgeSamples));
+    } else if (i > sampleCount - edgeSamples) {
+      const rem = sampleCount - i;
+      env = 0.5 * (1 - Math.cos((Math.PI * rem) / edgeSamples));
+    }
+    data[i] = lpState * 2.6 * env;
+  }
+
+  // 1. Deep Sub-Bass Boom (112 Hz -> 56 Hz -> 38 Hz pure sine, soft 20ms attack)
+  const subOsc = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  subOsc.type = 'sine';
+  subOsc.frequency.setValueAtTime(112, now);
+  subOsc.frequency.exponentialRampToValueAtTime(56, now + 0.18);
+  subOsc.frequency.exponentialRampToValueAtTime(38, now + 0.78);
+  subGain.gain.setValueAtTime(0.0001, now);
+  subGain.gain.linearRampToValueAtTime(0.34, now + 0.02);
+  subGain.gain.setValueAtTime(0.32, now + 0.075);
+  subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.78);
+  subOsc.connect(subGain);
+  subGain.connect(masterFilter);
+  subOsc.start(now);
+  subOsc.stop(now + 0.8);
+
+  // 2. Rolling Tectonic Stone Rumble (lowpass noise 210 -> 82 Hz + detuned low cavern undertone)
+  const rumbleSrc = ctx.createBufferSource();
+  rumbleSrc.buffer = noiseBuffer;
+  const rumbleFilter = ctx.createBiquadFilter();
+  rumbleFilter.type = 'lowpass';
+  rumbleFilter.frequency.setValueAtTime(210, now);
+  rumbleFilter.frequency.exponentialRampToValueAtTime(82, now + 0.82);
+  rumbleFilter.Q.setValueAtTime(0.7, now);
+  const rumbleGain = ctx.createGain();
+  rumbleGain.gain.setValueAtTime(0.0001, now);
+  rumbleGain.gain.linearRampToValueAtTime(0.32, now + 0.045);
+  rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.84);
+  rumbleSrc.connect(rumbleFilter);
+  rumbleFilter.connect(rumbleGain);
+  rumbleGain.connect(masterFilter);
+  rumbleSrc.start(now);
+  rumbleSrc.stop(now + 0.86);
+
+  for (const detune of [-8, 8]) {
+    const cavernOsc = ctx.createOscillator();
+    const cavernLp = ctx.createBiquadFilter();
+    const cavernGain = ctx.createGain();
+    cavernOsc.type = 'triangle';
+    cavernOsc.frequency.setValueAtTime(73.42, now);
+    cavernOsc.frequency.exponentialRampToValueAtTime(55.0, now + 0.78);
+    cavernOsc.detune.setValueAtTime(detune, now);
+    cavernLp.type = 'lowpass';
+    cavernLp.frequency.setValueAtTime(175, now);
+    cavernLp.Q.setValueAtTime(0.6, now);
+    cavernGain.gain.setValueAtTime(0.0001, now);
+    cavernGain.gain.linearRampToValueAtTime(0.11, now + 0.055);
+    cavernGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+    cavernOsc.connect(cavernLp);
+    cavernLp.connect(cavernGain);
+    cavernGain.connect(masterFilter);
+    cavernOsc.start(now);
+    cavernOsc.stop(now + 0.82);
+  }
+
+  // 3. Expansive Mystic Whoosh + Soft Airy Swish (wide low-Q swept bandpass, zero whistle)
+  const whooshSrc = ctx.createBufferSource();
+  whooshSrc.buffer = noiseBuffer;
+  whooshSrc.playbackRate.setValueAtTime(0.92, now);
+  whooshSrc.playbackRate.linearRampToValueAtTime(1.16, now + 0.16);
+  whooshSrc.playbackRate.exponentialRampToValueAtTime(0.76, now + 0.76);
+  const whooshBp = ctx.createBiquadFilter();
+  whooshBp.type = 'bandpass';
+  whooshBp.Q.setValueAtTime(0.72, now);
+  whooshBp.frequency.setValueAtTime(145, now);
+  whooshBp.frequency.exponentialRampToValueAtTime(510, now + 0.15);
+  whooshBp.frequency.exponentialRampToValueAtTime(140, now + 0.76);
+  const whooshGain = ctx.createGain();
+  whooshGain.gain.setValueAtTime(0.0001, now);
+  whooshGain.gain.linearRampToValueAtTime(0.28, now + 0.038);
+  whooshGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.76);
+  whooshSrc.connect(whooshBp);
+  whooshBp.connect(whooshGain);
+  whooshGain.connect(masterFilter);
+  whooshSrc.start(now);
+  whooshSrc.stop(now + 0.78);
+
+  const swishSrc = ctx.createBufferSource();
+  swishSrc.buffer = noiseBuffer;
+  swishSrc.playbackRate.setValueAtTime(1.04, now + 0.015);
+  swishSrc.playbackRate.exponentialRampToValueAtTime(0.82, now + 0.7);
+  const swishBp = ctx.createBiquadFilter();
+  swishBp.type = 'bandpass';
+  swishBp.Q.setValueAtTime(0.92, now + 0.015);
+  swishBp.frequency.setValueAtTime(260, now + 0.015);
+  swishBp.frequency.exponentialRampToValueAtTime(840, now + 0.19);
+  swishBp.frequency.exponentialRampToValueAtTime(220, now + 0.7);
+  const swishGain = ctx.createGain();
+  swishGain.gain.setValueAtTime(0.0001, now + 0.015);
+  swishGain.gain.linearRampToValueAtTime(0.16, now + 0.075);
+  swishGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+  swishSrc.connect(swishBp);
+  swishBp.connect(swishGain);
+  swishGain.connect(masterFilter);
+  swishSrc.start(now + 0.015);
+  swishSrc.stop(now + 0.74);
+
+  // 4. Warm Low-Baritone Mystic Breath Fifth (110 Hz A2 + 164.81 Hz E3, slow 85ms swell, zero ding)
+  for (const freq of [110.0, 164.81]) {
+    const auraOsc = ctx.createOscillator();
+    const auraGain = ctx.createGain();
+    auraOsc.type = 'sine';
+    auraOsc.frequency.setValueAtTime(freq, now + 0.02);
+    auraOsc.frequency.exponentialRampToValueAtTime(freq * 0.94, now + 0.76);
+    auraGain.gain.setValueAtTime(0.0001, now + 0.02);
+    auraGain.gain.linearRampToValueAtTime(0.06, now + 0.105);
+    auraGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.76);
+    auraOsc.connect(auraGain);
+    auraGain.connect(masterFilter);
+    auraOsc.start(now + 0.02);
+    auraOsc.stop(now + 0.78);
+  }
+}
+
 export function scheduleAmbientStepVoice(
   ctx: AudioContext,
   musicGain: GainNode,

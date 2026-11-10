@@ -10,8 +10,10 @@ import { handlePopstateNavigationImpl, refreshSaveTransferModalImpl } from './mo
 export function bindDomEventsImpl(app: AppViewContext): void {
   // Sacred-Geometry Title Crest Overlay Actions
   document.getElementById('btn-title-play')?.addEventListener('click', () => {
-    app.sound.playButtonTap();
     const save = app.saveManager.getPayload();
+    if (save.settings.reducedMotion) {
+      app.sound.playButtonTap();
+    }
     const targetId = app.isNewPlayerSave(save)
       ? 1
       : Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
