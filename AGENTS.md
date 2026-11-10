@@ -30,19 +30,22 @@ Every change to the codebase must preserve these invariants:
    - **First-Move Safety Invariant (`UX-03`)**: On levels `1..30`, every legal first move must lead to a solvable board state (`verifyFirstMoveSafety()`).
    - **Fun-First Difficulty Ramping Invariants (`RAMP-01`–`RAMP-05`)**:
      - **Breather Rhythm (`RAMP-01`)**: Every `5th` level (`15, 20, 25, ...`) is a flow-state breather level (`difficulty: 'NORMAL'`, generous gate apertures, zero bombs/tight shutters).
-     - **Progressive Courtyard Scaling**: Boards expand gradually across 6 architectural epochs (`5×5` on `L1–15` $\rightarrow$ `6×6` on `L16–40` $\rightarrow$ `6×7` on `L41–80` $\rightarrow$ `7×7` on `L81–140` $\rightarrow$ `7×8`/`8×8` on `L141–220` $\rightarrow$ `8×8`/`9×9` Grand Citadel on `L221–300`).
+     - **Progressive Courtyard Scaling & Sculpted Multi-Room Sanctums**: Boards expand gradually across 6 architectural epochs (`5×5` on `L1–15` $\rightarrow$ `6×6` on `L16–40` $\rightarrow$ `6×7` on `L41–80` $\rightarrow$ `7×7` on `L81–140` $\rightarrow$ `7×8`/`8×8` on `L141–220` $\rightarrow$ `8×8`/`9×9` Grand Citadel on `L221–300`), incorporating **Sculpted 3D Courtyards (`L14+`)**, **Stepped-Edge Exit Gates (`gate.edgeLine`, `L18+`)**, and **Multi-Room Portcullis Sanctums & Sunken Twilight Chambers (`board.barriers`, `board.roomMap`, `L25+`)**.
      - **Per-Block & Per-Board Modifier Budgets (`RAMP-02` & `RAMP-03`)**: Never stack two primary movement-blocking modifiers (`axisLock`, `iceCount`, `chained`, `ropeColor`, `bombCount`) on the same block (`canAddBlockModifier`), and cap active obstacle families to `1` (`L1–70`), `2` (`L71–170`), or `3` (`L171+`).
      - **Generous Gate Apertures & Bomb Buffers (`RAMP-04` & `RAMP-05`)**: Keep gate `spanLength >= maxPerpendicularBlockSpan` (`>= 3` on `7×7+` boards) and `bombCount >= Math.max(10, coloredBlocks.length * 2 + 4)` so puzzles remain fun and tactile rather than frustrating.
 4. **Sacred-Geometry Architectural Sanctuary & Tactile 3D Design Language**:
-   - **Visual Identity**: Atmospheric twilight-to-terracotta `oklab` gradient skies, sacred-geometry SVG astrolabe accents (`.sacred-geometry-ornament`), stepped 3D architectural sanctuary plinths under the board tray, warm sunlit top lighting paired with cool lavender-indigo shadow fill, and chamfered 3D circular block studs.
+   - **Visual Identity**: Atmospheric twilight-to-terracotta `oklab` gradient skies, sacred-geometry SVG astrolabe accents (`.sacred-geometry-ornament`), sculpted cell-aware 3D architectural sanctuary plinths under non-rectangular & multi-room boards (`plinthSpans`), warm sunlit top lighting paired with cool lavender-indigo shadow fill, and chamfered 3D circular block studs.
+   - **Full Settings × Custom Theme Compatibility (`AX-01`, `AX-02`, `UX-10`)**:
+     - All 8 user settings (`playMode`, `sfxEnabled`, `musicEnabled`, `hapticsEnabled`, `colorblindSymbols`, `highContrast`, `reducedMotion`, `qualityTier`) must work in every combination across all 5 Block Skins, 5 Board Trays (`HIGH_CONTRAST_TRAY_PALETTES` / `getEffectiveTrayPalette`), and 5 Particle Styles.
+     - Colorblind symbols (`CB_0..9` on dark obsidian circular medallions) must render at `zCbSymbol = zLift + 0.692 * scaleZ` above all studs, 3D medallions, and straps, and shift cleanly to the top-left collar `(0.21, 0.21)` on multi-layer or center-badged cells so outer vs. inner layer symbols never collide.
    - **Integrated 3D Block Modifiers (Zero "Slapped-On" 2D Sticker Overlays)**:
      - Never cover a block's top face with flat dark `overlayQuad` strips or black rectangular sticker icons.
      - Axis-Locked blocks (`axisLock: 'H' | 'V'`) must use **3D beveled side-flange guide rails** (`railBeamMesh` tinted with block-harmonized `entry.lipHex` + warm champagne metallic cap) leaving the top circular studs 100% uncovered, paired with sculpted 3D circular/octagonal badge medallions (`drawBadgeMedallion3D` in [`src/render/atlas-3d.ts`](src/render/atlas-3d.ts)).
      - Early-stage 3D Move Guides must render as a hollow 3D beveled perimeter frame (`drawHollowMoveGuideFrame`) so the underlying block remains clearly visible and clickable.
    - **Sacred-Geometry Title Screen & Adaptive Player Flows (`#title-overlay`)**:
-     - Launches over the live 3D courtyard backdrop (`#screen-game.title-backdrop-mode`) with a compact horizontal Sacred-Geometry Astrolabe & Title Crest banner at the top and a compact Sanctuary Pedestal at the bottom, while `.game-stage-wrapper` reserves top/bottom padding so the 3D puzzle board is centered cleanly in the open window without overlap.
-     - **New Player Flow (`A2` — FTUE)**: Brand-new players (`isNewPlayerSave(save) === true`) see **`▶ BEGIN JOURNEY`** as the primary CTA (plus a single-row dock with `Restore Save`, `Settings`, and conditional `Install`) and go **straight into Level 1 (`First Shred`)** without menu overload.
-     - **Returning Player Flow (`A3`)**: Returning players (`isNewPlayerSave(save) === false`) see a compact single-bar progress header (Chapter + Level title on the left, `★ / Coins / ✦` pills on the right), **`▶ CONTINUE · LEVEL N`**, and a unified single-row quick-action dock (`Map` · `Themes` · `Sync` · `Settings` · conditional `Install`).
+     - Launches over the live 3D courtyard backdrop (`#screen-game.title-backdrop-mode`), rendering any rectangular, sculpted, or multi-room board as an animated **Sacred-Geometry Astrolabe Wall-Scroll Diagram** (`u_blueprintMix = 1.0`) that smoothly transitions (`0.72s`) into full tactile 3D when gameplay begins.
+     - **New Player Flow (FTUE)**: Brand-new players (`isNewPlayerSave(save) === true`) see **`▶ BEGIN JOURNEY`** as the primary CTA (plus a single-row dock with `Restore Save`, `Settings`, and conditional `Install`) and go **straight into Level 1 (`First Shred`)** without menu overload.
+     - **Returning Player Flow**: Returning players (`isNewPlayerSave(save) === false`) see a compact single-bar progress header (Chapter + Level title on the left, `★ / Coins / ✦` pills on the right), **`▶ CONTINUE · LEVEL N`**, and a unified single-row quick-action dock (`Map` · `Themes` · `Sync` · `Settings` · conditional `Install`).
      - **Installed PWA Detection (`isPwaInstalled()`)**: Uses multi-signal detection (`matchMedia('(display-mode: standalone|fullscreen|minimal-ui|window-controls-overlay)')`, iOS `navigator.standalone`, Android `android-app://` referrer, `appinstalled` event persisted in `localStorage`, and Chromium `navigator.getInstalledRelatedApps()`) to automatically hide `#btn-title-install` and `#btn-install-header` whenever the app is already installed.
      - Tapping the ShredBlocks brand crest (`#btn-home-title`) on `#screen-home` re-opens `#title-overlay` at any time.
    - **Cross-Platform PWA Launcher Icons & Automatic SW Versioning (`public/icon*.{svg,png}`, `scripts/generate-icons.ts`, `vite.config.ts`)**:
@@ -67,7 +70,7 @@ Every change to the codebase must preserve these invariants:
 | [`index.html`](index.html) | Single-page application shell: `#screen-home`, `#screen-game`, `#screen-themes`, 5 `<dialog>` modals, and `.sacred-geometry-ornament` SVG. |
 | [`src/main.ts`](src/main.ts) | `ShredBlocksApp` orchestrator: screen routing, HUD synchronization, rAF loop, booster state machine, modals, PWA lifecycle, and `window.__SHREDBLOCKS_DEBUG__`. |
 | [`src/styles/main.css`](src/styles/main.css) | Sacred-geometry architectural & tactile 3D stylesheet (`in oklab` gradients, responsive `100dvh`/`100dvw` layout, `@media (forced-colors: active)`). |
-| [`src/core/types.ts`](src/core/types.ts) | Canonical TypeScript interfaces, `COLOR_PALETTE` (8 colors + `0` neutral stone + `AX-01` symbols), and `SavePayloadV1` schema. |
+| [`src/core/types.ts`](src/core/types.ts) | Canonical TypeScript interfaces, `COLOR_PALETTE` (9 colors + `0` neutral stone + `AX-01` symbols + `hcRgb` high-contrast overrides), and `SavePayloadV1` schema. |
 | [`src/core/polyomino.ts`](src/core/polyomino.ts) | 19 canonical polyomino shapes (`1×1` through `3×3` and pentominoes), cell occupancy iterators, and multi-layer color stack helpers. |
 | [`src/core/physics.ts`](src/core/physics.ts) | Channel-locked orthogonal swept grid raycast (`clampGroupDragDelta` with `0.30`-cell corner bevel assist), `isBlockMovable` (including movable neutral stone sliders `color: 0`), and `groupId` linked-group movement (`F-03`). |
 | [`src/core/gate-clearance.ts`](src/core/gate-clearance.ts) | Gate aperture span & axis-lock directional exit rules (`F-02`), outward pull-dot mid-drag gate capture (`checkMidDragGateCapture`), and isolated post-shred side-effect resolution (`allowedCascadeIds`). |
@@ -76,8 +79,8 @@ Every change to the codebase must preserve these invariants:
 | [`src/levels/generator.ts`](src/levels/generator.ts) | Deterministic `Mulberry32` reverse-move procedural level generator (`RAMP-01`–`RAMP-05`) for Campaign (`82..300`) and Endless Mastery (`Level 301+`). |
 | [`src/levels/solver.ts`](src/levels/solver.ts) | State-space BFS/A\* solver (`solveBoard`), optimal `parMoves` calculator, and Zen/Timed Hint engine (`findNextHintMove`). |
 | [`src/render/camera-3d.ts`](src/render/camera-3d.ts) | 52° perspective camera, responsive aspect-fit framing (`rows + 1.55`), and exact ray-plane unprojection (`screenToBoardRayPlane` at `z = 0.58`). |
-| [`src/render/mesh-generator.ts`](src/render/mesh-generator.ts) | Procedural 3D mesh generator for all 19 polyomino shapes, chamfered 3D circular top studs (`addCylinderCapToBuilder`), inner multi-layer cores, and environment meshes. |
-| [`src/render/atlas-3d.ts`](src/render/atlas-3d.ts) | Procedural 1024×1024 crisp mipmapped WebGL2 texture atlas (`CB_0..8`, sculpted 3D `drawBadgeMedallion3D` obstacle badges, `DIGIT_0..9`). |
+| [`src/render/mesh-generator.ts`](src/render/mesh-generator.ts) | Procedural 3D mesh generator for all 76 static polyomino meshes (19 shapes × 4 geometry variants), chamfered 3D circular top studs (`addCylinderCapToBuilder`), inner multi-layer cores, and environment meshes. |
+| [`src/render/atlas-3d.ts`](src/render/atlas-3d.ts) | Procedural 512×512 crisp mipmapped WebGL2 texture atlas (`CB_0..9` dark obsidian circular medallions, sculpted 3D `drawBadgeMedallion3D` obstacle badges, `DIGIT_0..9`). |
 | [`src/render/renderer-3d.ts`](src/render/renderer-3d.ts) | 4-Pass WebGL2 renderer, `QualityGovernor` (`VER-03` `workDurationMs` ring buffer), GPU-instanced 3D particles (`MAX_PARTICLES = 2048`), and `Canvas2D` fallback. |
 | [`src/input/pointer-controller.ts`](src/input/pointer-controller.ts) | Unified pointer/touch/mouse drag controller (`setPointerCapture`, `pointercancel`/`blur` snap-back, 32px outward gate funnel), booster canvas targeting, and `AX-03` keyboard navigation. |
 | [`src/audio/synth.ts`](src/audio/synth.ts) | Zero-asset procedural Web Audio API synthesizer + ambient pentatonic chime loop + haptic feedback wrapper. |
@@ -98,7 +101,7 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
    ```bash
    npm run test:unit
    ```
-   Must pass all 35+ tests in `< 1.5s`, including 100% solvability and non-overlapping cell verification across all 300 campaign levels.
+   Must pass all 42+ tests in `< 1.5s`, including 100% solvability and non-overlapping cell verification across all 300 campaign levels.
 2. **TypeScript Typecheck & Production Build**:
    ```bash
    npm run build
@@ -108,29 +111,46 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
    ```bash
    npm run test:e2e
    ```
-   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (New & Returning Player flows), real pointer drag-and-drop, keyboard controls, all 5 boosters, and all 18 obstacle mechanics.
+   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (New & Returning Player flows), real pointer drag-and-drop, keyboard controls, all 5 boosters, all 8 user settings across custom themes, and all 18 obstacle + multi-room sanctum mechanics.
 4. **Multi-Viewport Visual Screenshot & Launcher Icon Harness (when touching UI/CSS/3D rendering/icons)**:
    ```bash
    npm run verify:visual
    ./node_modules/.bin/tsx scripts/generate-icons.ts
    ```
-   Captures 31+ screenshots across `360×640`, `390×844`, `768×1024`, and `1440×900` plus the cross-platform launcher icon mask sheet (`29-launcher-icons-preview.png`) and verifies zero orphan server/browser processes afterward.
+   Captures 34+ screenshots across `360×640`, `390×844`, `768×1024`, and `1440×900` plus the cross-platform launcher icon mask sheet (`29-launcher-icons-preview.png`) and verifies zero orphan server/browser processes afterward.
 5. **Multi-Level Subagent Adversarial Audit & UX Sign-Off (MANDATORY FOR UI / UX / GAMEPLAY UPDATES)**:
    - Every non-trivial UI, UX, icon, or gameplay change must be independently audited by dedicated subagents (`invoke_subagent` / `send_message`):
-     1. **Visual Aesthetics & UX Design Critic**: Inspects the rendered multi-viewport screenshots (`00-title-screen-new-player-mobile.png`, `30-title-screen-returning-player-mobile.png`, `01-home-roadmap-mobile.png`, `02-level-001-gameplay-mobile.png`, `29-launcher-icons-preview.png`, etc.) for Sacred-Geometry Architectural Sanctuary cohesion, typography, hierarchy, navigation clarity, and zero clipping/overlap across mobile, tablet, and desktop.
+     1. **Visual Aesthetics & UX Design Critic**: Inspects the rendered multi-viewport screenshots (`00-title-screen-new-player-mobile.png`, `30-title-screen-returning-player-mobile.png`, `01-home-roadmap-mobile.png`, `02-level-001-gameplay-mobile.png`, `29-launcher-icons-preview.png`, `32..37`, etc.) for Sacred-Geometry Architectural Sanctuary cohesion, typography, hierarchy, navigation clarity, and zero clipping/overlap across mobile, tablet, and desktop.
      2. **Gameplay Mechanics & Playtest Auditor**: Audits interactive flows (New vs. Returning player onboarding, 1-tap Map/Title navigation, progressive power-up unlocking & rarity scarcity, solver-verified level ramping, and E2E playtest coverage).
-   - Address all P0/P1/P2 findings raised by the review subagents and re-verify before presenting the final result to the user.
+   - Address all P0/P1/P2 findings raised by the review subagents and re-verify in iterative cycles until zero issues remain (`0 P0`, `0 P1`, `0 P2`), always adding regression tests whenever bugs or regressions not caught by existing tests are uncovered.
 
 ---
 
-## 4. Browser Support & Modern Web Guidance Policy
+## 4. Engineering & Testing Guardrails (Lessons Learned)
+
+1. **Self-Contained Documentation & Comment Hygiene**:
+   - Code comments, test descriptions, and documentation (`src/`, `tests/`, `scripts/`, `docs/`, `README.md`, `AGENTS.md`) must **only** reference self-contained domain concepts or git-tracked architecture invariants defined in [`docs/ARCHITECTURE_AND_RULES.md`](docs/ARCHITECTURE_AND_RULES.md) and [`AGENTS.md`](AGENTS.md). Never leave references to transient implementation plans, stage numbers, review rounds, or temporary bug labels.
+2. **3D Block Top-Surface Z-Layer Hierarchy (`zCbSymbol = 0.692`)**:
+   - Studded block skins (`classic_studs`, `gummy_jelly`, `neon_cyber`) have 3D circular top studs reaching `Z = 0.660` (outer shell) and `Z = 0.677` (inner multi-layer core). Any surface badge that must be visible on studded skins—such as `CB_0..9` colorblind symbols—must render at `zCbSymbol = zLift + 0.692 * scaleZ` above the studs and shift to the top-left collar `(0.21, 0.21)` on multi-layer or center-badged cells. Consult the Z-Layer Hierarchy table in [`docs/ARCHITECTURE_AND_RULES.md`](docs/ARCHITECTURE_AND_RULES.md) before adding or moving any 3D block overlay.
+3. **WebGL2 Canvas Pixel-Diff Verification for Settings × Custom Themes**:
+   - Asserting DOM classes or `localStorage` state is insufficient for verifying 3D visual accessibility settings (`highContrast`, `colorblindSymbols`) across custom skins and trays. Always maintain the `#game-canvas` screenshot buffer comparison in [`tests/e2e/shredblocks.spec.ts`](tests/e2e/shredblocks.spec.ts) verifying that toggling High Contrast and Colorblind Symbols on non-default custom themes (`neon_cyber` + `warm_birch`) produces measurably distinct WebGL2 rendered frames.
+4. **Row-Span Plinth Merging (`plinthSpans`) for 120Hz Frame Budget (`<= 6.5ms`)**:
+   - Never issue per-cell `drawMesh` calls for multi-tier architectural plinths under sculpted or multi-room boards (`L14+`, `L25+`). Always merge contiguous row spans (`plinthSpans` in [`src/render/renderer-3d.ts`](src/render/renderer-3d.ts)) so Pass 1 draw calls stay compact (`~15–24` calls instead of `150+`).
+5. **4-Entry-Point Clear & Barrier Unlock Parity**:
+   - All 4 block-clearing entry points (`commitBlockMove`, `applyBoosterHammer`, `applyBoosterRocket`, and `applyBoosterVacuum`) must maintain 100% parity for post-clear side effects (`triggerCarrierItems`, `stepPortcullisBarriersOnShred`, `trySpawnReadyGenerators`, and `⛩️ Portcullis Opened!` toast feedback).
+6. **Visual Harness Context Isolation**:
+   - Because [`scripts/visual-harness.ts`](scripts/visual-harness.ts) reuses browser contexts across captures, always explicitly reset `setHighContrast(false)`, `setColorblindMode(false)`, `setReducedMotion(false)`, and `setTheme('classic_studs', 'industrial_slate', 'micro_cubes')` after any custom-state capture.
+
+---
+
+## 5. Browser Support & Modern Web Guidance Policy
 
 - **Browser Support**: Baseline Widely Available + progressive enhancement (`@supports (background: linear-gradient(in oklab, white, black))` for `in oklab` / `in oklch` gradients, `"devicePixelContentBoxSize" in ResizeObserverEntry.prototype` with `devicePixelRatio` fallback).
 - Consult [`docs/ARCHITECTURE_AND_RULES.md`](docs/ARCHITECTURE_AND_RULES.md) for deep-dive specifications of the 18 mechanics, coordinate systems, and shader pipelines.
 
 ---
 
-## 5. Upstream Instance & Hosting Configuration (Optional — Trim or Customize on Fork)
+## 6. Upstream Instance & Hosting Configuration (Optional — Trim or Customize on Fork)
 
 If you fork this repository for your own deployment or a different hosting provider, only these upstream-specific settings reference the canonical deployment environment and can be freely modified or removed:
 - **Upstream Production Domain (`https://shredblocks.skorupski.org`)**: Referenced in [`index.html`](index.html) (`canonical` / `og:url` metadata) and [`src/storage/save-manager.ts`](src/storage/save-manager.ts) (`buildShareUrl()` fallback when not running on `localhost` or LAN).

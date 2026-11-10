@@ -36,23 +36,27 @@ This document provides the deep-dive technical specification for **ShredBlocks: 
     2. **Strict Axis-Lock Gate Exit (`DRAG-01`)**: If `block.axisLock === 'H'`, `gate.edge` must be `'LEFT'` or `'RIGHT'`. If `block.axisLock === 'V'`, `gate.edge` must be `'TOP'` or `'BOTTOM'`. An axis-locked block can never exit sideways through a gate perpendicular to its rail axis.
     3. `gate.iceCount === 0` and `gate.shutterOpen === true` and `gate.shutterLockColor === 0`.
     4. If `block.isStar === true`, `gate.isStar` must also be `true`.
-    5. Every cell of the block (at `candidateRow, candidateCol`) lies within `[gate.spanStart, gate.spanStart + gate.spanLength - 1]` along the gate's parallel axis, and at least one cell touches the gate's boundary row/col.
-    6. No occupied cell (`occupancy !== 0` and not `block.id`) blocks the straight-line extrusion corridor between any cell of the block and the gate lip.
+    5. Every cell of the block (at `candidateRow, candidateCol`) lies within `[gate.spanStart, gate.spanStart + gate.spanLength - 1]` along the gate's parallel axis, and at least one cell touches the gate's boundary row/col (`gate.edgeLine`, supporting both outer perimeter gates and **Stepped-Edge Exit Gates (`GATE-STEP-01`)** mounted on recessed inner courtyard ledges).
+    6. No occupied cell (`occupancy !== 0` and not `block.id`) blocks the straight-line extrusion corridor between any cell of the block and `gate.edgeLine`.
+    7. **Multi-Room Portcullis Sanctum Gating (`SANCTUM-01`, `SANCTUM-02`)**: Neither the block (`isBlockInLockedRoom`) nor the gate (`isGateInLockedRoom`) may belong to a sealed room (`roomId > 0` where an active `BarrierState` with `unlocksRoomId === roomId` has `open === false`).
 - **`checkMidDragGateCapture(board, blockId, stepVecX, stepVecY, rawPullX, rawPullY)` (`F-01`, `MECH-04`)**:
-  - Captures and shreds a block mid-drag when it is within `0.15` cells of an integer alignment at an eligible gate lip AND either:
+  - Captures and shreds a block mid-drag when it is within `0.15` cells of an integer alignment at an eligible gate lip (`gate.edgeLine`) AND either:
     - The incremental step vector has positive dot product toward the gate's outward normal (`dot > 1e-4`), OR
-    - The raw pointer pull vector from the block's center has outward component `pullDot >= 0.12` (allowing blocks that start at `row = 0` or `col = 0` to shred when pulled outward against the wall clamp).
+    - The raw pointer pull vector from the block's center has outward component `pullDot >= 0.12` (allowing blocks that start at `gate.edgeLine` to shred when pulled outward against the wall clamp).
 - **Outward Gate Funnel & Pointer Cancel Safety ([`src/input/pointer-controller.ts`](../src/input/pointer-controller.ts))**:
-  - When a dragged block is touching the perimeter row/col and aligned with a matching gate, outward pointer pulls up to `32px` beyond the board lip clamp tangential jitter (`rawDeltaX *= 0.25` or `rawDeltaY *= 0.25`) so the block funnels cleanly into the shredder mouth.
+  - When a dragged block is touching `gate.edgeLine` and aligned with a matching gate, outward pointer pulls up to `32px` beyond the gate lip clamp tangential jitter (`rawDeltaX *= 0.25` or `rawDeltaY *= 0.25`) so the block funnels cleanly into the shredder mouth.
+  - Tapping a dormant block inside a sealed Sunken Twilight Chamber (`isBlockInLockedRoom`) triggers a gentle rebound shake and displays a clear `"⛩ Chamber Sealed! Shred N more blocks to open the Portcullis."` toast.
   - Any `pointercancel`, `window.blur`, or `visibilitychange` event during an active drag cleanly snaps the dragged block (and its glued `groupId` partners) back to its last valid integer cell (`snapActiveDragToGridAndEnd`).
 
 ### 2.3 Synchronous Fixed-Point Clear Cascade (`resolveClearCascade`)
 Whenever a block shreds or peels at a gate, side effects execute in a strict deterministic order:
-1. **Step 1A (`triggerCarrierItems`)**: Keys (`hasKey`) unlock matching `lockId` Chained blocks; Colored Scissors (`scissorColor`) cut matching `ropeColor` ropes; Shutter Gems (`shutterGemColor`) unlock matching `shutterLockColor` gates.
+1. **Step 1A (`triggerCarrierItems`)**: Keys (`hasKey`) unlock matching `lockId` Chained blocks and Key-locked Portcullis Barriers (`bar.lockId === keyId`); Colored Scissors (`scissorColor`) cut matching `ropeColor` ropes; Shutter Gems (`shutterGemColor`) unlock matching `shutterLockColor` gates.
 2. **Step 1B (Layer Peel vs. Full Shred)**:
    - If `colorCursor + 1 < colorStack.length`, increments `colorCursor`, adds `+2` moves/sec to any active bomb on that block, detaches from any glued group, and keeps the block `ACTIVE` on the board.
    - Otherwise, marks `block.status = 'CLEARED'` and detaches from any glued group (`detachBlockFromGluedGroup` re-evaluates connected components so remaining glued partners stay intact!).
-3. **Step 1C (Global Ice Thaw)**: Decrements `iceCount` by `1` on all active frozen blocks and frozen gates.
+3. **Step 1C (Global Ice Thaw & Portcullis Barrier Countdown — `stepBarriersOnShred`)**:
+   - Decrements `iceCount` by `1` on all active frozen blocks and frozen gates (skipping dormant blocks/gates inside still-locked rooms).
+   - Decrements `shredsRemaining` by `1` on closed threshold Portcullis Barriers (`bar.shredsRemaining > 0`); when `shredsRemaining` reaches `0` (and `lockId === 0`), opens the Portcullis (`bar.open = true`), vacates its `occupancy = -3` cells to `0`, and awakens the sealed room (`unlockedBarrierIds`).
 4. **Step 1D (Adjacent Wooden Crates)**: Decrements `hp` by `1` on any Wooden Crate orthogonally adjacent to the cleared block's footprint.
 5. **Step 1E (`stepDynamicGatesOnShred`)**:
    - Advances `exitedGate.colorCursor` on the gate that just shredded the block.
@@ -60,8 +64,8 @@ Whenever a block shreds or peels at a gate, side effects execute in a strict det
    - Shifts all `slidesOnClear` gates and steps all `sizeChangesOnClear` gates—**with an anti-softlock span guard (`DRAG-07`)**: never shrinks a gate's `spanLength` below the minimum perpendicular span required by the largest remaining block of that gate's active color when it is the sole gate for that color.
 6. **Step 2A (`stepMovingElevators`)**: Shifts each Moving Elevator (`F-05`) and any active blocks whose footprints are **100% contained** within the elevator platform, provided no block straddles the boundary, is immobilized, or violates a `floorColor` path.
 7. **Step 2B (`trySpawnReadyGenerators`)**: Decrements generator cooldowns and spawns queued blocks at `[spawnRow, spawnCol]` when unobstructed (`F-06`).
-8. **Step 2C (Isolated Cascade Check — `BUG-01`)**: Only newly spawned generator blocks or blocks shifted by a moving elevator (`allowedCascadeIds`) are checked for automatic gate clearance; unrelated blocks merely resting near another perimeter gate never auto-shred or trigger phantom gate animations.
-9. **Step 3 (`autoAdvanceColorQueues` — `BUG-02`)**: Single-pass check per shred event that advances any Color-Changing Gate whose front color has `0` remaining supply across active blocks and generators (`F-08`).
+8. **Step 2C (Strict Cascade Isolation)**: Only newly spawned generator blocks or blocks actively involved in the current move (`allowedCascadeIds`) are checked for automatic gate clearance; unrelated stationary blocks resting near another perimeter gate never auto-shred or trigger phantom gate animations.
+9. **Step 3 (`autoAdvanceColorQueues` — Single-Pass Queue Auto-Advance)**: Single-pass check per shred event that advances any unlocked-room Color-Changing Gate whose front color has `0` remaining supply across active blocks and generators (`F-08`).
 
 ---
 
@@ -69,23 +73,41 @@ Whenever a block shreds or peels at a gate, side effects execute in a strict det
 
 [`src/render/renderer-3d.ts`](../src/render/renderer-3d.ts) renders each frame in 4 GPU passes:
 1. **Pass 1 (`renderPass1Environment`)**:
-   - Draws the 3-tier **Stepped Architectural Sanctuary Plinth** (`z = -0.50`, `-0.34`, `-0.18`), interior recessed courtyard tiles, cutouts, stone pillars, elevator rails, generator housings, wooden crates, and perimeter shredder gates (with toothed rollers that spin cleanly at `2.0 rad/s` on standby and `18.0 rad/s` **only** on the specific gate actively shredding or aligned with a dragged block (`BUG-03`), queued color indicator bars in dark bezels, star emblems, ice shells, and shutter bars).
+   - Draws the 3-tier **Stepped Architectural Sanctuary Plinth** (`z = -0.50`, `-0.34`, `-0.18`, merged into contiguous row spans via `plinthSpans` for non-rectangular and multi-room courtyards), interior recessed courtyard tiles, cutouts, stone pillars, portcullis barriers (`bar.open === false`), elevator rails, generator housings, wooden crates, and perimeter shredder gates (with toothed rollers that spin cleanly at `1.35 rad/s` on standby and `18.0 rad/s` **only** on the specific gate actively shredding or aligned with a dragged block, queued color indicator bars in dark bezels, star emblems, ice shells, and shutter bars).
 2. **Pass 2 (`renderPass2ReticleAndPrompts`)**:
-   - Draws the snapped grid shadow reticle, green alignment beam when aligned with an eligible shredder gate, solver hint / `autoGuideMove` highlights (`source` + `target` cells + 3 stepping floor chevrons), isolated 3D circular shockwave rings (`this.activeShockwaves` using `ENVIRONMENT_MESHES.shockwaveRingMesh` triggered only on the specific gate and blocks whose state changed (`BUG-04`)), and booster targeting highlights (`HAMMER`, `ROCKET`, `VACUUM`).
+   - Draws the snapped grid shadow reticle, green alignment beam when aligned with an eligible shredder gate, solver hint / `autoGuideMove` highlights (`source` + `target` cells + 3 stepping floor chevrons), isolated 3D circular shockwave rings (`this.activeShockwaves` using `ENVIRONMENT_MESHES.shockwaveRingMesh` triggered only on the specific gate and blocks whose state changed), and booster targeting highlights (`HAMMER`, `ROCKET`, `VACUUM`).
 3. **Pass 3 (`renderPass3Blocks`)**:
-   - Renders each active 3D polyomino block (and any active visual shred animation) using hardware clip planes (`u_useClipPlane`) as the block slices through the gate plane, plus inner multi-layer cores, chamfered 3D top studs (`addCylinderCapToBuilder`), glued solder bridges, **3D beveled side-flange Axis-Lock guide rails** (`railBeamMesh` tinted with block-harmonized `entry.lipHex` + warm champagne metallic cap, leaving top circular studs 100% uncovered), **sculpted 3D circular/octagonal badge medallions** (`drawBadgeMedallion3D` in [`src/render/atlas-3d.ts`](../src/render/atlas-3d.ts)), **hollow 3D beveled perimeter move-guide frames** (`drawHollowMoveGuideFrame`), and `AX-01` colorblind symbols on every stud.
+   - Renders each active 3D polyomino block (and any active visual shred animation) using hardware clip planes (`u_useClipPlane`) as the block slices through the gate plane, plus inner multi-layer cores, chamfered 3D top studs (`addCylinderCapToBuilder`), glued solder bridges, **3D beveled side-flange Axis-Lock guide rails** (`railBeamMesh` tinted with block-harmonized `entry.lipHex` + warm champagne metallic cap, leaving top circular studs 100% uncovered), **sculpted 3D circular/octagonal badge medallions** (`drawBadgeMedallion3D` in [`src/render/atlas-3d.ts`](../src/render/atlas-3d.ts)), **hollow 3D beveled perimeter move-guide frames** (`drawHollowMoveGuideFrame`), and `AX-01` colorblind symbols (`CB_0..9` on dark obsidian circular medallions).
    - **Grabbed Block Focus & Centroid Compensation**: Grabbed blocks (and any glued `groupId` partners) elevate by `BLOCK_LIFT_DELTA_Z = 0.46`, scale by `1.05x` in XY (shifting `(meshTx, meshTy)` by `-(scaleXY - 1.0) * shape.cols * 0.5` so scaling occurs around the polyomino's geometric center), cast an offset floor drop shadow, and render a pulsing golden-white selection rim halo while non-grabbed blocks dim to `0.88x`.
    - **Sunlit & Twilight Directional Lighting**: `MAIN_FRAGMENT_SHADER` blends a warm sunlit key light (`vec3(1.04, 0.98, 0.92)`) on top faces/stud bevels with a cool twilight shadow tint (`vec3(0.90, 0.88, 1.03)`) on side faces.
 4. **Pass 4 (`renderPass4Particles`)**:
    - Single-draw-call GPU-instanced 3D particle system (`gl.drawArraysInstanced`, `MAX_PARTICLES = 2048`) supporting 5 distinct geometric styles (`micro_cubes`, `star_confetti`, `pixel_sparks`, `soap_bubbles`, `lightning_bolts`).
+
+### 3.1 Canonical 3D Block Top-Surface Z-Layer Hierarchy
+Because WebGL depth testing (`gl.DEPTH_TEST`, `gl.LEQUAL`) is active during Pass 3, every element rendered on top of a block must obey this strict vertical `Z` hierarchy (relative to `zLift`, scaled by `scaleZ`):
+
+| Layer / Feature | Relative `Z` Elevation | Notes |
+| :--- | :--- | :--- |
+| **Courtyard Floor Tile** | `0.000` (`-0.042` in sealed chambers) | Sunken Twilight Chambers (`roomId > 0` while locked) sit `-0.042` lower and smoothly rise to `0.000` when unlocked. |
+| **Block Top Face** | `0.580` | Base top face of all 19 polyomino shapes (`BLOCK_TOP_Z = 0.58`). |
+| **3D Straps, Chains, Ropes & Axis-Lock Side Rails** | `0.588 .. 0.626` | Side-flange rails (`0.13` / `0.87`) leave the central `[0.34, 0.66]` circular stud zone 100% uncovered. |
+| **Multi-Layer Inner Core Top Face** | `0.602` | Exposed through the outer shell's central cutout window on multi-layer blocks. |
+| **3D Beveled Obstacle Medallions (`drawBadgeMedallion3D`)** | `0.562 .. 0.648` | Two-tiered 3D plinths for Axis-Lock chevrons, Ice, Bombs, Keys, Locks, Scissors, Gems, and Stars; glyphs sit at `0.651`. |
+| **Outer Shell 3D Circular Studs** | `0.660` | Present on `classic_studs`, `gummy_jelly`, and `neon_cyber` skins (`0.580 + 0.080`). |
+| **Inner Multi-Layer Core 3D Studs** | `0.677` | Present on `classic_studs`, `gummy_jelly`, and `neon_cyber` multi-layer cores (`0.602 + 0.075`). |
+| **Colorblind Symbol Medallions (`zCbSymbol`)** | `0.692` (`0.696` inner core) | Renders above all studs, straps, and medallions across all 5 skins; shifts to top-left collar `(0.21, 0.21)` on multi-layer or center-badged cells so outer and inner symbols never overlap. |
+
+### 3.2 High-Contrast, Custom Themes & Wall-Scroll Blueprint Shader Pipeline
+- **High-Contrast Tray & Block Palettes (`AX-02`)**: When `highContrast === true`, `getEffectiveTrayPalette(trayId, true)` selects from `HIGH_CONTRAST_TRAY_PALETTES` (deep obsidian-slate floors and dark borders for all 5 Board Trays, including light trays like `warm_birch`, `frosted_quartz`, and `mint_studio`), `getColorRgb(color, true)` selects high-luminance `hcRgb` block colors, and `u_highContrast = 1.0` boosts fragment rim contrast across all 5 Block Skins.
+- **Sacred-Geometry Wall-Scroll Diagram (`u_blueprintMix`)**: While `#title-overlay` is open (`blueprintMix = 1.0`), `MAIN_FRAGMENT_SHADER` transforms any rectangular, sculpted (`L14+`), or multi-room (`L25+`) courtyard into a warm parchment & bronze-gold architectural blueprint (`materialStyle = 5` ink outlines on blocks, gates, pillars, and portcullis barriers) and smoothly interpolates to `0.0` over `0.72s` when entering gameplay.
 
 ---
 
 ## 4. 300-Level Progression Epochs & Fun-First Difficulty Ramp (`RAMP-01`–`RAMP-05`)
 
 1. **Progressive Courtyard Scaling Across 6 Architectural Epochs (`1..300`, Endless `301+`)**:
-   - **Epoch I (`Levels 1–15`, `5×5`)**: Onboarding Sanctuary (`3–4` blocks, `2–3` colors, Axis-Lock debut at `L11`).
-   - **Epoch II (`Levels 16–40`, `6×6`)**: Courtyard Expansion (`4–5` blocks, Cutouts & Pillars at `L21`, Multi-Layer at `L31`).
+   - **Epoch I (`Levels 1–15`, `5×5`)**: Onboarding Sanctuary (`3–4` blocks, `2–3` colors, Axis-Lock debut at `L11`, Sculpted Courtyard `CROSS_ATRIUM` debut at `L14`).
+   - **Epoch II (`Levels 16–40`, `6×6`)**: Courtyard Expansion (`4–5` blocks, Stepped-Edge Exit Gates on `L_WING` at `L18`, Cutouts & Pillars at `L21`, Multi-Room Portcullis Sanctum at `L25`, Multi-Layer at `L31`).
    - **Epoch III (`Levels 41–80`, `6×7`)**: Tactical Chambers (`5–6` blocks, Ice `L41`, Stars `L51`, Keys `L61`, Neutral Stone `L71`).
    - **Epoch IV (`Levels 81–140`, `7×7`)**: Grand Plaza (`6–7` blocks, Crates `L81`, Bombs `L91`, Glued Groups `L101`, Ropes `L111`, Color Queue Gates `L121`, Frozen Gates `L131`).
    - **Epoch V (`Levels 141–220`, `7×8` & `8×8`)**: Kinetic Machinery (`6–8` blocks, Shutters `L141/145`, Sliding/Resizing Gates `L151/155`, Generators `L161`, Floor Paths `L171`, Elevators `L181`, Milestone `L200`).

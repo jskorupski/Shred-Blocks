@@ -58,7 +58,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#title-returning-nav')).toBeHidden();
     await expect(page.locator('#btn-title-play')).toHaveText('▶ BEGIN JOURNEY');
 
-    // Tapping '▶ BEGIN JOURNEY' launches a brand-new player straight into Level 1 (A2 FTUE)
+    // Tapping '▶ BEGIN JOURNEY' launches a brand-new player straight into Level 1 (FTUE)
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#title-overlay')).toBeHidden();
     await expect(page.locator('#screen-game')).toBeVisible();
@@ -73,6 +73,10 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     // Verify 300+ roadmap nodes render in All view
     const allNodesCount = await page.locator('#roadmap-list .level-node-card').count();
     expect(allNodesCount).toBeGreaterThanOrEqual(300);
+
+    // Verify Sculpted Courtyard (🏛️ on L14) and Multi-Room Sanctum (⛩️ on L25) badges appear on Sanctuary Map
+    await expect(page.locator('#roadmap-list .level-node-card').nth(13)).toContainText('🏛️');
+    await expect(page.locator('#roadmap-list .level-node-card').nth(24)).toContainText('⛩️');
 
     // Click a locked level (#5) on Home Roadmap and verify global #game-toast feedback appears on #screen-home
     await page.locator('#roadmap-list .level-node-card').nth(4).click();
@@ -163,7 +167,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     expect(saveAfterL2.highestLevelUnlocked).toBe(3);
 
     // Return to Sanctuary Map via Victory Modal '‹ Map' button, then tap Brand Crest (#btn-home-title)
-    // to verify Returning Player Title Screen flow (A3: '▶ CONTINUE · LEVEL 3' + Map & Themes buttons)
+    // to verify Returning Player Title Screen flow ('▶ CONTINUE · LEVEL 3' + Map & Themes buttons)
     await page.locator('#btn-victory-home').click();
     await expect(page.locator('#screen-home')).toBeVisible();
     await page.locator('#btn-home-title').click();
@@ -222,7 +226,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#game-toast')).toBeVisible();
     await expect(page.locator('#game-toast')).toContainText('Frozen!');
 
-    // Test CRIT-01: Entering Hammer targeting and cancelling must NOT spend boosters or coins
+    // Entering Hammer targeting and cancelling must NOT spend boosters or coins (`UX-04`)
     const beforeBoosters = await page.evaluate(() => ({
       coins: window.__SHREDBLOCKS_DEBUG__.getSave().coins,
       boosters: { ...window.__SHREDBLOCKS_DEBUG__.getSave().boosters },
@@ -292,9 +296,10 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
 
     await page.goto('/');
 
-    // Verify all 18 obstacle showcase levels load & render cleanly in WebGL2
+    // Verify all 18 obstacle showcase levels + Sculpted Courtyards, Multi-Room Sanctums & Endless Mode load & render cleanly in WebGL2
     const showcaseLevels = [
-      1, 11, 21, 31, 41, 51, 61, 71, 81, 91, 101, 111, 121, 131, 141, 151, 161, 171, 181, 200, 201,
+      1, 11, 14, 18, 21, 22, 25, 31, 41, 51, 61, 71, 81, 91, 101, 111, 121, 131, 141, 151, 161,
+      171, 181, 200, 201, 250, 300, 301,
     ];
     for (const lvl of showcaseLevels) {
       await page.evaluate((id) => window.__SHREDBLOCKS_DEBUG__.loadLevel(id), lvl);
@@ -331,6 +336,101 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.locator('button[data-theme-id="gummy_jelly"]').click();
     await expect(page.locator('#game-toast')).toBeVisible();
     await expect(page.locator('#game-toast')).toContainText('Need 150 Coins');
+
+    // Verify all 8 Settings in #dialog-pause across custom skins & custom trays (`AX-01`, `AX-02`, `UX-10`)
+    await page.locator('#tab-btn-settings').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+
+    await page.locator('#toggle-high-contrast').check();
+    await page.locator('#toggle-colorblind').check();
+    await page.locator('#toggle-reduced-motion').check();
+    await page.locator('#toggle-sfx').uncheck();
+    await page.locator('#toggle-music').uncheck();
+    await page.locator('#toggle-haptics').uncheck();
+    await page.locator('#select-quality-tier').selectOption('BALANCED_60');
+
+    const bodyClassesAndSettings = await page.evaluate(() => {
+      const s = window.__SHREDBLOCKS_DEBUG__.getSave().settings;
+      const wheel = document.querySelector('.ornament-outer-wheel');
+      const wheelAnim = wheel ? window.getComputedStyle(wheel).animationName : '';
+      return {
+        hcClass: document.body.classList.contains('high-contrast'),
+        cbClass: document.body.classList.contains('colorblind-mode'),
+        rmClass: document.body.classList.contains('reduced-motion'),
+        wheelAnim,
+        settings: s,
+      };
+    });
+    expect(bodyClassesAndSettings.hcClass).toBe(true);
+    expect(bodyClassesAndSettings.cbClass).toBe(true);
+    expect(bodyClassesAndSettings.rmClass).toBe(true);
+    expect(bodyClassesAndSettings.wheelAnim).toBe('none');
+    expect(bodyClassesAndSettings.settings.highContrast).toBe(true);
+    expect(bodyClassesAndSettings.settings.colorblindSymbols).toBe(true);
+    expect(bodyClassesAndSettings.settings.reducedMotion).toBe(true);
+    expect(bodyClassesAndSettings.settings.sfxEnabled).toBe(false);
+    expect(bodyClassesAndSettings.settings.musicEnabled).toBe(false);
+    expect(bodyClassesAndSettings.settings.hapticsEnabled).toBe(false);
+    expect(bodyClassesAndSettings.settings.qualityTier).toBe('BALANCED_60');
+
+    // Cycle through all 5 Block Skins x 5 Board Trays while High Contrast + Colorblind Symbols are active
+    await page.evaluate(() => {
+      const skins = [
+        'classic_studs',
+        'smooth_bevel',
+        'gummy_jelly',
+        'carved_wood',
+        'neon_cyber',
+      ] as const;
+      const trays = [
+        'industrial_slate',
+        'warm_birch',
+        'midnight_arcade',
+        'frosted_quartz',
+        'mint_studio',
+      ] as const;
+      for (let i = 0; i < 5; i++) {
+        window.__SHREDBLOCKS_DEBUG__.setTheme(skins[i], trays[i], 'micro_cubes');
+      }
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
+      window.__SHREDBLOCKS_DEBUG__.setReducedMotion(false);
+      window.__SHREDBLOCKS_DEBUG__.setQualityTier('AUTO');
+    });
+    await page.locator('#btn-pause-close').click();
+
+    // WebGL2 Canvas Pixel-Diff Verification on Custom Theme (`neon_cyber` + `warm_birch` on Level 25):
+    // Proves that toggling High Contrast and Colorblind Symbols on a non-default custom skin + custom tray
+    // produces measurably distinct WebGL2 rendered frames (preventing silent shader/depth-clipping regressions).
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(25);
+      window.__SHREDBLOCKS_DEBUG__.setTheme('neon_cyber', 'warm_birch', 'pixel_sparks');
+      window.__SHREDBLOCKS_DEBUG__.setReducedMotion(true);
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
+    });
+    const canvasShotNormal = await page.locator('#game-canvas').screenshot();
+
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(true);
+    });
+    const canvasShotHC = await page.locator('#game-canvas').screenshot();
+    expect(canvasShotNormal.equals(canvasShotHC)).toBe(false);
+
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(true);
+    });
+    const canvasShotHCCB = await page.locator('#game-canvas').screenshot();
+    expect(canvasShotHC.equals(canvasShotHCCB)).toBe(false);
+
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
+      window.__SHREDBLOCKS_DEBUG__.setReducedMotion(false);
+      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+    });
+    await page.locator('#btn-pause').click();
+    await page.locator('#btn-pause-home').click();
 
     // Open Save Transfer modal, verify SB1-... code and Offline QR SVG
     await page.locator('#tab-btn-save').click();
@@ -392,12 +492,59 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     ).toBe('CLEARED');
     await expect(page.locator('#unlock-toast')).toBeHidden();
 
-    // 2. Level 21: Cutouts & Interior Stone Pillars
+    // 2. Level 14 (Cruciform Atrium — CROSS_ATRIUM), Level 18 (East Wing Alcove — L_WING Stepped Gate),
+    //    Level 21 (Cutouts & Interior Stone Pillars), and Level 25 (Twin Sanctum — Multi-Room Portcullis)
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(14));
+    await expect(page.locator('#unlock-toast')).toBeVisible();
+    await expect(page.locator('#unlock-toast-text')).toContainText('Sculpted Courtyards');
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
+    expect(
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].status)
+    ).toBe('CLEARED');
+
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(18));
+    await expect(page.locator('#unlock-toast')).toBeVisible();
+    await expect(page.locator('#unlock-toast-text')).toContainText('Stepped Exit Gate');
+    // Drag Block 1 (col 4, row 3) up into the Stepped-Edge TOP Gate (edgeLine = 2) at (col 4, row 2)
+    await dragBoardCellToCell(page, 4, 3, 4, 2);
+    expect(
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].status)
+    ).toBe('CLEARED');
+
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(21));
     // Drag Block 1 at (col 2, row 1) into TOP gate
     await dragBoardCellToCell(page, 2, 1, 2, 0);
     expect(
       await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].status)
+    ).toBe('CLEARED');
+
+    // Level 25: Twin Sanctum — Multi-Room Portcullis Barrier & Sunken Twilight Chamber Awakening
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(25));
+    await expect(page.locator('#unlock-toast')).toBeVisible();
+    await expect(page.locator('#unlock-toast-text')).toContainText('Multi-Room Sanctum');
+    // Tap dormant Block 4 (col 2, row 1) in sealed North Chamber -> verify Chamber Sealed toast
+    await clickBoardCell(page, 2, 1);
+    await expect(page.locator('#game-toast')).toBeVisible();
+    await expect(page.locator('#game-toast')).toContainText('Chamber Sealed!');
+    // Attempting to drag dormant Block 4 (col 2, row 1) must not move or clear it
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
+    expect(
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[3].status)
+    ).toBe('ACTIVE');
+    // Shred 2 South Courtyard blocks: Block 1 (col 2, row 5 -> BOTTOM gate at row 6) and Block 2 (col 4, row 3 -> RIGHT gate at col 5)
+    await dragBoardCellToCell(page, 2, 5, 2, 6);
+    expect(
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().barriers[0].shredsRemaining)
+    ).toBe(1);
+    await dragBoardCellToCell(page, 4, 3, 5, 3);
+    expect(
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().barriers[0].open)
+    ).toBe(true);
+    await expect(page.locator('#game-toast')).toContainText('Portcullis Opened!');
+    // Now drag newly awakened Block 4 from North Chamber (col 2, row 1) into TOP gate (col 2, row 0)!
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
+    expect(
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[3].status)
     ).toBe('CLEARED');
 
     // 3. Level 31: Multi-Layer Shell Peel -> Core Shred

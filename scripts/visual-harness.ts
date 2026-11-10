@@ -464,6 +464,78 @@ async function runVisualHarness(): Promise<void> {
     await mobileL11Page.screenshot({
       path: join(ARTIFACT_SCRATCH_DIR, '28-mobile-level-011-axis-lock-rails-and-guide.png'),
     });
+
+    // 32. Level 18: East Wing Alcove (L_WING Sculpted Courtyard + Stepped-Edge TOP Gate at row 2)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(18);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '32-level-018-stepped-gate-l-wing-mobile.png'),
+    });
+
+    // 33. Level 25: Twin Sanctum (TWIN_SANCTUM Multi-Room Portcullis Barrier + Sunken Twilight North Chamber)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(25);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '33-level-025-twin-sanctum-locked-mobile.png'),
+    });
+
+    // 35. Level 25: Twin Sanctum with Custom Theme (Frosted Quartz Tray + Gummy Jelly Skin)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setTheme('gummy_jelly', 'frosted_quartz', 'soap_bubbles');
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(25);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '35-level-025-twin-sanctum-frosted-quartz-theme.png'),
+    });
+
+    // 36. Level 31: Multi-Layer Blocks + Custom Warm Birch Tray & Neon Cyber Skin + High Contrast + Colorblind Symbols
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setTheme('neon_cyber', 'warm_birch', 'lightning_bolts');
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(true);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(true);
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(31);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(
+        ARTIFACT_SCRATCH_DIR,
+        '36-level-031-custom-theme-high-contrast-colorblind-mobile.png'
+      ),
+    });
+
+    // 37. Level 25: Twin Sanctum + Custom Frosted Quartz Tray & Gummy Jelly Skin + High Contrast + Colorblind Symbols
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setTheme('gummy_jelly', 'frosted_quartz', 'soap_bubbles');
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(true);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(true);
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(25);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(
+        ARTIFACT_SCRATCH_DIR,
+        '37-level-025-frosted-quartz-high-contrast-colorblind-mobile.png'
+      ),
+    });
+
+    // 34. Level 25: Title Screen Wall-Scroll Diagram over Twin Sanctum Multi-Room Courtyard
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
+      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(25);
+      window.__SHREDBLOCKS_DEBUG__.openTitleScreen();
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '34-level-025-twin-sanctum-title-scroll-mobile.png'),
+    });
+
     await mobileL11Ctx.close();
 
     if (errors.length > 0) {
@@ -471,7 +543,7 @@ async function runVisualHarness(): Promise<void> {
     }
 
     console.log(
-      '✅ Captured all 28 multi-viewport visual verification screenshots cleanly with 0 errors.'
+      '✅ Captured all 34 multi-viewport visual verification screenshots cleanly with 0 errors.'
     );
   } finally {
     if (browser) {

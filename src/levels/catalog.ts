@@ -245,10 +245,73 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     timeLimitSec: 90,
   },
 
+  14: {
+    id: 14,
+    name: 'Cruciform Atrium',
+    difficulty: 'NORMAL',
+    layoutId: 'CROSS_ATRIUM',
+    unlockNote:
+      '🏛️ New Architecture: Sculpted Courtyards! Corner voids carve open the sanctuary—maneuver blocks through the central cross-atrium.',
+    rows: 6,
+    cols: 6,
+    cutouts: [
+      [0, 0],
+      [0, 5],
+      [5, 0],
+      [5, 5],
+    ],
+    blocks: [
+      { id: 1, shapeId: '1x2', row: 1, col: 2, colorStack: [1] },
+      { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
+      { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
+      { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+    ],
+    gates: [
+      { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
+      { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
+      { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
+      { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
+    ],
+    parMoves: 4,
+    timeLimitSec: 95,
+  },
+
+  18: {
+    id: 18,
+    name: 'East Wing Alcove',
+    difficulty: 'NORMAL',
+    layoutId: 'L_WING',
+    unlockNote:
+      '📐 Stepped Exit Gate! Exit Gates can anchor directly along recessed courtyard wings.',
+    rows: 6,
+    cols: 6,
+    cutouts: [
+      [0, 4],
+      [0, 5],
+      [1, 4],
+      [1, 5],
+    ],
+    blocks: [
+      { id: 1, shapeId: '1x2', row: 3, col: 4, colorStack: [1] },
+      { id: 2, shapeId: '1x2', row: 1, col: 1, colorStack: [2] },
+      { id: 3, shapeId: '1x2', row: 4, col: 1, colorStack: [3] },
+      { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+    ],
+    gates: [
+      { edge: 'TOP', spanStart: 4, spanLength: 2, edgeLine: 2, colorQueue: [1] },
+      { edge: 'TOP', spanStart: 0, spanLength: 4, edgeLine: 0, colorQueue: [2] },
+      { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
+      { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
+    ],
+    parMoves: 4,
+    timeLimitSec: 95,
+  },
+
   21: {
     id: 21,
     name: 'Pillar Courtyard',
     difficulty: 'NORMAL',
+    layoutId: 'HOURGLASS_BRIDGE',
     unlockNote: 'New Obstacle: Corner Cutouts & Interior Stone Pillars reshape the board.',
     rows: 6,
     cols: 6,
@@ -273,6 +336,95 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     timeLimitSec: 90,
   },
 
+  22: {
+    id: 22,
+    name: 'Terrace Pavilion',
+    difficulty: 'NORMAL',
+    layoutId: 'T_PAVILION',
+    unlockNote: '🏛️ Terrace Pavilion: Dual lower alcoves shape a T-courtyard with stepped walls.',
+    rows: 6,
+    cols: 6,
+    cutouts: [
+      [4, 0],
+      [5, 0],
+      [4, 5],
+      [5, 5],
+    ],
+    blocks: [
+      { id: 1, shapeId: '1x2', row: 1, col: 2, colorStack: [1] },
+      { id: 2, shapeId: '2x1', row: 1, col: 4, colorStack: [2] },
+      { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
+      { id: 4, shapeId: '2x1', row: 1, col: 1, colorStack: [4] },
+    ],
+    gates: [
+      { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
+      { edge: 'RIGHT', spanStart: 0, spanLength: 4, colorQueue: [2] },
+      { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
+      { edge: 'LEFT', spanStart: 0, spanLength: 4, colorQueue: [4] },
+    ],
+    parMoves: 4,
+    timeLimitSec: 95,
+  },
+
+  25: {
+    id: 25,
+    name: 'Twin Sanctum',
+    difficulty: 'HARD',
+    layoutId: 'TWIN_SANCTUM',
+    unlockNote:
+      '⛩️ Multi-Room Sanctum! Shred 2 blocks in the South Courtyard to raise the Golden Portcullis and awaken the North Chamber!',
+    rows: 7,
+    cols: 6,
+    cutouts: [
+      [0, 0],
+      [0, 5],
+    ],
+    pillars: [
+      [2, 0],
+      [2, 5],
+    ],
+    barriers: [
+      {
+        id: 1,
+        cells: [
+          [2, 1],
+          [2, 2],
+          [2, 3],
+          [2, 4],
+        ],
+        orientation: 'H',
+        shredsRemaining: 2,
+        unlocksRoomId: 1,
+        roomCells: [
+          [0, 1],
+          [0, 2],
+          [0, 3],
+          [0, 4],
+          [1, 0],
+          [1, 1],
+          [1, 2],
+          [1, 3],
+          [1, 4],
+          [1, 5],
+        ],
+      },
+    ],
+    blocks: [
+      { id: 1, shapeId: '1x2', row: 5, col: 2, colorStack: [1] },
+      { id: 2, shapeId: '2x1', row: 3, col: 4, colorStack: [2] },
+      { id: 3, shapeId: '2x1', row: 3, col: 1, colorStack: [3] },
+      { id: 4, shapeId: '1x2', row: 1, col: 2, colorStack: [4] },
+    ],
+    gates: [
+      { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [1] },
+      { edge: 'RIGHT', spanStart: 3, spanLength: 4, colorQueue: [2] },
+      { edge: 'LEFT', spanStart: 3, spanLength: 4, colorQueue: [3] },
+      { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [4] },
+    ],
+    parMoves: 4,
+    timeLimitSec: 105,
+  },
+
   31: {
     id: 31,
     name: 'Double Shell',
@@ -288,7 +440,7 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
-      { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
+      { edge: 'RIGHT', spanStart: 2, spanLength: 4, colorQueue: [2] },
       { edge: 'RIGHT', spanStart: 0, spanLength: 2, colorQueue: [3] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
@@ -766,6 +918,7 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     id: 250,
     name: 'Citadel Sovereign',
     difficulty: 'SUPER_HARD',
+    layoutId: 'CITADEL_OCTAGON',
     unlockNote: 'Epoch V Finale: Master the 8×8 Grand Citadel Courtyard!',
     rows: 8,
     cols: 8,
@@ -798,6 +951,7 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     id: 300,
     name: 'Sacred Astrolabe',
     difficulty: 'SUPER_HARD',
+    layoutId: 'CITADEL_OCTAGON',
     unlockNote: 'Campaign Finale (Level 300): Conquer the 9×9 Sacred Astrolabe Sanctuary!',
     rows: 9,
     cols: 9,
@@ -853,6 +1007,15 @@ function cloneLevelSpec(spec: LevelSpec): LevelSpec {
         }))
       : undefined,
     elevators: spec.elevators ? spec.elevators.map((e) => ({ ...e })) : undefined,
+    barriers: spec.barriers
+      ? spec.barriers.map((bar) => ({
+          ...bar,
+          cells: bar.cells.map(([r, c]) => [r, c] as [number, number]),
+          roomCells: bar.roomCells
+            ? bar.roomCells.map(([r, c]) => [r, c] as [number, number])
+            : undefined,
+        }))
+      : undefined,
   };
 }
 

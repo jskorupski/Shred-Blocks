@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SoundEngine } from '../../src/audio/synth';
 import { createBoardState } from '../../src/core/board';
-import type { LevelSpec, SavePayloadV1 } from '../../src/core/types';
+import {
+  COLOR_PALETTE,
+  type ColorId,
+  type LevelSpec,
+  type ParticleStyleId,
+  type QualityTier,
+  type SavePayloadV1,
+  type SkinId,
+  type TrayId,
+} from '../../src/core/types';
+import { Renderer3D } from '../../src/render/renderer-3d';
 import {
   BoardInputController,
   MONO_PRIORITY_WEIGHT,
@@ -170,7 +180,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
     });
   });
 
-  describe('UX-07 & HIGH-03: Self-Contained QR SVG Generator & ISO/IEC 18004 Table E.1', () => {
+  describe('UX-07: Self-Contained QR SVG Generator & ISO/IEC 18004 Table E.1', () => {
     it('returns exact ISO/IEC 18004 Annex E Table E.1 alignment pattern coordinates for Versions 1..40', () => {
       expect(getAlignmentPositions(1)).toEqual([]);
       expect(getAlignmentPositions(2)).toEqual([6, 18]);
@@ -462,7 +472,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
     });
   });
 
-  describe('MED-01: SoundEngine Suspended Context & Ambient Music Scheduler Hardening', () => {
+  describe('SoundEngine Suspended Context & Ambient Music Scheduler Hardening', () => {
     it('clamps nextNoteTime when behind currentTime and does not throw when AudioContext is unavailable', () => {
       const sound = new SoundEngine({ sfxEnabled: true, musicEnabled: true, hapticsEnabled: false });
       expect(() => {
@@ -480,6 +490,123 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
         sound.playButtonTap();
       }).not.toThrow();
       sound.destroy();
+    });
+  });
+
+  describe('AX-01, AX-02 & UX-10: Full Settings Matrix, High-Contrast Palettes & Custom Theme Compatibility', () => {
+    it('persists and round-trips all 8 settings and all 15 customization items across SaveManager and SaveCode', () => {
+      const manager = new SaveManager();
+
+      const skins: SkinId[] = [
+        'classic_studs',
+        'smooth_bevel',
+        'gummy_jelly',
+        'carved_wood',
+        'neon_cyber',
+      ];
+      const trays: TrayId[] = [
+        'industrial_slate',
+        'warm_birch',
+        'midnight_arcade',
+        'frosted_quartz',
+        'mint_studio',
+      ];
+      const particles: ParticleStyleId[] = [
+        'micro_cubes',
+        'star_confetti',
+        'pixel_sparks',
+        'soap_bubbles',
+        'lightning_bolts',
+      ];
+      const tiers: QualityTier[] = ['AUTO', 'ULTRA_120', 'BALANCED_60'];
+
+      for (const skin of skins) {
+        expect(manager.unlockOrEquipSkin(skin, 0)).toBe(true);
+        expect(manager.getPayload().equippedSkin).toBe(skin);
+      }
+      for (const tray of trays) {
+        expect(manager.unlockOrEquipTray(tray, 0)).toBe(true);
+        expect(manager.getPayload().equippedTray).toBe(tray);
+      }
+      for (const particle of particles) {
+        expect(manager.unlockOrEquipParticle(particle, 0)).toBe(true);
+        expect(manager.getPayload().equippedParticle).toBe(particle);
+      }
+
+      for (const tier of tiers) {
+        const updated = manager.updateSettings({
+          playMode: tier === 'ULTRA_120' ? 'TIMED' : 'ZEN',
+          sfxEnabled: false,
+          musicEnabled: false,
+          hapticsEnabled: false,
+          colorblindSymbols: true,
+          highContrast: true,
+          reducedMotion: true,
+          qualityTier: tier,
+        });
+        expect(updated.settings).toEqual({
+          playMode: tier === 'ULTRA_120' ? 'TIMED' : 'ZEN',
+          sfxEnabled: false,
+          musicEnabled: false,
+          hapticsEnabled: false,
+          colorblindSymbols: true,
+          highContrast: true,
+          reducedMotion: true,
+          qualityTier: tier,
+        });
+
+        const code = manager.exportSaveCode();
+        const decoded = decodeSaveCode(code);
+        expect(decoded.settings).toEqual(updated.settings);
+        expect(decoded.equippedSkin).toBe('neon_cyber');
+        expect(decoded.equippedTray).toBe('mint_studio');
+        expect(decoded.equippedParticle).toBe('lightning_bolts');
+      }
+    });
+
+    it('ensures every COLOR_PALETTE entry (0..9) has unique colorblind symbols and distinct High-Contrast RGB values', () => {
+      const symbols = new Set<string>();
+      const hcHexes = new Set<string>();
+      for (let c = 0 as ColorId; c <= 9; c = (c + 1) as ColorId) {
+        const entry = COLOR_PALETTE[c];
+        expect(entry).toBeDefined();
+        expect(entry.symbol.length).toBeGreaterThan(0);
+        symbols.add(entry.symbol);
+        hcHexes.add(entry.highContrastPrimaryHex);
+
+        // Verify hcRgb differs meaningfully from normal rgb so High Contrast is visually distinct
+        const delta =
+          Math.abs(entry.hcRgb[0] - entry.rgb[0]) +
+          Math.abs(entry.hcRgb[1] - entry.rgb[1]) +
+          Math.abs(entry.hcRgb[2] - entry.rgb[2]);
+        expect(delta).toBeGreaterThan(0.12);
+      }
+      expect(symbols.size).toBe(10);
+      expect(hcHexes.size).toBe(10);
+    });
+
+    it('enforces dark high-contrast floor tiles and bright wall rims across all 5 custom Board Trays when highContrast is enabled', () => {
+      const trays: TrayId[] = [
+        'industrial_slate',
+        'warm_birch',
+        'midnight_arcade',
+        'frosted_quartz',
+        'mint_studio',
+      ];
+      const getEffective = Renderer3D.prototype.getEffectiveTrayPalette;
+
+      for (const tray of trays) {
+        const stdPalette = getEffective(tray, false);
+        const hcPalette = getEffective(tray, true);
+        expect(hcPalette).not.toEqual(stdPalette);
+
+        // High-contrast floor tiles must be dark (<= 0.18 per channel) even on bright trays like warm_birch/frosted_quartz/mint_studio
+        expect(Math.max(...hcPalette.floorTileA)).toBeLessThanOrEqual(0.18);
+        expect(Math.max(...hcPalette.floorTileB)).toBeLessThanOrEqual(0.14);
+
+        // High-contrast perimeter wall rims must be bright (>= 0.78 on their primary channel)
+        expect(Math.max(...hcPalette.rimHighlight)).toBeGreaterThanOrEqual(0.78);
+      }
     });
   });
 });

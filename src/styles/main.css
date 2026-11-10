@@ -2619,6 +2619,53 @@ dialog::backdrop {
   }
 }
 
+/* User-configurable Accessibility & Motion Overrides (`AX-02`, `UX-10`, `IDLE-01`) */
+body.reduced-motion .ornament-outer-wheel,
+body.reduced-motion .ornament-inner-star,
+body.reduced-motion .astrolabe-ring-outer,
+body.reduced-motion .astrolabe-star-group,
+body.reduced-motion .btn-title-hero,
+body.reduced-motion .level-node-card.current-level,
+body.reduced-motion .booster-btn.targeting {
+  animation: none !important;
+  transition: none !important;
+}
+
+body.high-contrast {
+  --bg-deep: #090b14;
+  --bg-slate: #111629;
+  --bg-panel: rgba(9, 11, 20, 0.98);
+  --bg-card: linear-gradient(180deg var(--in-oklab), #1e2642 0%, #101528 100%);
+  --bg-card-hover: linear-gradient(180deg var(--in-oklab), #283358 0%, #171e38 100%);
+  --border-subtle: rgba(255, 248, 231, 0.62);
+  --border-bright: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: #f8fafc;
+  --text-muted: #e2e8f0;
+  --accent-primary: #00f5d4;
+  --accent-primary-lip: #008b76;
+  --accent-gold: #ffea00;
+  --accent-gold-lip: #b48600;
+}
+
+body.high-contrast .top-economy-bar,
+body.high-contrast .hud-top-bar,
+body.high-contrast .hud-bottom-dock,
+body.high-contrast .bottom-tab-bar,
+body.high-contrast .dialog-card,
+body.high-contrast .title-crest-card,
+body.high-contrast .title-pedestal-card,
+body.high-contrast .title-returning-plaque,
+body.high-contrast .hero-launch-card,
+body.high-contrast .theme-card,
+body.high-contrast .level-node-card,
+body.high-contrast .booster-btn,
+body.high-contrast .econ-pill,
+body.high-contrast .hud-stat-pill,
+body.high-contrast .title-utility-pill {
+  border-color: rgba(255, 250, 235, 0.72);
+}
+
 /* Forced Colors Mode Fallbacks (modern-web-guidance `color`) */
 @media (forced-colors: active) {
   .btn-tactile,

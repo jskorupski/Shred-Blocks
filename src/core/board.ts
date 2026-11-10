@@ -5,22 +5,30 @@ import {
   resolveClearCascade,
   stepDynamicGatesOnShred,
   stepMovingElevators,
+  stepPortcullisBarriersOnShred,
   triggerCarrierItems,
   trySpawnReadyGenerators,
 } from './gate-clearance';
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
+  getPlayableEdgeSpanBounds,
   getReachableAnchors,
+  isBlockInLockedRoom,
   isBlockMovable,
+  isGateInLockedRoom,
+  isRoomUnlocked,
   rebuildOccupancyGrid,
 } from './physics';
 import { getActiveColor, getShape } from './polyomino';
 import type {
+  BarrierState,
   BlockState,
   BoardState,
   ColorId,
+  CourtyardLayoutId,
   CrateState,
+  EdgeDir,
   ElevatorState,
   GateState,
   GeneratorState,
@@ -29,10 +37,81 @@ import type {
   RocketAxis,
 } from './types';
 
+/**
+ * Resolves the boundary row (`TOP`/`BOTTOM`) or col (`LEFT`/`RIGHT`) along which a gate sits.
+ * When `explicitEdgeLine` is omitted, auto-detects the outermost playable (`occ !== -1`) line
+ * spanning `[spanStart .. spanStart + spanLength - 1]` so recessed L-Wing and T-Pavilion gates
+ * bind cleanly to their stepped wall.
+ */
+export function resolveGateEdgeLine(
+  rows: number,
+  cols: number,
+  occupancy: Int16Array,
+  edge: EdgeDir,
+  spanStart: number,
+  spanLength: number,
+  explicitEdgeLine?: number
+): number {
+  if (explicitEdgeLine !== undefined) {
+    return explicitEdgeLine;
+  }
+  if (edge === 'TOP') {
+    for (let r = 0; r < rows; r++) {
+      let allPlayable = true;
+      for (let c = spanStart; c < spanStart + spanLength; c++) {
+        if (c < 0 || c >= cols || occupancy[r * cols + c] === -1) {
+          allPlayable = false;
+          break;
+        }
+      }
+      if (allPlayable) return r;
+    }
+    return 0;
+  }
+  if (edge === 'BOTTOM') {
+    for (let r = rows - 1; r >= 0; r--) {
+      let allPlayable = true;
+      for (let c = spanStart; c < spanStart + spanLength; c++) {
+        if (c < 0 || c >= cols || occupancy[r * cols + c] === -1) {
+          allPlayable = false;
+          break;
+        }
+      }
+      if (allPlayable) return r;
+    }
+    return rows - 1;
+  }
+  if (edge === 'LEFT') {
+    for (let c = 0; c < cols; c++) {
+      let allPlayable = true;
+      for (let r = spanStart; r < spanStart + spanLength; r++) {
+        if (r < 0 || r >= rows || occupancy[r * cols + c] === -1) {
+          allPlayable = false;
+          break;
+        }
+      }
+      if (allPlayable) return c;
+    }
+    return 0;
+  }
+  for (let c = cols - 1; c >= 0; c--) {
+    let allPlayable = true;
+    for (let r = spanStart; r < spanStart + spanLength; r++) {
+      if (r < 0 || r >= rows || occupancy[r * cols + c] === -1) {
+        allPlayable = false;
+        break;
+      }
+    }
+    if (allPlayable) return c;
+  }
+  return cols - 1;
+}
+
 export function createBoardState(spec: LevelSpec): BoardState {
   const { rows, cols } = spec;
   const occupancy = new Int16Array(rows * cols);
   const floorColor = new Uint8Array(rows * cols);
+  const roomMap = new Uint8Array(rows * cols);
 
   if (spec.cutouts) {
     for (const [r, c] of spec.cutouts) {
@@ -57,6 +136,37 @@ export function createBoardState(spec: LevelSpec): BoardState {
       }
     }
   }
+
+  const barriers: BarrierState[] = (spec.barriers ?? []).map((bar, idx) => {
+    const unlocksRoomId = bar.unlocksRoomId ?? idx + 1;
+    const shredsRemaining = Math.max(0, bar.shredsRemaining ?? 0);
+    const lockId = bar.lockId ?? 0;
+    if (bar.roomCells) {
+      for (const [rr, cc] of bar.roomCells) {
+        if (rr >= 0 && rr < rows && cc >= 0 && cc < cols) {
+          roomMap[rr * cols + cc] = unlocksRoomId;
+        }
+      }
+    }
+    return {
+      id: bar.id,
+      cells: bar.cells.map(([r, c]) => [r, c]),
+      orientation: bar.orientation,
+      shredsRemaining,
+      maxShreds: Math.max(1, shredsRemaining),
+      lockId,
+      unlocksRoomId,
+      open: shredsRemaining <= 0 && lockId === 0,
+    };
+  });
+
+  const inferredLayoutId: CourtyardLayoutId =
+    spec.layoutId ??
+    (barriers.length > 0
+      ? 'TWIN_SANCTUM'
+      : (spec.cutouts?.length ?? 0) > 0
+        ? 'CROSS_ATRIUM'
+        : 'RECTANGLE');
 
   let maxBlockId = 0;
   const blocks: BlockState[] = spec.blocks.map((b) => {
@@ -91,12 +201,31 @@ export function createBoardState(spec: LevelSpec): BoardState {
   });
 
   const gates: GateState[] = spec.gates.map((g, idx) => {
-    const edgeLimit = g.edge === 'TOP' || g.edge === 'BOTTOM' ? cols : rows;
+    const edgeLine = resolveGateEdgeLine(
+      rows,
+      cols,
+      occupancy,
+      g.edge,
+      g.spanStart,
+      g.spanLength,
+      g.edgeLine
+    );
+    const { minSpan, maxSpanEnd } = getPlayableEdgeSpanBounds(
+      rows,
+      cols,
+      occupancy,
+      g.edge,
+      edgeLine,
+      g.spanStart,
+      g.spanLength
+    );
+    const playableSpanLen = Math.max(g.spanLength, maxSpanEnd - minSpan);
     return {
       index: idx,
       edge: g.edge,
       spanStart: g.spanStart,
       spanLength: g.spanLength,
+      edgeLine,
       colorQueue: [...g.colorQueue],
       colorCursor: 0,
       isStar: g.isStar ?? false,
@@ -105,12 +234,12 @@ export function createBoardState(spec: LevelSpec): BoardState {
       togglesOnClear: g.togglesOnClear ?? false,
       shutterOpen: g.shutterOpen ?? (g.shutterLockColor ? false : true),
       slidesOnClear: g.slidesOnClear ?? false,
-      slideMin: g.slideMin ?? 0,
-      slideMax: g.slideMax ?? Math.max(0, edgeLimit - g.spanLength),
+      slideMin: g.slideMin ?? minSpan,
+      slideMax: g.slideMax ?? Math.max(minSpan, maxSpanEnd - g.spanLength),
       slideDir: g.slideDir ?? 1,
       sizeChangesOnClear: g.sizeChangesOnClear ?? false,
       minLength: g.minLength ?? 1,
-      maxLength: g.maxLength ?? Math.min(4, edgeLimit),
+      maxLength: g.maxLength ?? Math.min(4, playableSpanLen),
       sizeDir: -1,
       rollerPhase: 0,
     };
@@ -131,14 +260,15 @@ export function createBoardState(spec: LevelSpec): BoardState {
     col: gen.col,
     spawnRow: gen.spawnRow,
     spawnCol: gen.spawnCol,
-    cooldown: gen.cooldown,
-    maxCooldown: Math.max(1, gen.cooldown),
+    cooldown: gen.cooldown ?? 0,
+    maxCooldown: Math.max(1, gen.cooldown ?? 1),
     queue: gen.queue.map((q) => ({
       ...q,
       colorStack: [...q.colorStack],
     })),
     queueCursor: 0,
-    state: gen.queue.length === 0 ? 'DEPLETED' : gen.cooldown <= 0 ? 'READY_TO_SPAWN' : 'COUNTING',
+    state:
+      gen.queue.length === 0 ? 'DEPLETED' : (gen.cooldown ?? 0) <= 0 ? 'READY_TO_SPAWN' : 'COUNTING',
   }));
 
   const elevators: ElevatorState[] = (spec.elevators ?? []).map((e) => ({
@@ -159,15 +289,18 @@ export function createBoardState(spec: LevelSpec): BoardState {
     levelId: spec.id,
     name: spec.name,
     difficulty: spec.difficulty,
+    layoutId: inferredLayoutId,
     rows,
     cols,
     occupancy,
     floorColor,
+    roomMap,
     blocks,
     gates,
     crates,
     generators,
     elevators,
+    barriers,
     parMoves,
     timeLimitSec,
     timeRemainingSec: timeLimitSec,
@@ -190,6 +323,7 @@ export function cloneBoardState(board: BoardState): BoardState {
     ...board,
     occupancy: new Int16Array(board.occupancy),
     floorColor: new Uint8Array(board.floorColor),
+    roomMap: new Uint8Array(board.roomMap),
     blocks: board.blocks.map((b) => ({
       ...b,
       colorStack: [...b.colorStack],
@@ -204,6 +338,10 @@ export function cloneBoardState(board: BoardState): BoardState {
       queue: gen.queue.map((q) => ({ ...q, colorStack: [...q.colorStack] })),
     })),
     elevators: board.elevators.map((e) => ({ ...e })),
+    barriers: board.barriers.map((bar) => ({
+      ...bar,
+      cells: bar.cells.map(([r, c]) => [r, c]),
+    })),
     hintMove: board.hintMove ? { ...board.hintMove } : null,
   };
 }
@@ -251,6 +389,7 @@ export interface CommitMoveOutcome {
   clearedBlockIds: number[];
   peeledBlockIds: number[];
   spawnedBlockIds: number[];
+  unlockedBarrierIds: number[];
 }
 
 /**
@@ -275,6 +414,7 @@ export function commitBlockMove(
       clearedBlockIds: [],
       peeledBlockIds: [],
       spawnedBlockIds: [],
+      unlockedBarrierIds: [],
     };
   }
 
@@ -289,6 +429,7 @@ export function commitBlockMove(
       clearedBlockIds: [],
       peeledBlockIds: [],
       spawnedBlockIds: [],
+      unlockedBarrierIds: [],
     };
   }
 
@@ -301,6 +442,7 @@ export function commitBlockMove(
         clearedBlockIds: [],
         peeledBlockIds: [],
         spawnedBlockIds: [],
+        unlockedBarrierIds: [],
       };
     }
   }
@@ -319,6 +461,7 @@ export function commitBlockMove(
   const clearedBlockIds: number[] = [];
   const peeledBlockIds: number[] = [];
   const spawnedBlockIds: number[] = [];
+  const unlockedBarrierIds: number[] = [];
   const movedGroupIds = new Set<number>(group.map((b) => b.id));
 
   for (const b of group) {
@@ -330,6 +473,7 @@ export function commitBlockMove(
       clearedBlockIds.push(...cascade.clearedBlockIds);
       peeledBlockIds.push(...cascade.peeledBlockIds);
       spawnedBlockIds.push(...cascade.spawnedBlockIds);
+      unlockedBarrierIds.push(...cascade.unlockedBarrierIds);
     }
   }
 
@@ -341,10 +485,15 @@ export function commitBlockMove(
     board.timerRunning = true;
     board.hintMove = null;
 
-    // In ZEN mode, Bomb counters decrement by 1 per committed move
+    // In ZEN mode, Bomb counters decrement by 1 per committed move (only in unlocked rooms)
     if (playMode === 'ZEN' && board.freezeRemainingSec <= 0) {
       for (const b of board.blocks) {
-        if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0) {
+        if (
+          b.status === 'ACTIVE' &&
+          b.bombMax > 0 &&
+          b.bombCount > 0 &&
+          !isBlockInLockedRoom(board, b)
+        ) {
           b.bombCount = Math.max(0, b.bombCount - 1);
         }
       }
@@ -366,6 +515,7 @@ export function commitBlockMove(
     clearedBlockIds,
     peeledBlockIds,
     spawnedBlockIds,
+    unlockedBarrierIds,
   };
 }
 
@@ -403,14 +553,19 @@ function destroyOrPeelBlockByBooster(board: BoardState, block: BlockState): void
     detachBlockFromGluedGroup(board, block);
   }
 
-  // Global Ice thaw (blocks & gates)
+  // Global Ice thaw (blocks & gates in unlocked rooms)
   for (const b of board.blocks) {
-    if (b.status === 'ACTIVE' && b.id !== block.id && b.iceCount > 0) {
+    if (
+      b.status === 'ACTIVE' &&
+      b.id !== block.id &&
+      b.iceCount > 0 &&
+      !isBlockInLockedRoom(board, b)
+    ) {
       b.iceCount = Math.max(0, b.iceCount - 1);
     }
   }
   for (const g of board.gates) {
-    if (g.iceCount > 0) {
+    if (g.iceCount > 0 && !isGateInLockedRoom(board, g)) {
       g.iceCount = Math.max(0, g.iceCount - 1);
     }
   }
@@ -434,10 +589,16 @@ function destroyOrPeelBlockByBooster(board: BoardState, block: BlockState): void
   }
 
   stepDynamicGatesOnShred(board, undefined);
+  stepPortcullisBarriersOnShred(board);
   rebuildOccupancyGrid(board);
   stepMovingElevators(board);
 
   for (const gen of board.generators) {
+    const genRoom =
+      board.roomMap && gen.row >= 0 && gen.row < board.rows && gen.col >= 0 && gen.col < board.cols
+        ? board.roomMap[gen.row * board.cols + gen.col]
+        : 0;
+    if (!isRoomUnlocked(board, genRoom)) continue;
     if (gen.state === 'COUNTING') {
       gen.cooldown = Math.max(0, gen.cooldown - 1);
       if (gen.cooldown === 0) {
@@ -459,8 +620,9 @@ function destroyOrPeelBlockByBooster(board: BoardState, block: BlockState): void
 
 /**
  * Booster 3: Hammer (`🔨`) — Smashes 1 tapped block (including Stone blocks, or peels outer layer),
- * destroys 1 Wooden Crate, or shatters an Iced / Locked Shutter Gate directly. Supports optional
- * `blockId` for non-convex shapes whose `(row, col)` anchor is an empty pocket cell.
+ * destroys 1 Wooden Crate, shatters a closed Portcullis Barrier, or shatters an Iced / Locked
+ * Shutter Gate directly. Supports optional `blockId` for non-convex shapes whose `(row, col)`
+ * anchor is an empty pocket cell.
  */
 export function applyBoosterHammer(
   board: BoardState,
@@ -469,7 +631,9 @@ export function applyBoosterHammer(
   blockId?: number | null
 ): boolean {
   if (blockId !== undefined && blockId !== null && blockId > 0) {
-    const directBlock = board.blocks.find((b) => b.id === blockId && b.status === 'ACTIVE');
+    const directBlock = board.blocks.find(
+      (b) => b.id === blockId && b.status === 'ACTIVE' && !isBlockInLockedRoom(board, b)
+    );
     if (directBlock) {
       destroyOrPeelBlockByBooster(board, directBlock);
       return true;
@@ -477,8 +641,36 @@ export function applyBoosterHammer(
   }
 
   if (row >= 0 && row < board.rows && col >= 0 && col < board.cols) {
-    // Check if a crate occupies (row, col)
-    const crate = board.crates.find((c) => !c.destroyed && c.row === row && c.col === col);
+    // Allow Hammer to smash open a closed Portcullis Barrier directly
+    if (board.barriers) {
+      const hitBarrier = board.barriers.find(
+        (bar) => !bar.open && bar.cells.some(([br, bc]) => br === row && bc === col)
+      );
+      if (hitBarrier) {
+        hitBarrier.shredsRemaining = 0;
+        hitBarrier.lockId = 0;
+        hitBarrier.open = true;
+        rebuildOccupancyGrid(board);
+        const spawned = trySpawnReadyGenerators(board);
+        autoAdvanceColorQueues(board);
+        for (const sb of spawned) {
+          const gIdx = findEligibleGateForBlockAt(board, sb, sb.row, sb.col);
+          if (gIdx >= 0) {
+            resolveClearCascade(board, sb, gIdx, new Set([sb.id]));
+          }
+        }
+        return true;
+      }
+    }
+
+    // Check if a crate in an unlocked room occupies (row, col)
+    const crate = board.crates.find(
+      (c) =>
+        !c.destroyed &&
+        c.row === row &&
+        c.col === col &&
+        isRoomUnlocked(board, board.roomMap[c.row * board.cols + c.col] ?? 0)
+    );
     if (crate) {
       crate.hp = 0;
       crate.destroyed = true;
@@ -496,7 +688,9 @@ export function applyBoosterHammer(
 
     const occ = board.occupancy[row * board.cols + col];
     if (occ > 0) {
-      const block = board.blocks.find((b) => b.id === occ && b.status === 'ACTIVE');
+      const block = board.blocks.find(
+        (b) => b.id === occ && b.status === 'ACTIVE' && !isBlockInLockedRoom(board, b)
+      );
       if (block) {
         destroyOrPeelBlockByBooster(board, block);
         return true;
@@ -506,27 +700,36 @@ export function applyBoosterHammer(
 
   // Also allow Hammer to shatter an Iced Gate or break open a Locked/Closed Shutter Gate
   for (const gate of board.gates) {
+    if (isGateInLockedRoom(board, gate)) continue;
     const isLockedOrIced = gate.iceCount > 0 || !gate.shutterOpen || gate.shutterLockColor > 0;
     if (!isLockedOrIced) continue;
 
+    const edgeLine =
+      gate.edgeLine ??
+      (gate.edge === 'TOP' || gate.edge === 'LEFT'
+        ? 0
+        : gate.edge === 'BOTTOM'
+          ? board.rows - 1
+          : board.cols - 1);
+
     const hitsTop =
       gate.edge === 'TOP' &&
-      (row === -1 || row === 0) &&
+      (row === edgeLine - 1 || row === edgeLine) &&
       col >= gate.spanStart &&
       col < gate.spanStart + gate.spanLength;
     const hitsBottom =
       gate.edge === 'BOTTOM' &&
-      (row === board.rows || row === board.rows - 1) &&
+      (row === edgeLine + 1 || row === edgeLine) &&
       col >= gate.spanStart &&
       col < gate.spanStart + gate.spanLength;
     const hitsLeft =
       gate.edge === 'LEFT' &&
-      (col === -1 || col === 0) &&
+      (col === edgeLine - 1 || col === edgeLine) &&
       row >= gate.spanStart &&
       row < gate.spanStart + gate.spanLength;
     const hitsRight =
       gate.edge === 'RIGHT' &&
-      (col === board.cols || col === board.cols - 1) &&
+      (col === edgeLine + 1 || col === edgeLine) &&
       row >= gate.spanStart &&
       row < gate.spanStart + gate.spanLength;
 
@@ -544,8 +747,9 @@ export function applyBoosterHammer(
 }
 
 /**
- * Booster 4: Rocket (`🚀`) — Clears a full Row or Column of crates and peels/destroys all blocks
- * (including Neutral Stone Sliders) intersecting that Row or Column.
+ * Booster 4: Rocket (`🚀`) — Clears a full Row or Column of crates, opens any intersected
+ * Portcullis Barrier, and peels/destroys all unlocked-room blocks (including Neutral Stone
+ * Sliders) intersecting that Row or Column.
  */
 export function applyBoosterRocket(
   board: BoardState,
@@ -557,18 +761,12 @@ export function applyBoosterRocket(
 
   let affected = false;
 
-  for (const crate of board.crates) {
-    if (crate.destroyed) continue;
-    if ((axis === 'ROW' && crate.row === row) || (axis === 'COL' && crate.col === col)) {
-      crate.hp = 0;
-      crate.destroyed = true;
-      affected = true;
-    }
-  }
-
+  // Snapshot unlocked rooms before breaching barriers so blocks/crates sealed inside a locked room
+  // are shielded while the Portcullis Barrier itself is breached by the Rocket strike.
   const hitBlocks = new Set<BlockState>();
   for (const b of board.blocks) {
     if (b.status !== 'ACTIVE') continue;
+    if (isBlockInLockedRoom(board, b)) continue;
     const shape = getShape(b.shapeId);
     for (const [dr, dc] of shape.cells) {
       const br = b.row + dr;
@@ -580,20 +778,49 @@ export function applyBoosterRocket(
     }
   }
 
+  for (const crate of board.crates) {
+    if (crate.destroyed) continue;
+    const crateRoomId = board.roomMap[crate.row * board.cols + crate.col] ?? 0;
+    if (!isRoomUnlocked(board, crateRoomId)) continue;
+    if ((axis === 'ROW' && crate.row === row) || (axis === 'COL' && crate.col === col)) {
+      crate.hp = 0;
+      crate.destroyed = true;
+      affected = true;
+    }
+  }
+
+  if (board.barriers) {
+    for (const bar of board.barriers) {
+      if (bar.open) continue;
+      if (bar.cells.some(([br, bc]) => (axis === 'ROW' && br === row) || (axis === 'COL' && bc === col))) {
+        bar.shredsRemaining = 0;
+        bar.lockId = 0;
+        bar.open = true;
+        affected = true;
+      }
+    }
+  }
+
   for (const b of hitBlocks) {
     destroyOrPeelBlockByBooster(board, b);
     affected = true;
   }
 
   rebuildOccupancyGrid(board);
-  trySpawnReadyGenerators(board);
+  const spawned = trySpawnReadyGenerators(board);
   autoAdvanceColorQueues(board);
+  for (const sb of spawned) {
+    const gIdx = findEligibleGateForBlockAt(board, sb, sb.row, sb.col);
+    if (gIdx >= 0) {
+      resolveClearCascade(board, sb, gIdx, new Set([sb.id]));
+    }
+  }
   return affected;
 }
 
 /**
  * Booster 5: Color Vacuum (`🧲`) — Removes the outer layer of ALL unlocked active blocks matching the
- * tapped block's active color.
+ * tapped block's active color in currently unlocked rooms.
  */
 export function applyBoosterVacuum(board: BoardState, targetColor: ColorId): boolean {
   if (targetColor <= 0 || targetColor > 9) return false;
@@ -604,6 +831,7 @@ export function applyBoosterVacuum(board: BoardState, targetColor: ColorId): boo
       !b.chained &&
       b.ropeColor === 0 &&
       b.iceCount === 0 &&
+      !isBlockInLockedRoom(board, b) &&
       getActiveColor(b.colorStack, b.colorCursor) === targetColor
   );
   if (matchingBlocks.length === 0) return false;

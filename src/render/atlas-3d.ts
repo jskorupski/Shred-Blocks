@@ -205,7 +205,7 @@ const ATLAS_SLOTS: GlyphSlotSpec[] = [
     keys: ['LOCK_H', '↔', 'AXIS_H'],
     glyph: '↔',
     drawCustom: (ctx, cx, cy, r) => {
-      // Pill-free sculpted architectural double-headed chevron arrow (`Pillar 2`)
+      // Pill-free sculpted architectural double-headed chevron arrow (`UX-10`, `R3D-07`)
       const l = r * 0.94;
       const ah = r * 0.48;
       const bh = r * 0.2;
@@ -234,7 +234,7 @@ const ATLAS_SLOTS: GlyphSlotSpec[] = [
     keys: ['LOCK_V', '↕', 'AXIS_V'],
     glyph: '↕',
     drawCustom: (ctx, cx, cy, r) => {
-      // Pill-free sculpted architectural double-headed chevron arrow (`Pillar 2`)
+      // Pill-free sculpted architectural double-headed chevron arrow (`UX-10`, `R3D-07`)
       const l = r * 0.94;
       const ah = r * 0.48;
       const bw = r * 0.2;
@@ -399,6 +399,53 @@ const ATLAS_SLOTS: GlyphSlotSpec[] = [
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     },
   },
+  {
+    keys: ['BADGE_PORTCULLIS', 'PORTCULLIS'],
+    glyph: '⛩',
+    drawCustom: (ctx, cx, cy, r) => {
+      // Sacred-geometry arched portcullis gate with iron-gold vertical bars and bottom spikes
+      const w = r * 0.78;
+      const topY = cy - r * 0.72;
+      const botY = cy + r * 0.68;
+      ctx.lineWidth = 4.5;
+      // Outer arch frame
+      ctx.beginPath();
+      ctx.moveTo(cx - w, botY);
+      ctx.lineTo(cx - w, cy - r * 0.12);
+      ctx.arc(cx, cy - r * 0.12, w, Math.PI, 0, false);
+      ctx.lineTo(cx + w, botY);
+      ctx.stroke();
+
+      // Horizontal portcullis crossbars
+      for (const yf of [-0.15, 0.25]) {
+        const py = cy + r * yf;
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.92, py);
+        ctx.lineTo(cx + w * 0.92, py);
+        ctx.strokeStyle = 'rgba(18, 22, 38, 0.75)';
+        ctx.lineWidth = 6.5;
+        ctx.stroke();
+        ctx.strokeStyle = '#FFFDF9';
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+      }
+
+      // Vertical portcullis spears with pointed tips
+      for (const xf of [-0.46, 0, 0.46]) {
+        const px = cx + w * xf;
+        const barTop = topY + Math.abs(xf) * r * 0.22;
+        ctx.beginPath();
+        ctx.moveTo(px, barTop);
+        ctx.lineTo(px, botY + r * 0.1);
+        ctx.strokeStyle = 'rgba(18, 22, 38, 0.75)';
+        ctx.lineWidth = 6.5;
+        ctx.stroke();
+        ctx.strokeStyle = '#FFFDF9';
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+      }
+    },
+  },
 ];
 
 let cachedAtlasData: AtlasTextureData | null = null;
@@ -437,14 +484,26 @@ export function createAtlasTextureData(): AtlasTextureData {
 
     if (ctx) {
       ctx.save();
+      const isColorblindGlyph = slot.keys[0]?.startsWith('CB_') ?? false;
+      if (isColorblindGlyph) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.94, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(11, 15, 29, 0.88)';
+        ctx.fill();
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = 'rgba(255, 250, 235, 0.72)';
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.fillStyle = '#FFFDF9';
-      ctx.strokeStyle = 'rgba(18, 22, 38, 0.65)';
-      ctx.lineWidth = 4.0;
+      ctx.strokeStyle = isColorblindGlyph ? 'rgba(8, 12, 24, 0.94)' : 'rgba(18, 22, 38, 0.65)';
+      ctx.lineWidth = isColorblindGlyph ? 4.4 : 4.0;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
       if (slot.drawCustom) {
-        slot.drawCustom(ctx, cx, cy, radius);
+        slot.drawCustom(ctx, cx, cy, isColorblindGlyph ? radius * 0.86 : radius);
       } else if (slot.glyph) {
         ctx.font = '900 48px "Inter", "SF Pro Rounded", system-ui, -apple-system, sans-serif';
         ctx.strokeText(slot.glyph, cx, cy + 2);

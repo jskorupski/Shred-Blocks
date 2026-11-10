@@ -1,5 +1,12 @@
-import { getMovedGroupBlocks, rebuildOccupancyGrid } from './physics';
-import { getActiveColor, getShape } from './polyomino';
+import {
+  getMovedGroupBlocks,
+  getPlayableEdgeSpanBounds,
+  isBlockInLockedRoom,
+  isGateInLockedRoom,
+  isRoomUnlocked,
+  rebuildOccupancyGrid,
+} from './physics';
+import { getActiveColor, getLayersRemaining, getShape } from './polyomino';
 import type { BlockState, BoardState, ColorId, EdgeDir, GateState } from './types';
 
 export function getGateActiveColor(gate: GateState): ColorId {
@@ -39,6 +46,8 @@ export function checkBlockGateClearance(
   const activeColor = getActiveColor(block.colorStack, block.colorCursor);
   if (activeColor === 0) return false; // Stone blocks never exit gates
   if (block.iceCount > 0 || block.chained || block.ropeColor > 0) return false;
+  if (isBlockInLockedRoom(board, block)) return false; // Blocks in sealed chambers are dormant
+  if (isGateInLockedRoom(board, gate)) return false; // Gates inside sealed chambers are dormant
 
   // Axis-Lock Directional Exit Compatibility (`DRAG-01`):
   // Horizontal-locked blocks (`H`) can only exit through LEFT or RIGHT gates;
@@ -62,8 +71,15 @@ export function checkBlockGateClearance(
   if (!gate.shutterOpen) return false;
 
   const shape = getShape(block.shapeId);
+  const edgeLine =
+    gate.edgeLine ??
+    (gate.edge === 'TOP' || gate.edge === 'LEFT'
+      ? 0
+      : gate.edge === 'BOTTOM'
+        ? board.rows - 1
+        : board.cols - 1);
 
-  // 2. Perpendicular Span Containment & 3. Edge Contact
+  // 2. Perpendicular Span Containment & 3. Edge Contact (including Stepped-Edge `edgeLine`)
   if (gate.edge === 'TOP' || gate.edge === 'BOTTOM') {
     const minCol = candidateCol;
     const maxCol = candidateCol + shape.cols - 1;
@@ -71,8 +87,8 @@ export function checkBlockGateClearance(
     const gateMaxCol = gate.spanStart + gate.spanLength - 1;
     if (minCol < gateMinCol || maxCol > gateMaxCol) return false;
 
-    if (gate.edge === 'TOP' && candidateRow !== 0) return false;
-    if (gate.edge === 'BOTTOM' && candidateRow + shape.rows !== board.rows) return false;
+    if (gate.edge === 'TOP' && candidateRow !== edgeLine) return false;
+    if (gate.edge === 'BOTTOM' && candidateRow + shape.rows - 1 !== edgeLine) return false;
   } else {
     const minRow = candidateRow;
     const maxRow = candidateRow + shape.rows - 1;
@@ -80,12 +96,12 @@ export function checkBlockGateClearance(
     const gateMaxRow = gate.spanStart + gate.spanLength - 1;
     if (minRow < gateMinRow || maxRow > gateMaxRow) return false;
 
-    if (gate.edge === 'LEFT' && candidateCol !== 0) return false;
-    if (gate.edge === 'RIGHT' && candidateCol + shape.cols !== board.cols) return false;
+    if (gate.edge === 'LEFT' && candidateCol !== edgeLine) return false;
+    if (gate.edge === 'RIGHT' && candidateCol + shape.cols - 1 !== edgeLine) return false;
   }
 
   // 4. Non-Convex Swept-Path Raycast Clearance:
-  // Every constituent cell of the polyomino must have a clear line of sight out the gate edge
+  // Every constituent cell of the polyomino must have a clear line of sight out the gate edgeLine
   // without colliding with another block, shifted glued sibling, obstacle, or mismatched floor path.
   const { rows, cols, occupancy, floorColor } = board;
   const dRow = candidateRow - block.row;
@@ -135,19 +151,19 @@ export function checkBlockGateClearance(
     const cellC = candidateCol + dc;
 
     if (gate.edge === 'TOP') {
-      for (let r = cellR - 1; r >= 0; r--) {
+      for (let r = cellR - 1; r >= edgeLine; r--) {
         if (isRaycastCellBlocked(r, cellC)) return false;
       }
     } else if (gate.edge === 'BOTTOM') {
-      for (let r = cellR + 1; r < rows; r++) {
+      for (let r = cellR + 1; r <= edgeLine; r++) {
         if (isRaycastCellBlocked(r, cellC)) return false;
       }
     } else if (gate.edge === 'LEFT') {
-      for (let c = cellC - 1; c >= 0; c--) {
+      for (let c = cellC - 1; c >= edgeLine; c--) {
         if (isRaycastCellBlocked(cellR, c)) return false;
       }
     } else if (gate.edge === 'RIGHT') {
-      for (let c = cellC + 1; c < cols; c++) {
+      for (let c = cellC + 1; c <= edgeLine; c++) {
         if (isRaycastCellBlocked(cellR, c)) return false;
       }
     }
@@ -277,47 +293,125 @@ export function checkMidDragGateCapture(
  * clears or is destroyed by a booster (Zero-Softlock Law).
  */
 export function triggerCarrierItems(board: BoardState, block: BlockState): void {
-  // 1. Key -> unlocks Chained blocks
+  // 1. Key -> unlocks matching Chained blocks AND/OR Key-Sealed Portcullis Barriers (`lockId`)
+  // Prioritizes Chained blocks in currently unlocked rooms (`MECH-18`).
   if (block.hasKey > 0) {
     const keyId = block.hasKey;
     block.hasKey = 0;
     let unlockedAny = false;
+
+    if (board.barriers) {
+      for (const bar of board.barriers) {
+        if (!bar.open && bar.lockId === keyId) {
+          bar.lockId = 0;
+          bar.shredsRemaining = 0;
+          bar.open = true;
+          unlockedAny = true;
+        }
+      }
+    }
+
+    // First pass: unlocked rooms with matching lockId
     for (const other of board.blocks) {
-      if (other.status === 'ACTIVE' && other.chained && (other.lockId === keyId || other.lockId === 0)) {
+      if (
+        other.status === 'ACTIVE' &&
+        other.chained &&
+        !isBlockInLockedRoom(board, other) &&
+        (other.lockId === keyId || other.lockId === 0)
+      ) {
         other.chained = false;
         unlockedAny = true;
-        break; // 1 Key unlocks 1 matching padlock (or fallback below)
+        break;
+      }
+    }
+    // Second pass: locked rooms with matching lockId (if no unlocked room block matched)
+    if (!unlockedAny) {
+      for (const other of board.blocks) {
+        if (
+          other.status === 'ACTIVE' &&
+          other.chained &&
+          (other.lockId === keyId || other.lockId === 0)
+        ) {
+          other.chained = false;
+          unlockedAny = true;
+          break;
+        }
       }
     }
     if (!unlockedAny) {
-      for (const other of board.blocks) {
-        if (other.status === 'ACTIVE' && other.chained) {
-          other.chained = false;
-          break;
+      if (board.barriers) {
+        for (const bar of board.barriers) {
+          if (!bar.open && bar.lockId > 0) {
+            bar.lockId = 0;
+            bar.shredsRemaining = 0;
+            bar.open = true;
+            unlockedAny = true;
+            break;
+          }
+        }
+      }
+      if (!unlockedAny) {
+        for (const other of board.blocks) {
+          if (other.status === 'ACTIVE' && other.chained && !isBlockInLockedRoom(board, other)) {
+            other.chained = false;
+            unlockedAny = true;
+            break;
+          }
+        }
+      }
+      if (!unlockedAny) {
+        for (const other of board.blocks) {
+          if (other.status === 'ACTIVE' && other.chained) {
+            other.chained = false;
+            break;
+          }
         }
       }
     }
   }
 
-  // 2. Colored Scissors -> cuts all Colored Ropes of matching color
+  // 2. Colored Scissors -> cuts all Colored Ropes of matching color in unlocked rooms (with fallback)
   if (block.scissorColor > 0) {
     const cutColor = block.scissorColor;
     block.scissorColor = 0;
+    let cutUnlocked = false;
     for (const other of board.blocks) {
-      if (other.status === 'ACTIVE' && other.ropeColor === cutColor) {
+      if (
+        other.status === 'ACTIVE' &&
+        other.ropeColor === cutColor &&
+        !isBlockInLockedRoom(board, other)
+      ) {
         other.ropeColor = 0;
+        cutUnlocked = true;
+      }
+    }
+    if (!cutUnlocked) {
+      for (const other of board.blocks) {
+        if (other.status === 'ACTIVE' && other.ropeColor === cutColor) {
+          other.ropeColor = 0;
+        }
       }
     }
   }
 
-  // 3. Shutter Gem -> unlocks all Locked Shutter Gates of matching gem color
+  // 3. Shutter Gem -> unlocks all Locked Shutter Gates of matching gem color in unlocked rooms (with fallback)
   if (block.shutterGemColor > 0) {
     const gemColor = block.shutterGemColor;
     block.shutterGemColor = 0;
+    let openedUnlocked = false;
     for (const gate of board.gates) {
-      if (gate.shutterLockColor === gemColor) {
+      if (gate.shutterLockColor === gemColor && !isGateInLockedRoom(board, gate)) {
         gate.shutterLockColor = 0;
         gate.shutterOpen = true;
+        openedUnlocked = true;
+      }
+    }
+    if (!openedUnlocked) {
+      for (const gate of board.gates) {
+        if (gate.shutterLockColor === gemColor) {
+          gate.shutterLockColor = 0;
+          gate.shutterOpen = true;
+        }
       }
     }
   }
@@ -356,8 +450,9 @@ export function autoAdvanceColorQueues(board: BoardState): boolean {
 
     let passChanged = false;
 
-    // Advance any gate whose current front color has 0 remaining supply on board + generators (`BUG-03`)
+    // Advance any unlocked-room gate whose current front color has 0 remaining supply on board + generators (`MECH-12`, `MECH-18`)
     for (const gate of board.gates) {
+      if (isGateInLockedRoom(board, gate)) continue;
       while (gate.colorCursor + 1 < gate.colorQueue.length) {
         const frontColor = getGateActiveColor(gate);
         if (supply[frontColor] === 0) {
@@ -385,6 +480,11 @@ export function trySpawnReadyGenerators(board: BoardState): BlockState[] {
 
   for (const gen of board.generators) {
     if (gen.state !== 'READY_TO_SPAWN') continue;
+    const genRoom =
+      board.roomMap && gen.row >= 0 && gen.row < rows && gen.col >= 0 && gen.col < cols
+        ? board.roomMap[gen.row * cols + gen.col]
+        : 0;
+    if (!isRoomUnlocked(board, genRoom)) continue;
     if (gen.queueCursor >= gen.queue.length) {
       gen.state = 'DEPLETED';
       continue;
@@ -517,6 +617,88 @@ export function detachBlockFromGluedGroup(board: BoardState, block: BlockState):
 }
 
 /**
+ * Steps all Portcullis Barriers (`board.barriers`) on every block/layer shred:
+ * - Decrements `shredsRemaining` on closed barriers
+ * - Opens any barrier whose `shredsRemaining <= 0` and `lockId === 0`
+ * - Enforces Zero-Softlock Law: if the remaining shreddable layers in currently unlocked rooms
+ *   (plus unlocked generators) are fewer than `shredsRemaining` (or if a required key is no
+ *   longer available in unlocked rooms), clamps `shredsRemaining` and auto-opens when `0`.
+ */
+export function stepPortcullisBarriersOnShred(board: BoardState): number[] {
+  if (!board.barriers || board.barriers.length === 0) return [];
+
+  const openedIds: number[] = [];
+
+  for (const bar of board.barriers) {
+    if (bar.open) continue;
+    if (bar.shredsRemaining > 0) {
+      bar.shredsRemaining = Math.max(0, bar.shredsRemaining - 1);
+    }
+    if (bar.shredsRemaining <= 0 && bar.lockId === 0) {
+      bar.open = true;
+      openedIds.push(bar.id);
+    }
+  }
+
+  // Zero-Softlock Law for Multi-Room Portcullises:
+  for (let pass = 0; pass < 4; pass++) {
+    let unlockedLayers = 0;
+    const availableKeys = new Set<number>();
+
+    for (const b of board.blocks) {
+      if (b.status !== 'ACTIVE') continue;
+      if (isBlockInLockedRoom(board, b)) continue;
+      const activeColor = getActiveColor(b.colorStack, b.colorCursor);
+      if (activeColor !== 0) {
+        unlockedLayers += getLayersRemaining(b.colorStack, b.colorCursor);
+      }
+      if (b.hasKey > 0) {
+        availableKeys.add(b.hasKey);
+      }
+    }
+
+    for (const gen of board.generators) {
+      if (gen.state === 'DEPLETED') continue;
+      const genRoom =
+        board.roomMap && gen.row >= 0 && gen.row < board.rows && gen.col >= 0 && gen.col < board.cols
+          ? board.roomMap[gen.row * board.cols + gen.col]
+          : 0;
+      if (!isRoomUnlocked(board, genRoom)) continue;
+      for (let q = gen.queueCursor; q < gen.queue.length; q++) {
+        const spec = gen.queue[q];
+        unlockedLayers += spec.colorStack.length;
+        if (spec.hasKey && spec.hasKey > 0) {
+          availableKeys.add(spec.hasKey);
+        }
+      }
+    }
+
+    let passOpened = false;
+    for (const bar of board.barriers) {
+      if (bar.open) continue;
+      if (bar.lockId > 0 && !availableKeys.has(bar.lockId)) {
+        bar.lockId = 0;
+      }
+      if (bar.shredsRemaining > unlockedLayers) {
+        bar.shredsRemaining = unlockedLayers;
+      }
+      if (bar.shredsRemaining <= 0 && bar.lockId === 0) {
+        bar.open = true;
+        openedIds.push(bar.id);
+        passOpened = true;
+      }
+    }
+    if (!passOpened) break;
+  }
+
+  if (openedIds.length > 0) {
+    rebuildOccupancyGrid(board);
+  }
+
+  return openedIds;
+}
+
+/**
  * Globally steps dynamic gates on every block/layer shred:
  * - Advances `exitedGate.colorCursor` ONLY on `exitedGate`
  * - Flips all unlocked toggling shutter gates (`g.togglesOnClear && g.shutterLockColor === 0`)
@@ -529,28 +711,58 @@ export function stepDynamicGatesOnShred(board: BoardState, exitedGate?: GateStat
   }
 
   for (const g of board.gates) {
+    if (isGateInLockedRoom(board, g)) continue;
+    const edgeLine =
+      g.edgeLine ??
+      (g.edge === 'TOP' || g.edge === 'LEFT'
+        ? 0
+        : g.edge === 'BOTTOM'
+          ? board.rows - 1
+          : board.cols - 1);
+    const { minSpan, maxSpanEnd } = getPlayableEdgeSpanBounds(
+      board.rows,
+      board.cols,
+      board.occupancy,
+      g.edge,
+      edgeLine,
+      g.spanStart,
+      g.spanLength
+    );
+    const playableLimit = Math.max(1, maxSpanEnd - minSpan);
+
     if (g.togglesOnClear && g.shutterLockColor === 0) {
       g.shutterOpen = !g.shutterOpen;
     }
-    if (g.slidesOnClear) {
-      let nextStart = g.spanStart + g.slideDir;
-      if (nextStart < g.slideMin || nextStart > g.slideMax) {
-        g.slideDir = (g.slideDir * -1) as 1 | -1;
-        nextStart = Math.max(g.slideMin, Math.min(g.slideMax, g.spanStart + g.slideDir));
-      }
-      g.spanStart = nextStart;
-    }
     if (g.sizeChangesOnClear) {
+      const effectiveMaxLen = Math.min(g.maxLength, playableLimit);
       let nextLen = g.spanLength + g.sizeDir;
-      if (nextLen < g.minLength || nextLen > g.maxLength) {
+      if (nextLen < g.minLength || nextLen > effectiveMaxLen) {
         g.sizeDir = (g.sizeDir * -1) as 1 | -1;
-        nextLen = Math.max(g.minLength, Math.min(g.maxLength, g.spanLength + g.sizeDir));
+        nextLen = Math.max(g.minLength, Math.min(effectiveMaxLen, g.spanLength + g.sizeDir));
       }
       g.spanLength = nextLen;
-      const limit = g.edge === 'TOP' || g.edge === 'BOTTOM' ? board.cols : board.rows;
-      if (g.spanStart + g.spanLength > limit) {
-        g.spanStart = Math.max(0, limit - g.spanLength);
+      if (g.spanStart < minSpan) {
+        g.spanStart = minSpan;
       }
+      if (g.spanStart + g.spanLength > maxSpanEnd) {
+        g.spanStart = Math.max(minSpan, maxSpanEnd - g.spanLength);
+      }
+    }
+    if (g.slidesOnClear) {
+      const clampSlideMin = Math.max(minSpan, g.slideMin);
+      const clampSlideMax = Math.max(
+        clampSlideMin,
+        Math.min(g.slideMax, maxSpanEnd - g.spanLength)
+      );
+      let nextStart = g.spanStart + g.slideDir;
+      if (nextStart < clampSlideMin || nextStart > clampSlideMax) {
+        g.slideDir = (g.slideDir * -1) as 1 | -1;
+        nextStart = Math.max(
+          clampSlideMin,
+          Math.min(clampSlideMax, g.spanStart + g.slideDir)
+        );
+      }
+      g.spanStart = nextStart;
     }
   }
 
@@ -564,10 +776,12 @@ export function stepDynamicGatesOnShred(board: BoardState, exitedGate?: GateStat
       getActiveColor(b.colorStack, b.colorCursor) !== 0 &&
       b.iceCount === 0 &&
       !b.chained &&
-      b.ropeColor === 0
+      b.ropeColor === 0 &&
+      !isBlockInLockedRoom(board, b)
   );
   if (activeMovableNonStone.length > 0) {
     const anyOpenGateMatchesBlock = board.gates.some((g) => {
+      if (isGateInLockedRoom(board, g)) return false;
       if (!g.shutterOpen || g.shutterLockColor > 0 || g.iceCount > 0) return false;
       const gColor = getGateActiveColor(g);
       const isHoriz = g.edge === 'TOP' || g.edge === 'BOTTOM';
@@ -581,21 +795,42 @@ export function stepDynamicGatesOnShred(board: BoardState, exitedGate?: GateStat
 
     if (!anyOpenGateMatchesBlock) {
       for (const g of board.gates) {
+        if (isGateInLockedRoom(board, g)) continue;
         if (g.togglesOnClear && !g.shutterOpen && g.shutterLockColor === 0) {
           g.shutterOpen = true;
         }
         if (g.sizeChangesOnClear) {
           const gColor = getGateActiveColor(g);
           const isHoriz = g.edge === 'TOP' || g.edge === 'BOTTOM';
+          const edgeLine =
+            g.edgeLine ??
+            (g.edge === 'TOP' || g.edge === 'LEFT'
+              ? 0
+              : g.edge === 'BOTTOM'
+                ? board.rows - 1
+                : board.cols - 1);
+          const { minSpan, maxSpanEnd } = getPlayableEdgeSpanBounds(
+            board.rows,
+            board.cols,
+            board.occupancy,
+            g.edge,
+            edgeLine,
+            g.spanStart,
+            g.spanLength
+          );
+          const playableLimit = Math.max(1, maxSpanEnd - minSpan);
+          const effectiveMaxLen = Math.min(g.maxLength, playableLimit);
           for (const b of activeMovableNonStone) {
             if (getActiveColor(b.colorStack, b.colorCursor) === gColor) {
               const sh = getShape(b.shapeId);
               const reqSpan = isHoriz ? sh.cols : sh.rows;
-              if (reqSpan > g.spanLength && reqSpan <= g.maxLength) {
+              if (reqSpan > g.spanLength && reqSpan <= effectiveMaxLen) {
                 g.spanLength = reqSpan;
-                const limit = isHoriz ? board.cols : board.rows;
-                if (g.spanStart + g.spanLength > limit) {
-                  g.spanStart = Math.max(0, limit - g.spanLength);
+                if (g.spanStart < minSpan) {
+                  g.spanStart = minSpan;
+                }
+                if (g.spanStart + g.spanLength > maxSpanEnd) {
+                  g.spanStart = Math.max(minSpan, maxSpanEnd - g.spanLength);
                 }
               }
             }
@@ -616,6 +851,12 @@ export function stepMovingElevators(board: BoardState): void {
   const { rows, cols, occupancy, floorColor } = board;
 
   for (const elev of board.elevators) {
+    const elevRoomId =
+      board.roomMap && elev.row >= 0 && elev.row < rows && elev.col >= 0 && elev.col < cols
+        ? board.roomMap[elev.row * cols + elev.col]
+        : 0;
+    if (elevRoomId > 0 && !isRoomUnlocked(board, elevRoomId)) continue;
+
     const dir = elev.atAlternatePos ? -1 : 1;
     const dRow = elev.deltaRow * dir;
     const dCol = elev.deltaCol * dir;
@@ -647,6 +888,7 @@ export function stepMovingElevators(board: BoardState): void {
           b.iceCount > 0 ||
           b.chained ||
           b.ropeColor > 0 ||
+          isBlockInLockedRoom(board, b) ||
           (dRow !== 0 && b.axisLock === 'H') ||
           (dCol !== 0 && b.axisLock === 'V');
 
@@ -742,6 +984,7 @@ export interface ClearCascadeResult {
   peeledBlockIds: number[];
   spawnedBlockIds: number[];
   destroyedCrateIds: number[];
+  unlockedBarrierIds: number[];
 }
 
 /**
@@ -759,7 +1002,13 @@ export function resolveClearCascade(
     peeledBlockIds: [],
     spawnedBlockIds: [],
     destroyedCrateIds: [],
+    unlockedBarrierIds: [],
   };
+
+  const closedBarrierIdsBefore = new Set<number>();
+  for (const bar of board.barriers ?? []) {
+    if (!bar.open) closedBarrierIdsBefore.add(bar.id);
+  }
 
   const pendingQueue: Array<{ block: BlockState; gateIndex: number }> = [
     { block: initialBlock, gateIndex: initialGateIndex },
@@ -800,14 +1049,19 @@ export function resolveClearCascade(
       result.clearedBlockIds.push(block.id);
     }
 
-    // Step 1C: Global Ice thaw (blocks & gates)
+    // Step 1C: Global Ice thaw (blocks & gates in unlocked rooms)
     for (const b of board.blocks) {
-      if (b.status === 'ACTIVE' && b.id !== block.id && b.iceCount > 0) {
+      if (
+        b.status === 'ACTIVE' &&
+        b.id !== block.id &&
+        b.iceCount > 0 &&
+        !isBlockInLockedRoom(board, b)
+      ) {
         b.iceCount = Math.max(0, b.iceCount - 1);
       }
     }
     for (const g of board.gates) {
-      if (g.iceCount > 0) {
+      if (g.iceCount > 0 && !isGateInLockedRoom(board, g)) {
         g.iceCount = Math.max(0, g.iceCount - 1);
       }
     }
@@ -831,16 +1085,21 @@ export function resolveClearCascade(
       }
     }
 
-    // Step 1E: Gate state transitions (Color Queue on exited gate, Global Toggling/Sliding/Size-Changing)
+    // Step 1E: Gate state transitions
     stepDynamicGatesOnShred(board, gate);
 
     rebuildOccupancyGrid(board);
 
-    // Step 2A: Moving Elevators
+    // Step 2A: Moving Elevators (in already-unlocked rooms)
     stepMovingElevators(board);
 
-    // Step 2B: Block Generators countdown & spawn
+    // Step 2B: Block Generators countdown (in already-unlocked rooms)
     for (const gen of board.generators) {
+      const genRoom =
+        board.roomMap && gen.row >= 0 && gen.row < board.rows && gen.col >= 0 && gen.col < board.cols
+          ? board.roomMap[gen.row * board.cols + gen.col]
+          : 0;
+      if (!isRoomUnlocked(board, genRoom)) continue;
       if (gen.state === 'COUNTING') {
         gen.cooldown = Math.max(0, gen.cooldown - 1);
         if (gen.cooldown === 0) {
@@ -848,6 +1107,17 @@ export function resolveClearCascade(
         }
       }
     }
+
+    // Step 2C: Multi-Room Portcullis countdown/unlock & Ready Generator Spawning
+    stepPortcullisBarriersOnShred(board);
+    for (const bar of board.barriers ?? []) {
+      if (bar.open && closedBarrierIdsBefore.has(bar.id)) {
+        closedBarrierIdsBefore.delete(bar.id);
+        result.unlockedBarrierIds.push(bar.id);
+      }
+    }
+    rebuildOccupancyGrid(board);
+
     const newlySpawned = trySpawnReadyGenerators(board);
     for (const sb of newlySpawned) {
       result.spawnedBlockIds.push(sb.id);
@@ -871,7 +1141,7 @@ export function resolveClearCascade(
       }
 
       // Check if an actively involved block (the peeled block itself, a glued partner moved in this
-      // exact drag gesture, or a newly spawned generator block on a gate lip) is now eligible to clear (`BUG-01`, `ADV-R4-01`).
+      // exact drag gesture, or a newly spawned generator block on a gate lip) is now eligible to clear (`F-02`, `MECH-11`).
       // Unmoved stationary blocks elsewhere on the board must NEVER auto-shred without being dragged.
       const allowedCascadeIds = new Set<number>([
         initialBlock.id,

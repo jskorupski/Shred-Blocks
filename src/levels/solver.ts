@@ -97,6 +97,19 @@ export function computeStateHash(board: BoardState): bigint {
     h = (h ^ he) & MASK_64;
   }
 
+  if (board.barriers) {
+    for (const bar of board.barriers) {
+      const hbar = hashTuple(
+        0x6001n,
+        bar.id,
+        bar.open ? 1 : 0,
+        bar.shredsRemaining,
+        bar.lockId
+      );
+      h = (h ^ hbar) & MASK_64;
+    }
+  }
+
   return h;
 }
 
@@ -112,18 +125,25 @@ function getCandidateExitAnchorsForColor(
     const minSpan = g.slidesOnClear ? g.slideMin : g.spanStart;
     const maxLen = g.sizeChangesOnClear ? g.maxLength : g.spanLength;
     const maxSpanEnd = (g.slidesOnClear ? g.slideMax : g.spanStart) + maxLen;
+    const edgeLine =
+      g.edgeLine ??
+      (g.edge === 'TOP' || g.edge === 'LEFT'
+        ? 0
+        : g.edge === 'BOTTOM'
+          ? board.rows - 1
+          : board.cols - 1);
 
     if (g.edge === 'TOP' || g.edge === 'BOTTOM') {
-      const r = g.edge === 'TOP' ? 0 : board.rows - shapeRows;
+      const r = g.edge === 'TOP' ? edgeLine : edgeLine - shapeRows + 1;
       for (let c = minSpan; c <= maxSpanEnd - shapeCols; c++) {
-        if (c >= 0 && c + shapeCols <= board.cols) {
+        if (r >= 0 && r + shapeRows <= board.rows && c >= 0 && c + shapeCols <= board.cols) {
           anchors.add(r * board.cols + c);
         }
       }
     } else {
-      const c = g.edge === 'LEFT' ? 0 : board.cols - shapeCols;
+      const c = g.edge === 'LEFT' ? edgeLine : edgeLine - shapeCols + 1;
       for (let r = minSpan; r <= maxSpanEnd - shapeRows; r++) {
-        if (r >= 0 && r + shapeRows <= board.rows) {
+        if (r >= 0 && r + shapeRows <= board.rows && c >= 0 && c + shapeCols <= board.cols) {
           anchors.add(r * board.cols + c);
         }
       }
@@ -178,12 +198,27 @@ export function computeAdmissibleHeuristic(board: BoardState): number {
       for (let q = gen.queueCursor; q < gen.queue.length; q++) {
         const spec = gen.queue[q];
         const sh = getShape(spec.shapeId);
-        const touchesBorder =
+        const touchesGateOrBorder =
           gen.spawnRow <= 0 ||
           gen.spawnRow + sh.rows >= board.rows ||
           gen.spawnCol <= 0 ||
-          gen.spawnCol + sh.cols >= board.cols;
-        if (!touchesBorder) {
+          gen.spawnCol + sh.cols >= board.cols ||
+          board.gates.some((g) => {
+            const line =
+              g.edgeLine ??
+              (g.edge === 'TOP' || g.edge === 'LEFT'
+                ? 0
+                : g.edge === 'BOTTOM'
+                  ? board.rows - 1
+                  : board.cols - 1);
+            return (
+              (g.edge === 'TOP' && gen.spawnRow === line) ||
+              (g.edge === 'BOTTOM' && gen.spawnRow + sh.rows - 1 === line) ||
+              (g.edge === 'LEFT' && gen.spawnCol === line) ||
+              (g.edge === 'RIGHT' && gen.spawnCol + sh.cols - 1 === line)
+            );
+          });
+        if (!touchesGateOrBorder) {
           genRemaining++;
         }
       }
@@ -235,6 +270,14 @@ function computeRemainingLayersAndObstacles(board: BoardState): {
     restrictionScore += gen.cooldown;
   }
 
+  if (board.barriers) {
+    for (const bar of board.barriers) {
+      if (!bar.open) {
+        restrictionScore += Math.max(1, bar.shredsRemaining) + (bar.lockId > 0 ? 2 : 0);
+      }
+    }
+  }
+
   return { totalLayers, restrictionScore };
 }
 
@@ -247,7 +290,9 @@ function isPureSafeExit(board: BoardState, block: BlockState, gateIndex: number)
   if (gateIndex < 0 || gateIndex >= board.gates.length) return false;
   if (board.elevators.length > 0 || board.generators.length > 0) return false;
   if (board.crates.some((c) => !c.destroyed && c.hp > 0)) return false;
+  if (board.barriers && board.barriers.some((b) => !b.open)) return false;
   if (block.groupId > 0) return false;
+  if (block.hasKey > 0 || block.scissorColor > 0 || block.shutterGemColor > 0) return false;
   if (getLayersRemaining(block.colorStack, block.colorCursor) > 1) return false;
   if (board.blocks.some((b) => b.status === 'ACTIVE' && b.bombCount > 0)) return false;
   if (board.gates.some((g) => g.togglesOnClear || g.slidesOnClear || g.sizeChangesOnClear)) {
@@ -435,13 +480,21 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
         let score = Math.min(anchor.dist, 4) * 2;
         const activeColor = getActiveColor(lead.colorStack, lead.colorCursor);
 
+        const leadShape = getShape(lead.shapeId);
         for (const g of board.gates) {
           if (g.colorQueue.includes(activeColor)) {
+            const edgeLine =
+              g.edgeLine ??
+              (g.edge === 'TOP' || g.edge === 'LEFT'
+                ? 0
+                : g.edge === 'BOTTOM'
+                  ? board.rows - 1
+                  : board.cols - 1);
             if (
-              (g.edge === 'TOP' && anchor.row === 0) ||
-              (g.edge === 'BOTTOM' && anchor.row === board.rows - 1) ||
-              (g.edge === 'LEFT' && anchor.col === 0) ||
-              (g.edge === 'RIGHT' && anchor.col === board.cols - 1)
+              (g.edge === 'TOP' && anchor.row === edgeLine) ||
+              (g.edge === 'BOTTOM' && anchor.row + leadShape.rows - 1 === edgeLine) ||
+              (g.edge === 'LEFT' && anchor.col === edgeLine) ||
+              (g.edge === 'RIGHT' && anchor.col + leadShape.cols - 1 === edgeLine)
             ) {
               score += 5;
             }

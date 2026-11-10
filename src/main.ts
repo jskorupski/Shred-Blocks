@@ -13,6 +13,7 @@ import {
   type CommitMoveOutcome,
 } from './core/board';
 import { findEligibleGateForBlockAt } from './core/gate-clearance';
+import { getBlockRoomId, isBlockInLockedRoom } from './core/physics';
 import { getActiveColor, getShape } from './core/polyomino';
 import {
   COLOR_PALETTE,
@@ -66,6 +67,8 @@ export interface ShredBlocksDebugBridge {
   setPlayMode: (mode: PlayMode) => void;
   setColorblindMode: (enabled: boolean) => void;
   setHighContrast: (enabled: boolean) => void;
+  setReducedMotion: (enabled: boolean) => void;
+  setQualityTier: (tier: QualityTier) => void;
   setTheme: (skin: SkinId, tray: TrayId, particle: ParticleStyleId) => void;
   activateBooster: (type: BoosterType) => void;
   openModal: (id: ModalId) => void;
@@ -471,6 +474,9 @@ export class ShredBlocksApp {
     if (unlockToast && !unlockToast.hidden) {
       unlockToast.hidden = true;
     }
+    if (outcome.unlockedBarrierIds && outcome.unlockedBarrierIds.length > 0) {
+      this.showGameToast('⛩️ Portcullis Opened! New chamber unlocked!');
+    }
     this.lastPointerActivityMs = performance.now();
     this.syncInGameHud();
     this.checkWinOrLossAfterAction();
@@ -671,6 +677,21 @@ export class ShredBlocksApp {
   }
 
   private handleImmobileBlockTap(block: BlockState): void {
+    if (isBlockInLockedRoom(this.board, block)) {
+      const roomId = getBlockRoomId(this.board, block);
+      const bar = this.board.barriers.find((b) => !b.open && b.unlocksRoomId === roomId);
+      if (bar && bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0) {
+        this.showGameToast('⛩️ Chamber Sealed! Shred a block with a 🔑 Key to open the Portcullis');
+      } else if (bar && bar.shredsRemaining > 0) {
+        this.showGameToast(
+          `⛩️ Chamber Sealed! Shred ${bar.shredsRemaining} more block(s) to open the Portcullis`
+        );
+      } else {
+        this.showGameToast('⛩️ Chamber Sealed! Open the Portcullis Barrier first');
+      }
+      return;
+    }
+
     const activeColor = getActiveColor(block.colorStack, block.colorCursor);
     if (activeColor === 0) {
       this.showGameToast('🪨 Stone Block — permanent obstacle that never moves');
@@ -876,6 +897,9 @@ export class ShredBlocksApp {
   private executeTargetedBooster(type: BoosterType, target: BoosterTargetPayload): boolean {
     if (!this.canAffordBooster(type)) return false;
 
+    const closedBefore = new Set(
+      this.board.barriers.filter((b) => !b.open).map((b) => b.id)
+    );
     let applied = false;
 
     if (type === 'HAMMER') {
@@ -909,6 +933,10 @@ export class ShredBlocksApp {
     this.preRestartSnapshot = null;
     this.preRestartUndoStack = [];
     this.saveManager.spendBooster(type);
+    const newlyOpened = this.board.barriers.some((b) => b.open && closedBefore.has(b.id));
+    if (newlyOpened) {
+      this.showGameToast('⛩️ Portcullis Opened! New chamber unlocked!');
+    }
     this.syncInGameHud();
     this.checkWinOrLossAfterAction();
     return true;
@@ -1023,7 +1051,12 @@ export class ShredBlocksApp {
       while (this.bombSecondAccumulator >= 1.0) {
         this.bombSecondAccumulator -= 1.0;
         for (const b of this.board.blocks) {
-          if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0) {
+          if (
+            b.status === 'ACTIVE' &&
+            b.bombMax > 0 &&
+            b.bombCount > 0 &&
+            !isBlockInLockedRoom(this.board, b)
+          ) {
             b.bombCount = Math.max(0, b.bombCount - 1);
           }
         }
@@ -1235,6 +1268,10 @@ export class ShredBlocksApp {
       hapticsEnabled: save.settings.hapticsEnabled,
     });
     this.renderer.setQualityPreference(save.settings.qualityTier);
+
+    document.body.classList.toggle('high-contrast', Boolean(save.settings.highContrast));
+    document.body.classList.toggle('colorblind-mode', Boolean(save.settings.colorblindSymbols));
+    document.body.classList.toggle('reduced-motion', Boolean(save.settings.reducedMotion));
 
     // Header Economy Pills
     const coinsEl = document.getElementById('stat-coins');
@@ -1601,7 +1638,14 @@ export class ShredBlocksApp {
 
       const nameDiv = document.createElement('div');
       nameDiv.className = 'node-name';
-      nameDiv.textContent = spec.name;
+      const archPrefix =
+        spec.barriers && spec.barriers.length > 0
+          ? '⛩️ '
+          : (spec.layoutId && spec.layoutId !== 'RECTANGLE') ||
+              (spec.cutouts && spec.cutouts.length > 0)
+            ? '🏛️ '
+            : '';
+      nameDiv.textContent = `${archPrefix}${spec.name}`;
 
       btn.append(topRow, nameDiv);
 
@@ -1678,7 +1722,14 @@ export class ShredBlocksApp {
 
         const nameDiv = document.createElement('div');
         nameDiv.className = 'node-name';
-        nameDiv.textContent = spec.name;
+        const endlessPrefix =
+          spec.barriers && spec.barriers.length > 0
+            ? '⛩️ '
+            : (spec.layoutId && spec.layoutId !== 'RECTANGLE') ||
+                (spec.cutouts && spec.cutouts.length > 0)
+              ? '🏛️ '
+              : '';
+        nameDiv.textContent = `${endlessPrefix}${spec.name}`;
 
         btn.append(topRow, nameDiv);
 
@@ -2694,6 +2745,15 @@ export class ShredBlocksApp {
       },
       setHighContrast: (enabled: boolean) => {
         this.saveManager.updateSettings({ highContrast: enabled });
+        this.renderNow();
+      },
+      setReducedMotion: (enabled: boolean) => {
+        this.saveManager.updateSettings({ reducedMotion: enabled });
+        this.renderNow();
+      },
+      setQualityTier: (tier: QualityTier) => {
+        this.saveManager.updateSettings({ qualityTier: tier });
+        this.renderer.setQualityPreference(tier);
         this.renderNow();
       },
       setTheme: (skin: SkinId, tray: TrayId, particle: ParticleStyleId) => {

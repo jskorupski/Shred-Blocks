@@ -4,7 +4,14 @@ import {
   getGateActiveColor,
   getGateOutwardNormal,
 } from '../core/gate-clearance';
-import { canGroupOccupyOffset, getMovedGroupBlocks } from '../core/physics';
+import {
+  canGroupOccupyOffset,
+  getBlockRoomId,
+  getMovedGroupBlocks,
+  isBlockInLockedRoom,
+  isGateInLockedRoom,
+  isRoomUnlocked,
+} from '../core/physics';
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import {
   COLOR_PALETTE,
@@ -34,7 +41,7 @@ export const MAX_PARTICLES = 2048;
 const PARTICLE_STRIDE = 14; // x, y, z, vx, vy, vz, r, g, b, scale, age, maxAge, rotAngle, rotSpeed
 const INSTANCE_STRIDE = 8; // x, y, z, scale, r, g, b, rotAngle
 
-interface TrayPalette {
+export interface TrayPalette {
   bgClear: [number, number, number];
   floorTileA: [number, number, number];
   floorTileB: [number, number, number];
@@ -77,6 +84,50 @@ const TRAY_PALETTES: Record<TrayId, TrayPalette> = {
     floorTileB: [0.63, 0.82, 0.74],
     wallColor: [0.11, 0.36, 0.29],
     rimHighlight: [0.2, 0.52, 0.42],
+  },
+};
+
+/**
+ * High-Contrast Tray Palettes (`AX-02`):
+ * Preserves each custom tray's distinct architectural color identity while enforcing
+ * dark, low-luminance floor tiles (`<= 0.14`) and bright high-contrast perimeter wall rims (`>= 0.78`)
+ * so all 10 block colors, reticles, and badges maintain maximum WCAG contrast regardless of equipped tray.
+ */
+const HIGH_CONTRAST_TRAY_PALETTES: Record<TrayId, TrayPalette> = {
+  industrial_slate: {
+    bgClear: [0.03, 0.04, 0.08],
+    floorTileA: [0.09, 0.105, 0.15],
+    floorTileB: [0.055, 0.068, 0.105],
+    wallColor: [0.18, 0.22, 0.32],
+    rimHighlight: [0.84, 0.9, 0.98],
+  },
+  warm_birch: {
+    bgClear: [0.06, 0.04, 0.025],
+    floorTileA: [0.14, 0.1, 0.065],
+    floorTileB: [0.095, 0.065, 0.04],
+    wallColor: [0.34, 0.22, 0.12],
+    rimHighlight: [0.96, 0.82, 0.58],
+  },
+  midnight_arcade: {
+    bgClear: [0.02, 0.02, 0.06],
+    floorTileA: [0.06, 0.07, 0.15],
+    floorTileB: [0.035, 0.045, 0.105],
+    wallColor: [0.16, 0.12, 0.38],
+    rimHighlight: [0.76, 0.68, 1.0],
+  },
+  frosted_quartz: {
+    bgClear: [0.035, 0.055, 0.09],
+    floorTileA: [0.095, 0.125, 0.175],
+    floorTileB: [0.06, 0.085, 0.125],
+    wallColor: [0.24, 0.32, 0.44],
+    rimHighlight: [0.88, 0.95, 1.0],
+  },
+  mint_studio: {
+    bgClear: [0.02, 0.06, 0.05],
+    floorTileA: [0.065, 0.135, 0.115],
+    floorTileB: [0.04, 0.095, 0.08],
+    wallColor: [0.1, 0.3, 0.24],
+    rimHighlight: [0.68, 0.98, 0.86],
   },
 };
 
@@ -368,6 +419,7 @@ uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_ove
 uniform sampler2D u_atlas;
 uniform float u_blueprintMix;
 uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
+uniform int u_highContrast;
 
 out vec4 outColor;
 
@@ -426,25 +478,33 @@ void main() {
   if (u_materialStyle == 1) {
     // gummy_jelly: subsurface glow + glossy highlight
     specPower = 48.0;
-    specStrength = 0.45;
+    specStrength = u_highContrast == 1 ? 0.34 : 0.45;
     base = mix(base, vec3(1.0), 0.12 * rim);
   } else if (u_materialStyle == 2) {
     // carved_wood: warm procedural woodgrain bands locked to block-local coordinates
-    float grain = sin(v_localPos.x * 16.0 + v_localPos.y * 6.0 + sin(v_localPos.x * 5.0 - v_localPos.y * 4.0) * 1.6) * 0.105;
+    float grainAmp = u_highContrast == 1 ? 0.048 : 0.105;
+    float grain = sin(v_localPos.x * 16.0 + v_localPos.y * 6.0 + sin(v_localPos.x * 5.0 - v_localPos.y * 4.0) * 1.6) * grainAmp;
     base = clamp(base + vec3(grain * 1.1, grain * 0.85, grain * 0.55), 0.0, 1.0);
     specStrength = 0.16;
   } else if (u_materialStyle == 3) {
-    // neon_cyber: dark core with bright edge rim
-    base = mix(base * 0.72, min(vec3(1.0), base * 1.35 + 0.15), clamp(rim * 1.6, 0.0, 1.0));
+    // neon_cyber: dark core with bright edge rim (kept brighter in High Contrast mode)
+    float coreMul = u_highContrast == 1 ? 0.92 : 0.72;
+    base = mix(base * coreMul, min(vec3(1.0), base * 1.35 + 0.15), clamp(rim * 1.6, 0.0, 1.0));
     specPower = 64.0;
     specStrength = 0.4;
   }
 
   float spec = pow(max(dot(N, H), 0.0), specPower) * specStrength;
-  float ambient = 0.50;
+  float ambient = u_highContrast == 1 ? 0.54 : 0.50;
   float heightShade = clamp((v_localPos.z - 0.54) * 1.45, -0.08, 0.14);
   float studRim = (v_localPos.z > 0.565 && N.z < 0.96 && N.z > 0.05) ? (0.16 * max(dot(N, L1), -0.35)) : 0.0;
   vec3 lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim);
+
+  if (u_highContrast == 1) {
+    // Crisp high-contrast 3D bevel edge contour so every block and wall edge has razor-sharp definition
+    float edgeBevel = smoothstep(0.58, 0.16, abs(N.z));
+    lit = mix(min(vec3(1.0), lit * 1.08), lit * 0.34, edgeBevel * 0.58);
+  }
 
   if (u_blueprintMix > 0.001) {
     // Sacred-Geometry Astrolabe Wall-Scroll Diagram Mode:
@@ -452,8 +512,9 @@ void main() {
     // blueprint matching the counter-rotating sacred-geometry astrolabe rings behind the board.
     float maxC = max(u_color.r, max(u_color.g, u_color.b));
     float minC = min(u_color.r, min(u_color.g, u_color.b));
-    float sat = maxC - minC;
+    float sat = (maxC - minC) / max(maxC, 0.12);
     float isPiece = smoothstep(0.14, 0.30, sat);
+    float isSunkenRoom = smoothstep(-0.02, -0.10, v_worldPos.z);
 
     vec2 relCenter = v_worldPos.xy - u_boardInfo.xy;
     float distCenter = length(relCenter);
@@ -464,14 +525,16 @@ void main() {
       vec3(0.165, 0.125, 0.265),
       radialGlow
     );
+    scrollPaper *= mix(1.0, 0.78, isSunkenRoom);
     float paperGrain =
       sin(v_worldPos.x * 38.0 + sin(v_worldPos.y * 29.0)) *
       cos(v_worldPos.y * 41.0 + sin(v_worldPos.x * 23.0)) * 0.015;
     scrollPaper += vec3(paperGrain);
 
     // Delicate architectural ink-wash for colored blocks & exit gates (28% hue + warm vellum)
-    vec3 warmPieceHue = mix(u_color.rgb, vec3(0.96, 0.78, 0.48), 0.26);
-    vec3 pieceWash = mix(scrollPaper + vec3(0.035, 0.025, 0.055), warmPieceHue, 0.29);
+    vec3 normPieceRgb = u_color.rgb / max(1.0 - isSunkenRoom * 0.40, 0.58);
+    vec3 warmPieceHue = mix(clamp(normPieceRgb, 0.0, 1.0), vec3(0.96, 0.78, 0.48), 0.26);
+    vec3 pieceWash = mix(scrollPaper + vec3(0.035, 0.025, 0.055), warmPieceHue, mix(0.29, 0.21, isSunkenRoom));
     vec3 scrollFill = mix(scrollPaper, pieceWash, isPiece);
 
     // 1. 3D Bevel, Chamfer & Circular Stud Rim Drafting Contours
@@ -521,6 +584,12 @@ void main() {
     vec3 baseGold = mix(vec3(0.96, 0.74, 0.38), warmPieceHue, isPiece * 0.28);
     vec3 brightGold = vec3(1.0, 0.94, 0.78);
     vec3 goldInk = mix(baseGold, brightGold, clamp(inkStrength * 0.7, 0.0, 1.0));
+
+    if (u_highContrast == 1) {
+      scrollFill *= 0.65;
+      inkStrength = clamp(inkStrength * 1.25 + bevelInk * 0.22, 0.0, 1.0);
+      goldInk = mix(vec3(1.0, 0.88, 0.40), vec3(1.0, 0.99, 0.92), clamp(inkStrength, 0.0, 1.0));
+    }
 
     vec3 scrollDiagram = mix(scrollFill, goldInk, inkStrength);
     lit = mix(lit, scrollDiagram, u_blueprintMix);
@@ -675,6 +744,7 @@ export class Renderer3D {
   private uAtlas: WebGLUniformLocation | null = null;
   private uBlueprintMix: WebGLUniformLocation | null = null;
   private uBoardInfo: WebGLUniformLocation | null = null;
+  private uHighContrast: WebGLUniformLocation | null = null;
 
   // Uniform locations for particle program
   private uPartViewProj: WebGLUniformLocation | null = null;
@@ -718,6 +788,11 @@ export class Renderer3D {
     }
   >();
   private readonly elevatorSnapshots = new Map<number, { atAlternatePos: boolean }>();
+  private readonly barrierSnapshots = new Map<
+    number,
+    { open: boolean; shredsRemaining: number }
+  >();
+  private readonly roomAwakenMap = new Map<number, number>();
   private readonly activeVisualShreds: VisualShredAnim[] = [];
   private readonly activeShockwaves: VisualShockwave[] = [];
   private readonly blockBounceMap = new Map<number, number>();
@@ -781,6 +856,13 @@ export class Renderer3D {
 
   public setQualityPreference(tier: QualityTier): void {
     this.qualityGovernor.setPreference(tier);
+  }
+
+  public getEffectiveTrayPalette(trayId: TrayId, highContrast = false): TrayPalette {
+    if (highContrast) {
+      return HIGH_CONTRAST_TRAY_PALETTES[trayId] ?? HIGH_CONTRAST_TRAY_PALETTES.industrial_slate;
+    }
+    return TRAY_PALETTES[trayId] ?? TRAY_PALETTES.industrial_slate;
   }
 
   public async run120HzBenchmark(frames = 120, board?: BoardState): Promise<Benchmark120HzResult> {
@@ -1019,6 +1101,7 @@ export class Renderer3D {
     this.uAtlas = gl.getUniformLocation(mainProg, 'u_atlas');
     this.uBlueprintMix = gl.getUniformLocation(mainProg, 'u_blueprintMix');
     this.uBoardInfo = gl.getUniformLocation(mainProg, 'u_boardInfo');
+    this.uHighContrast = gl.getUniformLocation(mainProg, 'u_highContrast');
 
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
     this.uPartStyle = gl.getUniformLocation(partProg, 'u_particleStyle');
@@ -1365,13 +1448,13 @@ export class Renderer3D {
       const gx = isHoriz
         ? gate.spanStart + gate.spanLength * 0.5
         : gate.edge === 'LEFT'
-          ? 0
-          : board.cols;
+          ? gate.edgeLine
+          : gate.edgeLine + 1;
       const gy = !isHoriz
         ? gate.spanStart + gate.spanLength * 0.5
         : gate.edge === 'TOP'
-          ? 0
-          : board.rows;
+          ? gate.edgeLine
+          : gate.edgeLine + 1;
       const [nx, ny] = getGateOutwardNormal(gate.edge);
       this.spawnParticlesAt(gx, gy, 0.55, cId, 24, -nx * 0.6, -ny * 0.6, style);
     }
@@ -1435,6 +1518,16 @@ export class Renderer3D {
       }
     }
 
+    // Step 3D room awakening upward extrusion timers (`550ms` smooth cubic ease-out)
+    for (const [rid, elapsed] of this.roomAwakenMap.entries()) {
+      const next = elapsed + dt;
+      if (next >= 0.55) {
+        this.roomAwakenMap.delete(rid);
+      } else {
+        this.roomAwakenMap.set(rid, next);
+      }
+    }
+
     for (let i = 0; i < MAX_PARTICLES; i++) {
       const idx = i * PARTICLE_STRIDE;
       const age = this.particlePool[idx + 10];
@@ -1474,6 +1567,29 @@ export class Renderer3D {
     this.qualityGovernor.setActiveParticles(active);
   }
 
+  private getRoomVisualState(
+    board: BoardState,
+    roomId: number
+  ): { zOffset: number; luminanceMul: number; isLocked: boolean } {
+    if (roomId <= 0) {
+      return { zOffset: 0, luminanceMul: 1.0, isLocked: false };
+    }
+    if (!isRoomUnlocked(board, roomId)) {
+      return { zOffset: -0.14, luminanceMul: 0.58, isLocked: true };
+    }
+    const elapsed = this.roomAwakenMap.get(roomId);
+    if (elapsed !== undefined && elapsed < 0.55 && !this.lastOptions.reducedMotion) {
+      const t = Math.min(1, Math.max(0, elapsed / 0.55));
+      const eased = 1 - Math.pow(1 - t, 3);
+      return {
+        zOffset: -0.14 * (1 - eased),
+        luminanceMul: 0.58 + 0.42 * eased,
+        isLocked: false,
+      };
+    }
+    return { zOffset: 0, luminanceMul: 1.0, isLocked: false };
+  }
+
   /**
    * Spawns continuous GPU-instanced ambient sanctuary motes and ready-gate roller sparks (`IDLE-04`)
    * when `reducedMotion === false` so the idle 3D courtyard feels alive and tactile.
@@ -1484,7 +1600,7 @@ export class Renderer3D {
     dtSec: number,
     timeSec: number
   ): void {
-    if (options.reducedMotion) return;
+    if (options.reducedMotion || (options.blueprintMix ?? 0) > 0.5) return;
     const isUltra = this.qualityGovernor.getActiveTier() === 'ULTRA_120';
     const spawnIntervalSec = isUltra ? 0.24 : 0.42;
     const maxAmbientCap = isUltra ? 18 : 10;
@@ -1501,7 +1617,11 @@ export class Renderer3D {
       if (this.activeParticleCount >= maxAmbientCap) break;
 
       const readyGates = board.gates.filter(
-        (g) => g.shutterOpen && g.shutterLockColor === 0 && g.iceCount <= 0
+        (g) =>
+          g.shutterOpen &&
+          g.shutterLockColor === 0 &&
+          g.iceCount <= 0 &&
+          !isGateInLockedRoom(board, g)
       );
 
       // Alternate between Gate Roller Intake Sparks and Floating Block/Courtyard Shimmer Motes
@@ -1515,13 +1635,13 @@ export class Renderer3D {
         const gx = isHoriz
           ? along
           : gate.edge === 'LEFT'
-            ? -0.14
-            : board.cols + 0.14;
+            ? gate.edgeLine - 0.14
+            : gate.edgeLine + 1 + 0.14;
         const gy = !isHoriz
           ? along
           : gate.edge === 'TOP'
-            ? -0.14
-            : board.rows + 0.14;
+            ? gate.edgeLine - 0.14
+            : gate.edgeLine + 1 + 0.14;
         const [nx, ny] = getGateOutwardNormal(gate.edge);
 
         const idx = this.particleWriteCursor * PARTICLE_STRIDE;
@@ -1541,7 +1661,9 @@ export class Renderer3D {
         this.particlePool[idx + 12] = stepIndex * 0.9;
         this.particlePool[idx + 13] = (stepIndex % 2 === 0 ? 1 : -1) * 3.4;
       } else {
-        const activeBlocks = board.blocks.filter((blk) => blk.status === 'ACTIVE');
+        const activeBlocks = board.blocks.filter(
+          (blk) => blk.status === 'ACTIVE' && !isBlockInLockedRoom(board, blk)
+        );
         let mx = ((stepIndex * 1.6180339) % 1) * board.cols;
         let my = ((stepIndex * 2.4142135) % 1) * board.rows;
         let mr = 1.0;
@@ -1561,6 +1683,18 @@ export class Renderer3D {
           mr = Math.min(1, br * 0.68 + 0.35);
           mg = Math.min(1, bg * 0.68 + 0.32);
           mb = Math.min(1, bb * 0.68 + 0.24);
+        } else {
+          const fallbackR = Math.floor(my);
+          const fallbackC = Math.floor(mx);
+          if (
+            fallbackR < 0 ||
+            fallbackR >= board.rows ||
+            fallbackC < 0 ||
+            fallbackC >= board.cols ||
+            board.occupancy[fallbackR * board.cols + fallbackC] === -1
+          ) {
+            continue;
+          }
         }
 
         const idx = this.particleWriteCursor * PARTICLE_STRIDE;
@@ -1621,6 +1755,13 @@ export class Renderer3D {
     for (const el of board.elevators) {
       this.elevatorSnapshots.set(el.id, { atAlternatePos: el.atAlternatePos });
     }
+    this.barrierSnapshots.clear();
+    for (const bar of board.barriers) {
+      this.barrierSnapshots.set(bar.id, {
+        open: bar.open,
+        shredsRemaining: bar.shredsRemaining,
+      });
+    }
   }
 
   private detectAutomaticShredEvents(board: BoardState, options: RenderSceneOptions): void {
@@ -1632,6 +1773,7 @@ export class Renderer3D {
 
     if (isLevelChange || isUndoOrRestart) {
       this.syncSnapshots(board);
+      this.roomAwakenMap.clear();
       if (isLevelChange) {
         this.activeVisualShreds.length = 0;
         this.activeShockwaves.length = 0;
@@ -1758,8 +1900,8 @@ export class Renderer3D {
       }
     }
 
-    // 3. Diff Gate Knock-Ons (`BUG-02`: Only fire a localized gate unlock effect when a gate's
-    // frozen ice shatters to 0 or its shutter gem lock unlocks — never on routine color queue steps or sliding)
+    // 3. Diff Gate Knock-Ons: Only fire a localized gate unlock effect when a gate's
+    // frozen ice shatters to 0 or its shutter gem lock unlocks — never on routine color queue steps or sliding.
     board.gates.forEach((gate, gi) => {
       const prevG = this.gateSnapshots.get(gi);
       if (!prevG) return;
@@ -1771,19 +1913,62 @@ export class Renderer3D {
         const gx = isHoriz
           ? gate.spanStart + gate.spanLength * 0.5
           : gate.edge === 'LEFT'
-            ? 0
-            : board.cols;
+            ? gate.edgeLine
+            : gate.edgeLine + 1;
         const gy = !isHoriz
           ? gate.spanStart + gate.spanLength * 0.5
           : gate.edge === 'TOP'
-            ? 0
-            : board.rows;
+            ? gate.edgeLine
+            : gate.edgeLine + 1;
         const cId = getGateActiveColor(gate);
         const [gr, gg, gb] = iceShattered ? [0.45, 0.92, 1.0] : this.getColorRgb(cId, hc);
         this.spawnShockwave(gx, gy, 0.52, gr, gg, gb, 0.2, 0.85, 0.32);
         this.spawnParticlesAt(gx, gy, 0.5, iceShattered ? 7 : cId, 8, 0, 0, pStyle);
       }
     });
+
+    // 4. Diff Sanctuary Portcullis Barrier Countdown & Room Awakening Knock-Ons (`SANCTUM-01`)
+    for (const bar of board.barriers) {
+      const prevB = this.barrierSnapshots.get(bar.id);
+      if (!prevB || bar.cells.length === 0) continue;
+      let minR = bar.cells[0][0];
+      let maxR = bar.cells[0][0];
+      let minC = bar.cells[0][1];
+      let maxC = bar.cells[0][1];
+      for (const [r, c] of bar.cells) {
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      }
+      const spanW = maxC - minC + 1;
+      const spanH = maxR - minR + 1;
+      const barLen = Math.max(spanW, spanH);
+      const bcx = minC + spanW * 0.5;
+      const bcy = minR + spanH * 0.5;
+      if (!prevB.open && bar.open) {
+        this.roomAwakenMap.set(bar.unlocksRoomId, 0.001);
+        this.spawnShockwave(
+          bcx,
+          bcy,
+          0.55,
+          1.0,
+          0.86,
+          0.32,
+          0.35,
+          Math.max(2.2, barLen * 0.95),
+          0.52
+        );
+        this.spawnParticlesAt(bcx, bcy, 0.52, 4, 34, 0, 0, pStyle);
+        for (const blk of board.blocks) {
+          if (blk.status === 'ACTIVE' && getBlockRoomId(board, blk) === bar.unlocksRoomId) {
+            this.blockBounceMap.set(blk.id, 0.38);
+          }
+        }
+      } else if (!bar.open && bar.shredsRemaining < prevB.shredsRemaining) {
+        this.spawnShockwave(bcx, bcy, 0.62, 1.0, 0.88, 0.38, 0.18, 0.85, 0.28);
+      }
+    }
 
     this.syncSnapshots(board);
   }
@@ -1962,7 +2147,7 @@ export class Renderer3D {
   }
 
   /**
-   * Renders a two-tiered 3D beveled architectural medallion plinth (`Guardrail 2A`, `Pillar 2`)
+   * Renders a two-tiered 3D beveled architectural medallion plinth (`UX-10`, `R3D-07`)
    * using `unitParticleCube` (`materialStyle = 0` full 3D lighting) so block modifiers and axis
    * emblems look carved and inlaid into the 3D piece rather than flat black 2D stickers.
    * Returns the exact top `Z` coordinate (`zBase + 0.086`) for placing the vector glyph on top.
@@ -2026,7 +2211,7 @@ export class Renderer3D {
     const skinId = options.equippedSkin ?? 'smooth_bevel';
     const highContrast = Boolean(options.highContrast);
     const colorblind = Boolean(options.colorblindSymbols);
-    const palette = TRAY_PALETTES[trayId] ?? TRAY_PALETTES.industrial_slate;
+    const palette = this.getEffectiveTrayPalette(trayId, highContrast);
     const timeSec = options.timeSec ?? (performance.now() - this.startTimeMs) * 0.001;
     const pulse = 0.5 + 0.5 * Math.sin(timeSec * 6.0);
 
@@ -2053,6 +2238,7 @@ export class Renderer3D {
     gl.uniform3f(this.uCapColor, 0.2, 0.2, 0.2);
     gl.uniform1f(this.uBlueprintMix, blueprintMix);
     gl.uniform3f(this.uBoardInfo, board.cols * 0.5, board.rows * 0.5, timeSec);
+    gl.uniform1i(this.uHighContrast, highContrast ? 1 : 0);
 
     if (this.atlasTexture) {
       gl.activeTexture(gl.TEXTURE0);
@@ -2092,61 +2278,139 @@ export class Renderer3D {
     timeSec: number
   ): void {
     const { rows, cols, occupancy, floorColor } = board;
+    const live3DMix = Math.max(0, 1.0 - (this.lastOptions.blueprintMix ?? 0) * 0.92);
+    const isCellPlayable = (r: number, c: number): boolean =>
+      r >= 0 && r < rows && c >= 0 && c < cols && occupancy[r * cols + c] !== -1;
 
-    // 1A. Stepped sacred-geometry architectural pedestal plinth + outer tray platform
-    this.drawMesh(
-      gl,
-      ENVIRONMENT_MESHES.wallSegment,
-      -0.38,
-      -0.38,
-      -0.34,
-      cols + 0.76,
-      rows + 0.76,
-      0.16,
-      palette.wallColor[0] * 0.56,
-      palette.wallColor[1] * 0.55,
-      palette.wallColor[2] * 0.62,
-      1.0
-    );
-    this.drawMesh(
-      gl,
-      ENVIRONMENT_MESHES.wallSegment,
-      -0.55,
-      -0.55,
-      -0.18,
-      cols + 1.1,
-      rows + 1.1,
-      0.16,
-      palette.wallColor[0] * 0.78,
-      palette.wallColor[1] * 0.76,
-      palette.wallColor[2] * 0.82,
-      1.0
-    );
+    // 1A. Contoured Stepped Sanctuary Pedestal Plinth (merged contiguous spans to minimize draw calls & overdraw)
+    const plinthSpans: Array<{ r0: number; r1: number; c0: number; c1: number; roomId: number }> = [];
+    for (let r = 0; r < rows; r++) {
+      let c = 0;
+      while (c < cols) {
+        if (!isCellPlayable(r, c)) {
+          c++;
+          continue;
+        }
+        const roomId = board.roomMap[r * cols + c] ?? 0;
+        const c0 = c;
+        while (
+          c + 1 < cols &&
+          isCellPlayable(r, c + 1) &&
+          (board.roomMap[r * cols + (c + 1)] ?? 0) === roomId
+        ) {
+          c++;
+        }
+        const c1 = c;
+        const prev = plinthSpans.find(
+          (s) => s.r1 === r - 1 && s.c0 === c0 && s.c1 === c1 && s.roomId === roomId
+        );
+        if (prev) {
+          prev.r1 = r;
+        } else {
+          plinthSpans.push({ r0: r, r1: r, c0, c1, roomId });
+        }
+        c++;
+      }
+    }
 
-    // 1B. Interior Floor Tiles, Cutouts, Pillars, and Colorful Floor Paths
+    for (const span of plinthSpans) {
+      const roomVis = this.getRoomVisualState(board, span.roomId);
+      const zOff = roomVis.zOffset;
+      const lum = roomVis.luminanceMul;
+      let bordersDiffRoomTop = false;
+      let bordersDiffRoomBot = false;
+      for (let c = span.c0; c <= span.c1; c++) {
+        if (
+          span.r0 > 0 &&
+          isCellPlayable(span.r0 - 1, c) &&
+          (board.roomMap[(span.r0 - 1) * cols + c] ?? 0) !== span.roomId
+        ) {
+          bordersDiffRoomTop = true;
+        }
+        if (
+          span.r1 < rows - 1 &&
+          isCellPlayable(span.r1 + 1, c) &&
+          (board.roomMap[(span.r1 + 1) * cols + c] ?? 0) !== span.roomId
+        ) {
+          bordersDiffRoomBot = true;
+        }
+      }
+      let bordersDiffRoomLeft = false;
+      let bordersDiffRoomRight = false;
+      for (let r = span.r0; r <= span.r1; r++) {
+        if (
+          span.c0 > 0 &&
+          isCellPlayable(r, span.c0 - 1) &&
+          (board.roomMap[r * cols + (span.c0 - 1)] ?? 0) !== span.roomId
+        ) {
+          bordersDiffRoomLeft = true;
+        }
+        if (
+          span.c1 < cols - 1 &&
+          isCellPlayable(r, span.c1 + 1) &&
+          (board.roomMap[r * cols + (span.c1 + 1)] ?? 0) !== span.roomId
+        ) {
+          bordersDiffRoomRight = true;
+        }
+      }
+
+      const stepL = bordersDiffRoomLeft ? 0.02 : 0.55;
+      const stepR = bordersDiffRoomRight ? 0.02 : 0.55;
+      const stepT = bordersDiffRoomTop ? 0.02 : 0.55;
+      const stepB = bordersDiffRoomBot ? 0.02 : 0.55;
+      const spanW = span.c1 - span.c0 + 1;
+      const spanH = span.r1 - span.r0 + 1;
+
+      this.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.wallSegment,
+        span.c0 - stepL,
+        span.r0 - stepT,
+        -0.34 + zOff * 0.45,
+        spanW + stepL + stepR,
+        spanH + stepT + stepB,
+        0.16,
+        palette.wallColor[0] * 0.56 * lum,
+        palette.wallColor[1] * 0.55 * lum,
+        palette.wallColor[2] * 0.62 * lum,
+        1.0
+      );
+
+      const padL = bordersDiffRoomLeft ? 0.02 : 0.38;
+      const padR = bordersDiffRoomRight ? 0.02 : 0.38;
+      const padT = bordersDiffRoomTop ? 0.02 : 0.38;
+      const padB = bordersDiffRoomBot ? 0.02 : 0.38;
+      this.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.wallSegment,
+        span.c0 - padL,
+        span.r0 - padT,
+        -0.18 + zOff * 0.65,
+        spanW + padL + padR,
+        spanH + padT + padB,
+        0.18,
+        palette.wallColor[0] * 0.78 * lum,
+        palette.wallColor[1] * 0.76 * lum,
+        palette.wallColor[2] * 0.82 * lum,
+        1.0
+      );
+    }
+
+    // 1B. Interior Floor Tiles, Sunken Twilight Veil, Pillars & Floor Paths
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const idx = r * cols + c;
         const occ = occupancy[idx];
 
         if (occ === -1) {
-          // Cutout cell: raised perimeter wall plug
-          this.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.wallSegment,
-            c,
-            r,
-            0.0,
-            1.0,
-            1.0,
-            0.95,
-            palette.wallColor[0],
-            palette.wallColor[1],
-            palette.wallColor[2],
-            1.0
-          );
+          // Exterior VOID cell (`COURTYARD-01`): carved completely away into open negative space!
           continue;
         }
+
+        const roomId = board.roomMap[idx] ?? 0;
+        const roomVis = this.getRoomVisualState(board, roomId);
+        const zOff = roomVis.zOffset;
+        const lum = roomVis.luminanceMul;
 
         const checker = (r + c) % 2 === 0 ? palette.floorTileA : palette.floorTileB;
         const primaryWave = Math.pow(
@@ -2157,9 +2421,10 @@ export class Renderer3D {
           Math.max(0, Math.cos(timeSec * 0.8 + (c - r) * 0.52)),
           4
         );
-        const sheen = !this.lastOptions.reducedMotion
-          ? primaryWave * 0.048 + crossWave * 0.022
-          : 0;
+        const sheen =
+          !this.lastOptions.reducedMotion && !roomVis.isLocked
+            ? primaryWave * 0.048 + crossWave * 0.022
+            : 0;
         const pathColorId = (floorColor[idx] ?? 0) as ColorId;
 
         if (pathColorId > 0) {
@@ -2169,13 +2434,13 @@ export class Renderer3D {
             ENVIRONMENT_MESHES.trayFloorTile,
             c,
             r,
-            0.0,
+            zOff,
             1.0,
             1.0,
             1.0,
-            Math.min(1, pr * 0.62 + checker[0] * 0.38 + sheen),
-            Math.min(1, pg * 0.62 + checker[1] * 0.38 + sheen),
-            Math.min(1, pb * 0.62 + checker[2] * 0.38 + sheen * 0.7),
+            Math.min(1, (pr * 0.62 + checker[0] * 0.38 + sheen) * lum),
+            Math.min(1, (pg * 0.62 + checker[1] * 0.38 + sheen) * lum),
+            Math.min(1, (pb * 0.62 + checker[2] * 0.38 + sheen * 0.7) * lum),
             1.0
           );
           if (colorblind) {
@@ -2184,11 +2449,11 @@ export class Renderer3D {
               `CB_${pathColorId}`,
               c + 0.5,
               r + 0.5,
-              0.008,
+              zOff + 0.008,
               0.42,
-              1,
-              1,
-              1,
+              lum,
+              lum,
+              lum,
               0.85
             );
           }
@@ -2198,29 +2463,28 @@ export class Renderer3D {
             ENVIRONMENT_MESHES.trayFloorTile,
             c,
             r,
-            0.0,
+            zOff,
             1.0,
             1.0,
             1.0,
-            Math.min(1, checker[0] + sheen),
-            Math.min(1, checker[1] + sheen * 0.9),
-            Math.min(1, checker[2] + sheen * 0.65),
+            Math.min(1, (checker[0] + sheen) * lum),
+            Math.min(1, (checker[1] + sheen * 0.9) * lum),
+            Math.min(1, (checker[2] + sheen * 0.65) * lum + (1 - lum) * 0.05),
             1.0
           );
         }
 
         // Interior Stone Pillar (`occ === -2`): Fixed architectural wall column with 3D carved diamond capital
-        // (visually distinct from both movable silver-steel Color 0 Sliders and unlockable Padlocks)
         if (occ === -2) {
-          const pr = Math.min(1, palette.wallColor[0] * 1.38);
-          const pg = Math.min(1, palette.wallColor[1] * 1.38);
-          const pb = Math.min(1, palette.wallColor[2] * 1.38);
+          const pr = Math.min(1, palette.wallColor[0] * 1.38 * lum);
+          const pg = Math.min(1, palette.wallColor[1] * 1.38 * lum);
+          const pb = Math.min(1, palette.wallColor[2] * 1.38 * lum);
           this.drawMesh(
             gl,
             ENVIRONMENT_MESHES.pillarMesh,
             c,
             r,
-            0.0,
+            zOff,
             1.0,
             1.0,
             1.0,
@@ -2229,25 +2493,26 @@ export class Renderer3D {
             pb,
             1.0
           );
-          // 3D rotated architectural diamond capital plinth on top of the stone pillar (`IDLE-05`)
-          const pillarBobZ = !this.lastOptions.reducedMotion
-            ? Math.sin(timeSec * 2.8 + r * 0.9 + c * 1.1) * 0.024
-            : 0;
-          const pillarSpinZ = !this.lastOptions.reducedMotion
-            ? Math.PI * 0.25 + timeSec * 0.95
-            : Math.PI * 0.25;
+          const pillarBobZ =
+            !this.lastOptions.reducedMotion && !roomVis.isLocked
+              ? Math.sin(timeSec * 2.8 + r * 0.9 + c * 1.1) * 0.024
+              : 0;
+          const pillarSpinZ =
+            !this.lastOptions.reducedMotion && !roomVis.isLocked
+              ? Math.PI * 0.25 + timeSec * 0.95
+              : Math.PI * 0.25;
           this.drawMesh(
             gl,
             ENVIRONMENT_MESHES.unitParticleCube,
             c + 0.5,
             r + 0.5,
-            0.652 + pillarBobZ,
+            zOff + 0.652 + pillarBobZ,
             0.38,
             0.38,
             0.056,
-            Math.min(1, pr * 0.85 + 0.22),
-            Math.min(1, pg * 0.82 + 0.18),
-            Math.min(1, pb * 0.78 + 0.12),
+            Math.min(1, pr * 0.85 + 0.22 * lum),
+            Math.min(1, pg * 0.82 + 0.18 * lum),
+            Math.min(1, pb * 0.78 + 0.12 * lum),
             1.0,
             0,
             pillarSpinZ,
@@ -2258,11 +2523,11 @@ export class Renderer3D {
             'DIAMOND',
             c + 0.5,
             r + 0.5,
-            0.686 + pillarBobZ,
+            zOff + 0.686 + pillarBobZ,
             0.36,
-            0.98,
-            0.86,
-            0.58,
+            0.98 * lum,
+            0.86 * lum,
+            0.58 * lum,
             0.95
           );
         }
@@ -2271,11 +2536,14 @@ export class Renderer3D {
 
     // 1C. Moving Elevator Platforms (`board.elevators`)
     for (const elev of board.elevators) {
+      const elevRoomId = board.roomMap[elev.row * cols + elev.col] ?? 0;
+      const elevVis = this.getRoomVisualState(board, elevRoomId);
+      const zOff = elevVis.zOffset;
+      const lum = elevVis.luminanceMul;
       const dir = elev.atAlternatePos ? -1 : 1;
       const targetR = elev.row + elev.deltaRow * dir;
       const targetC = elev.col + elev.deltaCol * dir;
 
-      // 3D beveled metallic track guide rails toward alternate position
       const minR = Math.min(elev.row, targetR);
       const minC = Math.min(elev.col, targetC);
       const spanR = Math.abs(targetR - elev.row) + elev.height;
@@ -2287,13 +2555,13 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.unitParticleCube,
           minC + spanC * 0.5,
           minR + 0.22,
-          0.014,
+          zOff + 0.014,
           spanC - 0.24,
           0.08,
           0.028,
-          0.36,
-          0.66,
-          0.86,
+          0.36 * lum,
+          0.66 * lum,
+          0.86 * lum,
           0.88,
           0,
           0,
@@ -2304,13 +2572,13 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.unitParticleCube,
           minC + spanC * 0.5,
           minR + spanR - 0.22,
-          0.014,
+          zOff + 0.014,
           spanC - 0.24,
           0.08,
           0.028,
-          0.36,
-          0.66,
-          0.86,
+          0.36 * lum,
+          0.66 * lum,
+          0.86 * lum,
           0.88,
           0,
           0,
@@ -2322,13 +2590,13 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.unitParticleCube,
           minC + 0.22,
           minR + spanR * 0.5,
-          0.014,
+          zOff + 0.014,
           0.08,
           spanR - 0.24,
           0.028,
-          0.36,
-          0.66,
-          0.86,
+          0.36 * lum,
+          0.66 * lum,
+          0.86 * lum,
           0.88,
           0,
           0,
@@ -2339,13 +2607,13 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.unitParticleCube,
           minC + spanC - 0.22,
           minR + spanR * 0.5,
-          0.014,
+          zOff + 0.014,
           0.08,
           spanR - 0.24,
           0.028,
-          0.36,
-          0.66,
-          0.86,
+          0.36 * lum,
+          0.66 * lum,
+          0.86 * lum,
           0.88,
           0,
           0,
@@ -2353,19 +2621,18 @@ export class Renderer3D {
         );
       }
 
-      // Metallic elevator platform
       this.drawMesh(
         gl,
         ENVIRONMENT_MESHES.elevatorMesh,
         elev.col,
         elev.row,
-        0.0,
+        zOff,
         elev.width,
         elev.height,
         1.0,
-        0.32,
-        0.58,
-        0.78,
+        0.32 * lum,
+        0.58 * lum,
+        0.78 * lum,
         1.0
       );
       const chevronKey = isHorizTrack ? 'LOCK_H' : 'LOCK_V';
@@ -2373,12 +2640,12 @@ export class Renderer3D {
         gl,
         elev.col + elev.width * 0.5,
         elev.row + elev.height * 0.5,
-        0.032,
+        zOff + 0.032,
         isHorizTrack ? 0.52 : 0.38,
         isHorizTrack ? 0.38 : 0.52,
-        0.32,
-        0.58,
-        0.78
+        0.32 * lum,
+        0.58 * lum,
+        0.78 * lum
       );
       this.drawAtlasBadge(
         gl,
@@ -2387,9 +2654,9 @@ export class Renderer3D {
         elev.row + elev.height * 0.5,
         elevBadgeZ,
         0.42,
-        0.92,
-        0.98,
-        1.0,
+        0.92 * lum,
+        0.98 * lum,
+        1.0 * lum,
         0.95
       );
     }
@@ -2397,16 +2664,20 @@ export class Renderer3D {
     // 1D. Wooden Crates (`board.crates`)
     for (const crate of board.crates) {
       if (crate.destroyed || crate.hp <= 0) continue;
+      const crateRoomId = board.roomMap[crate.row * cols + crate.col] ?? 0;
+      const crateVis = this.getRoomVisualState(board, crateRoomId);
+      const zOff = crateVis.zOffset;
+      const lum = crateVis.luminanceMul;
       const hpRatio = crate.hp / Math.max(1, crate.maxHp);
-      const cr = 0.68 + 0.12 * hpRatio;
-      const cg = 0.44 + 0.1 * hpRatio;
-      const cb = 0.2 + 0.06 * hpRatio;
+      const cr = (0.68 + 0.12 * hpRatio) * lum;
+      const cg = (0.44 + 0.1 * hpRatio) * lum;
+      const cb = (0.2 + 0.06 * hpRatio) * lum;
       this.drawMesh(
         gl,
         ENVIRONMENT_MESHES.crateMesh,
         crate.col,
         crate.row,
-        0.0,
+        zOff,
         1.0,
         1.0,
         1.0,
@@ -2422,7 +2693,7 @@ export class Renderer3D {
         gl,
         crate.col + 0.5,
         crate.row + 0.5,
-        0.585,
+        zOff + 0.585,
         0.46,
         0.42,
         cr,
@@ -2436,24 +2707,28 @@ export class Renderer3D {
         crate.row + 0.5,
         crateBadgeZ,
         0.38,
-        1.0,
-        0.96,
-        0.84
+        1.0 * lum,
+        0.96 * lum,
+        0.84 * lum
       );
     }
 
     // 1E. Block Generators (`board.generators`)
     for (const gen of board.generators) {
+      const genRoomId = board.roomMap[gen.row * cols + gen.col] ?? 0;
+      const genVis = this.getRoomVisualState(board, genRoomId);
+      const zOff = genVis.zOffset;
+      const lum = genVis.luminanceMul;
       const depleted = gen.state === 'DEPLETED' || gen.queueCursor >= gen.queue.length;
-      const gr = depleted ? 0.25 : 0.35;
-      const gg = depleted ? 0.28 : 0.42;
-      const gb = depleted ? 0.32 : 0.55;
+      const gr = (depleted ? 0.25 : 0.35) * lum;
+      const gg = (depleted ? 0.28 : 0.42) * lum;
+      const gb = (depleted ? 0.32 : 0.55) * lum;
       this.drawMesh(
         gl,
         ENVIRONMENT_MESHES.generatorMesh,
         gen.col,
         gen.row,
-        0.0,
+        zOff,
         1.0,
         1.0,
         1.0,
@@ -2467,12 +2742,15 @@ export class Renderer3D {
         const nextSpec = gen.queue[gen.queueCursor];
         if (nextSpec && nextSpec.colorStack.length > 0) {
           const nextColor = nextSpec.colorStack[0];
-          const [nr, ng, nb] = this.getColorRgb(nextColor, highContrast);
+          const [rawNr, rawNg, rawNb] = this.getColorRgb(nextColor, highContrast);
+          const nr = rawNr * lum;
+          const ng = rawNg * lum;
+          const nb = rawNb * lum;
 
-          // Framed floor spawn pad across nextSpec shape footprint (`R3D-08`, `IDLE-05`)
-          const genPulse = !this.lastOptions.reducedMotion
-            ? 0.5 + 0.5 * Math.sin(timeSec * 3.8 + gen.col * 0.9)
-            : 0.5;
+          const genPulse =
+            !this.lastOptions.reducedMotion && !genVis.isLocked
+              ? 0.5 + 0.5 * Math.sin(timeSec * 3.8 + gen.col * 0.9)
+              : 0.5;
           const spawnShape = getShape(nextSpec.shapeId);
           for (const [dr, dc] of spawnShape.cells) {
             const sc = gen.spawnCol + dc;
@@ -2483,7 +2761,7 @@ export class Renderer3D {
                 ENVIRONMENT_MESHES.overlayQuad,
                 sc + 0.06,
                 sr + 0.06,
-                0.006,
+                zOff + 0.006,
                 0.88,
                 0.88,
                 1.0,
@@ -2498,16 +2776,16 @@ export class Renderer3D {
             }
           }
 
-          // 3D beveled colored preview block core emerging from the generator chimney (`IDLE-05`)
-          const previewBobZ = !this.lastOptions.reducedMotion
-            ? Math.sin(timeSec * 3.8 + gen.col) * 0.034
-            : 0;
+          const previewBobZ =
+            !this.lastOptions.reducedMotion && !genVis.isLocked
+              ? Math.sin(timeSec * 3.8 + gen.col) * 0.034
+              : 0;
           this.drawMesh(
             gl,
             ENVIRONMENT_MESHES.unitParticleCube,
             gen.col + 0.5,
             gen.row + 0.34,
-            0.735 + previewBobZ,
+            zOff + 0.735 + previewBobZ,
             0.62,
             0.36,
             0.065,
@@ -2525,11 +2803,11 @@ export class Renderer3D {
               `CB_${nextColor}`,
               gen.col + 0.5,
               gen.row + 0.34,
-              0.774 + previewBobZ,
+              zOff + 0.774 + previewBobZ,
               0.24,
-              1.0,
-              1.0,
-              1.0,
+              lum,
+              lum,
+              lum,
               0.96
             );
           }
@@ -2538,7 +2816,7 @@ export class Renderer3D {
           gl,
           gen.col + 0.5,
           gen.row + 0.68,
-          0.705,
+          zOff + 0.705,
           0.68,
           0.32,
           gr,
@@ -2552,9 +2830,9 @@ export class Renderer3D {
           gen.row + 0.68,
           genBadgeZ,
           0.3,
-          1.0,
-          0.92,
-          0.25,
+          1.0 * lum,
+          0.92 * lum,
+          0.25 * lum,
           1.0
         );
         this.drawNumberBadges(
@@ -2564,68 +2842,196 @@ export class Renderer3D {
           gen.row + 0.68,
           genBadgeZ + 0.002,
           0.3,
-          1.0,
-          1.0,
-          1.0
+          lum,
+          lum,
+          lum
         );
       }
     }
 
-    // 1F. Raised Perimeter Walls & Exit Gates
-    const topGateCells = new Uint8Array(cols);
-    const bottomGateCells = new Uint8Array(cols);
-    const leftGateCells = new Uint8Array(rows);
-    const rightGateCells = new Uint8Array(rows);
-
-    for (const gate of board.gates) {
-      for (let s = 0; s < gate.spanLength; s++) {
-        const idx = gate.spanStart + s;
-        if (gate.edge === 'TOP' && idx >= 0 && idx < cols) topGateCells[idx] = 1;
-        if (gate.edge === 'BOTTOM' && idx >= 0 && idx < cols) bottomGateCells[idx] = 1;
-        if (gate.edge === 'LEFT' && idx >= 0 && idx < rows) leftGateCells[idx] = 1;
-        if (gate.edge === 'RIGHT' && idx >= 0 && idx < rows) rightGateCells[idx] = 1;
-      }
-    }
-
+    // 1F. Contoured Perimeter Parapet Walls, Corner Posts & Stepped-Edge Exit Gates (`COURTYARD-01`, `GATE-STEP-01`)
     const wallThick = 0.42;
     const [wr, wg, wb] = palette.wallColor;
     const [rhr, rhg, rhb] = palette.rimHighlight;
 
-    // Corner wall posts
-    this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, -wallThick, -wallThick, 0, wallThick, wallThick, 1, wr, wg, wb);
-    this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, cols, -wallThick, 0, wallThick, wallThick, 1, wr, wg, wb);
-    this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, -wallThick, rows, 0, wallThick, wallThick, 1, wr, wg, wb);
-    this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, cols, rows, 0, wallThick, wallThick, 1, wr, wg, wb);
+    const isUnitEdgeCoveredByGate = (
+      edge: GateState['edge'],
+      edgeLine: number,
+      spanCell: number
+    ): boolean => {
+      for (const gate of board.gates) {
+        if (
+          gate.edge === edge &&
+          gate.edgeLine === edgeLine &&
+          spanCell >= gate.spanStart &&
+          spanCell < gate.spanStart + gate.spanLength
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
 
-    for (let c = 0; c < cols; c++) {
-      if (!topGateCells[c]) {
-        this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c, -wallThick, 0, 1, wallThick, 1, wr, wg, wb);
-        // Inner perimeter rim highlight trim (`R3D-12`)
-        this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c, -0.09, 0.682, 1, 0.08, 1, rhr, rhg, rhb, 0.9);
-      }
-      if (!bottomGateCells[c]) {
-        this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c, rows, 0, 1, wallThick, 1, wr, wg, wb);
-        this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c, rows + 0.01, 0.682, 1, 0.08, 1, rhr, rhg, rhb, 0.9);
-      }
-    }
     for (let r = 0; r < rows; r++) {
-      if (!leftGateCells[r]) {
-        this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, -wallThick, r, 0, wallThick, 1, 1, wr, wg, wb);
-        this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, -0.09, r, 0.682, 0.08, 1, 1, rhr, rhg, rhb, 0.9);
-      }
-      if (!rightGateCells[r]) {
-        this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, cols, r, 0, wallThick, 1, 1, wr, wg, wb);
-        this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, cols + 0.01, r, 0.682, 0.08, 1, 1, rhr, rhg, rhb, 0.9);
+      for (let c = 0; c < cols; c++) {
+        if (!isCellPlayable(r, c)) continue;
+
+        const roomId = board.roomMap[r * cols + c] ?? 0;
+        const roomVis = this.getRoomVisualState(board, roomId);
+        const zOff = roomVis.zOffset;
+        const lum = roomVis.luminanceMul;
+        const cwr = wr * lum;
+        const cwg = wg * lum;
+        const cwb = wb * lum;
+        const crhr = rhr * lum;
+        const crhg = rhg * lum;
+        const crhb = rhb * lum;
+
+        const topOpen = !isCellPlayable(r - 1, c);
+        const botOpen = !isCellPlayable(r + 1, c);
+        const leftOpen = !isCellPlayable(r, c - 1);
+        const rightOpen = !isCellPlayable(r, c + 1);
+
+        const gateThick = wallThick - 0.03;
+        if (topOpen && !isUnitEdgeCoveredByGate('TOP', r, c)) {
+          const trimLeft =
+            isCellPlayable(r - 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r - 1)
+              ? gateThick
+              : 0;
+          const trimRight =
+            isCellPlayable(r - 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r - 1)
+              ? gateThick
+              : 0;
+          const segW = 1 - trimLeft - trimRight;
+          if (segW > 0.02) {
+            this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + trimLeft, r - wallThick, zOff, segW, wallThick, 1, cwr, cwg, cwb);
+            this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c + trimLeft, r - 0.09, zOff + 0.682, segW, 0.08, 1, crhr, crhg, crhb, 0.9);
+          }
+        }
+        if (botOpen && !isUnitEdgeCoveredByGate('BOTTOM', r, c)) {
+          const trimLeft =
+            isCellPlayable(r + 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r + 1)
+              ? gateThick
+              : 0;
+          const trimRight =
+            isCellPlayable(r + 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r + 1)
+              ? gateThick
+              : 0;
+          const segW = 1 - trimLeft - trimRight;
+          if (segW > 0.02) {
+            this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + trimLeft, r + 1, zOff, segW, wallThick, 1, cwr, cwg, cwb);
+            this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c + trimLeft, r + 1.01, zOff + 0.682, segW, 0.08, 1, crhr, crhg, crhb, 0.9);
+          }
+        }
+        if (leftOpen && !isUnitEdgeCoveredByGate('LEFT', c, r)) {
+          const trimTop = isCellPlayable(r - 1, c - 1)
+            ? isUnitEdgeCoveredByGate('BOTTOM', r - 1, c - 1)
+              ? gateThick
+              : wallThick
+            : 0;
+          const trimBot = isCellPlayable(r + 1, c - 1)
+            ? isUnitEdgeCoveredByGate('TOP', r + 1, c - 1)
+              ? gateThick
+              : wallThick
+            : 0;
+          const segH = 1 - trimTop - trimBot;
+          if (segH > 0.02) {
+            this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r + trimTop, zOff, wallThick, segH, 1, cwr, cwg, cwb);
+            this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c - 0.09, r + trimTop, zOff + 0.682, 0.08, segH, 1, crhr, crhg, crhb, 0.9);
+          }
+        }
+        if (rightOpen && !isUnitEdgeCoveredByGate('RIGHT', c, r)) {
+          const trimTop = isCellPlayable(r - 1, c + 1)
+            ? isUnitEdgeCoveredByGate('BOTTOM', r - 1, c + 1)
+              ? gateThick
+              : wallThick
+            : 0;
+          const trimBot = isCellPlayable(r + 1, c + 1)
+            ? isUnitEdgeCoveredByGate('TOP', r + 1, c + 1)
+              ? gateThick
+              : wallThick
+            : 0;
+          const segH = 1 - trimTop - trimBot;
+          if (segH > 0.02) {
+            this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r + trimTop, zOff, wallThick, segH, 1, cwr, cwg, cwb);
+            this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c + 1.01, r + trimTop, zOff + 0.682, 0.08, segH, 1, crhr, crhg, crhb, 0.9);
+          }
+        }
+
+        // Convex outer corner posts
+        if (topOpen && leftOpen) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
+        if (topOpen && rightOpen) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
+        if (botOpen && leftOpen) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
+        if (botOpen && rightOpen) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
+
+        // Concave inner elbow posts when stepped-edge gates abut an inward corner
+        if (
+          !topOpen &&
+          !leftOpen &&
+          !isCellPlayable(r - 1, c - 1) &&
+          isUnitEdgeCoveredByGate('LEFT', c, r - 1) &&
+          isUnitEdgeCoveredByGate('TOP', r, c - 1)
+        ) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
+        if (
+          !topOpen &&
+          !rightOpen &&
+          !isCellPlayable(r - 1, c + 1) &&
+          isUnitEdgeCoveredByGate('RIGHT', c, r - 1) &&
+          isUnitEdgeCoveredByGate('TOP', r, c + 1)
+        ) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
+        if (
+          !botOpen &&
+          !leftOpen &&
+          !isCellPlayable(r + 1, c - 1) &&
+          isUnitEdgeCoveredByGate('LEFT', c, r + 1) &&
+          isUnitEdgeCoveredByGate('BOTTOM', r, c - 1)
+        ) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
+        if (
+          !botOpen &&
+          !rightOpen &&
+          !isCellPlayable(r + 1, c + 1) &&
+          isUnitEdgeCoveredByGate('RIGHT', c, r + 1) &&
+          isUnitEdgeCoveredByGate('BOTTOM', r, c + 1)
+        ) {
+          this.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        }
       }
     }
 
-    // Render each Exit Gate housing, spinning shredder roller, queue pips, and badges
+    // Render each Exit Gate housing, spinning shredder roller, queue pips, and badges (`GATE-STEP-01`)
     for (const gate of board.gates) {
       const activeColor = getGateActiveColor(gate);
-      const [gr, gg, gb] = this.getColorRgb(activeColor, highContrast);
+      const [rawGr, rawGg, rawGb] = this.getColorRgb(activeColor, highContrast);
       const isHorizEdge = gate.edge === 'TOP' || gate.edge === 'BOTTOM';
       const spanAxisX = isHorizEdge ? 1 : 0;
       const spanAxisY = isHorizEdge ? 0 : 1;
+
+      const adjR = isHorizEdge ? gate.edgeLine : gate.spanStart;
+      const adjC = isHorizEdge ? gate.spanStart : gate.edgeLine;
+      const gateRoomId =
+        adjR >= 0 && adjR < rows && adjC >= 0 && adjC < cols
+          ? (board.roomMap[adjR * cols + adjC] ?? 0)
+          : 0;
+      const gateVis = this.getRoomVisualState(board, gateRoomId);
+      const zOff = gateVis.zOffset;
+      const lum = gateVis.luminanceMul;
+      const gr = rawGr * lum;
+      const gg = rawGg * lum;
+      const gb = rawGb * lum;
 
       let gx = 0;
       let gy = 0;
@@ -2633,39 +3039,39 @@ export class Renderer3D {
       let gh = 1;
       let rollerX = 0;
       let rollerY = 0;
-      let rollerLen = gate.spanLength;
+      const rollerLen = gate.spanLength;
       let rollerRotZ = 0;
 
       if (gate.edge === 'TOP') {
         gx = gate.spanStart;
-        gy = -wallThick;
+        gy = gate.edgeLine - wallThick;
         gw = gate.spanLength;
         gh = wallThick;
         rollerX = gate.spanStart + gate.spanLength * 0.5;
-        rollerY = -wallThick * 0.5;
+        rollerY = gate.edgeLine - wallThick * 0.5;
         rollerRotZ = 0;
       } else if (gate.edge === 'BOTTOM') {
         gx = gate.spanStart;
-        gy = rows;
+        gy = gate.edgeLine + 1;
         gw = gate.spanLength;
         gh = wallThick;
         rollerX = gate.spanStart + gate.spanLength * 0.5;
-        rollerY = rows + wallThick * 0.5;
+        rollerY = gate.edgeLine + 1 + wallThick * 0.5;
         rollerRotZ = 0;
       } else if (gate.edge === 'LEFT') {
-        gx = -wallThick;
+        gx = gate.edgeLine - wallThick;
         gy = gate.spanStart;
         gw = wallThick;
         gh = gate.spanLength;
-        rollerX = -wallThick * 0.5;
+        rollerX = gate.edgeLine - wallThick * 0.5;
         rollerY = gate.spanStart + gate.spanLength * 0.5;
         rollerRotZ = Math.PI * 0.5;
       } else {
-        gx = cols;
+        gx = gate.edgeLine + 1;
         gy = gate.spanStart;
         gw = wallThick;
         gh = gate.spanLength;
-        rollerX = cols + wallThick * 0.5;
+        rollerX = gate.edgeLine + 1 + wallThick * 0.5;
         rollerY = gate.spanStart + gate.spanLength * 0.5;
         rollerRotZ = Math.PI * 0.5;
       }
@@ -2685,13 +3091,13 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.gateHousing,
           rx,
           ry,
-          0.0,
+          zOff,
           rw,
           rh,
           0.18,
-          rhr * 0.9,
-          rhg * 0.9,
-          rhb * 0.9,
+          rhr * 0.9 * lum,
+          rhg * 0.9 * lum,
+          rhb * 0.9 * lum,
           0.95
         );
         this.drawAtlasBadge(
@@ -2699,11 +3105,11 @@ export class Renderer3D {
           isHorizEdge ? 'LOCK_H' : 'LOCK_V',
           rollerX + spanAxisX * (gate.spanLength * 0.5 - 0.16),
           rollerY + spanAxisY * (gate.spanLength * 0.5 - 0.16),
-          0.72,
+          zOff + 0.72,
           0.24,
-          0.9,
-          0.96,
-          1.0,
+          0.9 * lum,
+          0.96 * lum,
+          1.0 * lum,
           0.95
         );
       }
@@ -2714,7 +3120,7 @@ export class Renderer3D {
         ENVIRONMENT_MESHES.gateHousing,
         gx,
         gy,
-        0.0,
+        zOff,
         gw,
         gh,
         0.42,
@@ -2726,7 +3132,10 @@ export class Renderer3D {
 
       // Spinning 3D Shredder Roller cylinder + Breathing Threshold Floor Aura (`IDLE-03`)
       const gateReady =
-        gate.shutterOpen && gate.shutterLockColor === 0 && gate.iceCount <= 0;
+        gate.shutterOpen &&
+        gate.shutterLockColor === 0 &&
+        gate.iceCount <= 0 &&
+        !gateVis.isLocked;
       const isGateActivelyShredding = this.activeVisualShreds.some(
         (a) => a.gateIndex === gate.index
       );
@@ -2740,51 +3149,49 @@ export class Renderer3D {
       const rollerSpeed =
         !gateReady || this.lastOptions.reducedMotion
           ? 0.0
-          : isGateActivelyShredding || isGateDragTargeted
-            ? 6.4
-            : 1.35;
+          : (isGateActivelyShredding || isGateDragTargeted ? 6.4 : 1.35) * live3DMix;
       const rollerSpin = gate.rollerPhase + timeSec * rollerSpeed;
       this.drawMesh(
         gl,
         ENVIRONMENT_MESHES.rollerMesh,
         rollerX,
         rollerY,
-        0.34,
+        zOff + 0.34,
         rollerLen * 0.92,
         0.135,
         0.135,
-        Math.min(1, gr * 0.85 + 0.18 + rollerGlint),
-        Math.min(1, gg * 0.85 + 0.18 + rollerGlint),
-        Math.min(1, gb * 0.85 + 0.18 + rollerGlint * 0.8),
+        Math.min(1, (rawGr * 0.85 + 0.18 + rollerGlint) * lum),
+        Math.min(1, (rawGg * 0.85 + 0.18 + rollerGlint) * lum),
+        Math.min(1, (rawGb * 0.85 + 0.18 + rollerGlint * 0.8) * lum),
         1.0,
         rollerSpin,
         rollerRotZ
       );
 
       // Breathing Threshold Intake Floor Glow on ready gates (`IDLE-03`)
-      if (gateReady) {
-        const auraDepth = 0.38 + 0.07 * gatePulse;
+      if (gateReady && live3DMix > 0.05) {
+        const auraDepth = 0.38 + 0.07 * gatePulse * live3DMix;
         let auraX = 0;
         let auraY = 0;
         let auraW = 1;
         let auraH = 1;
         if (gate.edge === 'TOP') {
           auraX = gate.spanStart + 0.04;
-          auraY = 0.01;
+          auraY = gate.edgeLine + 0.01;
           auraW = gate.spanLength - 0.08;
           auraH = auraDepth;
         } else if (gate.edge === 'BOTTOM') {
           auraX = gate.spanStart + 0.04;
-          auraY = rows - auraDepth - 0.01;
+          auraY = gate.edgeLine + 1 - auraDepth - 0.01;
           auraW = gate.spanLength - 0.08;
           auraH = auraDepth;
         } else if (gate.edge === 'LEFT') {
-          auraX = 0.01;
+          auraX = gate.edgeLine + 0.01;
           auraY = gate.spanStart + 0.04;
           auraW = auraDepth;
           auraH = gate.spanLength - 0.08;
         } else {
-          auraX = cols - auraDepth - 0.01;
+          auraX = gate.edgeLine + 1 - auraDepth - 0.01;
           auraY = gate.spanStart + 0.04;
           auraW = auraDepth;
           auraH = gate.spanLength - 0.08;
@@ -2794,14 +3201,14 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.overlayQuad,
           auraX,
           auraY,
-          0.007,
+          zOff + 0.007,
           Math.max(0.2, auraW),
           Math.max(0.2, auraH),
           1.0,
-          Math.min(1, gr * 0.8 + 0.2),
-          Math.min(1, gg * 0.8 + 0.2),
-          Math.min(1, gb * 0.8 + 0.2),
-          0.1 + 0.1 * gatePulse,
+          Math.min(1, gr * 0.8 + 0.2 * lum),
+          Math.min(1, gg * 0.8 + 0.2 * lum),
+          Math.min(1, gb * 0.8 + 0.2 * lum),
+          (0.1 + 0.1 * gatePulse) * live3DMix,
           0,
           0,
           4
@@ -2810,9 +3217,9 @@ export class Renderer3D {
 
       // Toggling Shutter Side-Posts & Status Bar (`R3D-08`)
       if (gate.togglesOnClear) {
-        const indR = gate.shutterOpen ? 0.14 : 0.92;
-        const indG = gate.shutterOpen ? 0.82 : 0.22;
-        const indB = gate.shutterOpen ? 0.38 : 0.28;
+        const indR = (gate.shutterOpen ? 0.14 : 0.92) * lum;
+        const indG = (gate.shutterOpen ? 0.82 : 0.22) * lum;
+        const indB = (gate.shutterOpen ? 0.38 : 0.28) * lum;
         const postW = isHorizEdge ? 0.1 : gw * 0.86;
         const postH = isHorizEdge ? gh * 0.86 : 0.1;
         this.drawMesh(
@@ -2820,7 +3227,7 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.gateHousing,
           gx + (isHorizEdge ? 0.02 : gw * 0.07),
           gy + (isHorizEdge ? gh * 0.07 : 0.02),
-          0.26,
+          zOff + 0.26,
           postW,
           postH,
           0.52,
@@ -2834,7 +3241,7 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.gateHousing,
           gx + (isHorizEdge ? gw - 0.12 : gw * 0.07),
           gy + (isHorizEdge ? gh * 0.07 : gh - 0.12),
-          0.26,
+          zOff + 0.26,
           postW,
           postH,
           0.52,
@@ -2856,13 +3263,13 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.gateHousing,
           gx + gw * 0.08,
           gy + gh * 0.08,
-          0.32,
+          zOff + 0.32,
           gw * 0.84,
           gh * 0.84,
           0.45,
-          lockRgb[0] * 0.7,
-          lockRgb[1] * 0.7,
-          lockRgb[2] * 0.7,
+          lockRgb[0] * 0.7 * lum,
+          lockRgb[1] * 0.7 * lum,
+          lockRgb[2] * 0.7 * lum,
           0.95
         );
         if (gate.shutterLockColor > 0) {
@@ -2871,11 +3278,11 @@ export class Renderer3D {
             'BADGE_GEM',
             rollerX,
             rollerY,
-            0.72,
+            zOff + 0.72,
             0.32,
-            lockRgb[0],
-            lockRgb[1],
-            lockRgb[2],
+            lockRgb[0] * lum,
+            lockRgb[1] * lum,
+            lockRgb[2] * lum,
             1.0
           );
           if (colorblind) {
@@ -2884,11 +3291,11 @@ export class Renderer3D {
               `CB_${gate.shutterLockColor}`,
               rollerX + spanAxisX * 0.2,
               rollerY + spanAxisY * 0.2,
-              0.725,
+              zOff + 0.725,
               0.22,
-              1,
-              1,
-              1,
+              lum,
+              lum,
+              lum,
               1
             );
           }
@@ -2903,13 +3310,13 @@ export class Renderer3D {
           ENVIRONMENT_MESHES.gateHousing,
           gx - 0.008,
           gy - 0.008,
-          0.02,
+          zOff + 0.02,
           gw + 0.016,
           gh + 0.016,
           0.92,
-          0.55,
-          0.88,
-          1.0,
+          0.55 * lum,
+          0.88 * lum,
+          1.0 * lum,
           0.55,
           0,
           0,
@@ -2921,11 +3328,11 @@ export class Renderer3D {
           'BADGE_ICE',
           rollerX - spanAxisX * 0.12,
           rollerY - spanAxisY * 0.12,
-          0.72,
+          zOff + 0.72,
           0.28,
-          0.85,
-          0.97,
-          1.0,
+          0.85 * lum,
+          0.97 * lum,
+          1.0 * lum,
           1.0
         );
         this.drawNumberBadges(
@@ -2933,11 +3340,11 @@ export class Renderer3D {
           gate.iceCount,
           rollerX + spanAxisX * 0.12,
           rollerY + spanAxisY * 0.12,
-          0.725,
+          zOff + 0.725,
           0.3,
-          1,
-          1,
-          1
+          lum,
+          lum,
+          lum
         );
       }
 
@@ -2949,28 +3356,36 @@ export class Renderer3D {
           'BADGE_STAR',
           rollerX + spanAxisX * starOffset,
           rollerY + spanAxisY * starOffset,
-          0.72,
+          zOff + 0.72,
           0.32,
-          1.0,
-          0.9,
-          0.25,
+          1.0 * lum,
+          0.9 * lum,
+          0.25 * lum,
           1.0
         );
       }
 
-      // Colorblind symbol on gate housing (`UX-10`, `R3D-04`: elevated to z = 0.72 & separated along span)
+      // Colorblind symbol on gate housing (`UX-10`, `R3D-04`: clear of center badges and outward queue pips)
       if (colorblind) {
-        const symOffset = -0.3;
+        const hasCenterGateBadge =
+          gate.iceCount > 0 || gate.shutterLockColor > 0 || gate.isStar;
+        const symSpanOffset = hasCenterGateBadge
+          ? -Math.max(0.34, Math.min(0.46, gate.spanLength * 0.5 - 0.22))
+          : 0.0;
+        const inwardX =
+          gate.edge === 'LEFT' ? 0.06 : gate.edge === 'RIGHT' ? -0.06 : 0;
+        const inwardY =
+          gate.edge === 'TOP' ? 0.06 : gate.edge === 'BOTTOM' ? -0.06 : 0;
         this.drawAtlasBadge(
           gl,
           `CB_${activeColor}`,
-          rollerX + spanAxisX * symOffset,
-          rollerY + spanAxisY * symOffset,
-          0.72,
-          0.26,
-          1.0,
-          1.0,
-          1.0,
+          rollerX + spanAxisX * symSpanOffset + inwardX,
+          rollerY + spanAxisY * symSpanOffset + inwardY,
+          zOff + 0.755,
+          0.28,
+          lum,
+          lum,
+          lum,
           1.0
         );
       }
@@ -2990,38 +3405,37 @@ export class Renderer3D {
           : rollerY + (gate.edge === 'TOP' ? -0.18 : 0.18);
         const barW = isHorizEdge ? 0.5 : 0.16;
         const barH = !isHorizEdge ? 0.5 : 0.16;
-        const pipBobZ = !this.lastOptions.reducedMotion
-          ? Math.sin(timeSec * 3.4 + q * 1.1 + gate.index * 0.8) * 0.025
-          : 0;
+        const pipBobZ =
+          !this.lastOptions.reducedMotion && !gateVis.isLocked
+            ? Math.sin(timeSec * 3.4 + q * 1.1 + gate.index * 0.8) * 0.025
+            : 0;
 
-        // Dark housing bezel behind queued color bar
         this.drawMesh(
           gl,
           ENVIRONMENT_MESHES.unitParticleCube,
           px,
           py,
-          0.62 + pipBobZ,
+          zOff + 0.62 + pipBobZ,
           barW + 0.08,
           barH + 0.08,
           0.11,
-          0.08,
-          0.11,
-          0.18,
+          0.08 * lum,
+          0.11 * lum,
+          0.18 * lum,
           1.0
         );
-        // Glowing queued color bar
         this.drawMesh(
           gl,
           ENVIRONMENT_MESHES.unitParticleCube,
           px,
           py,
-          0.65 + pipBobZ,
+          zOff + 0.65 + pipBobZ,
           barW,
           barH,
           0.12,
-          qr,
-          qg,
-          qb,
+          qr * lum,
+          qg * lum,
+          qb * lum,
           1.0
         );
         if (colorblind) {
@@ -3030,14 +3444,262 @@ export class Renderer3D {
             `CB_${nextCol}`,
             px,
             py,
-            0.72 + pipBobZ,
+            zOff + 0.72 + pipBobZ,
             0.15,
-            1.0,
-            1.0,
-            1.0,
+            lum,
+            lum,
+            lum,
             0.96
           );
         }
+      }
+    }
+
+    // 1G. 3D Sanctuary Portcullis Barriers (`board.barriers`, `SANCTUM-01`, `SANCTUM-02`)
+    for (const bar of board.barriers) {
+      if (bar.cells.length === 0) continue;
+      let minR = bar.cells[0][0];
+      let maxR = bar.cells[0][0];
+      let minC = bar.cells[0][1];
+      let maxC = bar.cells[0][1];
+      for (const [r, c] of bar.cells) {
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      }
+      const isHoriz = bar.orientation === 'H';
+      const spanW = maxC - minC + 1;
+      const spanH = maxR - minR + 1;
+      const barLen = Math.max(spanW, spanH);
+      const bcx = minC + spanW * 0.5;
+      const bcy = minR + spanH * 0.5;
+
+      // Flush inlaid brass & obsidian threshold track across the barrier cells (visible both open and closed)
+      this.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        bcx,
+        bcy,
+        0.008,
+        spanW - 0.08,
+        spanH - 0.08,
+        0.016,
+        0.58,
+        0.46,
+        0.24,
+        0.92
+      );
+      this.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        bcx,
+        bcy,
+        0.012,
+        isHoriz ? spanW - 0.14 : 0.24,
+        isHoriz ? 0.24 : spanH - 0.14,
+        0.02,
+        0.22,
+        0.18,
+        0.14,
+        0.96
+      );
+
+      if (bar.open) {
+        // Retracted threshold side-bollards at the two outer ends of the opened doorway
+        const endOffset = (barLen - 0.22) * 0.5;
+        for (const sign of [-1, 1]) {
+          const px = isHoriz ? bcx + sign * endOffset : bcx;
+          const py = isHoriz ? bcy : bcy + sign * endOffset;
+          this.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.unitParticleCube,
+            px,
+            py,
+            0.03,
+            0.18,
+            0.18,
+            0.06,
+            0.84,
+            0.68,
+            0.34,
+            0.95
+          );
+        }
+        continue;
+      }
+
+      // Closed 3D Sanctuary Portcullis Archway & Golden Slotted Lattice
+      const portPulse = !this.lastOptions.reducedMotion
+        ? 0.5 + 0.5 * Math.sin(timeSec * 3.2 + bar.id * 1.3)
+        : 0.5;
+
+      // Subtle golden threshold floor aura beneath the closed portcullis
+      this.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.overlayQuad,
+        minC + 0.06,
+        minR + 0.06,
+        0.018,
+        spanW - 0.12,
+        spanH - 0.12,
+        1.0,
+        0.98,
+        0.8,
+        0.32,
+        0.18 + 0.1 * portPulse,
+        0,
+        0,
+        4
+      );
+
+      // Twin sculpted stone-and-brass jamb pillars at the two ends of the portcullis span
+      const pillarOffset = Math.max(0.32, barLen * 0.5 - 0.16);
+      const jambR = Math.min(1, palette.wallColor[0] * 0.65 + 0.16);
+      const jambG = Math.min(1, palette.wallColor[1] * 0.65 + 0.14);
+      const jambB = Math.min(1, palette.wallColor[2] * 0.65 + 0.18);
+      for (const sign of [-1, 1]) {
+        const px = isHoriz ? bcx + sign * pillarOffset : bcx;
+        const py = isHoriz ? bcy : bcy + sign * pillarOffset;
+        this.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          px,
+          py,
+          0.32,
+          isHoriz ? 0.26 : 0.62,
+          isHoriz ? 0.62 : 0.26,
+          0.64,
+          jambR,
+          jambG,
+          jambB,
+          1.0
+        );
+        this.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          px,
+          py,
+          0.65,
+          isHoriz ? 0.3 : 0.66,
+          isHoriz ? 0.66 : 0.3,
+          0.06,
+          0.92,
+          0.76,
+          0.38,
+          1.0
+        );
+      }
+
+      // Upper sculpted bronze-gold lintel beam + lower sill beam
+      this.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        bcx,
+        bcy,
+        0.54,
+        isHoriz ? spanW - 0.12 : 0.42,
+        isHoriz ? 0.42 : spanH - 0.12,
+        0.14,
+        0.88 + 0.08 * portPulse,
+        0.72 + 0.08 * portPulse,
+        0.34,
+        1.0
+      );
+      this.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        bcx,
+        bcy,
+        0.08,
+        isHoriz ? spanW - 0.16 : 0.36,
+        isHoriz ? 0.36 : spanH - 0.16,
+        0.12,
+        0.72,
+        0.58,
+        0.28,
+        1.0
+      );
+
+      // Vertical 3D golden portcullis spears along the span
+      const barCount = Math.max(3, barLen * 2 + 1);
+      for (let bi = 0; bi < barCount; bi++) {
+        const frac = (bi + 0.5) / barCount - 0.5;
+        const bx = isHoriz ? bcx + frac * (barLen - 0.32) : bcx;
+        const by = isHoriz ? bcy : bcy + frac * (barLen - 0.32);
+        this.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          bx,
+          by,
+          0.31,
+          0.09,
+          0.09,
+          0.42,
+          0.95,
+          0.82,
+          0.42,
+          1.0
+        );
+      }
+
+      // Central 3D Sculpted Portcullis Medallion (`BADGE_PORTCULLIS` + `shredsRemaining` or `BADGE_KEY`)
+      const isKeyOnly = Boolean(bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0);
+      const medBobZ = !this.lastOptions.reducedMotion
+        ? Math.sin(timeSec * 2.6 + bar.id) * 0.015 * live3DMix
+        : 0;
+      const medZ = this.drawBadgeMedallion3D(
+        gl,
+        bcx,
+        bcy,
+        0.615 + medBobZ,
+        isKeyOnly ? 0.54 : 0.78,
+        0.48,
+        0.32,
+        0.24,
+        0.14,
+        0.96,
+        0.82,
+        0.42
+      );
+      if (isKeyOnly) {
+        this.drawAtlasBadge(
+          gl,
+          'BADGE_KEY',
+          bcx,
+          bcy,
+          medZ,
+          0.44,
+          1.0,
+          0.9,
+          0.35,
+          1.0
+        );
+      } else {
+        const twoDigit = bar.shredsRemaining >= 10;
+        this.drawAtlasBadge(
+          gl,
+          'BADGE_PORTCULLIS',
+          bcx - (twoDigit ? 0.21 : 0.16),
+          bcy,
+          medZ,
+          twoDigit ? 0.34 : 0.38,
+          1.0,
+          0.9,
+          0.38,
+          1.0
+        );
+        this.drawNumberBadges(
+          gl,
+          bar.shredsRemaining,
+          bcx + (twoDigit ? 0.16 : 0.15),
+          bcy,
+          medZ + 0.002,
+          twoDigit ? 0.32 : 0.36,
+          1.0,
+          0.97,
+          0.52
+        );
       }
     }
   }
@@ -3144,45 +3806,54 @@ export class Renderer3D {
       const hRow = options.hoverRow ?? Math.floor(board.rows * 0.5);
       const hCol = options.hoverCol ?? Math.floor(board.cols * 0.5);
       if (axis === 'ROW' && hRow >= 0 && hRow < board.rows) {
-        this.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.overlayQuad,
-          0,
-          hRow + 0.1,
-          0.025,
-          board.cols,
-          0.8,
-          1.0,
-          1.0,
-          0.35,
-          0.2,
-          0.42 + 0.22 * pulse,
-          0,
-          0,
-          4
-        );
+        for (let c = 0; c < board.cols; c++) {
+          if (board.occupancy[hRow * board.cols + c] === -1) continue;
+          const roomVis = this.getRoomVisualState(board, board.roomMap[hRow * board.cols + c] ?? 0);
+          this.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.overlayQuad,
+            c + 0.02,
+            hRow + 0.1,
+            roomVis.zOffset + 0.025,
+            0.96,
+            0.8,
+            1.0,
+            1.0,
+            0.35,
+            0.2,
+            (0.42 + 0.22 * pulse) * roomVis.luminanceMul,
+            0,
+            0,
+            4
+          );
+        }
       } else if (axis === 'COL' && hCol >= 0 && hCol < board.cols) {
-        this.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.overlayQuad,
-          hCol + 0.1,
-          0,
-          0.025,
-          0.8,
-          board.rows,
-          1.0,
-          1.0,
-          0.35,
-          0.2,
-          0.42 + 0.22 * pulse,
-          0,
-          0,
-          4
-        );
+        for (let r = 0; r < board.rows; r++) {
+          if (board.occupancy[r * board.cols + hCol] === -1) continue;
+          const roomVis = this.getRoomVisualState(board, board.roomMap[r * board.cols + hCol] ?? 0);
+          this.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.overlayQuad,
+            hCol + 0.1,
+            r + 0.02,
+            roomVis.zOffset + 0.025,
+            0.8,
+            0.96,
+            1.0,
+            1.0,
+            0.35,
+            0.2,
+            (0.42 + 0.22 * pulse) * roomVis.luminanceMul,
+            0,
+            0,
+            4
+          );
+        }
       }
     } else if (inputMode === 'TARGET_HAMMER' || inputMode === 'TARGET_VACUUM') {
       for (const b of board.blocks) {
         if (b.status !== 'ACTIVE') continue;
+        if (isBlockInLockedRoom(board, b)) continue;
         const cId: ColorId = getActiveColor(b.colorStack, b.colorCursor);
         if (cId === 0 && inputMode === 'TARGET_VACUUM') continue;
         if (
@@ -3198,6 +3869,54 @@ export class Renderer3D {
             ENVIRONMENT_MESHES.overlayQuad,
             b.col + dc + 0.04,
             b.row + dr + 0.04,
+            0.02,
+            0.92,
+            0.92,
+            1.0,
+            1.0,
+            0.85,
+            0.25,
+            0.25 + 0.2 * pulse,
+            0,
+            0,
+            4
+          );
+        }
+      }
+
+      if (inputMode === 'TARGET_HAMMER') {
+        if (board.barriers) {
+          for (const bar of board.barriers) {
+            if (bar.open) continue;
+            for (const [br, bc] of bar.cells) {
+              this.drawMesh(
+                gl,
+                ENVIRONMENT_MESHES.overlayQuad,
+                bc + 0.04,
+                br + 0.04,
+                0.025,
+                0.92,
+                0.92,
+                1.0,
+                1.0,
+                0.85,
+                0.25,
+                0.28 + 0.22 * pulse,
+                0,
+                0,
+                4
+              );
+            }
+          }
+        }
+        for (const crate of board.crates) {
+          if (crate.destroyed) continue;
+          if (!isRoomUnlocked(board, board.roomMap[crate.row * board.cols + crate.col] ?? 0)) continue;
+          this.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.overlayQuad,
+            crate.col + 0.04,
+            crate.row + 0.04,
             0.02,
             0.92,
             0.92,
@@ -3335,7 +4054,7 @@ export class Renderer3D {
       }
     }
 
-    // 2D. Expanding 3D Knock-On & Shredding Shockwave Rings (`this.activeShockwaves`, `PLAN-06`)
+    // 2D. Expanding 3D Knock-On & Shredding Shockwave Rings (`this.activeShockwaves`, `R3D-08`)
     if (this.activeShockwaves.length > 0) {
       gl.depthMask(false);
       gl.disable(gl.CULL_FACE);
@@ -3383,7 +4102,7 @@ export class Renderer3D {
     const reducedMotion = Boolean(options.reducedMotion);
     const live3DMix = Math.max(0, 1.0 - (options.blueprintMix ?? 0) * 0.92);
 
-    // Identify all blocks in the currently grabbed/dragged group (`Pitfall 4B`)
+    // Identify all blocks in the currently grabbed/dragged group (`F-03`)
     const draggedGroupIds = new Set<number>();
     const liftedBlock = board.blocks.find((b) => b.status === 'ACTIVE' && b.liftAlpha > 0.05);
     const leadDraggedId = liftedBlock ? liftedBlock.id : null;
@@ -3417,10 +4136,10 @@ export class Renderer3D {
       const planeNx = -nx;
       const planeNy = -ny;
       let planeD = 0.21;
-      if (gate.edge === 'TOP') planeD = 0.21;
-      else if (gate.edge === 'BOTTOM') planeD = board.rows + 0.21;
-      else if (gate.edge === 'LEFT') planeD = 0.21;
-      else if (gate.edge === 'RIGHT') planeD = board.cols + 0.21;
+      if (gate.edge === 'TOP') planeD = 0.21 - gate.edgeLine;
+      else if (gate.edge === 'BOTTOM') planeD = gate.edgeLine + 1 + 0.21;
+      else if (gate.edge === 'LEFT') planeD = 0.21 - gate.edgeLine;
+      else if (gate.edge === 'RIGHT') planeD = gate.edgeLine + 1 + 0.21;
 
       gl.disable(gl.CULL_FACE);
       gl.uniform1i(this.uUseClipPlane, 1);
@@ -3431,19 +4150,27 @@ export class Renderer3D {
         anim.isOuterPeelOnly && skinId === 'classic_studs'
           ? (POLYOMINO_MESH_CATALOG[anim.shapeId]?.meshOuter ?? meshPair.meshOuter)
           : meshPair.meshOuter;
+      const isHorizShredGate = gate.edge === 'TOP' || gate.edge === 'BOTTOM';
+      const shredAdjR = isHorizShredGate ? gate.edgeLine : gate.spanStart;
+      const shredAdjC = isHorizShredGate ? gate.spanStart : gate.edgeLine;
+      const shredRoomId =
+        shredAdjR >= 0 && shredAdjR < board.rows && shredAdjC >= 0 && shredAdjC < board.cols
+          ? (board.roomMap[shredAdjR * board.cols + shredAdjC] ?? 0)
+          : 0;
+      const shredRoomVis = this.getRoomVisualState(board, shredRoomId);
 
       this.drawMesh(
         gl,
         shredOuterMesh,
         sx,
         sy,
-        0,
+        shredRoomVis.zOffset,
         1.0,
         1.0,
         1.0,
-        r,
-        g,
-        b,
+        r * shredRoomVis.luminanceMul,
+        g * shredRoomVis.luminanceMul,
+        b * shredRoomVis.luminanceMul,
         1.0,
         0,
         0,
@@ -3462,6 +4189,7 @@ export class Renderer3D {
         blk.iceCount === 0 &&
         !blk.chained &&
         blk.ropeColor === 0 &&
+        !isBlockInLockedRoom(board, blk) &&
         !draggedGroupIds.has(blk.id) &&
         blk.liftAlpha <= 0.05
       ) {
@@ -3495,10 +4223,15 @@ export class Renderer3D {
       const [rawR, rawG, rawB] = this.getColorRgb(activeColor, highContrast);
       const layersLeft = getLayersRemaining(block.colorStack, block.colorCursor);
 
+      const blockRoomId = getBlockRoomId(board, block);
+      const blockRoomVis = this.getRoomVisualState(board, blockRoomId);
+      const roomLum = blockRoomVis.luminanceMul;
+
       const isGrabbed = draggedGroupIds.has(block.id) || block.liftAlpha > 0.05;
       const isIdleMovable =
         !reducedMotion &&
         !isGrabbed &&
+        !blockRoomVis.isLocked &&
         block.iceCount === 0 &&
         !block.chained &&
         block.ropeColor === 0;
@@ -3511,7 +4244,8 @@ export class Renderer3D {
       const wave01 = isIdleMovable ? 0.5 + 0.5 * Math.sin(wavePhase) : 0;
 
       // Bomb blocks also throb with an urgent rhythmic heartbeat (`IDLE-05`)
-      const isBombBlock = !reducedMotion && block.bombMax > 0 && block.bombCount > 0;
+      const isBombBlock =
+        !reducedMotion && !blockRoomVis.isLocked && block.bombMax > 0 && block.bombCount > 0;
       const bombHeartbeat = isBombBlock
         ? (0.5 + 0.5 * Math.sin(timeSec * (block.bombCount <= 4 ? 7.6 : 4.2) + block.id)) *
           (block.bombCount <= 4 ? 0.036 : 0.018)
@@ -3520,14 +4254,11 @@ export class Renderer3D {
       const idleColorBoost = isIdleMovable
         ? wave01 * 0.048 + blockHopEnv * 0.075
         : bombHeartbeat * 1.2;
-      const colorMul = isGrabbed
-        ? 1.14
-        : anyDragActive
-          ? 0.88
-          : 1.0 + idleColorBoost;
-      const r = Math.min(1, rawR * colorMul);
-      const g = Math.min(1, rawG * colorMul);
-      const b = Math.min(1, rawB * colorMul);
+      const colorMul =
+        (isGrabbed ? 1.14 : anyDragActive ? 0.88 : 1.0 + idleColorBoost) * roomLum;
+      const r = Math.min(1, rawR * colorMul + (1 - roomLum) * 0.03);
+      const g = Math.min(1, rawG * colorMul + (1 - roomLum) * 0.04);
+      const b = Math.min(1, rawB * colorMul + (1 - roomLum) * 0.09);
 
       // Gentle 3D vertical buoyancy + Spotlight Double-Bounce Hop (`IDLE-01`, `IDLE-02`)
       // Scaled by `live3DMix` so blocks lie still as an etched scroll diagram on the Title Screen
@@ -3539,7 +4270,10 @@ export class Renderer3D {
           ? Math.sin(timeSec * 7.2) * 0.022 * Math.min(1, block.liftAlpha)
           : 0;
       const zLift =
-        Math.max(0, Math.min(1, block.liftAlpha)) * 0.46 + grabHoverZ + idleBreathZ;
+        blockRoomVis.zOffset +
+        Math.max(0, Math.min(1, block.liftAlpha)) * 0.46 +
+        grabHoverZ +
+        idleBreathZ;
 
       // Knock-on scale bounce + grabbed scale pop + idle breathing scale (`IDLE-01`, `IDLE-02`)
       const bounceRem = this.blockBounceMap.get(block.id) ?? 0;
@@ -3610,10 +4344,10 @@ export class Renderer3D {
         const planeNx = -nx;
         const planeNy = -ny;
         let planeD = 0.21;
-        if (gate.edge === 'TOP') planeD = 0.21;
-        else if (gate.edge === 'BOTTOM') planeD = board.rows + 0.21;
-        else if (gate.edge === 'LEFT') planeD = 0.21;
-        else if (gate.edge === 'RIGHT') planeD = board.cols + 0.21;
+        if (gate.edge === 'TOP') planeD = 0.21 - gate.edgeLine;
+        else if (gate.edge === 'BOTTOM') planeD = gate.edgeLine + 1 + 0.21;
+        else if (gate.edge === 'LEFT') planeD = 0.21 - gate.edgeLine;
+        else if (gate.edge === 'RIGHT') planeD = gate.edgeLine + 1 + 0.21;
 
         useClip = true;
         gl.disable(gl.CULL_FACE);
@@ -3624,7 +4358,7 @@ export class Renderer3D {
         gl.uniform1i(this.uUseClipPlane, 0);
       }
 
-      // Dynamic floor drop shadow when lifted or spotlight-hopping (`Feedback #4`, `IDLE-02`)
+      // Dynamic floor drop shadow when lifted or spotlight-hopping (`IDLE-02`)
       const shadowAlpha = Math.max(block.liftAlpha, blockHopEnv * 0.28);
       if (shadowAlpha > 0.02) {
         for (const [dr, dc] of shape.cells) {
@@ -3634,7 +4368,7 @@ export class Renderer3D {
             ENVIRONMENT_MESHES.overlayQuad,
             drawX + dc + 0.12 * shadowAlpha,
             drawY + dr + 0.14 * shadowAlpha,
-            0.008,
+            blockRoomVis.zOffset + 0.008,
             0.92,
             0.92,
             1.0,
@@ -3716,14 +4450,16 @@ export class Renderer3D {
         );
       }
 
-      const zSurface =
-        zLift + BLOCK_TOP_Z * scaleZ + (skinId === 'classic_studs' ? 0.08 : 0.028);
+      const zCbSymbol = zLift + 0.692 * scaleZ;
       const zMedallionBase = zLift + 0.562 * scaleZ;
       const zStrapCenter = zLift + 0.588 * scaleZ;
 
       // 3C. 3D Colored Rope Straps (`block.ropeColor > 0` — sculpted 3D wrapping straps)
       if (block.ropeColor > 0) {
-        const [rr, rg, rb] = this.getColorRgb(block.ropeColor, highContrast);
+        const [rawRr, rawRg, rawRb] = this.getColorRgb(block.ropeColor, highContrast);
+        const rr = rawRr * roomLum;
+        const rg = rawRg * roomLum;
+        const rb = rawRb * roomLum;
         const anchorCell = shape.cells[shape.anchorCellIndex] ?? shape.cells[0];
         const rCx = drawX + anchorCell[1] + 0.5;
         const rCy = drawY + anchorCell[0] + 0.5;
@@ -3765,13 +4501,13 @@ export class Renderer3D {
           this.drawAtlasBadge(
             gl,
             `CB_${block.ropeColor}`,
-            drawX + anchorCell[1] + 0.22,
+            drawX + anchorCell[1] + 0.79,
             rCy,
-            zSurface + 0.015,
-            0.24,
-            1,
-            1,
-            1,
+            zCbSymbol + 0.006,
+            0.25,
+            roomLum,
+            roomLum,
+            roomLum,
             1
           );
         }
@@ -3789,9 +4525,9 @@ export class Renderer3D {
           Math.max(0.92, shape.cols - 0.08),
           0.22,
           0.066 * scaleZ,
-          0.28,
-          0.32,
-          0.4,
+          0.28 * roomLum,
+          0.32 * roomLum,
+          0.4 * roomLum,
           1.0,
           0,
           0,
@@ -3806,9 +4542,9 @@ export class Renderer3D {
           0.22,
           Math.max(0.92, shape.rows - 0.08),
           0.066 * scaleZ,
-          0.32,
-          0.36,
-          0.44,
+          0.32 * roomLum,
+          0.36 * roomLum,
+          0.44 * roomLum,
           1.0,
           0,
           0,
@@ -3828,9 +4564,9 @@ export class Renderer3D {
           scaleXY * 1.016,
           scaleXY * 1.016,
           scaleZ * 1.02,
-          0.62,
-          0.92,
-          1.0,
+          0.62 * roomLum,
+          0.92 * roomLum,
+          1.0 * roomLum,
           0.48,
           0,
           0,
@@ -3839,7 +4575,7 @@ export class Renderer3D {
         gl.depthMask(true);
       }
 
-      // 3F. 3-Zone Sculpted Architectural Surface Overlays (`UX-10`, `AX-01`, `R3D-07`, `Pillar 2`)
+      // 3F. 3-Zone Sculpted Architectural Surface Overlays (`UX-10`, `AX-01`, `R3D-07`)
       const anchor = shape.cells[shape.anchorCellIndex] ?? shape.cells[0];
       const anchorCx = drawX + anchor[1] + 0.5;
       const anchorCy = drawY + anchor[0] + 0.5;
@@ -3850,8 +4586,10 @@ export class Renderer3D {
         block.scissorColor > 0 ||
         block.shutterGemColor > 0 ||
         block.isStar;
+      let lockBadgeCx = -999;
+      let lockBadgeCy = -999;
 
-      // Zone A: Integrated 3D Axis-Lock Side-Flange Rails + Sculpted Tone-on-Tone Medallion (`Pillar 2`, `Guardrail 1A/1B`)
+      // Zone A: Integrated 3D Axis-Lock Side-Flange Rails + Sculpted Tone-on-Tone Medallion (`UX-10`, `R3D-07`)
       // Circular studs occupy [0.34, 0.66]; placing 3D side rails at 0.13 and 0.87 leaves the 3D studs 100% uncovered!
       if (block.axisLock === 'H') {
         const rowCells = shape.cells.filter((c) => c[0] === anchor[0]);
@@ -3930,6 +4668,8 @@ export class Renderer3D {
             iconSize = 0.34;
           }
         }
+        lockBadgeCx = arrowCx;
+        lockBadgeCy = arrowCy;
 
         const lockBadgeZ = this.drawBadgeMedallion3D(
           gl,
@@ -4031,6 +4771,8 @@ export class Renderer3D {
             iconSize = 0.34;
           }
         }
+        lockBadgeCx = arrowCx;
+        lockBadgeCy = arrowCy;
 
         const lockBadgeZ = this.drawBadgeMedallion3D(
           gl,
@@ -4057,76 +4799,7 @@ export class Renderer3D {
         );
       }
 
-      // Neutral `color: 0` Stone Sliders: 3D carved architectural masonry inlay when `colorblind === false`
-      if (activeColor === 0 && !colorblind) {
-        for (let ci = 0; ci < shape.cells.length; ci++) {
-          const cell = shape.cells[ci];
-          const isBusyCell =
-            (ci === shape.anchorCellIndex && (hasImmobilizer || hasPayload)) ||
-            block.axisLock !== 'NONE';
-          if (isBusyCell) continue;
-          this.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            drawX + cell[1] + 0.5,
-            drawY + cell[0] + 0.5,
-            zLift + 0.602 * scaleZ,
-            0.44,
-            0.44,
-            0.046 * scaleZ,
-            Math.min(1, r * 0.78 + 0.18),
-            Math.min(1, g * 0.78 + 0.18),
-            Math.min(1, b * 0.78 + 0.18),
-            1.0,
-            0,
-            Math.PI * 0.25,
-            0
-          );
-        }
-      }
-
-      // AX-01 Colorblind Symbols embossed on every unit stud (or corner when cell hosts a center badge/rail)
-      if (colorblind) {
-        for (let ci = 0; ci < shape.cells.length; ci++) {
-          const cell = shape.cells[ci];
-          const isBusyCell =
-            (ci === shape.anchorCellIndex && (hasImmobilizer || hasPayload)) ||
-            block.axisLock !== 'NONE';
-          const symX = drawX + cell[1] + (isBusyCell ? 0.21 : 0.5);
-          const symY = drawY + cell[0] + (isBusyCell ? 0.21 : 0.5);
-          const symSize = isBusyCell ? 0.24 : 0.34;
-          this.drawAtlasBadge(
-            gl,
-            `CB_${activeColor}`,
-            symX,
-            symY,
-            zSurface + 0.014,
-            symSize,
-            1.0,
-            1.0,
-            1.0,
-            0.96
-          );
-        }
-        const firstCell = shape.cells[0];
-        if (layersLeft > 1) {
-          const innerColor = block.colorStack[block.colorCursor + 1] ?? activeColor;
-          this.drawAtlasBadge(
-            gl,
-            `CB_${innerColor}`,
-            drawX + firstCell[1] + 0.78,
-            drawY + firstCell[0] + 0.78,
-            zSurface + 0.014,
-            0.22,
-            1.0,
-            1.0,
-            1.0,
-            0.94
-          );
-        }
-      }
-
-      // Zone B: Decoupled Immobilizer Badge vs Payload / Modifier Badge (`R3D-03`, `Pitfall 1C`)
+      // Zone B: Decoupled Immobilizer Badge vs Payload / Modifier Badge (`R3D-03`, `UX-10`)
       let immCx = anchorCx;
       let immCy = anchorCy;
       let immScale = layersLeft > 1 && shape.cells.length === 1 ? 0.86 : 1.0;
@@ -4149,6 +4822,84 @@ export class Renderer3D {
         }
       }
 
+      const isCellCenterBusy = (cellR: number, cellC: number, ci: number): boolean => {
+        const cellCx = drawX + cellC + 0.5;
+        const cellCy = drawY + cellR + 0.5;
+        return (
+          (hasImmobilizer && Math.hypot(cellCx - immCx, cellCy - immCy) < 0.36) ||
+          (hasPayload && Math.hypot(cellCx - payCx, cellCy - payCy) < 0.36) ||
+          (block.axisLock !== 'NONE' &&
+            Math.hypot(cellCx - lockBadgeCx, cellCy - lockBadgeCy) < 0.38) ||
+          (block.ropeColor > 0 && ci === shape.anchorCellIndex) ||
+          (block.chained && (cellR === anchor[0] || cellC === anchor[1]))
+        );
+      };
+
+      // Neutral `color: 0` Stone Sliders: 3D carved architectural masonry inlay when `colorblind === false`
+      if (activeColor === 0 && !colorblind) {
+        for (let ci = 0; ci < shape.cells.length; ci++) {
+          const cell = shape.cells[ci];
+          if (isCellCenterBusy(cell[0], cell[1], ci)) continue;
+          this.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.unitParticleCube,
+            drawX + cell[1] + 0.5,
+            drawY + cell[0] + 0.5,
+            zLift + 0.602 * scaleZ,
+            0.44,
+            0.44,
+            0.046 * scaleZ,
+            Math.min(1, r * 0.78 + 0.18),
+            Math.min(1, g * 0.78 + 0.18),
+            Math.min(1, b * 0.78 + 0.18),
+            1.0,
+            0,
+            Math.PI * 0.25,
+            0
+          );
+        }
+      }
+
+      // AX-01 Colorblind Symbols embossed above all studs/medallions (`zCbSymbol = zLift + 0.692 * scaleZ`)
+      if (colorblind) {
+        for (let ci = 0; ci < shape.cells.length; ci++) {
+          const cell = shape.cells[ci];
+          const isBusyCell = layersLeft > 1 || isCellCenterBusy(cell[0], cell[1], ci);
+          const symX = drawX + cell[1] + (isBusyCell ? 0.21 : 0.5);
+          const symY = drawY + cell[0] + (isBusyCell ? 0.21 : 0.5);
+          const symSize = isBusyCell ? 0.25 : 0.35;
+          this.drawAtlasBadge(
+            gl,
+            `CB_${activeColor}`,
+            symX,
+            symY,
+            zCbSymbol,
+            symSize,
+            roomLum,
+            roomLum,
+            roomLum,
+            0.98
+          );
+        }
+        const firstCell = shape.cells[0];
+        if (layersLeft > 1) {
+          const innerColor = block.colorStack[block.colorCursor + 1] ?? activeColor;
+          const firstBusy = isCellCenterBusy(firstCell[0], firstCell[1], 0);
+          this.drawAtlasBadge(
+            gl,
+            `CB_${innerColor}`,
+            drawX + firstCell[1] + (firstBusy ? 0.79 : 0.5),
+            drawY + firstCell[0] + (firstBusy ? 0.79 : 0.5),
+            zCbSymbol + 0.004,
+            firstBusy ? 0.24 : 0.31,
+            roomLum,
+            roomLum,
+            roomLum,
+            0.98
+          );
+        }
+      }
+
       // 1) Immobilizer Badge (`iceCount > 0` or `chained`) via Sculpted 3D Medallion
       if (block.iceCount > 0) {
         const iceBadgeZ = this.drawBadgeMedallion3D(
@@ -4158,9 +4909,9 @@ export class Renderer3D {
           zMedallionBase,
           0.66 * immScale,
           0.44 * immScale,
-          0.38,
-          0.74,
-          0.96
+          0.38 * roomLum,
+          0.74 * roomLum,
+          0.96 * roomLum
         );
         this.drawAtlasBadge(
           gl,
@@ -4169,9 +4920,9 @@ export class Renderer3D {
           immCy,
           iceBadgeZ,
           0.35 * immScale,
-          0.88,
-          0.98,
-          1.0,
+          0.88 * roomLum,
+          0.98 * roomLum,
+          1.0 * roomLum,
           1.0
         );
         this.drawNumberBadges(
@@ -4181,9 +4932,9 @@ export class Renderer3D {
           immCy,
           iceBadgeZ + 0.002,
           0.35 * immScale,
-          1,
-          1,
-          1
+          roomLum,
+          roomLum,
+          roomLum
         );
       } else if (block.chained) {
         const lockBadgeZ = this.drawBadgeMedallion3D(
@@ -4193,9 +4944,9 @@ export class Renderer3D {
           zMedallionBase,
           0.52 * immScale,
           0.52 * immScale,
-          0.36,
-          0.4,
-          0.48
+          0.36 * roomLum,
+          0.4 * roomLum,
+          0.48 * roomLum
         );
         this.drawAtlasBadge(
           gl,
@@ -4204,26 +4955,29 @@ export class Renderer3D {
           immCy,
           lockBadgeZ,
           0.48 * immScale,
-          1.0,
-          0.9,
-          0.42,
+          1.0 * roomLum,
+          0.9 * roomLum,
+          0.42 * roomLum,
           1.0
         );
       }
 
       // 2) Payload / Modifier Badge (`bomb`, `hasKey`, `scissorColor`, `shutterGemColor`, `isStar`) via Sculpted 3D Medallion (`IDLE-05`)
-      const payBobZ = !reducedMotion
-        ? Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.011
-        : 0;
-      const payPulseScale = !reducedMotion
-        ? payScale * (1.0 + Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.028)
-        : payScale;
+      const payBobZ =
+        !reducedMotion && !blockRoomVis.isLocked
+          ? Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.011 * live3DMix
+          : 0;
+      const payPulseScale =
+        !reducedMotion && !blockRoomVis.isLocked
+          ? payScale * (1.0 + Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.028 * live3DMix)
+          : payScale;
 
       if (block.bombMax > 0 && block.bombCount > 0) {
-        const urgent = block.bombCount <= 3 ? 0.65 + 0.35 * pulse : 1.0;
-        const bombMedScale = !reducedMotion
-          ? payScale * (1.0 + bombHeartbeat * 1.2)
-          : payScale;
+        const urgent = block.bombCount <= 3 && !blockRoomVis.isLocked ? 0.65 + 0.35 * pulse : 1.0;
+        const bombMedScale =
+          !reducedMotion && !blockRoomVis.isLocked
+            ? payScale * (1.0 + bombHeartbeat * 1.2 * live3DMix)
+            : payScale;
         const twoDigit = block.bombCount >= 10;
         const bombBadgeZ = this.drawBadgeMedallion3D(
           gl,
@@ -4243,9 +4997,9 @@ export class Renderer3D {
           payCy,
           bombBadgeZ,
           (twoDigit ? 0.32 : 0.35) * bombMedScale,
-          1.0,
-          0.86 * urgent,
-          0.3 * urgent,
+          1.0 * roomLum,
+          0.86 * urgent * roomLum,
+          0.3 * urgent * roomLum,
           1.0
         );
         this.drawNumberBadges(
@@ -4255,9 +5009,9 @@ export class Renderer3D {
           payCy,
           bombBadgeZ + 0.002,
           (twoDigit ? 0.3 : 0.35) * bombMedScale,
-          1.0,
-          0.97,
-          0.48
+          1.0 * roomLum,
+          0.97 * roomLum,
+          0.48 * roomLum
         );
       } else if (block.hasKey > 0) {
         const keyBadgeZ = this.drawBadgeMedallion3D(
@@ -4278,9 +5032,9 @@ export class Renderer3D {
           payCy,
           keyBadgeZ,
           0.48 * payPulseScale,
-          1.0,
-          0.9,
-          0.32,
+          1.0 * roomLum,
+          0.9 * roomLum,
+          0.32 * roomLum,
           1.0
         );
       } else if (block.scissorColor > 0) {
@@ -4303,9 +5057,9 @@ export class Renderer3D {
           payCy,
           scisBadgeZ,
           0.48 * payPulseScale,
-          sr,
-          sg,
-          sb,
+          sr * roomLum,
+          sg * roomLum,
+          sb * roomLum,
           1.0
         );
         if (colorblind) {
@@ -4316,9 +5070,9 @@ export class Renderer3D {
             payCy + 0.18 * payPulseScale,
             scisBadgeZ + 0.003,
             0.22 * payPulseScale,
-            1,
-            1,
-            1,
+            roomLum,
+            roomLum,
+            roomLum,
             1
           );
         }
@@ -4342,9 +5096,9 @@ export class Renderer3D {
           payCy,
           gemBadgeZ,
           0.48 * payPulseScale,
-          gr,
-          gg,
-          gb,
+          gr * roomLum,
+          gg * roomLum,
+          gb * roomLum,
           1.0
         );
         if (colorblind) {
@@ -4355,9 +5109,9 @@ export class Renderer3D {
             payCy + 0.18 * payPulseScale,
             gemBadgeZ + 0.003,
             0.22 * payPulseScale,
-            1,
-            1,
-            1,
+            roomLum,
+            roomLum,
+            roomLum,
             1
           );
         }
@@ -4380,9 +5134,9 @@ export class Renderer3D {
           payCy,
           starBadgeZ,
           0.46 * payPulseScale,
-          1.0,
-          0.92,
-          0.32,
+          1.0 * roomLum,
+          0.92 * roomLum,
+          0.32 * roomLum,
           1.0
         );
       }
@@ -4393,7 +5147,7 @@ export class Renderer3D {
       }
     }
 
-    // 3F.2 Early-Stage & Hint 3D Sliding Ghost Polyomino (`Feedback #2`, `PLAN-04`, `Pitfall 2A/2B`)
+    // 3F.2 Early-Stage & Hint 3D Sliding Ghost Polyomino (`UX-10`)
     const guideMove = board.hintMove ?? (!anyDragActive ? options.autoGuideMove : null) ?? null;
     if (guideMove && !anyDragActive && !reducedMotion) {
       const ghostBlock = board.blocks.find(
@@ -4455,7 +5209,9 @@ export class Renderer3D {
             if (Math.abs(ax - bx) + Math.abs(ay - by) < 1.05) {
               const mx = (ax + bx) * 0.5 + 0.5;
               const my = (ay + by) * 0.5 + 0.5;
-              const mz = Math.max(a.liftAlpha, b.liftAlpha) * BLOCK_LIFT_DELTA_Z;
+              const clampRoomVis = this.getRoomVisualState(board, getBlockRoomId(board, a));
+              const mz =
+                clampRoomVis.zOffset + Math.max(a.liftAlpha, b.liftAlpha) * BLOCK_LIFT_DELTA_Z;
               this.drawMesh(
                 gl,
                 ENVIRONMENT_MESHES.weldClampMesh,
@@ -4465,9 +5221,9 @@ export class Renderer3D {
                 1.0,
                 1.0,
                 1.0,
-                0.78,
-                0.84,
-                0.92,
+                0.78 * clampRoomVis.luminanceMul,
+                0.84 * clampRoomVis.luminanceMul,
+                0.92 * clampRoomVis.luminanceMul,
                 1.0
               );
               clamped = true;
@@ -4535,7 +5291,9 @@ export class Renderer3D {
     const trayId = options.equippedTray ?? 'industrial_slate';
     const highContrast = Boolean(options.highContrast);
     const colorblind = Boolean(options.colorblindSymbols);
-    const palette = TRAY_PALETTES[trayId] ?? TRAY_PALETTES.industrial_slate;
+    const palette = this.getEffectiveTrayPalette(trayId, highContrast);
+    const toCssRgb = (rgb: [number, number, number], mul = 1.0): string =>
+      `rgb(${Math.round(Math.min(1, rgb[0] * mul) * 255)}, ${Math.round(Math.min(1, rgb[1] * mul) * 255)}, ${Math.round(Math.min(1, rgb[2] * mul) * 255)})`;
     const dtMs = dtSec * 1000;
 
     const virtualRect = {
@@ -4552,8 +5310,10 @@ export class Renderer3D {
 
     ctx.clearRect(0, 0, w, h);
 
+    const blueprintMix = Math.max(0, Math.min(1, options.blueprintMix ?? 0));
+    const zRelief = 1.0 - 0.78 * blueprintMix;
     const project = (bx: number, by: number, bz: number) =>
-      this.camera.boardToScreen(bx, by, bz, virtualRect, board.rows, board.cols);
+      this.camera.boardToScreen(bx, by, bz * zRelief, virtualRect, board.rows, board.cols);
 
     const fillProjectedQuad = (
       x0: number,
@@ -4611,9 +5371,11 @@ export class Renderer3D {
         const idx = r * board.cols + c;
         const occ = board.occupancy[idx];
         if (occ === -1) {
-          fillProjectedQuad(c, r, c + 1, r + 1, 0.4, '#334155', '#475569', 1.5);
           continue;
         }
+        const roomId = board.roomMap[idx] ?? 0;
+        const roomVis = this.getRoomVisualState(board, roomId);
+        const zOff = roomVis.zOffset;
         const fc = (board.floorColor[idx] ?? 0) as ColorId;
         const fill =
           fc > 0
@@ -4621,11 +5383,11 @@ export class Renderer3D {
               ? COLOR_PALETTE[fc].highContrastPrimaryHex
               : COLOR_PALETTE[fc].primaryHex
             : (r + c) % 2 === 0
-              ? '#1E293B'
-              : '#172033';
-        fillProjectedQuad(c + 0.04, r + 0.04, c + 0.96, r + 0.96, 0, fill);
+              ? toCssRgb(palette.floorTileA, roomVis.luminanceMul)
+              : toCssRgb(palette.floorTileB, roomVis.luminanceMul);
+        fillProjectedQuad(c + 0.04, r + 0.04, c + 0.96, r + 0.96, zOff, fill);
         if (fc > 0 && colorblind) {
-          drawCenteredText(COLOR_PALETTE[fc].symbol, c + 0.5, r + 0.5, 0.02, '#FFFFFF');
+          drawCenteredText(COLOR_PALETTE[fc].symbol, c + 0.5, r + 0.5, zOff + 0.02, '#FFFFFF');
         }
         if (occ === -2) {
           fillProjectedQuad(
@@ -4633,12 +5395,12 @@ export class Renderer3D {
             r + 0.08,
             c + 0.92,
             r + 0.92,
-            0.62,
+            zOff + 0.62,
             COLOR_PALETTE[0].primaryHex,
             COLOR_PALETTE[0].lipHex,
             2
           );
-          drawCenteredText('▨', c + 0.5, r + 0.5, 0.65, '#E2E8F0', 'bold 14px sans-serif');
+          drawCenteredText('▨', c + 0.5, r + 0.5, zOff + 0.65, '#E2E8F0', 'bold 14px sans-serif');
         }
       }
     }
@@ -4827,7 +5589,7 @@ export class Renderer3D {
       }
     }
 
-    // 6. Draw Gates, Shutters, Ice Counters, Star Emblems & Queue Pips
+    // 6. Draw Gates, Shutters, Ice Counters, Star Emblems, Queue Pips & Portcullis Barriers
     for (const gate of board.gates) {
       const cId = getGateActiveColor(gate);
       const entry = COLOR_PALETTE[cId] ?? COLOR_PALETTE[1];
@@ -4837,19 +5599,19 @@ export class Renderer3D {
       let gx1 = gate.spanStart + gate.spanLength;
       let gy1 = 0;
       if (gate.edge === 'TOP') {
-        gy0 = -0.38;
-        gy1 = 0;
+        gy0 = gate.edgeLine - 0.38;
+        gy1 = gate.edgeLine;
       } else if (gate.edge === 'BOTTOM') {
-        gy0 = board.rows;
-        gy1 = board.rows + 0.38;
+        gy0 = gate.edgeLine + 1;
+        gy1 = gate.edgeLine + 1 + 0.38;
       } else if (gate.edge === 'LEFT') {
-        gx0 = -0.38;
-        gx1 = 0;
+        gx0 = gate.edgeLine - 0.38;
+        gx1 = gate.edgeLine;
         gy0 = gate.spanStart;
         gy1 = gate.spanStart + gate.spanLength;
       } else {
-        gx0 = board.cols;
-        gx1 = board.cols + 0.38;
+        gx0 = gate.edgeLine + 1;
+        gx1 = gate.edgeLine + 1 + 0.38;
         gy0 = gate.spanStart;
         gy1 = gate.spanStart + gate.spanLength;
       }
@@ -4941,6 +5703,57 @@ export class Renderer3D {
       }
     }
 
+    for (const bar of board.barriers) {
+      if (bar.cells.length === 0) continue;
+      let minR = bar.cells[0][0];
+      let maxR = bar.cells[0][0];
+      let minC = bar.cells[0][1];
+      let maxC = bar.cells[0][1];
+      for (const [r, c] of bar.cells) {
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      }
+      const spanW = maxC - minC + 1;
+      const spanH = maxR - minR + 1;
+      if (bar.open) {
+        fillProjectedQuad(
+          minC + 0.12,
+          minR + 0.12,
+          minC + spanW - 0.12,
+          minR + spanH - 0.12,
+          0.02,
+          'rgba(234, 179, 8, 0.18)',
+          '#CA8A04',
+          1
+        );
+      } else {
+        fillProjectedQuad(
+          minC + 0.08,
+          minR + 0.08,
+          minC + spanW - 0.08,
+          minR + spanH - 0.08,
+          0.56,
+          '#B45309',
+          '#FDE047',
+          2
+        );
+        const label =
+          bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0
+            ? '🔑'
+            : `⛩${bar.shredsRemaining}`;
+        drawCenteredText(
+          label,
+          minC + spanW * 0.5,
+          minR + spanH * 0.5,
+          0.64,
+          '#FEF08A',
+          'bold 13px sans-serif'
+        );
+      }
+    }
+
     // 7. Advance & Draw Active Visual Shreds (`this.activeVisualShreds`)
     for (let i = this.activeVisualShreds.length - 1; i >= 0; i--) {
       const anim = this.activeVisualShreds[i];
@@ -4959,6 +5772,10 @@ export class Renderer3D {
       for (const [dr, dc] of shape.cells) {
         const cx = sx + dc;
         const cy = sy + dr;
+        if (gate.edge === 'TOP' && cy < gate.edgeLine - 0.25) continue;
+        if (gate.edge === 'BOTTOM' && cy > gate.edgeLine + 0.25) continue;
+        if (gate.edge === 'LEFT' && cx < gate.edgeLine - 0.25) continue;
+        if (gate.edge === 'RIGHT' && cx > gate.edgeLine + 0.25) continue;
         if (cx < -0.25 || cx > board.cols - 0.75 || cy < -0.25 || cy > board.rows - 0.75) continue;
         fillProjectedQuad(
           cx + 0.05,
@@ -4982,8 +5799,11 @@ export class Renderer3D {
       const cId: ColorId = getActiveColor(block.colorStack, block.colorCursor);
       const entry = COLOR_PALETTE[cId] ?? COLOR_PALETTE[1];
       const layersLeft = getLayersRemaining(block.colorStack, block.colorCursor);
+      const blockRoomId = getBlockRoomId(board, block);
+      const blockRoomVis = this.getRoomVisualState(board, blockRoomId);
       const isIdleMovable =
         !fallbackReducedMotion &&
+        !blockRoomVis.isLocked &&
         block.liftAlpha <= 0.05 &&
         block.iceCount === 0 &&
         !block.chained &&
@@ -4995,7 +5815,11 @@ export class Renderer3D {
               fallbackTimeSec * 2.1 - (block.col * 0.68 + block.row * 0.54) + block.id * 0.55
             )
         : 0;
-      const z = BLOCK_TOP_Z + block.liftAlpha * BLOCK_LIFT_DELTA_Z + wave01 * 0.038;
+      const z =
+        BLOCK_TOP_Z +
+        blockRoomVis.zOffset +
+        block.liftAlpha * BLOCK_LIFT_DELTA_Z +
+        wave01 * 0.038;
 
       let drawX =
         block.x +

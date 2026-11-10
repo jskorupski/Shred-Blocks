@@ -1,9 +1,45 @@
 import { getActiveColor, getShape } from './polyomino';
-import type { AxisLock, BlockState, BoardState } from './types';
+import type { AxisLock, BlockState, BoardState, EdgeDir, GateState } from './types';
 
 export const MAX_SWEEP_SUBSTEP = 0.18;
 export const CORNER_BEVEL_THRESHOLD = 0.3;
 const EPS = 1e-5;
+
+/**
+ * Computes the contiguous playable `[minSpan .. maxSpanEnd]` interval along `edgeLine` containing
+ * `spanStart`, preventing sliding/size-changing gates on non-rectangular courtyards from
+ * sliding or expanding into exterior cutout voids (`occupancy === -1`).
+ */
+export function getPlayableEdgeSpanBounds(
+  rows: number,
+  cols: number,
+  occupancy: Int16Array,
+  edge: EdgeDir,
+  edgeLine: number,
+  spanStart: number,
+  spanLength: number
+): { minSpan: number; maxSpanEnd: number } {
+  const isHoriz = edge === 'TOP' || edge === 'BOTTOM';
+  const limit = isHoriz ? cols : rows;
+  const isPlayableAt = (pos: number): boolean => {
+    if (pos < 0 || pos >= limit) return false;
+    const r = isHoriz ? edgeLine : pos;
+    const c = isHoriz ? pos : edgeLine;
+    if (r < 0 || r >= rows && c < 0) return false;
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
+    return occupancy[r * cols + c] !== -1;
+  };
+
+  let minSpan = Math.max(0, Math.min(limit - 1, spanStart));
+  while (minSpan > 0 && isPlayableAt(minSpan - 1)) {
+    minSpan--;
+  }
+  let maxSpanEnd = Math.max(minSpan + 1, Math.min(limit, spanStart + spanLength));
+  while (maxSpanEnd < limit && isPlayableAt(maxSpanEnd)) {
+    maxSpanEnd++;
+  }
+  return { minSpan, maxSpanEnd };
+}
 
 /**
  * Returns all ACTIVE blocks that move together as a rigid assembly with `blockId`.
@@ -19,6 +55,88 @@ export function getMovedGroupBlocks(board: BoardState, blockId: number): BlockSt
 }
 
 /**
+ * Returns `true` if `roomId === 0` (the starting courtyard) or every Portcullis Barrier
+ * guarding `roomId` (`unlocksRoomId === roomId`) is currently open.
+ */
+export function isRoomUnlocked(board: BoardState, roomId: number): boolean {
+  if (roomId <= 0 || !board.barriers || board.barriers.length === 0) return true;
+  for (const bar of board.barriers) {
+    if (bar.unlocksRoomId === roomId && !bar.open) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Returns the room ID (`0` = starting courtyard, `1..N` = secondary chamber) containing `block`.
+ */
+export function getBlockRoomId(board: BoardState, block: BlockState): number {
+  if (!board.roomMap || board.roomMap.length === 0) return 0;
+  const shape = getShape(block.shapeId);
+  for (const [dr, dc] of shape.cells) {
+    const r = block.row + dr;
+    const c = block.col + dc;
+    if (r >= 0 && r < board.rows && c >= 0 && c < board.cols) {
+      const rid = board.roomMap[r * board.cols + c];
+      if (rid > 0) return rid;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Returns `true` if any constituent cell of `block` resides inside a currently sealed room.
+ */
+export function isBlockInLockedRoom(board: BoardState, block: BlockState): boolean {
+  if (!board.roomMap || !board.barriers || board.barriers.length === 0) return false;
+  const shape = getShape(block.shapeId);
+  for (const [dr, dc] of shape.cells) {
+    const r = block.row + dr;
+    const c = block.col + dc;
+    if (r >= 0 && r < board.rows && c >= 0 && c < board.cols) {
+      const rid = board.roomMap[r * board.cols + c];
+      if (rid > 0 && !isRoomUnlocked(board, rid)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns `true` if an Exit Gate sits along the wall of a currently sealed room (`MECH-18`).
+ */
+export function isGateInLockedRoom(board: BoardState, gate: GateState): boolean {
+  if (!board.roomMap || !board.barriers || board.barriers.length === 0) return false;
+  const isHoriz = gate.edge === 'TOP' || gate.edge === 'BOTTOM';
+  const edgeLine =
+    gate.edgeLine ??
+    (gate.edge === 'TOP' || gate.edge === 'LEFT'
+      ? 0
+      : gate.edge === 'BOTTOM'
+        ? board.rows - 1
+        : board.cols - 1);
+
+  let foundPlayableCell = false;
+  for (let s = gate.spanStart; s < gate.spanStart + gate.spanLength; s++) {
+    const r = isHoriz ? edgeLine : s;
+    const c = isHoriz ? s : edgeLine;
+    if (r >= 0 && r < board.rows && c >= 0 && c < board.cols) {
+      const idx = r * board.cols + c;
+      if (board.occupancy[idx] !== -1) {
+        foundPlayableCell = true;
+        const rid = board.roomMap[idx];
+        if (rid === 0 || isRoomUnlocked(board, rid)) {
+          return false;
+        }
+      }
+    }
+  }
+  return foundPlayableCell;
+}
+
+/**
  * Checks whether a single block (and its glued group if `groupId > 0`) is allowed to move.
  */
 export function isBlockMovable(board: BoardState, blockId: number): boolean {
@@ -29,6 +147,7 @@ export function isBlockMovable(board: BoardState, blockId: number): boolean {
     if (b.iceCount > 0) return false; // Frozen block
     if (b.chained) return false; // Padlocked / chained block
     if (b.ropeColor > 0) return false; // Tied with colored rope
+    if (isBlockInLockedRoom(board, b)) return false; // Sealed inside a dormant chamber
   }
 
   // Also check if group has conflicting axis locks (e.g., H and V glued together)
@@ -52,16 +171,29 @@ export function getGroupAxisLock(group: BlockState[]): AxisLock | 'LOCKED_BOTH' 
 }
 
 /**
- * Rebuilds the `board.occupancy` flat Int16Array from cutouts, pillars, crates, and active blocks.
+ * Rebuilds the `board.occupancy` flat Int16Array from cutouts, pillars, closed portcullis
+ * barriers (`-3`), crates (`-100 - id`), and active blocks (`> 0`).
  * Calling this after any discrete grid mutation guarantees 0 stale cells.
  */
 export function rebuildOccupancyGrid(board: BoardState): void {
   const { rows, cols, occupancy } = board;
-  // Preserve static cutouts (-1) and pillars (-2); clear dynamic entries (>0 or <= -100)
+  // Preserve static cutouts (-1) and pillars (-2); clear dynamic entries (>0, -3 portcullis, or <= -100)
   for (let i = 0; i < rows * cols; i++) {
     const val = occupancy[i];
-    if (val > 0 || val <= -100) {
+    if (val > 0 || val === -3 || val <= -100) {
       occupancy[i] = 0;
+    }
+  }
+
+  if (board.barriers) {
+    for (const barrier of board.barriers) {
+      if (!barrier.open) {
+        for (const [r, c] of barrier.cells) {
+          if (r >= 0 && r < rows && c >= 0 && c < cols) {
+            occupancy[r * cols + c] = -3;
+          }
+        }
+      }
     }
   }
 
@@ -348,7 +480,7 @@ export function sweepBlockToTarget(
     if (Math.abs(remVal) <= 1e-7) return 0;
     let d = Math.sign(remVal) * Math.min(Math.abs(remVal), MAX_SWEEP_SUBSTEP);
     // If there is significant perpendicular pull, land cleanly on any crossed integer grid line
-    // so the very next substep can turn 90 degrees into the perpendicular corridor (`DRAG-02`, `ADV-R4-06`).
+    // so the very next substep can turn 90 degrees into the perpendicular corridor (`DRAG-02`).
     if (Math.abs(perpRemVal) > 0.12 && Math.abs(curVal - Math.round(curVal)) > 1e-4) {
       const nextInt = d > 0 ? Math.ceil(curVal - 1e-5) : Math.floor(curVal + 1e-5);
       const toInt = nextInt - curVal;
@@ -372,7 +504,7 @@ export function sweepBlockToTarget(
     const offX = Math.abs(curDx - Math.round(curDx));
     const offY = Math.abs(curDy - Math.round(curDy));
 
-    // Channel-Locked Orthogonal Sweep State Machine (`DRAG-02`, `ADV-R4-06`):
+    // Channel-Locked Orthogonal Sweep State Machine (`DRAG-02`):
     // Ensures at most ONE axis has a non-integer fractional offset at any time (eliminating diagonal
     // off-grid floating in open 2x2 areas) while preserving 0.30-cell corner bevel assist and wall sliding.
     if (offX > 1e-4 && offY <= 1e-4) {

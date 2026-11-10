@@ -1,6 +1,12 @@
 import { createBoardState } from '../core/board';
 import { getShape } from '../core/polyomino';
-import type { AxisLock, ColorId, EdgeDir, LevelSpec } from '../core/types';
+import type {
+  AxisLock,
+  ColorId,
+  CourtyardLayoutId,
+  EdgeDir,
+  LevelSpec,
+} from '../core/types';
 import { solveBoard } from './solver';
 
 export const MAX_MODIFIERS_PER_BLOCK = 2;
@@ -281,6 +287,49 @@ function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId> {
   return active;
 }
 
+function selectCourtyardTopologyForLevel(
+  levelId: number,
+  rows: number,
+  cols: number,
+  attempt: number,
+  activeMechanics: Set<MechanicId>
+): CourtyardLayoutId {
+  if (levelId < 14 || attempt >= 2) return 'RECTANGLE';
+
+  if (
+    levelId >= 25 &&
+    (levelId % 6 === 0 || levelId % 9 === 0) &&
+    rows >= 7 &&
+    !activeMechanics.has('ELEVATORS') &&
+    !activeMechanics.has('GENERATORS') &&
+    !activeMechanics.has('GLUED') &&
+    !activeMechanics.has('SLIDING_GATE') &&
+    !activeMechanics.has('SIZE_CHANGING_GATE')
+  ) {
+    return 'TWIN_SANCTUM';
+  }
+
+  if (
+    levelId % 2 === 0 ||
+    levelId % 5 === 0 ||
+    activeMechanics.has('CUTOUTS_PILLARS')
+  ) {
+    if (rows >= 8 && cols >= 8 && levelId % 4 === 0) {
+      return 'CITADEL_OCTAGON';
+    }
+    const pool: CourtyardLayoutId[] = [
+      'CROSS_ATRIUM',
+      'L_WING',
+      'T_PAVILION',
+      'HOURGLASS_BRIDGE',
+      'H_SANCTUM',
+    ];
+    return pool[Math.floor(levelId / 2) % pool.length];
+  }
+
+  return 'RECTANGLE';
+}
+
 function getUnlockNoteForLevel(levelId: number): string | undefined {
   switch (levelId) {
     case 1:
@@ -377,7 +426,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     cols = isBreatherWave ? 8 : 9;
   }
 
-  // On late retry attempts (`attempt >= 3`), step down very large grids by 1 cell to guarantee fast solvability (`ADV-R4-05`)
+  // On late retry attempts (`attempt >= 3`), step down very large grids by 1 cell to guarantee fast solver verification
   if (attempt >= 3 && rows > 7) rows = 7;
   if (attempt >= 3 && cols > 7) cols = 7;
 
@@ -391,83 +440,15 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     availableColors[j] = tmp;
   }
 
-  const numColors =
-    levelId <= 3
-      ? 2
-      : levelId <= 8
-        ? 3
-        : isBreatherWave
-          ? 4
-          : levelId >= 140 && difficulty === 'SUPER_HARD' && cols >= 8
-            ? 6
-            : levelId >= 90 && (difficulty === 'HARD' || difficulty === 'SUPER_HARD') && cols >= 7
-              ? 5
-              : 4;
-  const activeColors = availableColors.slice(0, numColors);
-
-  const edges: EdgeDir[] = ['TOP', 'RIGHT', 'BOTTOM', 'LEFT'];
-  const gates: LevelSpec['gates'] = [];
-
-  for (let i = 0; i < numColors; i++) {
-    const edge = edges[i % 4];
-    const edgeLimit = edge === 'TOP' || edge === 'BOTTOM' ? cols : rows;
-    if (edge === 'TOP' && numColors >= 5 && edgeLimit >= 7) {
-      if (i === 0) {
-        gates.push({
-          edge,
-          spanStart: 1,
-          spanLength: 3,
-          colorQueue: [activeColors[i]],
-        });
-      } else {
-        gates.push({
-          edge,
-          spanStart: 4,
-          spanLength: Math.min(4, edgeLimit - 4),
-          colorQueue: [activeColors[i]],
-        });
-      }
-    } else if (edge === 'BOTTOM' && numColors >= 6 && edgeLimit >= 7) {
-      if (i === 2) {
-        gates.push({
-          edge,
-          spanStart: 1,
-          spanLength: 3,
-          colorQueue: [activeColors[i]],
-        });
-      } else {
-        gates.push({
-          edge,
-          spanStart: 4,
-          spanLength: Math.min(4, edgeLimit - 4),
-          colorQueue: [activeColors[i]],
-        });
-      }
-    } else {
-      const spanLength = Math.min(
-        edgeLimit,
-        Math.max(4, edgeLimit - (isBreatherWave ? 1 : 2))
-      );
-      const spanStart = Math.max(0, Math.floor((edgeLimit - spanLength) / 2));
-      gates.push({
-        edge,
-        spanStart,
-        spanLength,
-        colorQueue: [activeColors[i]],
-      });
-    }
-  }
-
-  const grid = new Int16Array(rows * cols);
-  const cutouts: Array<[number, number]> = [];
-  const pillars: Array<[number, number]> = [];
-  const crates: NonNullable<LevelSpec['crates']> = [];
-  const floorPaths: NonNullable<LevelSpec['floorPaths']> = [];
-  const generators: NonNullable<LevelSpec['generators']> = [];
-  const elevators: NonNullable<LevelSpec['elevators']> = [];
-
   // `RAMP-01`: Focused Primary + Harmonious Secondary Mechanic Selector (never uncapped modulo pile-ups!)
   const activeMechanics = selectFocusedMechanicsForLevel(levelId);
+  const layoutId = selectCourtyardTopologyForLevel(
+    levelId,
+    rows,
+    cols,
+    attempt,
+    activeMechanics
+  );
   const useCutoutsOrPillars = activeMechanics.has('CUTOUTS_PILLARS');
   const useAxisLock = activeMechanics.has('AXIS_LOCK');
   const useMultiLayer = activeMechanics.has('MULTI_LAYER');
@@ -489,15 +470,217 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
   const useFloorPaths = activeMechanics.has('FLOOR_PATHS');
   const useElevators = activeMechanics.has('ELEVATORS');
 
-  // 1. Cutouts & Pillars (L21+) — place in non-gate corners so central lanes stay open
-  if (useCutoutsOrPillars) {
-    cutouts.push([0, 0]);
-    grid[0] = -1;
+  const getSculptedEdgeSpanBounds = (
+    edge: EdgeDir
+  ): { minStart: number; maxEnd: number } => {
+    const limit = edge === 'TOP' || edge === 'BOTTOM' ? cols : rows;
+    if (layoutId === 'RECTANGLE') {
+      if (!useCutoutsOrPillars) {
+        return { minStart: 0, maxEnd: limit };
+      }
+      if (edge === 'TOP') return { minStart: 1, maxEnd: limit - 1 };
+      if (edge === 'LEFT' || edge === 'RIGHT') return { minStart: 1, maxEnd: limit };
+      return { minStart: 0, maxEnd: limit };
+    }
+    if (layoutId === 'TWIN_SANCTUM') {
+      if (edge === 'LEFT' || edge === 'RIGHT') return { minStart: 3, maxEnd: limit };
+      if (edge === 'TOP') return { minStart: 1, maxEnd: limit - 1 };
+      return { minStart: 0, maxEnd: limit };
+    }
+    if (layoutId === 'L_WING') {
+      if (edge === 'TOP') return { minStart: 0, maxEnd: limit - 1 };
+      if (edge === 'RIGHT') return { minStart: 2, maxEnd: limit };
+      if (edge === 'BOTTOM') return { minStart: 1, maxEnd: limit };
+      return { minStart: 0, maxEnd: limit - 1 };
+    }
+    if (layoutId === 'T_PAVILION') {
+      if (edge === 'TOP') return { minStart: 0, maxEnd: limit };
+      if (edge === 'BOTTOM') return { minStart: 1, maxEnd: limit - 1 };
+      return { minStart: 0, maxEnd: rows >= 7 ? limit - 2 : limit - 1 };
+    }
+    if (layoutId === 'HOURGLASS_BRIDGE') {
+      if (edge === 'TOP') return { minStart: 1, maxEnd: limit - 1 };
+      if (edge === 'BOTTOM') return { minStart: 0, maxEnd: limit - 1 };
+      if (edge === 'LEFT') return { minStart: 1, maxEnd: limit };
+      return { minStart: 1, maxEnd: limit - 1 };
+    }
+    return { minStart: 1, maxEnd: limit - 1 };
+  };
+
+  const topSpanBounds = getSculptedEdgeSpanBounds('TOP');
+  const rightSpanBounds = getSculptedEdgeSpanBounds('RIGHT');
+  const canSplitTopEdge = topSpanBounds.maxEnd - topSpanBounds.minStart >= 6;
+  const canSplitRightEdge = rightSpanBounds.maxEnd - rightSpanBounds.minStart >= 6;
+
+  const numColors =
+    levelId <= 3
+      ? 2
+      : levelId <= 8
+        ? 3
+        : isBreatherWave || layoutId === 'TWIN_SANCTUM'
+          ? 4
+          : levelId >= 140 &&
+              difficulty === 'SUPER_HARD' &&
+              cols >= 8 &&
+              canSplitTopEdge &&
+              canSplitRightEdge
+            ? 6
+            : levelId >= 90 &&
+                (difficulty === 'HARD' || difficulty === 'SUPER_HARD') &&
+                cols >= 7 &&
+                canSplitTopEdge
+              ? 5
+              : 4;
+  const activeColors = availableColors.slice(0, numColors);
+
+  const edges: EdgeDir[] = ['TOP', 'RIGHT', 'BOTTOM', 'LEFT'];
+  const gates: LevelSpec['gates'] = [];
+
+  for (let i = 0; i < numColors; i++) {
+    const edge = edges[i % 4];
+    const { minStart, maxEnd } = getSculptedEdgeSpanBounds(edge);
+    const availLen = Math.max(2, maxEnd - minStart);
+    if (edge === 'TOP' && numColors >= 5 && availLen >= 6) {
+      const mid = Math.floor((minStart + maxEnd) / 2);
+      if (i === 0) {
+        gates.push({
+          edge,
+          spanStart: minStart,
+          spanLength: Math.max(3, mid - minStart),
+          colorQueue: [activeColors[i]],
+        });
+      } else {
+        gates.push({
+          edge,
+          spanStart: mid,
+          spanLength: Math.max(3, maxEnd - mid),
+          colorQueue: [activeColors[i]],
+        });
+      }
+    } else if (edge === 'RIGHT' && numColors >= 6 && availLen >= 6) {
+      const mid = Math.floor((minStart + maxEnd) / 2);
+      if (i === 1) {
+        gates.push({
+          edge,
+          spanStart: minStart,
+          spanLength: Math.max(3, mid - minStart),
+          colorQueue: [activeColors[i]],
+        });
+      } else {
+        gates.push({
+          edge,
+          spanStart: mid,
+          spanLength: Math.max(3, maxEnd - mid),
+          colorQueue: [activeColors[i]],
+        });
+      }
+    } else {
+      const spanLength = Math.min(
+        availLen,
+        Math.max(Math.min(availLen, 4), availLen - (isBreatherWave ? 0 : 1))
+      );
+      const spanStart = minStart + Math.max(0, Math.floor((availLen - spanLength) / 2));
+      gates.push({
+        edge,
+        spanStart,
+        spanLength,
+        colorQueue: [activeColors[i]],
+      });
+    }
+  }
+
+  const grid = new Int16Array(rows * cols);
+  const cutouts: Array<[number, number]> = [];
+  const pillars: Array<[number, number]> = [];
+  const crates: NonNullable<LevelSpec['crates']> = [];
+  const floorPaths: NonNullable<LevelSpec['floorPaths']> = [];
+  const generators: NonNullable<LevelSpec['generators']> = [];
+  const elevators: NonNullable<LevelSpec['elevators']> = [];
+  const barriers: NonNullable<LevelSpec['barriers']> = [];
+
+  const addCutout = (r: number, c: number): void => {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    if (grid[r * cols + c] !== 0) return;
+    cutouts.push([r, c]);
+    grid[r * cols + c] = -1;
+  };
+  const addPillar = (r: number, c: number): void => {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    if (grid[r * cols + c] !== 0) return;
+    pillars.push([r, c]);
+    grid[r * cols + c] = -2;
+  };
+
+  // 1. Sculpted Courtyard Topology & Multi-Room Portcullis Synthesis (`COURTYARD-01`, `SANCTUM-01`)
+  if (layoutId === 'CROSS_ATRIUM') {
+    addCutout(0, 0);
+    addCutout(0, cols - 1);
+    addCutout(rows - 1, 0);
+    addCutout(rows - 1, cols - 1);
+  } else if (layoutId === 'CITADEL_OCTAGON') {
+    addCutout(0, 0);
+    addCutout(0, cols - 1);
+    addCutout(rows - 1, 0);
+    addCutout(rows - 1, cols - 1);
+    if (!isBreatherWave && !useElevators) {
+      addPillar(Math.floor(rows / 2), Math.floor(cols / 2));
+    }
+  } else if (layoutId === 'L_WING') {
+    addCutout(0, cols - 1);
+    addCutout(1, cols - 1);
+    addCutout(rows - 1, 0);
+  } else if (layoutId === 'T_PAVILION') {
+    addCutout(rows - 1, 0);
+    addCutout(rows - 1, cols - 1);
+    if (rows >= 7) {
+      addCutout(rows - 2, 0);
+      addCutout(rows - 2, cols - 1);
+    }
+  } else if (layoutId === 'HOURGLASS_BRIDGE') {
+    addCutout(0, 0);
+    addCutout(rows - 1, cols - 1);
+    if (!isBreatherWave && cols >= 6) {
+      addPillar(0, cols - 1);
+    }
+  } else if (layoutId === 'H_SANCTUM') {
+    addCutout(0, 0);
+    addCutout(0, cols - 1);
+    addCutout(rows - 1, 0);
+    addCutout(rows - 1, cols - 1);
+    if (!isBreatherWave && !useElevators && rows >= 7) {
+      addPillar(Math.floor(rows / 2), 1);
+    }
+  } else if (layoutId === 'TWIN_SANCTUM') {
+    addCutout(0, 0);
+    addCutout(0, cols - 1);
+    const barrierRow = 2;
+    addPillar(barrierRow, 0);
+    addPillar(barrierRow, cols - 1);
+    const barCells: Array<[number, number]> = [];
+    for (let c = 1; c < cols - 1; c++) {
+      barCells.push([barrierRow, c]);
+      grid[barrierRow * cols + c] = -3;
+    }
+    const room1Cells: Array<[number, number]> = [];
+    for (let r = 0; r < barrierRow; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r * cols + c] !== -1) {
+          room1Cells.push([r, c]);
+        }
+      }
+    }
+    barriers.push({
+      id: 1,
+      cells: barCells,
+      orientation: 'H',
+      shredsRemaining: 2,
+      unlocksRoomId: 1,
+      roomCells: room1Cells,
+    });
+  } else if (useCutoutsOrPillars) {
+    addCutout(0, 0);
     if (levelId >= 24 && attempt < 2 && !isBreatherWave) {
-      const pr = 0;
-      const pc = cols - 1;
-      pillars.push([pr, pc]);
-      grid[pr * cols + pc] = -2;
+      addPillar(0, cols - 1);
     }
   }
 
@@ -626,9 +809,58 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     const shape = getShape(chosenShape);
     let placed = false;
 
+    // In TWIN_SANCTUM, place block 0 in North Chamber (Room 1, row 1) and all other blocks in South Courtyard (Room 0, rows 3..rows-2)
+    if (layoutId === 'TWIN_SANCTUM') {
+      if (bIdx === 0) {
+        const sh1 = getShape('1x2');
+        const r1 = 1;
+        const c1 = Math.max(1, Math.min(cols - 3, Math.floor((cols - 2) / 2)));
+        if (grid[r1 * cols + c1] === 0 && grid[r1 * cols + (c1 + 1)] === 0) {
+          const id = nextId++;
+          grid[r1 * cols + c1] = id;
+          grid[r1 * cols + (c1 + 1)] = id;
+          blocks.push({
+            id,
+            shapeId: '1x2',
+            row: r1,
+            col: c1,
+            colorStack: [color],
+          });
+          placed = true;
+        }
+      } else {
+        for (let pTry = 0; pTry < 24 && !placed; pTry++) {
+          const minR = 3;
+          const maxR = Math.max(minR, rows - shape.rows - 1);
+          const r = minR + Math.floor(rng() * (maxR - minR + 1));
+          const c = 1 + Math.floor(rng() * Math.max(1, cols - shape.cols - 1));
+          let fits = true;
+          for (const [dr, dc] of shape.cells) {
+            if (grid[(r + dr) * cols + (c + dc)] !== 0) {
+              fits = false;
+              break;
+            }
+          }
+          if (!fits) continue;
+          const id = nextId++;
+          for (const [dr, dc] of shape.cells) {
+            grid[(r + dr) * cols + (c + dc)] = id;
+          }
+          blocks.push({
+            id,
+            shapeId: chosenShape,
+            row: r,
+            col: c,
+            colorStack: [color],
+          });
+          placed = true;
+        }
+      }
+    }
+
     // Interleaved Blocker Placement (C1-15):
     // Place block 0 at row 2 aligned with TOP gate, and place block 1 at row 1 directly in block 0's exit corridor!
-    if (attempt <= 1 && bIdx === 0 && gate.edge === 'TOP' && rows >= 6) {
+    if (!placed && layoutId !== 'TWIN_SANCTUM' && attempt <= 1 && bIdx === 0 && gate.edge === 'TOP' && rows >= 6) {
       const r0 = 2;
       const c0 = Math.max(1, Math.min(cols - shape.cols - 1, gate.spanStart));
       let fits0 = true;
@@ -714,7 +946,8 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     }
 
     if (!placed) {
-      for (let r = 1; r < rows - 1 && !placed; r++) {
+      const startRow = layoutId === 'TWIN_SANCTUM' && bIdx > 0 ? 3 : 1;
+      for (let r = startRow; r < rows - 1 && !placed; r++) {
         for (let c = 1; c < cols - 1 && !placed; c++) {
           if (grid[r * cols + c] === 0) {
             const id = nextId++;
@@ -810,11 +1043,23 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     }
   }
 
+  const isInStartingRoom = (b: LevelSpec['blocks'][number]): boolean =>
+    layoutId !== 'TWIN_SANCTUM' || b.row > 2;
+
   // Key & Lock (Chained) Blocks (L61+)
   if (useKeyLock && coloredBlocks.length >= 3) {
-    const keyCarrier = coloredBlocks.find(
-      (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
-    );
+    const keyCarrier =
+      coloredBlocks.find(
+        (b) =>
+          isInStartingRoom(b) &&
+          !b.iceCount &&
+          !b.chained &&
+          !b.ropeColor &&
+          canAddBlockModifier(b, 'PAYLOAD')
+      ) ??
+      coloredBlocks.find(
+        (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
+      );
     const lockedTarget = [...coloredBlocks]
       .reverse()
       .find(
@@ -832,9 +1077,18 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   // Bomb Blocks (L91+, `RAMP-04`: generous countdown so players never feel cheated)
   if (useBombs && coloredBlocks.length >= 2) {
-    const bombCandidate = coloredBlocks.find(
-      (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
-    );
+    const bombCandidate =
+      coloredBlocks.find(
+        (b) =>
+          isInStartingRoom(b) &&
+          !b.iceCount &&
+          !b.chained &&
+          !b.ropeColor &&
+          canAddBlockModifier(b, 'PAYLOAD')
+      ) ??
+      coloredBlocks.find(
+        (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
+      );
     if (bombCandidate) {
       bombCandidate.bombCount = Math.max(16, coloredBlocks.length * 3 + 2);
     }
@@ -842,9 +1096,18 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   // Colored Ropes & Scissors (L111+)
   if (useRopes && coloredBlocks.length >= 3) {
-    const scissorHolder = coloredBlocks.find(
-      (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
-    );
+    const scissorHolder =
+      coloredBlocks.find(
+        (b) =>
+          isInStartingRoom(b) &&
+          !b.iceCount &&
+          !b.chained &&
+          !b.ropeColor &&
+          canAddBlockModifier(b, 'PAYLOAD')
+      ) ??
+      coloredBlocks.find(
+        (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
+      );
     const ropedTarget = [...coloredBlocks]
       .reverse()
       .find(
@@ -877,14 +1140,24 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
   if (useShutterLock && gates.length >= 3 && coloredBlocks.length >= 3) {
     const lockedGate = gates[gates.length - 1];
     const lockedGateColor = lockedGate.colorQueue[0];
-    const gemCarrier = coloredBlocks.find(
-      (b) =>
-        b.colorStack[0] !== lockedGateColor &&
-        !b.iceCount &&
-        !b.chained &&
-        !b.ropeColor &&
-        canAddBlockModifier(b, 'PAYLOAD')
-    );
+    const gemCarrier =
+      coloredBlocks.find(
+        (b) =>
+          isInStartingRoom(b) &&
+          b.colorStack[0] !== lockedGateColor &&
+          !b.iceCount &&
+          !b.chained &&
+          !b.ropeColor &&
+          canAddBlockModifier(b, 'PAYLOAD')
+      ) ??
+      coloredBlocks.find(
+        (b) =>
+          b.colorStack[0] !== lockedGateColor &&
+          !b.iceCount &&
+          !b.chained &&
+          !b.ropeColor &&
+          canAddBlockModifier(b, 'PAYLOAD')
+      );
     if (gemCarrier && !lockedGate.iceCount) {
       const gemColor = gemCarrier.colorStack[0];
       gemCarrier.shutterGemColor = gemColor;
@@ -902,55 +1175,75 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     }
   }
 
+  const singleEdgeGates = gates.filter(
+    (g) =>
+      gates.filter((o) => o.edge === g.edge && (o.edgeLine ?? 0) === (g.edgeLine ?? 0)).length === 1
+  );
+
   // Sliding Gates (L151+)
-  if (useSlidingGate && gates.length >= 1) {
-    const gSlide = gates[0];
-    const limit = gSlide.edge === 'TOP' || gSlide.edge === 'BOTTOM' ? cols : rows;
+  if (useSlidingGate && singleEdgeGates.length >= 1) {
+    const gSlide = singleEdgeGates[0];
+    const { minStart, maxEnd } = getSculptedEdgeSpanBounds(gSlide.edge);
+    const availLen = Math.max(3, maxEnd - minStart);
     gSlide.slidesOnClear = true;
-    gSlide.spanLength = Math.min(limit, 4);
-    gSlide.slideMin = 0;
-    gSlide.slideMax = Math.max(0, limit - gSlide.spanLength);
+    gSlide.spanLength = Math.max(3, Math.min(4, availLen - 1));
+    gSlide.spanStart = Math.max(minStart, Math.min(gSlide.spanStart, maxEnd - gSlide.spanLength));
+    gSlide.slideMin = minStart;
+    gSlide.slideMax = Math.max(minStart, maxEnd - gSlide.spanLength);
     gSlide.slideDir = 1;
   }
 
   // Size-Changing Gates (L155+)
-  if (useSizeChangingGate && gates.length >= 2) {
-    const gSize = gates[1];
-    const limit = gSize.edge === 'TOP' || gSize.edge === 'BOTTOM' ? cols : rows;
+  if (useSizeChangingGate && singleEdgeGates.length >= 1) {
+    const gSize = singleEdgeGates[1] ?? singleEdgeGates[0];
+    const { minStart, maxEnd } = getSculptedEdgeSpanBounds(gSize.edge);
+    const availLen = Math.max(3, maxEnd - minStart);
     gSize.sizeChangesOnClear = true;
-    gSize.spanLength = Math.min(limit, 4);
-    gSize.minLength = Math.min(limit, 3);
-    gSize.maxLength = Math.min(limit, 4);
+    gSize.maxLength = Math.max(3, Math.min(4, availLen));
+    gSize.minLength = Math.max(2, Math.min(3, gSize.maxLength - 1));
+    gSize.spanLength = gSize.maxLength;
+    gSize.spanStart = Math.max(minStart, Math.min(gSize.spanStart, maxEnd - gSize.maxLength));
   }
 
   // Block Generators (L161+)
   if (useGenerators) {
-    let spawnR = 0;
-    let spawnC = cols - 1;
-    for (let r = 1; r < rows - 1; r++) {
-      for (let c = 1; c < cols - 1; c++) {
+    const minGenRow = layoutId === 'TWIN_SANCTUM' ? 3 : 0;
+    let genR = -1;
+    let genC = -1;
+    let spawnR = -1;
+    let spawnC = -1;
+    for (let c = 1; c < cols - 1; c++) {
+      for (let r = minGenRow; r < rows; r++) {
         if (grid[r * cols + c] === 0) {
-          spawnR = r;
-          spawnC = c;
-          break;
+          if (genR < 0) {
+            genR = r;
+            genC = c;
+          } else if (spawnR < 0) {
+            spawnR = r;
+            spawnC = c;
+            break;
+          }
         }
       }
-      if (spawnR > 0) break;
+      if (genR >= 0 && spawnR >= 0) break;
     }
-    generators.push({
-      id: 1,
-      row: 0,
-      col: spawnC,
-      spawnRow: spawnR,
-      spawnCol: spawnC,
-      cooldown: 1,
-      queue: [
-        {
-          shapeId: '1x1',
-          colorStack: [activeColors[0]],
-        },
-      ],
-    });
+    if (genR >= 0 && spawnR >= 0) {
+      grid[genR * cols + genC] = -2;
+      generators.push({
+        id: 1,
+        row: genR,
+        col: genC,
+        spawnRow: spawnR,
+        spawnCol: spawnC,
+        cooldown: 1,
+        queue: [
+          {
+            shapeId: '1x1',
+            colorStack: [activeColors[0]],
+          },
+        ],
+      });
+    }
   }
 
   // Color-Changing Gates (L121+, C1-04):
@@ -978,7 +1271,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   // Colorful Floor Paths (L171+)
   if (useFloorPaths && coloredBlocks.length > 0) {
-    const b0 = coloredBlocks[0];
+    const b0 = coloredBlocks.find(isInStartingRoom) ?? coloredBlocks[0];
     floorPaths.push({
       row: b0.row,
       col: b0.col,
@@ -988,15 +1281,29 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   // Moving Elevators (L181+)
   if (useElevators) {
-    elevators.push({
-      id: 1,
-      row: Math.floor(rows / 2),
-      col: 1,
-      width: 2,
-      height: 1,
-      deltaRow: 0,
-      deltaCol: 1,
-    });
+    const midR = Math.floor(rows / 2);
+    const candidateRows = [midR, midR + 1, midR - 1, rows - 2];
+    for (const er of candidateRows) {
+      if (er < 1 || er >= rows - 1) continue;
+      if (layoutId === 'TWIN_SANCTUM' && er <= 2) continue;
+      if (
+        cols >= 5 &&
+        grid[er * cols + 1] >= 0 &&
+        grid[er * cols + 2] >= 0 &&
+        grid[er * cols + 3] >= 0
+      ) {
+        elevators.push({
+          id: 1,
+          row: er,
+          col: 1,
+          width: 2,
+          height: 1,
+          deltaRow: 0,
+          deltaCol: 1,
+        });
+        break;
+      }
+    }
   }
 
   const adj = LEVEL_ADJECTIVES[(levelId * 7) % LEVEL_ADJECTIVES.length];
@@ -1009,6 +1316,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     id: levelId,
     name: `${adj} ${noun}`,
     difficulty,
+    layoutId,
     unlockNote: getUnlockNoteForLevel(levelId),
     rows,
     cols,
@@ -1020,6 +1328,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     crates: crates.length > 0 ? crates : undefined,
     generators: generators.length > 0 ? generators : undefined,
     elevators: elevators.length > 0 ? elevators : undefined,
+    barriers: barriers.length > 0 ? barriers : undefined,
     parMoves: Math.max(4, coloredBlocks.length),
     timeLimitSec,
   };

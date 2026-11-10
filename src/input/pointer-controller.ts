@@ -14,6 +14,7 @@ import {
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
+  isBlockInLockedRoom,
   isBlockMovable,
   rebuildOccupancyGrid,
   snapGroupToNearestGrid,
@@ -665,11 +666,17 @@ export class BoardInputController {
       return;
     }
 
-    const picked = pickBlockAtBoardPoint(board, boardX, boardY);
+    const inBounds = row >= 0 && row < board.rows && col >= 0 && col < board.cols;
+    const cellOcc = inBounds ? board.occupancy[row * board.cols + col] : -1;
+    const isDirectNonBlockHammerCell =
+      this.inputMode === 'TARGET_HAMMER' &&
+      (!inBounds || cellOcc === -1 || cellOcc === -3 || cellOcc <= -100);
+
+    const rawPicked = isDirectNonBlockHammerCell ? null : pickBlockAtBoardPoint(board, boardX, boardY);
+    const picked = rawPicked && !isBlockInLockedRoom(board, rawPicked) ? rawPicked : null;
     if (
       this.inputMode === 'TARGET_VACUUM' &&
-      picked &&
-      (picked.iceCount > 0 || picked.chained || picked.ropeColor > 0)
+      (!picked || picked.iceCount > 0 || picked.chained || picked.ropeColor > 0)
     ) {
       this.setInputMode('DRAG');
       return;

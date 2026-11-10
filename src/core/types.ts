@@ -21,10 +21,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#7C8BA1',
     highlightHex: '#B0BECF',
     lipHex: '#475569',
-    highContrastPrimaryHex: '#94A3B8',
-    highContrastLipHex: '#334155',
+    highContrastPrimaryHex: '#CBD5E1',
+    highContrastLipHex: '#1E293B',
     rgb: [0.486, 0.545, 0.631],
-    hcRgb: [0.58, 0.639, 0.722],
+    hcRgb: [0.796, 0.835, 0.882],
   },
   1: {
     id: 1,
@@ -33,10 +33,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#F42C38',
     highlightHex: '#FF7A72',
     lipHex: '#A8141E',
-    highContrastPrimaryHex: '#E11D48',
-    highContrastLipHex: '#881337',
+    highContrastPrimaryHex: '#FF1A33',
+    highContrastLipHex: '#7F1D1D',
     rgb: [0.957, 0.173, 0.22],
-    hcRgb: [0.882, 0.114, 0.282],
+    hcRgb: [1.0, 0.102, 0.2],
   },
   2: {
     id: 2,
@@ -45,10 +45,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#2074F8',
     highlightHex: '#6AB3FF',
     lipHex: '#0F4CAC',
-    highContrastPrimaryHex: '#2563EB',
+    highContrastPrimaryHex: '#0072FF',
     highContrastLipHex: '#1E3A8A',
     rgb: [0.125, 0.455, 0.973],
-    hcRgb: [0.145, 0.388, 0.922],
+    hcRgb: [0.0, 0.447, 1.0],
   },
   3: {
     id: 3,
@@ -57,10 +57,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#24C254',
     highlightHex: '#6EE799',
     lipHex: '#147A31',
-    highContrastPrimaryHex: '#16A34A',
-    highContrastLipHex: '#14532D',
+    highContrastPrimaryHex: '#00E575',
+    highContrastLipHex: '#064E3B',
     rgb: [0.141, 0.761, 0.329],
-    hcRgb: [0.086, 0.639, 0.29],
+    hcRgb: [0.0, 0.898, 0.459],
   },
   4: {
     id: 4,
@@ -69,10 +69,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#FFC400',
     highlightHex: '#FFE570',
     lipHex: '#B88600',
-    highContrastPrimaryHex: '#FACC15',
-    highContrastLipHex: '#854D0E',
+    highContrastPrimaryHex: '#FFEB00',
+    highContrastLipHex: '#713F12',
     rgb: [1.0, 0.769, 0.0],
-    hcRgb: [0.98, 0.8, 0.082],
+    hcRgb: [1.0, 0.922, 0.0],
   },
   5: {
     id: 5,
@@ -81,10 +81,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#9B51E0',
     highlightHex: '#C48AF5',
     lipHex: '#5E239D',
-    highContrastPrimaryHex: '#7C3AED',
-    highContrastLipHex: '#4C1D95',
+    highContrastPrimaryHex: '#A833FF',
+    highContrastLipHex: '#3B0764',
     rgb: [0.608, 0.318, 0.878],
-    hcRgb: [0.486, 0.227, 0.929],
+    hcRgb: [0.659, 0.2, 1.0],
   },
   6: {
     id: 6,
@@ -93,10 +93,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#FF7315',
     highlightHex: '#FFAE66',
     lipHex: '#B84300',
-    highContrastPrimaryHex: '#F97316',
-    highContrastLipHex: '#9A3412',
+    highContrastPrimaryHex: '#FF8C00',
+    highContrastLipHex: '#7C2D12',
     rgb: [1.0, 0.451, 0.082],
-    hcRgb: [0.976, 0.451, 0.086],
+    hcRgb: [1.0, 0.549, 0.0],
   },
   7: {
     id: 7,
@@ -105,10 +105,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#06C4D8',
     highlightHex: '#74F2F2',
     lipHex: '#007C8C',
-    highContrastPrimaryHex: '#22D3EE',
-    highContrastLipHex: '#155E75',
+    highContrastPrimaryHex: '#00F5FF',
+    highContrastLipHex: '#0E7490',
     rgb: [0.024, 0.769, 0.847],
-    hcRgb: [0.133, 0.827, 0.933],
+    hcRgb: [0.0, 0.961, 1.0],
   },
   8: {
     id: 8,
@@ -117,10 +117,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#F84E9E',
     highlightHex: '#FF99C8',
     lipHex: '#AD1C62',
-    highContrastPrimaryHex: '#F472B6',
+    highContrastPrimaryHex: '#FF3DB8',
     highContrastLipHex: '#831843',
     rgb: [0.973, 0.306, 0.62],
-    hcRgb: [0.957, 0.447, 0.714],
+    hcRgb: [1.0, 0.239, 0.722],
   },
   9: {
     id: 9,
@@ -129,10 +129,10 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
     primaryHex: '#8CE014',
     highlightHex: '#BDF56E',
     lipHex: '#528A04',
-    highContrastPrimaryHex: '#A3E635',
-    highContrastLipHex: '#3F6212',
+    highContrastPrimaryHex: '#B5FF00',
+    highContrastLipHex: '#365314',
     rgb: [0.549, 0.878, 0.078],
-    hcRgb: [0.639, 0.902, 0.208],
+    hcRgb: [0.71, 1.0, 0.0],
   },
 };
 
@@ -147,6 +147,42 @@ export type QualityTier = 'AUTO' | 'ULTRA_120' | 'BALANCED_60';
 export type SkinId = 'classic_studs' | 'smooth_bevel' | 'gummy_jelly' | 'carved_wood' | 'neon_cyber';
 export type TrayId = 'industrial_slate' | 'warm_birch' | 'midnight_arcade' | 'frosted_quartz' | 'mint_studio';
 export type ParticleStyleId = 'micro_cubes' | 'star_confetti' | 'pixel_sparks' | 'soap_bubbles' | 'lightning_bolts';
+
+export type CourtyardLayoutId =
+  | 'RECTANGLE'
+  | 'CROSS_ATRIUM'
+  | 'L_WING'
+  | 'T_PAVILION'
+  | 'HOURGLASS_BRIDGE'
+  | 'H_SANCTUM'
+  | 'TWIN_SANCTUM'
+  | 'CITADEL_OCTAGON';
+
+export interface BarrierSpec {
+  id: number;
+  /** Contiguous 1xK or Kx1 archway cells separating Room A and Room B */
+  cells: Array<[number, number]>;
+  orientation: 'H' | 'V';
+  /** Number of block/layer shreds required to retract this portcullis (0 if Key-only) */
+  shredsRemaining?: number;
+  /** Optional Key ID (`hasKey`) that unlocks this portcullis when shredded */
+  lockId?: number;
+  /** Room ID (`>= 1`) whose floor and blocks awaken when this barrier opens */
+  unlocksRoomId?: number;
+  /** Explicit `[row, col]` cells belonging to `unlocksRoomId` */
+  roomCells?: Array<[number, number]>;
+}
+
+export interface BarrierState {
+  id: number;
+  cells: Array<[number, number]>;
+  orientation: 'H' | 'V';
+  shredsRemaining: number;
+  maxShreds: number;
+  lockId: number;
+  unlocksRoomId: number;
+  open: boolean;
+}
 
 export interface BlockState {
   id: number;
@@ -197,6 +233,12 @@ export interface GateState {
   spanStart: number;
   /** Length in grid cells (1..4) */
   spanLength: number;
+  /**
+   * Boundary row (for TOP/BOTTOM) or col (for LEFT/RIGHT) along which this gate sits.
+   * Defaults to 0 (TOP/LEFT), rows-1 (BOTTOM), or cols-1 (RIGHT), or the outermost non-void
+   * stepped boundary line for recessed alcoves/wings.
+   */
+  edgeLine: number;
   /** Queue of active colors; index [colorCursor] is front color */
   colorQueue: ColorId[];
   colorCursor: number;
@@ -269,17 +311,21 @@ export interface BoardState {
   levelId: number;
   name: string;
   difficulty: 'NORMAL' | 'HARD' | 'SUPER_HARD';
+  layoutId: CourtyardLayoutId;
   rows: number;
   cols: number;
-  /** 81-element flat occupancy: 0=empty, -1=cutout, -2=pillar, -100-id=crate, >0=blockId */
+  /** Flat occupancy: 0=empty, -1=exterior void cutout, -2=pillar, -3=closed portcullis barrier, -100-id=crate, >0=blockId */
   occupancy: Int16Array;
-  /** 81-element colorful floor path: 0=normal floor, 1..9=restricted to ColorId */
+  /** Flat colorful floor path: 0=normal floor, 1..9=restricted to ColorId */
   floorColor: Uint8Array;
+  /** Flat room ID map (`rows * cols`): 0=starting courtyard, 1..N=secondary chambers unlocked by portcullis barriers */
+  roomMap: Uint8Array;
   blocks: BlockState[];
   gates: GateState[];
   crates: CrateState[];
   generators: GeneratorState[];
   elevators: ElevatorState[];
+  barriers: BarrierState[];
   parMoves: number;
   timeLimitSec: number;
   timeRemainingSec: number;
@@ -295,12 +341,14 @@ export interface LevelSpec {
   id: number;
   name: string;
   difficulty: 'NORMAL' | 'HARD' | 'SUPER_HARD';
+  layoutId?: CourtyardLayoutId;
   unlockNote?: string;
   rows: number;
   cols: number;
   cutouts?: Array<[number, number]>;
   pillars?: Array<[number, number]>;
   floorPaths?: Array<{ row: number; col: number; color: ColorId }>;
+  barriers?: BarrierSpec[];
   blocks: Array<{
     id: number;
     shapeId: string;
@@ -323,6 +371,7 @@ export interface LevelSpec {
     edge: EdgeDir;
     spanStart: number;
     spanLength: number;
+    edgeLine?: number;
     colorQueue: ColorId[];
     isStar?: boolean;
     iceCount?: number;

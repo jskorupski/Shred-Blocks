@@ -22,9 +22,12 @@ import {
 } from '../../src/core/gate-clearance';
 import {
   canGroupOccupyOffset,
+  getBlockRoomId,
   getReachableAnchors,
+  isBlockInLockedRoom,
   isBlockMovable,
   isContinuousOffsetValid,
+  isRoomUnlocked,
   snapGroupToNearestGrid,
   sweepBlockToTarget,
 } from '../../src/core/physics';
@@ -538,9 +541,33 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
     let has5OrMoreColors = false;
     let hasAdvancedShapes = false;
     let hasMultiStepBlockerPuzzle = false;
+    let sculptedOrMultiRoomCount = 0;
+    let multiRoomCount = 0;
+
+    // Verify milestone architectural debuts
+    expect(getLevelSpec(14).layoutId).toBe('CROSS_ATRIUM');
+    expect(getLevelSpec(18).layoutId).toBe('L_WING');
+    expect(getLevelSpec(18).gates[0].edgeLine).toBe(2);
+    expect(getLevelSpec(22).layoutId).toBe('T_PAVILION');
+    expect(getLevelSpec(25).layoutId).toBe('TWIN_SANCTUM');
+    expect(getLevelSpec(25).barriers?.length).toBe(1);
 
     for (const spec of campaign) {
       expect(spec.difficulty).toBe(getDifficultyForLevel(spec.id));
+      if (spec.id <= 13) {
+        expect(spec.cutouts ?? []).toHaveLength(0);
+        expect(spec.barriers ?? []).toHaveLength(0);
+      }
+      if (
+        (spec.layoutId && spec.layoutId !== 'RECTANGLE') ||
+        (spec.cutouts && spec.cutouts.length > 0) ||
+        (spec.barriers && spec.barriers.length > 0)
+      ) {
+        sculptedOrMultiRoomCount++;
+      }
+      if (spec.barriers && spec.barriers.length > 0) {
+        multiRoomCount++;
+      }
       if (spec.rows >= 8 || spec.cols >= 8) has8x8OrLarger = true;
       if (spec.rows === 9 && spec.cols === 9) has9x9 = true;
 
@@ -552,6 +579,12 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
       for (const [r, c] of spec.pillars ?? []) {
         expect(occupiedCells.has(`${r},${c}`), `Level ${spec.id} pillar overlaps at (${r},${c})`).toBe(false);
         occupiedCells.add(`${r},${c}`);
+      }
+      for (const bar of spec.barriers ?? []) {
+        for (const [br, bc] of bar.cells) {
+          expect(occupiedCells.has(`${br},${bc}`), `Level ${spec.id} barrier overlaps at (${br},${bc})`).toBe(false);
+          occupiedCells.add(`${br},${bc}`);
+        }
       }
       for (const crate of spec.crates ?? []) {
         const key = `${crate.row},${crate.col}`;
@@ -587,6 +620,69 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
       expect(allStarGates, `Level ${spec.id} must not hit fallbackSpec`).toBe(false);
 
       const board = createBoardState(spec);
+
+      // Architectural Topology & Gate Invariant Checks (`MECH-16`..`MECH-18`):
+      // 1. Verify no two gates on the same `(edge, edgeLine)` overlap in span, and no gate span or sliding range overlaps a VOID cutout (`occupancy === -1`)
+      for (let gi = 0; gi < board.gates.length; gi++) {
+        const g = board.gates[gi];
+        const minCheck = g.slidesOnClear ? g.slideMin : g.spanStart;
+        const maxCheck = g.slidesOnClear ? g.slideMax + g.spanLength : g.spanStart + g.spanLength;
+        for (let s = minCheck; s < maxCheck; s++) {
+          const r = g.edge === 'TOP' || g.edge === 'BOTTOM' ? g.edgeLine : s;
+          const c = g.edge === 'TOP' || g.edge === 'BOTTOM' ? s : g.edgeLine;
+          expect(
+            board.occupancy[r * board.cols + c],
+            `Level ${spec.id} gate ${gi} (${g.edge} line ${g.edgeLine}) cell (${r},${c}) overlaps VOID cutout`
+          ).not.toBe(-1);
+        }
+        for (let gj = gi + 1; gj < board.gates.length; gj++) {
+          const g2 = board.gates[gj];
+          if (g.edge === g2.edge && g.edgeLine === g2.edgeLine) {
+            const overlaps =
+              g.spanStart < g2.spanStart + g2.spanLength &&
+              g2.spanStart < g.spanStart + g.spanLength;
+            expect(
+              overlaps,
+              `Level ${spec.id} gates ${gi} and ${gj} overlap on ${g.edge} (line ${g.edgeLine})`
+            ).toBe(false);
+          }
+        }
+      }
+
+      // 2. Verify no generator housing/spawn cell or elevator footprint overlaps cutouts, pillars, or barriers
+      for (const gen of board.generators) {
+        expect(board.occupancy[gen.row * board.cols + gen.col]).toBeGreaterThanOrEqual(0);
+        expect(board.occupancy[gen.spawnRow * board.cols + gen.spawnCol]).toBeGreaterThanOrEqual(0);
+        expect(isRoomUnlocked(board, board.roomMap[gen.row * board.cols + gen.col])).toBe(true);
+      }
+      for (const elev of board.elevators) {
+        for (const step of [0, 1]) {
+          for (let dr = 0; dr < elev.height; dr++) {
+            for (let dc = 0; dc < elev.width; dc++) {
+              const er = elev.row + elev.deltaRow * step + dr;
+              const ec = elev.col + elev.deltaCol * step + dc;
+              expect(
+                board.occupancy[er * board.cols + ec],
+                `Level ${spec.id} elevator overlaps obstacle at (${er},${ec})`
+              ).toBeGreaterThanOrEqual(0);
+              expect(isRoomUnlocked(board, board.roomMap[er * board.cols + ec])).toBe(true);
+            }
+          }
+        }
+      }
+
+      // 3. On multi-room TWIN_SANCTUM levels, verify carrier payloads and bombs start in unlocked Room 0
+      if (board.barriers.length > 0) {
+        for (const blk of board.blocks) {
+          if (blk.hasKey > 0 || blk.scissorColor > 0 || blk.shutterGemColor > 0 || blk.bombCount > 0) {
+            expect(
+              isBlockInLockedRoom(board, blk),
+              `Level ${spec.id} block ${blk.id} carrier/bomb must start in unlocked room`
+            ).toBe(false);
+          }
+        }
+      }
+
       expect(computeStateHash(board)).toBeTypeOf('bigint');
       const hAdm = computeAdmissibleHeuristic(board);
       expect(hAdm).toBeGreaterThanOrEqual(1);
@@ -608,16 +704,42 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
     expect(has5OrMoreColors).toBe(true);
     expect(hasAdvancedShapes).toBe(true);
     expect(hasMultiStepBlockerPuzzle).toBe(true);
+    expect(sculptedOrMultiRoomCount).toBeGreaterThanOrEqual(120);
+    expect(multiRoomCount).toBeGreaterThanOrEqual(15);
 
-    // Verify Endless Mastery level 301
-    const endless301 = getLevelSpec(301);
-    const endlessRes = solveBoard(createBoardState(endless301), 600);
-    expect(endlessRes.solvable).toBe(true);
+    // Verify Endless Mastery levels 301..330 (including 310, 315, 320, 330)
+    for (let eid = 301; eid <= 330; eid++) {
+      const endlessSpec = getLevelSpec(eid);
+      const eBoard = createBoardState(endlessSpec);
+      for (let gi = 0; gi < eBoard.gates.length; gi++) {
+        const g = eBoard.gates[gi];
+        const minCheck = g.slidesOnClear ? g.slideMin : g.spanStart;
+        const maxCheck = g.slidesOnClear ? g.slideMax + g.spanLength : g.spanStart + g.spanLength;
+        for (let s = minCheck; s < maxCheck; s++) {
+          const r = g.edge === 'TOP' || g.edge === 'BOTTOM' ? g.edgeLine : s;
+          const c = g.edge === 'TOP' || g.edge === 'BOTTOM' ? s : g.edgeLine;
+          expect(eBoard.occupancy[r * eBoard.cols + c]).not.toBe(-1);
+        }
+        for (let gj = gi + 1; gj < eBoard.gates.length; gj++) {
+          const g2 = eBoard.gates[gj];
+          if (g.edge === g2.edge && g.edgeLine === g2.edgeLine) {
+            const overlaps =
+              g.spanStart < g2.spanStart + g2.spanLength &&
+              g2.spanStart < g.spanStart + g.spanLength;
+            expect(overlaps, `Endless Level ${eid} gates ${gi} and ${gj} overlap on ${g.edge}`).toBe(
+              false
+            );
+          }
+        }
+      }
+      const endlessRes = solveBoard(eBoard, 600);
+      expect(endlessRes.solvable).toBe(true);
+    }
   });
 });
 
-describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
-  it('C1-01 & C1-18: prevents diagonal wall-slide paralysis, respects axis lock in corner bevel, and enforces substep floor exemption', () => {
+describe('Physics, Gate Cascade & Solver Edge-Case Invariants', () => {
+  it('prevents diagonal wall-slide paralysis, respects axis lock in corner bevel, and enforces substep floor exemption', () => {
     const spec: LevelSpec = {
       id: 950,
       name: 'Diagonal Slide & Substep Floor Test',
@@ -641,7 +763,7 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     expect(slideRes.leadX).toBeCloseTo(5.0, 4);
     expect(slideRes.leadY).toBeCloseTo(3.0, 4);
 
-    // C1-18: Block 2 (color 2) starts on mismatched floor tile (2, 1) (color 1).
+    // Substep floor exemption: Block 2 (color 2) starts on mismatched floor tile (2, 1) (color 1).
     // At current substep (exemptDx=0, exemptDy=0), it can slide right to dx=1.0 (col 2).
     // Once at (exemptDx=1.0, exemptDy=0), it can NO LONGER re-enter col 1 (dx=0.5)!
     const blk2 = board.blocks[1];
@@ -649,7 +771,7 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     expect(isContinuousOffsetValid(board, [blk2], 0.5, 0, 1.0, 0)).toBe(false);
   });
 
-  it('C1-02, C1-03 & C1-10: steps all dynamic gates globally on shred, hammers Stone & non-convex blocks by blockId, and triggers full booster cascade', () => {
+  it('steps all dynamic gates globally on shred, hammers Stone & non-convex blocks by blockId, and triggers full booster cascade', () => {
     const spec: LevelSpec = {
       id: 951,
       name: 'Global Dynamic Gates & Booster Cascade',
@@ -694,7 +816,7 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     expect(board.blocks[1].status).toBe('CLEARED');
   });
 
-  it('C1-06, C1-07, C1-08 & C1-19: detaches glued multi-layer blocks on peel, checks shifted glued siblings in gate raycast, jams elevator on glued shear, and grants +2 bomb bonus on peel', () => {
+  it('detaches glued multi-layer blocks on peel, checks shifted glued siblings in gate raycast, jams elevator on glued shear, and grants +2 bomb bonus on peel', () => {
     const spec: LevelSpec = {
       id: 952,
       name: 'Glued Peel, Raycast & Elevator Jam',
@@ -719,9 +841,7 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     };
     const board = createBoardState(spec);
 
-    // C1-07: If group 1 shifts so Block 1 is at (0, 2) (dRow=-1, dCol=0), checks shifted sibling Block 2
-    // Wait: at current position, can Block 2 exit TOP gate? No, wrong color (2 vs 1).
-    // What if Block 1 is at (0, 2) and Block 2 is at (1, 2), and we check BOTTOM gate?
+    // Shifted glued sibling raycast check:
     const bottomGate = {
       ...board.gates[0],
       edge: 'BOTTOM' as const,
@@ -734,12 +854,12 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     // Block 1 at row 4 has glued sibling Block 2 at row 5 blocking its raycast to BOTTOM gate!
     expect(checkBlockGateClearance(board, board.blocks[0], bottomGate, 4, 2)).toBe(false);
 
-    // C1-08: Stepping elevators must jam Elevator 1 because passenger Block 3 is glued to outside sibling Block 4
+    // Stepping elevators must jam Elevator 1 because passenger Block 3 is glued to outside sibling Block 4
     stepMovingElevators(board);
     expect(board.elevators[0].col).toBe(1);
     expect(board.blocks[2].col).toBe(1);
 
-    // C1-06 & C1-19: Peel multi-layer Block 1 at TOP gate (0, 2) -> grants +2 bomb bonus (5 -> 7) and detaches groupId 1!
+    // Peel multi-layer Block 1 at TOP gate (0, 2) -> grants +2 bomb bonus (5 -> 7) and detaches groupId 1!
     board.blocks[0].row = 0;
     board.blocks[1].row = 1;
     resolveClearCascade(board, board.blocks[0], 0);
@@ -751,7 +871,7 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     void stepDynamicGatesOnShred;
   });
 
-  it('C1-05, C1-09, C1-11, C1-12 & C1-16: validates F-08 queued-only auto-advance, corridor reachability, Zobrist hash fields, and F-01/F-07 tie-breaking', () => {
+  it('validates F-08 queued-only auto-advance, corridor reachability, Zobrist hash fields, and F-01/F-07 tie-breaking', () => {
     const spec: LevelSpec = {
       id: 953,
       name: 'F-08, Reachability, Hash & Tie-Breaker',
@@ -773,19 +893,19 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     };
     const board = createBoardState(spec);
 
-    // C1-09: Even though 3 gates show color 1 and supply[1] === 1, only 1 gate is a queued gate (Gate 0),
+    // Even though 3 gates show color 1 and supply[1] === 1, only 1 gate is a queued gate (Gate 0),
     // so Gate 0 must NOT auto-advance prematurely while supply[1] === 1!
     expect(board.gates[0].colorCursor).toBe(0);
 
-    // C1-11: Block 1 at (0, 0) cannot teleport across the pillar wall at row 1 to (2, 0)
+    // Block 1 at (0, 0) cannot teleport across the pillar wall at row 1 to (2, 0)
     expect(commitBlockMove(board, 1, 2, 0, 'ZEN').moved).toBe(false);
 
-    // C1-16: Perpendicular walk-by (stepVecX = +0.15, stepVecY = 0) along TOP gate must NOT capture an unlocked block
+    // Perpendicular walk-by (stepVecX = +0.15, stepVecY = 0) along TOP gate must NOT capture an unlocked block
     expect(checkMidDragGateCapture(board, 1, 0.15, 0)).toBeNull();
     // F-07 Resource Priority Tie-Breaker at (0, 0) with zero velocity prefers Static Normal Gate (index 2) over Star Gate (index 1) and Queued Gate (index 0)
     expect(findEligibleGateForBlockAt(board, board.blocks[0], 0, 0, 0, 0)).toBe(2);
 
-    // C1-12: computeStateHash distinguishes scissorColor, shutterGemColor, groupId, and sizeDir
+    // computeStateHash distinguishes scissorColor, shutterGemColor, groupId, and sizeDir
     const h0 = computeStateHash(board);
     board.blocks[0].scissorColor = 2;
     const hScissor = computeStateHash(board);
@@ -801,10 +921,10 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     expect(hSizeDir).not.toBe(hGroup);
   });
 
-  it('BUG-01, BUG-03, DRAG-01, DRAG-02 & DRAG-06: prevents stationary unmoved block auto-shred, enforces axis-lock gate exit direction, locks diagonal sweep to orthogonal channels, and prevents dynamic gate softlocks', () => {
+  it('F-02, DRAG-01, DRAG-02 & DRAG-06: prevents stationary unmoved block auto-shred, enforces axis-lock gate exit direction, locks diagonal sweep to orthogonal channels, and prevents dynamic gate softlocks', () => {
     const spec: LevelSpec = {
       id: 954,
-      name: 'Round 4 Anti-Cheat & Cascade Isolation',
+      name: 'Cascade Isolation & Orthogonal Sweep Invariants',
       difficulty: 'NORMAL',
       rows: 6,
       cols: 6,
@@ -850,7 +970,7 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     const moveRes = commitBlockMove(board, 1, 0, 1, 'ZEN');
     expect(moveRes.moved).toBe(true);
     expect(moveRes.clearedBlockIds).toContain(1);
-    // BUG-01: Stationary unmoved Block 2 at (5, 2) must remain ACTIVE on the board!
+    // Strict Cascade Isolation: Stationary unmoved Block 2 at (5, 2) must remain ACTIVE on the board!
     expect(moveRes.clearedBlockIds).not.toContain(2);
     expect(board.blocks[1].status).toBe('ACTIVE');
 
@@ -864,5 +984,324 @@ describe('Adversarial Regression Suite (C1-01 through C1-19)', () => {
     stepDynamicGatesOnShred(board);
     expect(board.gates[1].shutterOpen).toBe(true);
     expect(board.gates[1].spanLength).toBeGreaterThanOrEqual(2);
+  });
+
+  it('COURTYARD-01 & GATE-STEP-01: validates Sculpted Non-Rectangular Courtyards, exterior VOID cutouts, and Stepped-Edge Exit Gates (edgeLine)', () => {
+    // 6x6 L_WING courtyard where top-right 3x3 quadrant (r=0..2, c=3..5) is exterior VOID (-1)
+    const cutouts: Array<[number, number]> = [];
+    for (let r = 0; r < 3; r++) {
+      for (let c = 3; c < 6; c++) {
+        cutouts.push([r, c]);
+      }
+    }
+
+    const spec: LevelSpec = {
+      id: 960,
+      name: 'East Wing Stepped Gate',
+      difficulty: 'NORMAL',
+      layoutId: 'L_WING',
+      rows: 6,
+      cols: 6,
+      cutouts,
+      blocks: [
+        // Block 1: Red 2x2 at (4, 3) -> slides up to (3, 3) to exit stepped TOP gate at edgeLine=3
+        { id: 1, shapeId: '2x2', row: 4, col: 3, colorStack: [1] },
+        // Block 2: Blue non-convex L3_TL at (2, 0) -> slides right & up to (0, 1) to exit stepped RIGHT gate
+        { id: 2, shapeId: 'L3_TL', row: 2, col: 0, colorStack: [2] },
+      ],
+      gates: [
+        // Stepped TOP gate along the inner East Wing roof (c=3..5, auto-detects edgeLine=3)
+        { edge: 'TOP', spanStart: 3, spanLength: 3, colorQueue: [1, 2], iceCount: 1 },
+        // Stepped RIGHT gate along the West Tower upper wall (r=0..2, auto-detects edgeLine=2)
+        { edge: 'RIGHT', spanStart: 0, spanLength: 3, colorQueue: [2] },
+      ],
+    };
+
+    const board = createBoardState(spec);
+    expect(board.layoutId).toBe('L_WING');
+    // Auto-detected stepped edgeLine: row 3 for East Wing TOP gate, col 2 for West Tower RIGHT gate
+    expect(board.gates[0].edgeLine).toBe(3);
+    expect(board.gates[1].edgeLine).toBe(2);
+
+    // Hammer at (3, 4) shatters the iced stepped-edge TOP gate
+    expect(applyBoosterHammer(board, 3, 4)).toBe(true);
+    expect(board.gates[0].iceCount).toBe(0);
+
+    // Solver finds optimal 2-move solution on the L_WING stepped-gate board
+    const solved = solveBoard(board, 400);
+    expect(solved.solvable).toBe(true);
+    expect(solved.minMoves).toBe(2);
+
+    // Execute Move 1: Red 2x2 slides from (4, 3) to (3, 3) and shreds out stepped TOP gate (edgeLine=3)
+    const m1 = commitBlockMove(board, 1, 3, 3, 'ZEN');
+    expect(m1.moved).toBe(true);
+    expect(m1.clearedBlockIds).toContain(1);
+    expect(board.gates[0].colorCursor).toBe(1); // Advances to Blue (2)
+
+    // Execute Move 2: Blue corner_tl_2x2 slides to (0, 1) to shred out stepped RIGHT gate (edgeLine=2)
+    const m2 = commitBlockMove(board, 2, 0, 1, 'ZEN');
+    expect(m2.moved).toBe(true);
+    expect(m2.clearedBlockIds).toContain(2);
+    expect(isBoardWon(board)).toBe(true);
+  });
+
+  it('SANCTUM-01 & SANCTUM-02: validates Multi-Room Portcullis Barriers (shredsRemaining, Key lockId, dormant room stasis, cross-room archway traversal, and Zero-Softlock Law)', () => {
+    // 7x6 TWIN_SANCTUM split across row 3:
+    // - South Courtyard (Room 0): rows 4..6
+    // - Archway row 3: pillars at [3,0] and [3,5], Portcullis Barrier across [3,1..4] (shredsRemaining: 2)
+    // - North Chamber (Room 1): rows 0..2 ( plus archway row 3)
+    const room1Cells: Array<[number, number]> = [];
+    for (let r = 0; r <= 2; r++) {
+      for (let c = 0; c < 6; c++) {
+        room1Cells.push([r, c]);
+      }
+    }
+
+    const spec: LevelSpec = {
+      id: 961,
+      name: 'Twin Sanctum Portcullis',
+      difficulty: 'NORMAL',
+      layoutId: 'TWIN_SANCTUM',
+      rows: 7,
+      cols: 6,
+      pillars: [
+        [3, 0],
+        [3, 5],
+      ],
+      barriers: [
+        {
+          id: 1,
+          cells: [
+            [3, 1],
+            [3, 2],
+            [3, 3],
+            [3, 4],
+          ],
+          orientation: 'H',
+          shredsRemaining: 2,
+          unlocksRoomId: 1,
+          roomCells: room1Cells,
+        },
+      ],
+      blocks: [
+        // South Courtyard (Room 0) blocks:
+        { id: 1, shapeId: '1x2', row: 5, col: 1, colorStack: [1] },
+        { id: 2, shapeId: '1x2', row: 5, col: 3, colorStack: [2] },
+        // North Chamber (Room 1) block: Green 2x2 with bombCount=5 and iceCount=1 -> must stay dormant while Room 1 is sealed!
+        { id: 3, shapeId: '2x2', row: 1, col: 2, colorStack: [3], bombCount: 5, iceCount: 1 },
+      ],
+      gates: [
+        // South gates for Red (1), Blue (2), and Green (3)
+        { edge: 'BOTTOM', spanStart: 0, spanLength: 3, colorQueue: [1, 3] },
+        { edge: 'BOTTOM', spanStart: 3, spanLength: 3, colorQueue: [2] },
+      ],
+    };
+
+    const board = createBoardState(spec);
+    expect(board.barriers.length).toBe(1);
+    expect(board.barriers[0].open).toBe(false);
+    expect(board.barriers[0].shredsRemaining).toBe(2);
+    // Closed barrier writes -3 into occupancy
+    expect(board.occupancy[3 * 6 + 2]).toBe(-3);
+
+    // North Chamber block (id=3) is in Room 1 and sealed
+    expect(getBlockRoomId(board, board.blocks[2])).toBe(1);
+    expect(isRoomUnlocked(board, 1)).toBe(false);
+    expect(isBlockInLockedRoom(board, board.blocks[2])).toBe(true);
+    expect(isBlockMovable(board, 3)).toBe(false);
+
+    // Vacuum on Green (3) must NOT affect Block 3 while Room 1 is sealed
+    expect(applyBoosterVacuum(board, 3)).toBe(false);
+
+    // Shred Block 1 in Room 0 -> portcullis ticks down 2 -> 1
+    const hashBefore = computeStateHash(board);
+    const out1 = commitBlockMove(board, 1, 6, 1, 'ZEN');
+    expect(out1.moved).toBe(true);
+    expect(out1.clearedBlockIds).toContain(1);
+    expect(out1.unlockedBarrierIds).toEqual([]);
+    expect(board.barriers[0].shredsRemaining).toBe(1);
+    expect(board.barriers[0].open).toBe(false);
+    expect(computeStateHash(board)).not.toBe(hashBefore);
+
+    // Dormant Room Stasis: Block 3's bombCount and iceCount did NOT tick down while Room 1 was locked!
+    expect(board.blocks[2].bombCount).toBe(5);
+    expect(board.blocks[2].iceCount).toBe(1);
+
+    // Shred Block 2 in Room 0 -> portcullis ticks down 1 -> 0 and OPENS!
+    const out2 = commitBlockMove(board, 2, 6, 3, 'ZEN');
+    expect(out2.moved).toBe(true);
+    expect(out2.clearedBlockIds).toContain(2);
+    expect(out2.unlockedBarrierIds).toEqual([1]);
+    expect(board.barriers[0].shredsRemaining).toBe(0);
+    expect(board.barriers[0].open).toBe(true);
+    expect(isRoomUnlocked(board, 1)).toBe(true);
+    // Archway cells are now walkable floor (0)
+    expect(board.occupancy[3 * 6 + 2]).toBe(0);
+
+    // Clear ice on Block 3 and verify it can now slide from Room 1 (row 1) across the archway (row 3) to South gate (row 5)!
+    board.blocks[2].iceCount = 0;
+    expect(isBlockMovable(board, 3)).toBe(true);
+    const solvedAfterUnlock = solveBoard(board, 300);
+    expect(solvedAfterUnlock.solvable).toBe(true);
+    const out3 = commitBlockMove(board, 3, 5, 1, 'ZEN');
+    expect(out3.moved).toBe(true);
+    expect(out3.clearedBlockIds).toContain(3);
+    expect(isBoardWon(board)).toBe(true);
+
+    // Also verify Key-Sealed Portcullis (`lockId: 1`) + Zero-Softlock Law
+    const keyBarrierBoard = createBoardState({
+      ...spec,
+      barriers: [
+        {
+          id: 1,
+          cells: [
+            [3, 1],
+            [3, 2],
+            [3, 3],
+            [3, 4],
+          ],
+          orientation: 'H',
+          shredsRemaining: 0,
+          lockId: 1,
+          unlocksRoomId: 1,
+          roomCells: room1Cells,
+        },
+      ],
+      blocks: [
+        { id: 1, shapeId: '1x2', row: 5, col: 1, colorStack: [1], hasKey: 1 },
+        { id: 3, shapeId: '2x2', row: 1, col: 2, colorStack: [3] },
+      ],
+    });
+    expect(keyBarrierBoard.barriers[0].open).toBe(false);
+    // Solver solves the Key-Sealed 2-room board in 2 moves (shred Key block 1 -> unlocks Room 1 -> shred block 3)
+    const keySolved = solveBoard(keyBarrierBoard, 400);
+    expect(keySolved.solvable).toBe(true);
+    expect(keySolved.minMoves).toBe(2);
+
+    // Sealed-Room Stasis & Cutout Clamping Invariants (`MECH-16`..`MECH-18`):
+    // Verify size-changing gate clamping on cutout edges, dormant gate stasis in locked rooms,
+    // Key/Scissor priority in unlocked rooms, and elevator stasis in locked rooms.
+    const stasisBoard = createBoardState({
+      ...spec,
+      cutouts: [
+        [6, 0],
+        [6, 5],
+      ],
+      elevators: [
+        // Elevator inside locked Room 1 (row 1) -> must stay in stasis while Room 1 is sealed!
+        { id: 1, row: 1, col: 0, width: 2, height: 1, deltaRow: 0, deltaCol: 1 },
+      ],
+      blocks: [
+        // Room 1 chained block appears FIRST in blocks array, Room 0 chained block appears SECOND:
+        // Key shredded in Room 0 must unlock Room 0's chained block first!
+        { id: 10, shapeId: '1x1', row: 1, col: 0, colorStack: [3] },
+        { id: 11, shapeId: '1x1', row: 0, col: 4, colorStack: [3], chained: true, lockId: 2 },
+        { id: 1, shapeId: '1x2', row: 5, col: 1, colorStack: [1], hasKey: 2 },
+        { id: 2, shapeId: '1x2', row: 4, col: 2, colorStack: [2], chained: true, lockId: 2 },
+      ],
+      gates: [
+        // South gate on row 6 (where cols 0 and 5 are cutouts -> playable span is [1..4])
+        {
+          edge: 'BOTTOM',
+          spanStart: 1,
+          spanLength: 3,
+          colorQueue: [1, 2, 3],
+          sizeChangesOnClear: true,
+          minLength: 2,
+          maxLength: 4,
+          slidesOnClear: true,
+        },
+        // North gate attached to locked Room 1 (row 0) with iceCount=2 and togglesOnClear=true
+        {
+          edge: 'TOP',
+          spanStart: 1,
+          spanLength: 3,
+          colorQueue: [3],
+          iceCount: 2,
+          togglesOnClear: true,
+          shutterOpen: true,
+        },
+      ],
+    });
+
+    // Shred Block 1 in Room 0 (carries Key 2, barrier has shredsRemaining: 2 so Room 1 stays locked after 1 shred):
+    const stasisMove1 = commitBlockMove(stasisBoard, 1, 6, 1, 'ZEN');
+    expect(stasisMove1.moved).toBe(true);
+    expect(stasisBoard.barriers[0].open).toBe(false);
+    // Key 2 unlocked Room 0's Block 2 (id=2), NOT locked Room 1's Block 11 (id=11)!
+    expect(stasisBoard.blocks.find((b) => b.id === 2)!.chained).toBe(false);
+    expect(stasisBoard.blocks.find((b) => b.id === 11)!.chained).toBe(true);
+    // Locked Room 1's TOP gate kept its iceCount=2 and shutterOpen=true in stasis!
+    expect(stasisBoard.gates[1].iceCount).toBe(2);
+    expect(stasisBoard.gates[1].shutterOpen).toBe(true);
+    // Locked Room 1's elevator did NOT move while Room 1 was sealed!
+    expect(stasisBoard.elevators[0].atAlternatePos).toBe(false);
+    // South gate on cutout edge stayed strictly within playable span [1..4] (never overlapping cutout col 0 or col 5)!
+    expect(stasisBoard.gates[0].spanStart).toBeGreaterThanOrEqual(1);
+    expect(stasisBoard.gates[0].spanStart + stasisBoard.gates[0].spanLength).toBeLessThanOrEqual(5);
+
+    // Multi-Room Booster Shielding, Non-Convex Room Resolution & 4-Entry-Point Barrier Unlock Parity (`MECH-10`, `MECH-18`):
+    // Verify crates/blocks in sealed rooms are shielded from Hammer & Rocket strikes,
+    // smashing a Portcullis Barrier triggers ready generators in the newly awakened room,
+    // non-convex polyominoes (`PLUS_5`) resolve their true roomId even when (row, col) is on a pillar,
+    // and all destructive boosters (`Hammer`, `Rocket`, `Vacuum`) decrement `shredsRemaining` on Portcullis Barriers when clearing blocks in an unlocked room!
+    const boosterShieldBoard = createBoardState({
+      ...spec,
+      pillars: [
+        [0, 0],
+        [3, 0],
+        [3, 5],
+      ],
+      crates: [
+        // Crate at (1, 4) inside sealed Room 1
+        { id: 1, row: 1, col: 4, hp: 1 },
+      ],
+      generators: [
+        // Ready generator at (2, 3) spawning at (2, 4) inside sealed Room 1 -> must stay dormant while sealed, then spawn when barrier is hammered!
+        {
+          id: 1,
+          row: 2,
+          col: 3,
+          spawnRow: 2,
+          spawnCol: 4,
+          cooldown: 0,
+          queue: [{ shapeId: '1x1', colorStack: [3] }],
+        },
+      ],
+      blocks: [
+        // Non-convex PLUS_5 at (0, 0) in Room 1 whose top-left [0, 0] cell sits on pillar [0, 0]
+        { id: 20, shapeId: 'PLUS_5', row: 0, col: 0, colorStack: [3] },
+        // Active blocks in Room 0 at (5, 2) and (4, 1)
+        { id: 21, shapeId: '1x2', row: 5, col: 2, colorStack: [1] },
+        { id: 22, shapeId: '1x2', row: 4, col: 1, colorStack: [2] },
+      ],
+    });
+
+    // Generator in sealed Room 1 did NOT spawn during createBoardState while Room 1 was locked
+    expect(boosterShieldBoard.generators[0].queueCursor).toBe(0);
+    // Non-convex PLUS_5 at (0, 0) resolves to Room 1 even if [0, 0] is a pillar
+    const plusBlock = boosterShieldBoard.blocks.find((b) => b.id === 20)!;
+    expect(getBlockRoomId(boosterShieldBoard, plusBlock)).toBe(1);
+    expect(isBlockInLockedRoom(boosterShieldBoard, plusBlock)).toBe(true);
+
+    // Hammer on crate (1, 4) inside sealed Room 1 is rejected while Room 1 is locked
+    expect(applyBoosterHammer(boosterShieldBoard, 1, 4)).toBe(false);
+    expect(boosterShieldBoard.crates[0].destroyed).toBe(false);
+
+    // Rocket along ROW 1 (passing through sealed Room 1 without hitting row 3 barrier) does NOT destroy crate or PLUS_5
+    expect(applyBoosterRocket(boosterShieldBoard, 1, 2, 'ROW')).toBe(false);
+    expect(boosterShieldBoard.crates[0].destroyed).toBe(false);
+    expect(plusBlock.status).toBe('ACTIVE');
+
+    // Rocket on unlocked Room 0 block at row 5 decrements barrier shredsRemaining from 2 -> 1!
+    expect(applyBoosterRocket(boosterShieldBoard, 5, 2, 'ROW')).toBe(true);
+    expect(boosterShieldBoard.barriers[0].shredsRemaining).toBe(1);
+    expect(boosterShieldBoard.barriers[0].open).toBe(false);
+
+    // Vacuum on unlocked Room 0 color 2 block decrements barrier shredsRemaining from 1 -> 0, opening the Portcullis AND triggering Room 1's ready generator!
+    expect(applyBoosterVacuum(boosterShieldBoard, 2)).toBe(true);
+    expect(boosterShieldBoard.barriers[0].shredsRemaining).toBe(0);
+    expect(boosterShieldBoard.barriers[0].open).toBe(true);
+    expect(boosterShieldBoard.generators[0].queueCursor).toBe(1);
   });
 });

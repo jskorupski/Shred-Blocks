@@ -979,7 +979,7 @@ export function createOverlayQuadMesh(): MeshData {
 
 /**
  * Generates a centered flat 3D annulus/ring (`[-0.5, 0.5]^2` at `Z = 0`) for expanding knock-on
- * and shredding shockwaves (`PLAN-06`).
+ * and shredding shockwaves (`R3D-08`).
  */
 export function createShockwaveRingMesh(
   segments = 24,
