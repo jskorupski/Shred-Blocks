@@ -19,6 +19,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 3, col: 2, colorStack: [2] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '1x2', row: 4, col: 2, colorStack: [4] },
+      { id: 5, shapeId: '2x1', row: 2, col: 0, colorStack: [2] },
+      { id: 6, shapeId: '2x1', row: 2, col: 5, colorStack: [3] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [4] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -26,7 +29,7 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 7,
     timeLimitSec: 105,
   },
 
@@ -38,10 +41,13 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     rows: 6,
     cols: 6,
     blocks: [
-      { id: 1, shapeId: '1x2', row: 2, col: 2, colorStack: [1], bombCount: 10 },
+      { id: 1, shapeId: '1x2', row: 2, col: 2, colorStack: [1], bombCount: 18 },
       { id: 2, shapeId: '1x2', row: 1, col: 2, colorStack: [2] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '1x2', row: 4, col: 2, colorStack: [4] },
+      { id: 5, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [2] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [4] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -49,7 +55,7 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 7,
     timeLimitSec: 105,
   },
 
@@ -65,6 +71,10 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x1', row: 2, col: 3, colorStack: [2], groupId: 1 },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 6, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
+      { id: 7, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
+      { id: 8, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -72,8 +82,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 8,
+    timeLimitSec: 95,
   },
 
   111: {
@@ -88,6 +98,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 4, col: 2, colorStack: [2], ropeColor: 1 },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '2x1', row: 2, col: 5, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -95,8 +108,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   121: {
@@ -111,14 +124,17 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 3, col: 2, colorStack: [2] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '1x2', row: 4, col: 2, colorStack: [4] },
+      { id: 5, shapeId: '2x1', row: 2, col: 5, colorStack: [3] },
+      { id: 6, shapeId: '2x1', row: 1, col: 0, colorStack: [3] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [4] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1, 2] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   131: {
@@ -133,6 +149,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -140,8 +159,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3], iceCount: 2 },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   141: {
@@ -156,6 +175,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 4, col: 2, colorStack: [2] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '2x1', row: 2, col: 5, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -170,8 +192,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   145: {
@@ -186,6 +208,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 6, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       {
@@ -200,8 +225,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 85,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   151: {
@@ -216,6 +241,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 3, col: 2, colorStack: [1] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 4, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
+      { id: 5, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
+      { id: 6, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
+      { id: 7, shapeId: '2x1', row: 2, col: 0, colorStack: [2] },
     ],
     gates: [
       {
@@ -231,8 +259,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   155: {
@@ -247,6 +275,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 3, col: 1, colorStack: [1] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 4, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
+      { id: 5, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
+      { id: 6, shapeId: '1x2', row: 5, col: 2, colorStack: [3] },
+      { id: 7, shapeId: '2x1', row: 3, col: 0, colorStack: [2] },
     ],
     gates: [
       {
@@ -261,8 +292,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
     ],
-    parMoves: 4,
-    timeLimitSec: 85,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   161: {
@@ -287,14 +318,17 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 1, shapeId: '1x2', row: 1, col: 2, colorStack: [1] },
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
+      { id: 4, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
+      { id: 5, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
+      { id: 6, shapeId: '2x1', row: 3, col: 0, colorStack: [2] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   171: {
@@ -313,6 +347,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 6, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -320,8 +357,8 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   181: {
@@ -347,6 +384,9 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 1, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '1x1', row: 3, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 3, col: 4, colorStack: [2] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -354,15 +394,15 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   200: {
     id: 200,
     name: 'Omega Shredder',
     difficulty: 'SUPER_HARD',
-    unlockNote: 'Grand Finale: Master all 18 ShredBlocks mechanics!',
+    unlockNote: 'Epoch IV Complete: Enter the Grand Citadel Masterworks (Levels 201–300)!',
     rows: 7,
     cols: 7,
     cutouts: [[0, 0]],
@@ -383,16 +423,20 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 3, shapeId: '1x2', row: 5, col: 2, colorStack: [3], chained: true, lockId: 1 },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4], isStar: true },
       { id: 5, shapeId: '1x1', row: 3, col: 2, colorStack: [1], iceCount: 1 },
-      { id: 6, shapeId: '1x1', row: 4, col: 4, colorStack: [2], bombCount: 18 },
+      { id: 6, shapeId: '1x1', row: 4, col: 4, colorStack: [2], bombCount: 24 },
+      { id: 7, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
+      { id: 8, shapeId: '2x1', row: 2, col: 6, colorStack: [2] },
+      { id: 9, shapeId: '1x3', row: 6, col: 2, colorStack: [3] },
+      { id: 10, shapeId: '2x1', row: 2, col: 0, colorStack: [4], isStar: true },
     ],
     gates: [
-      { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1, 1] },
+      { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1, 1, 1] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4], isStar: true },
     ],
-    parMoves: 7,
-    timeLimitSec: 125,
+    parMoves: 11,
+    timeLimitSec: 135,
   },
 
   250: {
@@ -417,15 +461,20 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 5, shapeId: '1x2', row: 6, col: 2, colorStack: [1], iceCount: 1 },
       { id: 6, shapeId: '2x1', row: 2, col: 1, colorStack: [2] },
       { id: 7, shapeId: '1x1', row: 5, col: 5, colorStack: [4] },
+      { id: 8, shapeId: '1x3', row: 0, col: 2, colorStack: [1] },
+      { id: 9, shapeId: '2x1', row: 2, col: 7, colorStack: [2] },
+      { id: 10, shapeId: '2x1', row: 4, col: 7, colorStack: [2] },
+      { id: 11, shapeId: '2x1', row: 2, col: 0, colorStack: [4], isStar: true },
+      { id: 12, shapeId: '1x3', row: 7, col: 2, colorStack: [3] },
     ],
     gates: [
-      { edge: 'TOP', spanStart: 1, spanLength: 6, colorQueue: [1, 1] },
-      { edge: 'RIGHT', spanStart: 1, spanLength: 6, colorQueue: [2, 2] },
-      { edge: 'BOTTOM', spanStart: 1, spanLength: 6, colorQueue: [3, 3] },
-      { edge: 'LEFT', spanStart: 1, spanLength: 6, colorQueue: [4, 4], isStar: true },
+      { edge: 'TOP', spanStart: 1, spanLength: 6, colorQueue: [1, 1, 1] },
+      { edge: 'RIGHT', spanStart: 1, spanLength: 6, colorQueue: [2, 2, 2, 2] },
+      { edge: 'BOTTOM', spanStart: 1, spanLength: 6, colorQueue: [3, 3, 3] },
+      { edge: 'LEFT', spanStart: 1, spanLength: 6, colorQueue: [4, 4, 4], isStar: true },
     ],
-    parMoves: 8,
-    timeLimitSec: 145,
+    parMoves: 13,
+    timeLimitSec: 155,
   },
 
   300: {
@@ -451,16 +500,22 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 5, shapeId: '1x2', row: 2, col: 3, colorStack: [1, 2], iceCount: 1 },
       { id: 6, shapeId: '2x1', row: 5, col: 6, colorStack: [2], shutterGemColor: 3 },
       { id: 7, shapeId: '1x2', row: 7, col: 3, colorStack: [3], iceCount: 2 },
-      { id: 8, shapeId: '1x1', row: 5, col: 2, colorStack: [4], bombCount: 18 },
+      { id: 8, shapeId: '1x1', row: 5, col: 2, colorStack: [4], bombCount: 28 },
+      { id: 9, shapeId: '1x3', row: 0, col: 3, colorStack: [1] },
+      { id: 10, shapeId: '2x1', row: 2, col: 8, colorStack: [2] },
+      { id: 11, shapeId: '2x1', row: 5, col: 8, colorStack: [2] },
+      { id: 12, shapeId: '2x1', row: 2, col: 0, colorStack: [4], isStar: true },
+      { id: 13, shapeId: '2x1', row: 5, col: 0, colorStack: [4], isStar: true },
+      { id: 14, shapeId: '1x3', row: 8, col: 3, colorStack: [3] },
     ],
     gates: [
-      { edge: 'TOP', spanStart: 1, spanLength: 7, colorQueue: [1, 1] },
-      { edge: 'RIGHT', spanStart: 1, spanLength: 7, colorQueue: [2, 2, 2] },
-      { edge: 'BOTTOM', spanStart: 1, spanLength: 7, colorQueue: [3, 3], shutterLockColor: 3 },
-      { edge: 'LEFT', spanStart: 1, spanLength: 7, colorQueue: [4, 4], isStar: true },
+      { edge: 'TOP', spanStart: 1, spanLength: 7, colorQueue: [1, 1, 1] },
+      { edge: 'RIGHT', spanStart: 1, spanLength: 7, colorQueue: [2, 2, 2, 2, 2] },
+      { edge: 'BOTTOM', spanStart: 1, spanLength: 7, colorQueue: [3, 3, 3], shutterLockColor: 3 },
+      { edge: 'LEFT', spanStart: 1, spanLength: 7, colorQueue: [4, 4, 4, 4], isStar: true },
     ],
-    parMoves: 9,
-    timeLimitSec: 165,
+    parMoves: 15,
+    timeLimitSec: 175,
   },
 };
 

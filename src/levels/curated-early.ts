@@ -93,6 +93,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 1, col: 2, colorStack: [2] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '1x2', row: 4, col: 2, colorStack: [4] },
+      { id: 5, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [2] },
+      { id: 7, shapeId: '1x2', row: 5, col: 2, colorStack: [4] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -100,7 +103,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 7,
     timeLimitSec: 105,
   },
 
@@ -115,6 +118,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 1, col: 3, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 1, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 3, col: 4, colorStack: [4] },
+      { id: 5, shapeId: '1x2', row: 0, col: 3, colorStack: [2] },
+      { id: 6, shapeId: '1x2', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -122,7 +127,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 0, spanLength: 4, colorQueue: [3] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 6,
     timeLimitSec: 110,
   },
 
@@ -137,7 +142,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
-      { id: 5, shapeId: '1x1', row: 2, col: 2, colorStack: [1] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -145,7 +151,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 5,
+    parMoves: 6,
     timeLimitSec: 90,
   },
 
@@ -160,7 +166,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: 'L3_BR', row: 2, col: 2, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 1, col: 4, colorStack: [4] },
-      { id: 5, shapeId: '1x1', row: 4, col: 4, colorStack: [1] },
+      { id: 5, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 3, col: 0, colorStack: [2] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -168,7 +175,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 5,
+    parMoves: 6,
     timeLimitSec: 90,
   },
 
@@ -184,7 +191,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 3, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
       { id: 4, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 5, shapeId: '1x2', row: 4, col: 2, colorStack: [1] },
-      { id: 6, shapeId: '1x1', row: 1, col: 4, colorStack: [2] },
+      { id: 6, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
+      { id: 7, shapeId: '1x2', row: 5, col: 2, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -192,7 +200,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 6,
+    parMoves: 7,
     timeLimitSec: 85,
   },
 
@@ -208,6 +216,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: 'L3_BL', row: 3, col: 1, colorStack: [4] },
       { id: 5, shapeId: '1x2', row: 4, col: 3, colorStack: [1] },
+      { id: 6, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
+      { id: 7, shapeId: '2x1', row: 3, col: 5, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -215,7 +225,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 3, spanLength: 3, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 5,
+    parMoves: 7,
     timeLimitSec: 105,
   },
 
@@ -231,6 +241,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 1, col: 1, colorStack: [2], axisLock: 'V' },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '1x1', row: 2, col: 4, colorStack: [4] },
+      { id: 5, shapeId: '1x2', row: 0, col: 1, colorStack: [2] },
+      { id: 6, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -238,7 +250,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'TOP', spanStart: 3, spanLength: 3, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 6,
     timeLimitSec: 90,
   },
 
@@ -262,6 +274,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -269,7 +284,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 7,
     timeLimitSec: 95,
   },
 
@@ -292,6 +307,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 1, col: 1, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 1, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x1', row: 2, col: 2, colorStack: [2] },
+      { id: 6, shapeId: '1x2', row: 4, col: 3, colorStack: [1] },
+      { id: 7, shapeId: '1x3', row: 5, col: 1, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 4, spanLength: 2, edgeLine: 2, colorQueue: [1] },
@@ -299,7 +317,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 7,
     timeLimitSec: 95,
   },
 
@@ -321,6 +339,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 1, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '1x2', row: 3, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '1x2', row: 5, col: 2, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -328,7 +349,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 7,
     timeLimitSec: 90,
   },
 
@@ -351,6 +372,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 1, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 1, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 1, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '1x2', row: 5, col: 2, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -358,7 +382,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 0, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 7,
     timeLimitSec: 95,
   },
 
@@ -410,6 +434,11 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 3, col: 4, colorStack: [2] },
       { id: 3, shapeId: '2x1', row: 3, col: 1, colorStack: [3] },
       { id: 4, shapeId: '1x2', row: 1, col: 2, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 3, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 4, col: 0, colorStack: [3] },
+      { id: 7, shapeId: '2x1', row: 5, col: 4, colorStack: [2] },
+      { id: 8, shapeId: '1x2', row: 1, col: 0, colorStack: [4] },
+      { id: 9, shapeId: '1x2', row: 1, col: 4, colorStack: [1] },
     ],
     gates: [
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -417,7 +446,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'LEFT', spanStart: 3, spanLength: 4, colorQueue: [3] },
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
+    parMoves: 9,
     timeLimitSec: 105,
   },
 
@@ -457,6 +486,11 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 5, shapeId: '1x2', row: 3, col: 2, colorStack: [2] },
       { id: 6, shapeId: '1x2', row: 5, col: 2, colorStack: [3] },
       { id: 7, shapeId: '1x2', row: 6, col: 2, colorStack: [4] },
+      { id: 8, shapeId: '2x1', row: 0, col: 0, colorStack: [4] },
+      { id: 9, shapeId: '1x2', row: 4, col: 1, colorStack: [1] },
+      { id: 10, shapeId: '1x2', row: 4, col: 3, colorStack: [2] },
+      { id: 11, shapeId: '2x1', row: 5, col: 1, colorStack: [4] },
+      { id: 12, shapeId: '2x1', row: 5, col: 4, colorStack: [2] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -464,8 +498,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3], iceCount: 3 },
     ],
-    parMoves: 7,
-    timeLimitSec: 110,
+    parMoves: 12,
+    timeLimitSec: 115,
   },
 
   31: {
@@ -480,6 +514,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [4] },
       { id: 4, shapeId: '1x1', row: 2, col: 1, colorStack: [1] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 0, col: 4, colorStack: [3] },
+      { id: 7, shapeId: '1x2', row: 5, col: 2, colorStack: [4] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -487,8 +524,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 0, spanLength: 2, colorQueue: [3] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 5,
-    timeLimitSec: 90,
+    parMoves: 8,
+    timeLimitSec: 95,
   },
 
   38: {
@@ -540,6 +577,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 8, shapeId: '1x2', row: 2, col: 2, colorStack: [3] },
       { id: 9, shapeId: '2x1', row: 3, col: 1, colorStack: [4] },
       { id: 10, shapeId: '2x2', row: 3, col: 3, colorStack: [2] },
+      { id: 11, shapeId: '2x1', row: 3, col: 2, colorStack: [1] },
+      { id: 12, shapeId: '2x1', row: 6, col: 0, colorStack: [1] },
+      { id: 13, shapeId: '2x1', row: 6, col: 5, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -548,7 +588,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [4] },
       { edge: 'RIGHT', spanStart: 5, spanLength: 3, colorQueue: [3], iceCount: 3 },
     ],
-    parMoves: 10,
+    parMoves: 13,
     timeLimitSec: 125,
   },
 
@@ -564,15 +604,18 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 3, shapeId: '1x2', row: 4, col: 2, colorStack: [3], iceCount: 2 },
       { id: 4, shapeId: '1x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 3, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '2x1', row: 0, col: 0, colorStack: [4] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
-      { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
+      { edge: 'LEFT', spanStart: 0, spanLength: 5, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   51: {
@@ -587,15 +630,18 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 1, col: 2, colorStack: [2] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '1x1', row: 4, col: 2, colorStack: [1] },
+      { id: 5, shapeId: '2x1', row: 2, col: 0, colorStack: [2] },
+      { id: 6, shapeId: '2x1', row: 2, col: 5, colorStack: [3] },
+      { id: 7, shapeId: '2x1', row: 4, col: 0, colorStack: [2] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1], isStar: true },
-      { edge: 'LEFT', spanStart: 0, spanLength: 3, colorQueue: [2] },
+      { edge: 'LEFT', spanStart: 0, spanLength: 4, colorQueue: [2] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [1], isStar: false },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   61: {
@@ -610,6 +656,9 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 4, col: 2, colorStack: [2], chained: true, lockId: 1 },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [3] },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
+      { id: 5, shapeId: '2x2', row: 2, col: 2, colorStack: [1] },
+      { id: 6, shapeId: '2x1', row: 2, col: 0, colorStack: [4] },
+      { id: 7, shapeId: '2x1', row: 2, col: 5, colorStack: [3] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
@@ -617,8 +666,8 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   71: {
@@ -633,14 +682,17 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '1x2', row: 3, col: 2, colorStack: [1] },
       { id: 3, shapeId: '2x1', row: 2, col: 4, colorStack: [2] },
       { id: 4, shapeId: '1x2', row: 4, col: 2, colorStack: [3] },
+      { id: 5, shapeId: '2x1', row: 2, col: 5, colorStack: [2] },
+      { id: 6, shapeId: '1x2', row: 5, col: 2, colorStack: [3] },
+      { id: 7, shapeId: '2x1', row: 3, col: 0, colorStack: [1] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
     ],
-    parMoves: 4,
-    timeLimitSec: 90,
+    parMoves: 7,
+    timeLimitSec: 95,
   },
 
   74: {
@@ -712,6 +764,10 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { id: 10, shapeId: '1x2', row: 7, col: 0, colorStack: [2] },
       { id: 11, shapeId: '2x1', row: 1, col: 0, colorStack: [3] },
       { id: 12, shapeId: '1x2', row: 3, col: 0, colorStack: [4] },
+      { id: 13, shapeId: '2x1', row: 1, col: 2, colorStack: [1] },
+      { id: 14, shapeId: '2x1', row: 4, col: 5, colorStack: [2] },
+      { id: 15, shapeId: '1x3', row: 6, col: 3, colorStack: [1] },
+      { id: 16, shapeId: '2x1', row: 2, col: 6, colorStack: [2] },
     ],
     gates: [
       { edge: 'TOP', spanStart: 2, spanLength: 4, colorQueue: [1] },
@@ -719,7 +775,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
       { edge: 'BOTTOM', spanStart: 2, spanLength: 4, colorQueue: [3], iceCount: 3 },
       { edge: 'LEFT', spanStart: 1, spanLength: 7, colorQueue: [4], iceCount: 5 },
     ],
-    parMoves: 12,
-    timeLimitSec: 145,
+    parMoves: 16,
+    timeLimitSec: 155,
   },
 };

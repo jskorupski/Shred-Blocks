@@ -276,9 +276,8 @@ function computeRemainingLayersAndObstacles(board: BoardState): {
  */
 function isPureSafeExit(board: BoardState, block: BlockState, gateIndex: number): boolean {
   if (gateIndex < 0 || gateIndex >= board.gates.length) return false;
-  if (board.elevators.length > 0 || board.generators.length > 0) return false;
+  if (board.elevators.length > 0 || board.generators.some((g) => g.state !== 'DEPLETED')) return false;
   if (board.crates.some((c) => !c.destroyed && c.hp > 0)) return false;
-  if (board.barriers?.some((b) => !b.open)) return false;
   if (block.groupId > 0) return false;
   if (block.hasKey > 0 || block.scissorColor > 0 || block.shutterGemColor > 0) return false;
   if (getLayersRemaining(block.colorStack, block.colorCursor) > 1) return false;

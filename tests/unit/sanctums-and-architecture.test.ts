@@ -354,12 +354,28 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(lvl74.barriers.map((b) => b.shredsRemaining)).toEqual([2, 5, 8]);
     expect(lvl74.barriers.map((b) => b.open)).toEqual([false, false, false]);
 
-    // Verify campaign catalog includes tall portrait maps (rows > cols) and MYSTERY_VAULT levels
+    // Verify campaign catalog includes tall portrait maps (rows > cols), MYSTERY_VAULT levels, and high-density & scaled breather invariants (`DENSITY-01`, `RAMP-01`)
     const allCampaign = getAllCampaignLevels();
     const portraitCount = allCampaign.filter((s) => s.rows > s.cols).length;
     const vaultCount = allCampaign.filter((s) => s.barriers?.some((b) => b.isVault)).length;
     expect(portraitCount).toBeGreaterThanOrEqual(40);
     expect(vaultCount).toBeGreaterThanOrEqual(25);
+
+    // Verify high-density packing on curated showcase levels & procedural epochs (`DENSITY-01`)
+    expect(getLevelSpec(25).blocks.length).toBeGreaterThanOrEqual(9);
+    expect(getLevelSpec(28).blocks.length).toBeGreaterThanOrEqual(12);
+    expect(getLevelSpec(38).blocks.length).toBeGreaterThanOrEqual(13);
+    expect(getLevelSpec(74).blocks.length).toBeGreaterThanOrEqual(16);
+    expect(getLevelSpec(200).blocks.length).toBeGreaterThanOrEqual(10);
+    expect(getLevelSpec(250).blocks.length).toBeGreaterThanOrEqual(12);
+    expect(getLevelSpec(300).blocks.length).toBeGreaterThanOrEqual(14);
+
+    // Verify breather levels (`decPos === 6`) scale up progressively across epochs rather than staying at 4 blocks (`RAMP-01`)
+    expect(getLevelSpec(16).blocks.length).toBeGreaterThanOrEqual(5);
+    expect(getLevelSpec(36).blocks.length).toBeGreaterThanOrEqual(6);
+    expect(getLevelSpec(66).blocks.length).toBeGreaterThanOrEqual(7);
+    expect(getLevelSpec(156).blocks.length).toBeGreaterThanOrEqual(8);
+    expect(getLevelSpec(256).blocks.length).toBeGreaterThanOrEqual(9);
   });
 
   it('ARCH-ERGONOMICS-01: enforces single-call agentic file-size limits (<= 800 lines and <= 45,000 bytes) across all repository source, style, test, script, and doc files', () => {

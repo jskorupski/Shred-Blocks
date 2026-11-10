@@ -343,6 +343,12 @@ export function continueFailedLevelImpl(app: AppViewContext): void {
 export function openTitleScreenImpl(app: AppViewContext): void {
   app.titleOverlayOpen = true;
   app.blueprintMix = 1.0;
+  if (app.toastTimerId !== null) {
+    clearTimeout(app.toastTimerId);
+    app.toastTimerId = null;
+  }
+  const gameToast = document.getElementById('game-toast');
+  if (gameToast) gameToast.hidden = true;
   const save = app.saveManager.getPayload();
   const targetLevelId = Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
   if (app.board.levelId !== targetLevelId) {

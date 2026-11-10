@@ -585,6 +585,10 @@ export async function executeBenchmarkFramesImpl(
   if (rctx.activeParticleCount < 60 && lastBoard) {
     rctx.spawnParticlesAt(lastBoard.cols * 0.5, lastBoard.rows * 0.5, 0.45, 1, 60, 0, -1);
   }
+  if (lastBoard) {
+    rctx.render(lastBoard, { ...rctx.lastOptions, dtSec: 1 / 120 });
+    rctx.gl?.finish();
+  }
 
   for (let i = 0; i < count; i++) {
     const t0 = performance.now();
@@ -594,7 +598,7 @@ export async function executeBenchmarkFramesImpl(
         dtSec: 1 / 120,
       });
     }
-    rctx.gl?.finish();
+    rctx.gl?.flush();
     const workMs = Math.max(0.01, performance.now() - t0);
     samples[i] = workMs;
   }

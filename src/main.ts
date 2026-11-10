@@ -231,6 +231,12 @@ export class ShredBlocksApp implements AppViewContext {
     this.bombSecondAccumulator = 0;
 
     this.inputController.cancelTargeting();
+    if (this.toastTimerId !== null) {
+      clearTimeout(this.toastTimerId);
+      this.toastTimerId = null;
+    }
+    const gameToast = document.getElementById('game-toast');
+    if (gameToast) gameToast.hidden = true;
     this.refreshAutoGuideMove();
 
     const save = this.saveManager.getPayload();

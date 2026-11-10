@@ -204,8 +204,7 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
   if (levelId <= 10) return active;
 
   const decPos = levelId % 10; // 1..9, 0
-  const isBreatherOrOnboardingWave =
-    decPos === 1 || decPos === 2 || decPos === 3 || decPos === 4 || decPos === 6;
+  const isBreatherOrOnboardingWave = (levelId <= 185 && decPos === 1) || decPos === 6;
 
   let primary: MechanicId = 'NONE';
   if (levelId <= 20) primary = 'AXIS_LOCK';
@@ -229,8 +228,8 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
   else if (levelId <= 180) primary = 'FLOOR_PATHS';
   else if (levelId <= 200) primary = 'ELEVATORS';
   else {
-    // Mastery Epochs (201+): Breather waves (mod 1, 2, 6) use a single gentle mechanic; others cycle all 20
-    if (decPos === 1 || decPos === 2 || decPos === 6) {
+    // Mastery Epochs (201+): Only the single decade breather (mod 6) uses the flow-state pool; others cycle all 20
+    if (decPos === 6) {
       primary = HARMONIOUS_SECONDARY_POOL[levelId % HARMONIOUS_SECONDARY_POOL.length];
     } else {
       primary = MASTERY_PRIMARY_POOL[levelId % MASTERY_PRIMARY_POOL.length];

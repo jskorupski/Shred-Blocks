@@ -508,6 +508,8 @@ export function detectAutomaticShredEventsImpl(
       rctx.activeShockwaves.length = 0;
       rctx.blockBounceMap.clear();
       rctx.boardShakeTimer = 0;
+      rctx.particlePool.fill(0);
+      rctx.activeParticleCount = 0;
     }
     return;
   }

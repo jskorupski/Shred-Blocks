@@ -631,8 +631,8 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
 
     // 9. Level 91: Time-Bomb Countdown & Defusal
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(91));
-    await dragBoardCellToCell(page, 4, 2, 5, 2); // Move 1: shred Block 3 -> Bomb 1 ticks 10 -> 9
-    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].bombCount)).toBe(9);
+    await dragBoardCellToCell(page, 4, 2, 5, 2); // Move 1: shred Block 3 -> Bomb 1 ticks 18 -> 17
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].bombCount)).toBe(17);
 
     // 10. Level 101: Glued Linked Groups Split on Shred
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(101));
@@ -686,8 +686,8 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
 
     // 16. Level 161: Block Generators
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(161));
-    await dragBoardCellToCell(page, 2, 1, 2, 0); // Shred Block 1 -> Generator spawns Block 4
-    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks.length)).toBe(4);
+    await dragBoardCellToCell(page, 2, 1, 2, 0); // Shred Block 1 -> Generator spawns Block 7
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks.length)).toBe(7);
 
     // 17. Level 171: Colorful Floor Paths
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(171));

@@ -22,7 +22,7 @@ export * from './generator-rules';
 function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: number): LevelSpec {
   const difficulty = getDifficultyForLevel(levelId);
   const decPos = levelId % 10; // 1..9, 0
-  const isBreatherWave = levelId >= 11 && (decPos === 1 || decPos === 2 || decPos === 6);
+  const isBreatherWave = levelId >= 11 && decPos === 6;
 
   // Decade-Aligned Spacious Board Size Curve (`PROG-01`, `RAMP-05`, `PORTRAIT-01`: `5x5` -> `9x9` & tall portrait maps)
   const usePortraitTall =
@@ -323,45 +323,90 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     }
   }
 
-  // 3. Place Blocks — `RAMP-02` & `DENSITY-01` 3-Tier Stage-Partitioned Brick Density
-  const baseTargetBlocks =
-    attempt >= 2
-      ? Math.min(5, levelId <= 10 ? 4 : 5)
-      : levelId <= 3
-        ? 3
+  // 3. Place Blocks — `RAMP-02` & `DENSITY-01` Epoch-Scaled High-Density Brick Packing
+  const rawTargetBlocks =
+    levelId <= 3
+      ? 3
+      : levelId <= 4
+        ? 4
         : levelId <= 10
-          ? 4
-          : isBreatherWave
-            ? levelId <= 180
-              ? 4
-              : 5
-            : layoutId === 'MYSTERY_VAULT'
-              ? rows >= 9
+          ? 5
+          : levelId <= 20
+            ? isBreatherWave
+              ? 5
+              : difficulty === 'SUPER_HARD'
                 ? 7
                 : 6
-              : levelId >= 220
-                ? difficulty === 'SUPER_HARD'
-                  ? 7
-                  : 6
-                : levelId >= 80
-                  ? difficulty === 'NORMAL'
-                    ? 5
-                    : 6
+            : levelId <= 40
+              ? isBreatherWave
+                ? 6
+                : layoutId === 'MYSTERY_VAULT'
+                  ? 9
                   : difficulty === 'SUPER_HARD'
-                    ? 6
-                    : difficulty === 'HARD'
-                      ? 5
-                      : 5;
+                    ? 8
+                    : 7
+              : levelId <= 80
+                ? isBreatherWave
+                  ? 7
+                  : layoutId === 'MYSTERY_VAULT'
+                    ? 10
+                    : difficulty === 'SUPER_HARD'
+                      ? 9
+                      : 8
+                : levelId <= 140
+                  ? isBreatherWave
+                    ? 7
+                    : layoutId === 'MYSTERY_VAULT'
+                      ? 11
+                      : difficulty === 'SUPER_HARD'
+                        ? 10
+                        : difficulty === 'HARD'
+                          ? 9
+                          : 8
+                  : levelId <= 220
+                    ? isBreatherWave
+                      ? 8
+                      : layoutId === 'MYSTERY_VAULT'
+                        ? 12
+                        : difficulty === 'SUPER_HARD'
+                          ? 11
+                          : difficulty === 'HARD'
+                            ? 10
+                            : 9
+                    : isBreatherWave
+                      ? 9
+                      : layoutId === 'MYSTERY_VAULT'
+                        ? 13
+                        : difficulty === 'SUPER_HARD'
+                          ? 12
+                          : difficulty === 'HARD'
+                            ? 11
+                            : 10;
+  const baseTargetBlocks =
+    attempt >= 3
+      ? Math.max(5, rawTargetBlocks - 2)
+      : attempt === 2
+        ? Math.max(5, rawTargetBlocks - 1)
+        : rawTargetBlocks;
   const targetBlocks = Math.max(numColors, baseTargetBlocks);
 
-  // `RAMP-03`: Keep EARLY_SHAPES through L40 and use NIMBLE_SHAPES on breather waves and non-lead blocks
+  // `RAMP-03` & `DENSITY-01`: Scale polyomino complexity across epochs while keeping breathers tactile with 2 medium shapes
   const leadShapePool = isBreatherWave
-    ? NIMBLE_SHAPES
+    ? EARLY_SHAPES
     : levelId <= 40
       ? EARLY_SHAPES
       : levelId <= 140
         ? MID_SHAPES
         : LATE_SHAPES;
+  const maxLargeBlocks =
+    attempt >= 2 || activeMechanics.has('SIZE_CHANGING_GATE')
+      ? 1
+      : isBreatherWave || levelId <= 40
+        ? 2
+        : levelId <= 140
+          ? 3
+          : 4;
+  const dominoAndTriominoPool = ['1x2', '2x1', '1x2', '2x1', 'L3_BL', 'L3_TL', 'L3_TR', 'L3_BR'];
 
   const blocks: LevelSpec['blocks'] = [];
   let nextId = 1;
@@ -409,24 +454,36 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
   }
 
   for (let bIdx = 0; bIdx < targetBlocks; bIdx++) {
-    const colorIdx =
-      useColorQueueGates && bIdx >= activeColors.length && activeColors.length >= 2
-        ? 1
-        : bIdx % activeColors.length;
+    let colorIdx = bIdx % activeColors.length;
+    if (layoutId === 'MYSTERY_VAULT' && activeColors.length >= 4) {
+      if (bIdx === 0) colorIdx = 2;
+      else if (bIdx === 1) colorIdx = 3;
+      else if (bIdx === 2) colorIdx = 0;
+      else if (bIdx === 3) colorIdx = 1;
+      else colorIdx = [0, 1, 3, 2][(bIdx - 4) % 4] % activeColors.length;
+    } else if (layoutId === 'TWIN_SANCTUM' && activeColors.length >= 4) {
+      if (bIdx === 0) colorIdx = 0;
+      else if (bIdx === 1) colorIdx = 3;
+      else if (bIdx === 2) colorIdx = 1;
+      else if (bIdx === 3) colorIdx = 2;
+      else colorIdx = [1, 2, 3, 0][(bIdx - 4) % 4] % activeColors.length;
+    } else if (useColorQueueGates && bIdx >= activeColors.length && activeColors.length >= 2) {
+      colorIdx = 1 + (bIdx % (activeColors.length - 1));
+    }
     const color = activeColors[colorIdx];
     const gate = gates[colorIdx % gates.length];
 
-    let chosenShape = '1x2';
-    // `RAMP-03`: At most 1 large polyomino (`bIdx === 0` only, and not on breather waves); all other blocks are nimble dominoes/monominoes!
-    const allowLargeShape = attempt <= 1 && bIdx === 0 && !isBreatherWave;
-    const activePool = allowLargeShape ? leadShapePool : NIMBLE_SHAPES;
-    for (let sTry = 0; sTry < 8; sTry++) {
+    let chosenShape = bIdx % 2 === 0 ? '1x2' : '2x1';
+    const allowLargeShape = !activeMechanics.has('SIZE_CHANGING_GATE') && bIdx < maxLargeBlocks;
+    const activePool = allowLargeShape ? leadShapePool : attempt <= 1 ? dominoAndTriominoPool : NIMBLE_SHAPES;
+    for (let sTry = 0; sTry < 10; sTry++) {
       const candidate =
-        attempt >= 2 || (!allowLargeShape && bIdx >= 2)
+        attempt >= 2 && !allowLargeShape
           ? bIdx % 2 === 0
             ? '1x2'
             : '2x1'
           : activePool[Math.floor(rng() * activePool.length)];
+      if (candidate === '1x1' && sTry < 7) continue;
       const sh = getShape(candidate);
       const reqSpan = gate.edge === 'TOP' || gate.edge === 'BOTTOM' ? sh.cols : sh.rows;
       const maxDim = allowLargeShape ? 3 : 2;
@@ -439,97 +496,88 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     const shape = getShape(chosenShape);
     let placed = false;
 
-    // In MYSTERY_VAULT, conceal blocks 0 and 1 inside the bottom Sealed Mystery Vault (rows-2..rows-1) and place remaining blocks in the open upper pocket (rows 1..rows-3)
+    const tryPlaceBlockAt = (r: number, c: number, overrideShapeId?: string, cellTarget = 0): boolean => {
+      const sh = overrideShapeId ? getShape(overrideShapeId) : shape;
+      if (r < 0 || c < 0 || r + sh.rows > rows || c + sh.cols > cols) return false;
+      for (const [dr, dc] of sh.cells) {
+        if (grid[(r + dr) * cols + (c + dc)] !== cellTarget) return false;
+      }
+      const id = nextId++;
+      for (const [dr, dc] of sh.cells) {
+        grid[(r + dr) * cols + (c + dc)] = id;
+      }
+      blocks.push({
+        id,
+        shapeId: overrideShapeId ?? chosenShape,
+        row: r,
+        col: c,
+        colorStack: [color],
+      });
+      return true;
+    };
+
+    // In MYSTERY_VAULT, conceal blocks 0 and 1 inside the bottom Sealed Mystery Vault (rows-2..rows-1) and place remaining blocks in the open upper pocket (rows 0..rows-3)
     if (layoutId === 'MYSTERY_VAULT') {
       if (bIdx === 0 || bIdx === 1) {
         const vr = bIdx === 0 ? rows - 2 : rows - 1;
         const vc = 2;
-        if (grid[vr * cols + vc] === -3 && grid[vr * cols + (vc + 1)] === -3) {
-          const id = nextId++;
-          grid[vr * cols + vc] = id;
-          grid[vr * cols + (vc + 1)] = id;
-          blocks.push({
-            id,
-            shapeId: '1x2',
-            row: vr,
-            col: vc,
-            colorStack: [color],
-          });
+        if (tryPlaceBlockAt(vr, vc, '1x2', -3)) {
           placed = true;
         }
       } else {
-        for (let pTry = 0; pTry < 24 && !placed; pTry++) {
-          const maxR = Math.max(1, rows - 3 - shape.rows + 1);
-          const r = 1 + Math.floor(rng() * maxR);
-          const c = 1 + Math.floor(rng() * Math.max(1, cols - shape.cols - 1));
-          let fits = true;
-          for (const [dr, dc] of shape.cells) {
-            if (grid[(r + dr) * cols + (c + dc)] !== 0) {
-              fits = false;
-              break;
-            }
+        if (bIdx === 2 && gate.edge === 'TOP') {
+          const pc = Math.max(1, Math.min(cols - shape.cols - 1, gate.spanStart));
+          if (tryPlaceBlockAt(0, pc) || tryPlaceBlockAt(1, pc)) placed = true;
+        } else if (bIdx === 3 && gate.edge === 'RIGHT') {
+          const pr = Math.max(1, Math.min(rows - 3 - shape.rows, gate.spanStart));
+          if (tryPlaceBlockAt(pr, cols - shape.cols) || tryPlaceBlockAt(pr, cols - shape.cols - 1)) {
+            placed = true;
           }
-          if (!fits) continue;
-          const id = nextId++;
-          for (const [dr, dc] of shape.cells) {
-            grid[(r + dr) * cols + (c + dc)] = id;
+        }
+        for (let pTry = 0; pTry < 32 && !placed; pTry++) {
+          const minR = pTry < 16 ? 1 : 0;
+          const maxR = Math.max(minR, rows - 3 - shape.rows);
+          const minC = pTry < 16 ? 1 : 0;
+          const maxC = Math.max(minC, cols - shape.cols - (pTry < 16 ? 1 : 0));
+          const r = minR + Math.floor(rng() * (maxR - minR + 1));
+          const c = minC + Math.floor(rng() * (maxC - minC + 1));
+          if (tryPlaceBlockAt(r, c)) {
+            placed = true;
           }
-          blocks.push({
-            id,
-            shapeId: chosenShape,
-            row: r,
-            col: c,
-            colorStack: [color],
-          });
-          placed = true;
         }
       }
     }
 
-    // In TWIN_SANCTUM, place block 0 in North Chamber (Room 1, row 1) and all other blocks in South Courtyard (Room 0, rows 3..rows-2)
+    // In TWIN_SANCTUM, place blocks 0 and 1 in North Chamber (Room 1, rows 0..1) and all other blocks in South Courtyard (Room 0, rows 3..rows-1)
     if (layoutId === 'TWIN_SANCTUM') {
-      if (bIdx === 0) {
-        const r1 = 1;
+      if (bIdx === 0 || (bIdx === 1 && cols >= 6)) {
+        const r1 = bIdx === 0 ? 1 : 0;
         const c1 = Math.max(1, Math.min(cols - 3, Math.floor((cols - 2) / 2)));
-        if (grid[r1 * cols + c1] === 0 && grid[r1 * cols + (c1 + 1)] === 0) {
-          const id = nextId++;
-          grid[r1 * cols + c1] = id;
-          grid[r1 * cols + (c1 + 1)] = id;
-          blocks.push({
-            id,
-            shapeId: '1x2',
-            row: r1,
-            col: c1,
-            colorStack: [color],
-          });
+        if (tryPlaceBlockAt(r1, c1, '1x2')) {
           placed = true;
         }
       } else {
-        for (let pTry = 0; pTry < 24 && !placed; pTry++) {
+        if (bIdx === 2 && gate.edge === 'RIGHT') {
+          const pr = Math.max(3, Math.min(rows - shape.rows - 1, gate.spanStart));
+          if (tryPlaceBlockAt(pr, cols - shape.cols) || tryPlaceBlockAt(pr, cols - shape.cols - 1)) {
+            placed = true;
+          }
+        } else if (bIdx === 3 && gate.edge === 'BOTTOM') {
+          const pc = Math.max(1, Math.min(cols - shape.cols - 1, gate.spanStart));
+          if (tryPlaceBlockAt(rows - shape.rows, pc) || tryPlaceBlockAt(rows - shape.rows - 1, pc)) {
+            placed = true;
+          }
+        }
+        for (let pTry = 0; pTry < 32 && !placed; pTry++) {
           const minR = 3;
-          const maxR = Math.max(minR, rows - shape.rows - 1);
+          const maxR = Math.max(minR, rows - shape.rows - (pTry < 16 ? 1 : 0));
+          const minC = pTry < 16 ? 1 : 0;
+          const maxC = Math.max(minC, cols - shape.cols - (pTry < 16 ? 1 : 0));
           const r = minR + Math.floor(rng() * (maxR - minR + 1));
-          const c = 1 + Math.floor(rng() * Math.max(1, cols - shape.cols - 1));
-          let fits = true;
-          for (const [dr, dc] of shape.cells) {
-            if (grid[(r + dr) * cols + (c + dc)] !== 0) {
-              fits = false;
-              break;
-            }
+          const c = minC + Math.floor(rng() * (maxC - minC + 1));
+          if (tryPlaceBlockAt(r, c)) {
+            placed = true;
           }
-          if (!fits) continue;
-          const id = nextId++;
-          for (const [dr, dc] of shape.cells) {
-            grid[(r + dr) * cols + (c + dc)] = id;
-          }
-          blocks.push({
-            id,
-            shapeId: chosenShape,
-            row: r,
-            col: c,
-            colorStack: [color],
-          });
-          placed = true;
         }
       }
     }
@@ -546,28 +594,11 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     ) {
       const r0 = 2;
       const c0 = Math.max(1, Math.min(cols - shape.cols - 1, gate.spanStart));
-      let fits0 = true;
-      for (const [dr, dc] of shape.cells) {
-        if (grid[(r0 + dr) * cols + (c0 + dc)] !== 0) {
-          fits0 = false;
-          break;
-        }
-      }
-      if (fits0) {
-        const id = nextId++;
-        for (const [dr, dc] of shape.cells) {
-          grid[(r0 + dr) * cols + (c0 + dc)] = id;
-        }
-        blocks.push({
-          id,
-          shapeId: chosenShape,
-          row: r0,
-          col: c0,
-          colorStack: [color],
-        });
+      if (tryPlaceBlockAt(r0, c0)) {
         placed = true;
       }
     } else if (
+      !placed &&
       attempt <= 1 &&
       bIdx === 1 &&
       blocks.length >= 1 &&
@@ -577,71 +608,66 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     ) {
       const r1 = 1;
       const c1 = Math.max(1, Math.min(cols - shape.cols - 1, blocks[0].col));
-      let fits1 = true;
-      for (const [dr, dc] of shape.cells) {
-        if (grid[(r1 + dr) * cols + (c1 + dc)] !== 0) {
-          fits1 = false;
-          break;
-        }
-      }
-      if (fits1) {
-        const id = nextId++;
-        for (const [dr, dc] of shape.cells) {
-          grid[(r1 + dr) * cols + (c1 + dc)] = id;
-        }
-        blocks.push({
-          id,
-          shapeId: chosenShape,
-          row: r1,
-          col: c1,
-          colorStack: [color],
-        });
+      if (tryPlaceBlockAt(r1, c1)) {
         placed = true;
       }
     }
 
-    for (let pTry = 0; pTry < 24 && !placed; pTry++) {
-      const r = 1 + Math.floor(rng() * Math.max(1, rows - shape.rows - 1));
-      const c = 1 + Math.floor(rng() * Math.max(1, cols - shape.cols - 1));
-
-      let fits = true;
-      for (const [dr, dc] of shape.cells) {
-        if (grid[(r + dr) * cols + (c + dc)] !== 0) {
-          fits = false;
-          break;
-        }
+    // Perimeter-First Peel Placement for early side/bottom blocks (bIdx === 2 or 3) so dense boards always have immediate outer peel moves
+    if (
+      !placed &&
+      layoutId !== 'TWIN_SANCTUM' &&
+      layoutId !== 'MYSTERY_VAULT' &&
+      (bIdx === 2 || bIdx === 3)
+    ) {
+      if (gate.edge === 'RIGHT') {
+        const pr = Math.max(1, Math.min(rows - shape.rows - 1, gate.spanStart));
+        const pc = cols - shape.cols;
+        if (tryPlaceBlockAt(pr, pc)) placed = true;
+      } else if (gate.edge === 'BOTTOM') {
+        const pr = rows - shape.rows;
+        const pc = Math.max(1, Math.min(cols - shape.cols - 1, gate.spanStart));
+        if (tryPlaceBlockAt(pr, pc)) placed = true;
+      } else if (gate.edge === 'LEFT') {
+        const pr = Math.max(1, Math.min(rows - shape.rows - 1, gate.spanStart));
+        const pc = 0;
+        if (tryPlaceBlockAt(pr, pc)) placed = true;
       }
-      if (!fits) continue;
+    }
 
-      const id = nextId++;
-      for (const [dr, dc] of shape.cells) {
-        grid[(r + dr) * cols + (c + dc)] = id;
+    for (let pTry = 0; pTry < 32 && !placed; pTry++) {
+      const allowPerimeter = pTry >= 14 && layoutId !== 'TWIN_SANCTUM' && layoutId !== 'MYSTERY_VAULT';
+      const minR = allowPerimeter ? 1 : 1;
+      const maxR = Math.max(minR, rows - shape.rows - (allowPerimeter ? 0 : 1));
+      const minC = allowPerimeter ? 0 : 1;
+      const maxC = Math.max(minC, cols - shape.cols - (allowPerimeter ? 0 : 1));
+      const r = minR + Math.floor(rng() * (maxR - minR + 1));
+      const c = minC + Math.floor(rng() * (maxC - minC + 1));
+      if (tryPlaceBlockAt(r, c)) {
+        placed = true;
+        break;
       }
-      blocks.push({
-        id,
-        shapeId: chosenShape,
-        row: r,
-        col: c,
-        colorStack: [color],
-      });
-      placed = true;
-      break;
     }
 
     if (!placed) {
       const startRow = layoutId === 'TWIN_SANCTUM' && bIdx > 0 ? 3 : 1;
-      for (let r = startRow; r < rows - 1 && !placed; r++) {
+      const endRow = layoutId === 'MYSTERY_VAULT' ? rows - 2 : rows;
+      // Try 2-cell dominoes first before falling back to 1x1 monominoes
+      for (const domShape of bIdx % 2 === 0 ? ['1x2', '2x1'] : ['2x1', '1x2']) {
+        const dsh = getShape(domShape);
+        const reqSpan = gate.edge === 'TOP' || gate.edge === 'BOTTOM' ? dsh.cols : dsh.rows;
+        if (reqSpan > gate.spanLength) continue;
+        for (let r = startRow; r <= endRow - dsh.rows && !placed; r++) {
+          for (let c = 0; c <= cols - dsh.cols && !placed; c++) {
+            if (tryPlaceBlockAt(r, c, domShape)) {
+              placed = true;
+            }
+          }
+        }
+      }
+      for (let r = startRow; r < endRow && !placed; r++) {
         for (let c = 1; c < cols - 1 && !placed; c++) {
-          if (grid[r * cols + c] === 0) {
-            const id = nextId++;
-            grid[r * cols + c] = id;
-            blocks.push({
-              id,
-              shapeId: '1x1',
-              row: r,
-              col: c,
-              colorStack: [color],
-            });
+          if (tryPlaceBlockAt(r, c, '1x1')) {
             placed = true;
           }
         }
@@ -706,7 +732,7 @@ export function generateProceduralLevel(levelId: number, seedOverride?: number):
     const rng = mulberry32((baseSeed + attempt * 1013904223) >>> 0);
     const candidate = tryBuildCandidateSpec(levelId, rng, attempt);
     const board = createBoardState(candidate);
-    const sol = solveBoard(board, 320);
+    const sol = solveBoard(board, 260);
 
     if (sol.solvable && sol.minMoves > 0) {
       const nonStoneCount = candidate.blocks.filter((b) => b.colorStack[0] !== 0).length;
