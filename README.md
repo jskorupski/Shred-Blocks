@@ -77,7 +77,7 @@ npm run lint
 # Run Vitest unit & 300-level BFS solver verification suite (< 4.0s, 46 tests)
 npm run test:unit
 
-# Run Playwright E2E interactive browser playtest suite (14 tests across Desktop & Mobile)
+# Run Playwright E2E interactive browser playtest suite (18 tests across Desktop & Mobile)
 npm run test:e2e
 
 # Capture 42 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
@@ -129,7 +129,7 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
   - **Row / Col Rocket (`EPIC`, Lvl 18)**: Blasts one layer across an entire row (`↔`) or column (`↕`) in any unlocked chamber (while leaving Sealed Mystery Vaults intact until unsealed).
   - **Color Vacuum (`LEGENDARY`, Lvl 30)**: Sweeps every unlocked block of a chosen color off the board at once.
 - **Themes Studio (`15 Unlockable Cosmetics`)**: Spend earned Coins (`150 Coins` each) on **5 Block Skins** (*Classic Studs*, *Smooth Bevel*, *Gummy Jelly*, *Carved Wood*, *Neon Cyber*), **5 Board Trays** (*Industrial Slate*, *Warm Birch*, *Midnight Arcade*, *Frosted Quartz*, *Mint Studio*), and **5 Shred Particle Styles** (*Micro-Cubes*, *Star Confetti*, *Pixel Sparks*, *Soap Bubbles*, *Lightning Bolts*)—all 100% compatible with High-Contrast and Colorblind Symbol modes.
-- **Ancient Stone Ruin Title Backdrop & Progressive Sanctuary Map**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a static, monochrome weathered ancient stone ruin (`u_blueprintMix = 1.0`) devoid of HUD clutter or labels—awakening smoothly into vibrant, living 3D reality when you begin playing. Opening the Sanctuary Map (`#screen-home`) automatically focuses on your active stage along a golden stepping-stone trail, previews your next upcoming Power-Up or Mechanic Awakening, and windows **Infinite Endless Mode (`Level 301+`)** stages with direct `Lvl #` stage jumping up to `999,999`.
+- **Levitating Mystic Stone Relic Title Backdrop & Grouped Linked Sanctuary Map**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a weathered, cracked monochrome ancient stone relic with pulsating mystic fissure glow and gentle floating/twisting levitation (`u_blueprintMix = 1.0`, `MYSTIC-RELIC-01`) devoid of HUD clutter or labels—smoothly fading away into vibrant, living 3D reality when you click Play. Opening the Sanctuary Map (`#screen-home`, `MAP-LINKED-PATH-01`) organizes progression into 5-stage flights (`Stages 1–5`, `Stages 6–10`, ...) along a continuous linked path that auto-scrolls to your active stage, clearly distinguishes **Completed (`✓ Cleared`)** emerald stages from neutral faded **Skipped (`Skipped`)** stages, previews your next upcoming Power-Up or Mechanic Awakening, and windows **Infinite Endless Mode (`Level 301+`)** stages with direct `Lvl #` stage jumping up to `999,999`.
 
 ---
 
