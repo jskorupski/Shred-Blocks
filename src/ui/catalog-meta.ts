@@ -23,6 +23,14 @@ export interface BeforeInstallPromptEvent extends Event {
 
 export type ModalId = 'victory' | 'failure' | 'pause' | 'save-transfer' | 'install';
 
+export const MAX_ENDLESS_LEVEL = 999_999;
+
+export interface AppHistoryState {
+  __shredblocksNav: true;
+  view: 'title' | 'home' | 'game' | 'themes';
+  levelId?: number;
+}
+
 export interface ShredBlocksDebugBridge {
   getBoard: () => BoardState;
   getSave: () => SavePayloadV1;
@@ -178,7 +186,7 @@ export function getChapterMetaForLevel(levelId: number): ChapterMeta {
     title: 'Infinite Horizon',
     subtitle: '8×8–9×9 Procedural Sanctuary Mastery',
     startLevel: 301,
-    endLevel: 9999,
+    endLevel: MAX_ENDLESS_LEVEL,
   };
 }
 
@@ -263,6 +271,8 @@ export interface AppViewContext {
   lastSwUpdateCheckMs: number;
   lastBackgroundedAtMs: number;
   hasUserInteracted: boolean;
+  isApplyingPopstate: boolean;
+  historyInitialized: boolean;
   loadLevel(levelId: number, switchToGameScreen?: boolean, persistLevel?: boolean): void;
   restartCurrentLevel(): void;
   skipCurrentLevel(): void;

@@ -226,6 +226,56 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(decoded1000.levelRecords[1].stars).toBe(massiveSave.levelRecords[1].stars);
       expect(decoded1000.levelRecords[300].stars).toBe(massiveSave.levelRecords[300].stars);
       expect(decoded1000.levelRecords[1000]).toEqual(massiveSave.levelRecords[1000]);
+
+      // ENDLESS-SAVE-01: Verify 5,000-level Infinite Mode progression + >32-bit varints (> 2^31)
+      // round-trip losslessly in full SB1-... codes and fit inside QR capacity in qrCompact mode
+      const endless5000 = createDefaultSavePayload();
+      endless5000.highestLevelUnlocked = 5001;
+      endless5000.currentLevelId = 5001;
+      endless5000.coins = 3_500_000_000; // Exceeds 32-bit signed/unsigned shift limits
+      endless5000.totalMovesCommitted = 5_250_000_000;
+      endless5000.totalStars = 0;
+      for (let lvl = 1; lvl <= 5000; lvl++) {
+        const stars = ((lvl * 11) % 3) + 1;
+        endless5000.totalStars += stars;
+        endless5000.levelRecords[lvl] = {
+          stars,
+          bestMoves: 5 + ((lvl * 17) % 32),
+          bestTimeSec: 12 + ((lvl * 23) % 90),
+          skipped: lvl % 29 === 0,
+        };
+      }
+
+      const t0 = performance.now();
+      const fullCode5000 = encodeSaveCode(endless5000);
+      const encodeElapsedMs = performance.now() - t0;
+      expect(encodeElapsedMs).toBeLessThan(200);
+
+      const fullDecoded5000 = decodeSaveCode(fullCode5000);
+      expect(Object.keys(fullDecoded5000.levelRecords).length).toBe(5000);
+      expect(fullDecoded5000.highestLevelUnlocked).toBe(5001);
+      expect(fullDecoded5000.currentLevelId).toBe(5001);
+      expect(fullDecoded5000.coins).toBe(3_500_000_000);
+      expect(fullDecoded5000.totalMovesCommitted).toBe(5_250_000_000);
+      expect(fullDecoded5000.levelRecords[1]).toEqual(endless5000.levelRecords[1]);
+      expect(fullDecoded5000.levelRecords[2500]).toEqual(endless5000.levelRecords[2500]);
+      expect(fullDecoded5000.levelRecords[5000]).toEqual(endless5000.levelRecords[5000]);
+
+      const qrCode5000 = encodeSaveCode(endless5000, { qrCompact: true });
+      const qrUrl5000 = `https://shredblocks.skorupski.org/#import=${encodeURIComponent(qrCode5000)}`;
+      expect(qrUrl5000.length).toBeLessThanOrEqual(2900);
+      const svg5000 = generateQrSvg(qrUrl5000);
+      expect(svg5000.startsWith('<svg ')).toBe(true);
+      const qrDecoded5000 = decodeSaveCode(qrCode5000);
+      expect(qrDecoded5000.highestLevelUnlocked).toBe(5001);
+      expect(qrDecoded5000.currentLevelId).toBe(5001);
+      expect(qrDecoded5000.coins).toBe(3_500_000_000);
+      expect(qrDecoded5000.totalStars).toBe(endless5000.totalStars);
+      // Preserves all 300 Campaign records + latest 1,200 Endless records (3801..5000)
+      expect(Object.keys(qrDecoded5000.levelRecords).length).toBe(1500);
+      expect(qrDecoded5000.levelRecords[300].stars).toBe(endless5000.levelRecords[300].stars);
+      expect(qrDecoded5000.levelRecords[300].skipped).toBe(endless5000.levelRecords[300].skipped);
+      expect(qrDecoded5000.levelRecords[5000]).toEqual(endless5000.levelRecords[5000]);
     });
   });
 

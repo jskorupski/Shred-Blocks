@@ -187,7 +187,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           <button type="button" id="btn-pause-save-transfer" class="btn-tactile btn-secondary btn-compact">
             Backup &amp; Sync Save
           </button>
-          <button type="button" id="btn-pause-install" class="btn-tactile btn-secondary btn-compact">
+          <button type="button" id="btn-pause-install" class="btn-tactile btn-install btn-compact">
             Install App Guide
           </button>
         </div>

@@ -446,7 +446,14 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
   it('ARCH-ERGONOMICS-01: enforces single-call agentic file-size limits (<= 800 lines and <= 45,000 bytes) across all repository source, style, test, script, and doc files', () => {
     const repoRoot = path.resolve(process.cwd());
     const trackedExtensions = new Set(['.ts', '.css', '.html', '.md', '.js', '.json', '.jsonc', '.svg']);
-    const ignoredDirs = new Set(['node_modules', 'dist', '.git', '.certs']);
+    const ignoredDirs = new Set([
+      'node_modules',
+      'dist',
+      '.git',
+      '.certs',
+      'test-results',
+      'playwright-report',
+    ]);
     const ignoredFiles = new Set(['package-lock.json']);
 
     const collectFiles = (dir: string, acc: string[] = []): string[] => {

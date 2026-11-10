@@ -117,6 +117,8 @@ export class ShredBlocksApp implements AppViewContext {
   public lastSwUpdateCheckMs = 0;
   public lastBackgroundedAtMs = 0;
   public hasUserInteracted = false;
+  public isApplyingPopstate = false;
+  public historyInitialized = false;
 
   constructor() {
     ensureDialogsMounted();

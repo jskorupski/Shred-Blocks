@@ -372,8 +372,8 @@
   flex: 1 1 auto;
   background: linear-gradient(
     180deg var(--in-oklab),
-    rgba(72, 56, 114, 0.84) 0%,
-    rgba(44, 33, 76, 0.92) 100%
+    rgba(74, 58, 118, 0.88) 0%,
+    rgba(46, 35, 80, 0.94) 100%
   );
   box-shadow:
     inset 0 1px 0 rgba(255, 248, 236, 0.2),
@@ -402,31 +402,65 @@
   display: none;
 }
 
-.title-nav-pill {
+.title-map-pill {
   background: linear-gradient(
     180deg var(--in-oklab),
-    rgba(86, 66, 134, 0.88) 0%,
-    rgba(52, 39, 90, 0.94) 100%
+    rgba(176, 98, 72, 0.88) 0%,
+    rgba(128, 66, 48, 0.94) 100%
   );
-  color: #fff8ee;
+  color: #fff3eb;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 214, 0.28),
+    0 2px 0 rgba(62, 26, 18, 0.72);
+}
+
+.title-map-pill svg {
+  color: #ffe8d6;
 }
 
 .title-install-pill {
   background: linear-gradient(
     180deg var(--in-oklab),
-    rgba(46, 138, 128, 0.82) 0%,
-    rgba(28, 92, 86, 0.9) 100%
+    rgba(46, 138, 128, 0.88) 0%,
+    rgba(28, 92, 86, 0.94) 100%
   );
+  color: #d8fcf7;
+  box-shadow:
+    inset 0 1px 0 rgba(196, 255, 248, 0.28),
+    0 2px 0 rgba(10, 46, 42, 0.72);
+}
+
+.title-install-pill svg {
   color: #b4f7ef;
 }
 
-.title-utility-pill:hover {
-  background: linear-gradient(
-    180deg var(--in-oklab),
-    rgba(102, 80, 156, 0.94) 0%,
-    rgba(64, 48, 108, 0.98) 100%
-  );
-  color: #ffffff;
+@media (hover: hover) {
+  .title-utility-pill:hover {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(92, 72, 142, 0.94) 0%,
+      rgba(58, 44, 98, 0.98) 100%
+    );
+    color: #ffffff;
+  }
+
+  .title-map-pill:hover {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(196, 112, 84, 0.94) 0%,
+      rgba(146, 76, 56, 0.98) 100%
+    );
+    color: #ffffff;
+  }
+
+  .title-install-pill:hover {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(58, 158, 147, 0.94) 0%,
+      rgba(36, 110, 102, 0.98) 100%
+    );
+    color: #ffffff;
+  }
 }
 
 .title-utility-pill:active {

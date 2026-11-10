@@ -15,6 +15,7 @@ import { generateQrSvg } from '../storage/qr-svg';
 import { decodeSaveCode, validateSavePayloadV1 } from '../storage/save-code';
 import { extractImportCodeFromHash } from '../storage/save-manager';
 import {
+  type AppHistoryState,
   type AppViewContext,
   BOOSTER_DEBUT_NOTES,
   type ModalId,
@@ -229,7 +230,7 @@ export function confirmPendingSaveImportImpl(app: AppViewContext): void {
     if (diffPanel) diffPanel.hidden = true;
 
     if (window.location.hash.includes('import=')) {
-      history.replaceState(null, '', window.location.pathname + window.location.search);
+      history.replaceState(history.state, '', window.location.pathname + window.location.search);
     }
 
     refreshSaveTransferModalImpl(app);
@@ -237,6 +238,12 @@ export function confirmPendingSaveImportImpl(app: AppViewContext): void {
     app.renderRoadmap();
     app.renderThemesStudio();
     app.loadLevel(updated.currentLevelId || updated.highestLevelUnlocked || 1, false);
+    if (typeof history !== 'undefined' && isAppHistoryState(history.state) && history.state.view === 'game') {
+      history.replaceState(
+        { __shredblocksNav: true, view: 'game', levelId: app.board.levelId } satisfies AppHistoryState,
+        ''
+      );
+    }
 
     if (statusEl) {
       statusEl.textContent = '🎉 Save imported! Your previous save is backed up and can be restored anytime.';
@@ -345,6 +352,51 @@ export function continueFailedLevelImpl(app: AppViewContext): void {
   app.renderNow();
 }
 
+function isAppHistoryState(val: unknown): val is AppHistoryState {
+  if (!val || typeof val !== 'object') return false;
+  const candidate = val as Partial<AppHistoryState>;
+  return (
+    candidate.__shredblocksNav === true &&
+    (candidate.view === 'title' ||
+      candidate.view === 'home' ||
+      candidate.view === 'game' ||
+      candidate.view === 'themes')
+  );
+}
+
+export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStateEvent): void {
+  const st = event.state;
+  if (!isAppHistoryState(st)) {
+    return;
+  }
+
+  app.isApplyingPopstate = true;
+  try {
+    app.inputController.cancelTargeting();
+    app.closeAllModals();
+
+    if (st.view === 'title') {
+      app.openTitleScreen();
+      return;
+    }
+
+    if (st.view === 'game') {
+      const save = app.saveManager.getPayload();
+      const targetId = Math.max(1, Math.floor(st.levelId || save.currentLevelId || 1));
+      if (app.board.levelId !== targetId) {
+        app.loadLevel(targetId, true, true);
+      } else {
+        app.switchScreen('game');
+      }
+      return;
+    }
+
+    app.switchScreen(st.view);
+  } finally {
+    app.isApplyingPopstate = false;
+  }
+}
+
 export function openTitleScreenImpl(app: AppViewContext): void {
   app.titleOverlayOpen = true;
   app.blueprintMix = 1.0;
@@ -365,13 +417,27 @@ export function openTitleScreenImpl(app: AppViewContext): void {
   app.checkForPwaUpdate(false);
   app.renderer.resize();
   app.renderNow();
+
+  if (typeof history !== 'undefined') {
+    const titleState: AppHistoryState = { __shredblocksNav: true, view: 'title' };
+    const curHist = isAppHistoryState(history.state) ? history.state : null;
+    if (!app.historyInitialized) {
+      app.historyInitialized = true;
+      history.replaceState(titleState, '');
+    } else if (!app.isApplyingPopstate) {
+      if (curHist?.view === 'title') {
+        history.replaceState(titleState, '');
+      } else {
+        history.pushState(titleState, '');
+      }
+    }
+  }
 }
 
 export function dismissTitleScreenImpl(
   app: AppViewContext,
   targetScreen: 'game' | 'home' | 'themes' = 'game'
 ): void {
-  app.titleOverlayOpen = false;
   app.switchScreen(targetScreen);
   if (targetScreen === 'game' && app.board.movesCommitted === 0) {
     const spec = getLevelSpec(app.board.levelId);
@@ -381,6 +447,7 @@ export function dismissTitleScreenImpl(
 }
 
 export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 'themes'): void {
+  const wasTitleOpen = app.titleOverlayOpen;
   app.activeScreen = screen;
   app.titleOverlayOpen = false;
   app.syncTitleOverlayDom();
@@ -402,6 +469,30 @@ export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 
     app.renderer.resize();
     app.syncInGameHud();
     app.renderNow();
+  }
+
+  if (typeof history !== 'undefined' && !app.isApplyingPopstate) {
+    const nextState: AppHistoryState =
+      screen === 'game'
+        ? { __shredblocksNav: true, view: 'game', levelId: app.board.levelId }
+        : { __shredblocksNav: true, view: screen };
+    const curHist = isAppHistoryState(history.state) ? history.state : null;
+
+    if (!app.historyInitialized) {
+      app.historyInitialized = true;
+      history.replaceState(nextState, '');
+    } else if (wasTitleOpen && screen === 'game') {
+      // Seed Sanctuary Map ('home') beneath Gameplay when launching directly from Title Screen
+      // so Browser Back from a level always returns to the Map screen first.
+      if (curHist?.view !== 'home') {
+        history.pushState({ __shredblocksNav: true, view: 'home' } satisfies AppHistoryState, '');
+      }
+      history.pushState(nextState, '');
+    } else if (curHist?.view === screen) {
+      history.replaceState(nextState, '');
+    } else {
+      history.pushState(nextState, '');
+    }
   }
 }
 

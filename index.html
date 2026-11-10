@@ -76,7 +76,7 @@
           </div>
 
           <div class="header-actions">
-            <button type="button" id="btn-install-header" class="btn-tactile btn-secondary btn-compact" title="Install App for Offline Play">
+            <button type="button" id="btn-install-header" class="btn-tactile btn-install btn-compact" title="Install App for Offline Play">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 3v12" />
                 <path d="m7 11 5 5 5-5" />
@@ -166,7 +166,7 @@
             </div>
             <div class="level-jump-box">
               <label for="level-jump-input" class="sr-only">Jump to Level</label>
-              <input type="number" id="level-jump-input" min="1" max="999" placeholder="Lvl #" class="input-compact" />
+              <input type="number" id="level-jump-input" min="1" max="999999" placeholder="Lvl #" class="input-compact" />
               <button type="button" id="btn-level-jump" class="btn-tactile btn-secondary btn-compact">
                 Go
               </button>
@@ -438,7 +438,7 @@
               <path d="M9 20v-6h6v6" />
             </svg>
           </span>
-          <span class="tab-label">Sanctuary</span>
+          <span class="tab-label">Map</span>
         </button>
         <button type="button" id="tab-btn-play" class="tab-item tab-play-cta" data-tab="game">
           <span class="tab-icon" aria-hidden="true">
@@ -600,14 +600,14 @@
           <!-- Unified Single-Row Quick-Action & Utility Dock -->
           <div class="title-dock-bar">
             <div id="title-returning-nav" class="title-nav-grid" hidden>
-              <button type="button" id="btn-title-map" class="title-utility-pill title-nav-pill" title="Open 300-Level Sanctuary Map">
+              <button type="button" id="btn-title-map" class="title-utility-pill title-map-pill" title="Open 300-Level Sanctuary Map">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polygon points="12,3 21,9 21,20 3,20 3,9" />
                   <path d="M9 20v-6h6v6" />
                 </svg>
                 <span>Map</span>
               </button>
-              <button type="button" id="btn-title-themes" class="title-utility-pill title-nav-pill" title="Open Themes Studio">
+              <button type="button" id="btn-title-themes" class="title-utility-pill" title="Open Themes Studio">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polygon points="12,2 22,12 12,22 2,12" />
                   <polygon points="12,7 17,12 12,17 7,12" fill="currentColor" fill-opacity="0.28" />

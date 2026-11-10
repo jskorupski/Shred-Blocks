@@ -312,7 +312,7 @@
 }
 
 .input-compact {
-  width: 56px;
+  width: 64px;
   min-height: 30px;
   padding: 0.2rem 0.42rem;
   border-radius: var(--radius-sm);
@@ -323,6 +323,15 @@
   font-family: var(--font-ui);
   font-size: 0.75rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.input-compact::-webkit-outer-spin-button,
+.input-compact::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .input-compact:focus-visible {

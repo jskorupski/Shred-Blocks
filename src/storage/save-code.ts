@@ -84,6 +84,15 @@ export function compressLz77(input: Uint8Array): Uint8Array {
   out[3] = (len >>> 8) & 0xff;
   out[4] = len & 0xff;
 
+  const head = new Int32Array(65536).fill(-1);
+  const prev = new Int32Array(4096).fill(-1);
+  const recordPos = (pos: number): void => {
+    if (pos + 1 >= len) return;
+    const h = ((input[pos] << 8) | input[pos + 1]) & 0xffff;
+    prev[pos & 4095] = head[h];
+    head[h] = pos;
+  };
+
   let outPos = 5;
   let inPos = 0;
 
@@ -98,20 +107,26 @@ export function compressLz77(input: Uint8Array): Uint8Array {
 
       if (maxMatchLen >= 3) {
         const winStart = Math.max(0, inPos - 4096);
-        const firstByte = input[inPos];
-        const secondByte = input[inPos + 1];
+        const h = ((input[inPos] << 8) | input[inPos + 1]) & 0xffff;
+        let cand = head[h];
+        let chainSteps = 0;
 
-        for (let cand = inPos - 1; cand >= winStart; cand--) {
-          if (input[cand] !== firstByte || input[cand + 1] !== secondByte) continue;
-          let mLen = 2;
-          while (mLen < maxMatchLen && input[cand + mLen] === input[inPos + mLen]) {
-            mLen++;
+        while (cand >= winStart && chainSteps < 96) {
+          chainSteps++;
+          if (input[cand + 2] === input[inPos + 2]) {
+            let mLen = 3;
+            while (mLen < maxMatchLen && input[cand + mLen] === input[inPos + mLen]) {
+              mLen++;
+            }
+            if (mLen > bestLen) {
+              bestLen = mLen;
+              bestOffset = inPos - cand;
+              if (bestLen === maxMatchLen) break;
+            }
           }
-          if (mLen > bestLen) {
-            bestLen = mLen;
-            bestOffset = inPos - cand;
-            if (bestLen === maxMatchLen) break;
-          }
+          const nextCand = prev[cand & 4095];
+          if (nextCand >= cand) break;
+          cand = nextCand;
         }
       }
 
@@ -124,8 +139,12 @@ export function compressLz77(input: Uint8Array): Uint8Array {
         if (baseLen === 15) {
           out[outPos++] = (bestLen - 18) & 0xff;
         }
+        for (let k = 0; k < bestLen; k++) {
+          recordPos(inPos + k);
+        }
         inPos += bestLen;
       } else {
+        recordPos(inPos);
         out[outPos++] = input[inPos++];
       }
     }
@@ -285,10 +304,10 @@ export function validateSavePayloadV1(candidate: unknown): SavePayloadV1 {
 }
 
 function writeVarint(out: number[], value: number): void {
-  let v = Math.max(0, Math.floor(value)) >>> 0;
+  let v = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
   while (v >= 0x80) {
-    out.push((v & 0x7f) | 0x80);
-    v >>>= 7;
+    out.push((v % 128) | 0x80);
+    v = Math.floor(v / 128);
   }
   out.push(v);
 }
@@ -343,12 +362,18 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
     (st.reducedMotion ? 64 : 0);
   out.push(sFlags, Math.max(0, QUALITY_TIERS.indexOf(st.qualityTier)));
 
-  const ids = Object.keys(payload.levelRecords)
+  const allIds = Object.keys(payload.levelRecords)
     .map(Number)
     .filter((n) => Number.isFinite(n) && n >= 1)
     .sort((a, b) => a - b);
-  const maxTelemetryEntries = qrCompact ? 60 : 400;
-  const telemetryCutoffIdx = Math.max(0, ids.length - maxTelemetryEntries);
+  // Full SB1 save codes (`qrCompact = false`) preserve 100% of Infinite/Endless level records
+  // (stars, skipped, bestMoves, bestTimeSec); QR-compact mode caps records at 1,500 and recent
+  // move/time telemetry at 60 so QR codes stay within ISO/IEC 18004 Version 40 capacity.
+  const ids =
+    qrCompact && allIds.length > 1500
+      ? [...allIds.filter((id) => id <= 300), ...allIds.filter((id) => id > 300).slice(-1200)]
+      : allIds;
+  const telemetryCutoffIdx = qrCompact ? Math.max(0, ids.length - 60) : 0;
   writeVarint(out, ids.length);
   writeVarint(out, telemetryCutoffIdx);
 
@@ -379,7 +404,7 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
   for (let i = telemetryCutoffIdx; i < ids.length; i++) {
     const t = Math.max(0, payload.levelRecords[ids[i]].bestTimeSec || 0);
     const tenths = Math.round(t * 10);
-    const encodedTime = tenths % 10 === 0 ? (Math.round(t) << 1) | 0 : (tenths << 1) | 1;
+    const encodedTime = tenths % 10 === 0 ? Math.round(t) * 2 : tenths * 2 + 1;
     writeVarint(out, encodedTime);
   }
 
@@ -400,12 +425,15 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
   };
   const readVarint = (): number => {
     let val = 0;
-    let shift = 0;
+    let mult = 1;
     while (pos < rawBytes.length) {
       const byte = rawBytes[pos++];
-      val |= (byte & 0x7f) << shift;
-      if ((byte & 0x80) === 0) return val >>> 0;
-      shift += 7;
+      val += (byte & 0x7f) * mult;
+      if ((byte & 0x80) === 0) return val;
+      mult *= 128;
+      if (mult > Number.MAX_SAFE_INTEGER) {
+        throw new SaveCodeError('DECOMPRESSION_FAILED', 'Varint exceeds safe integer range.');
+      }
     }
     throw new SaveCodeError('DECOMPRESSION_FAILED', 'Truncated varint in binary save stream.');
   };
@@ -479,7 +507,7 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
   const timesCol: number[] = [];
   for (let i = telemetryCutoffIdx; i < recordCount; i++) {
     const rawT = readVarint();
-    timesCol.push(rawT & 1 ? (rawT >>> 1) / 10 : rawT >>> 1);
+    timesCol.push(rawT % 2 === 1 ? Math.floor(rawT / 2) / 10 : Math.floor(rawT / 2));
   }
 
   const levelRecords: SavePayloadV1['levelRecords'] = {};

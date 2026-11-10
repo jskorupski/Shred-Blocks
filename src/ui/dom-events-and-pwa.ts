@@ -2,9 +2,10 @@ import type { PlayMode, QualityTier, SavePayloadV1 } from '../core/types';
 import {
   type AppViewContext,
   type BeforeInstallPromptEvent,
+  MAX_ENDLESS_LEVEL,
   PWA_INSTALLED_STORAGE_KEY,
 } from './catalog-meta';
-import { refreshSaveTransferModalImpl } from './modals-and-save-transfer';
+import { handlePopstateNavigationImpl, refreshSaveTransferModalImpl } from './modals-and-save-transfer';
 
 export function bindDomEventsImpl(app: AppViewContext): void {
   // Sacred-Geometry Title Crest Overlay Actions
@@ -107,14 +108,21 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     });
   });
 
-  // Direct Level Jump
+  // Direct Level Jump (Campaign 1..300 + Infinite Endless 301+)
   const jumpInput = document.getElementById('level-jump-input') as HTMLInputElement | null;
-  document.getElementById('btn-level-jump')?.addEventListener('click', () => {
+  const triggerLevelJump = () => {
     if (!jumpInput) return;
     const val = Number(jumpInput.value);
     if (Number.isFinite(val) && val >= 1) {
       app.sound.playButtonTap();
-      app.loadLevel(Math.min(999, Math.floor(val)), true);
+      app.loadLevel(Math.min(MAX_ENDLESS_LEVEL, Math.floor(val)), true);
+    }
+  };
+  document.getElementById('btn-level-jump')?.addEventListener('click', triggerLevelJump);
+  jumpInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      triggerLevelJump();
     }
   });
 
@@ -397,6 +405,10 @@ export function bindDomEventsImpl(app: AppViewContext): void {
 
   window.addEventListener('hashchange', () => {
     app.checkUrlHashForSaveImport();
+  });
+
+  window.addEventListener('popstate', (event) => {
+    handlePopstateNavigationImpl(app, event);
   });
 }
 

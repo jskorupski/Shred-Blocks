@@ -172,71 +172,128 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     fragment.appendChild(btn);
   }
 
-  // Append Procedural Endless Mastery Nodes (301..306 or beyond highestLevelUnlocked)
+  // Append Procedural Endless Mastery Nodes (Windowed so 50,000+ levels render in < 5ms)
   if (app.activeRoadmapRange === 'all' || app.activeRoadmapRange === 'endless') {
-    const endlessCh = getChapterMetaForLevel(TOTAL_CAMPAIGN_LEVELS + 1);
+    const endlessStart = TOTAL_CAMPAIGN_LEVELS + 1;
+    const endlessCh = getChapterMetaForLevel(endlessStart);
     fragment.appendChild(
       createChapterBanner(
-        `${endlessCh.chapterNum} · LEVEL ${TOTAL_CAMPAIGN_LEVELS + 1}+`,
+        `${endlessCh.chapterNum} · LEVEL ${endlessStart}+`,
         endlessCh.title,
         endlessCh.subtitle,
         '∞ Procedural'
       )
     );
-    const maxEndlessPreview = Math.max(TOTAL_CAMPAIGN_LEVELS + 6, unlockedMax + 3);
-    for (let eid = TOTAL_CAMPAIGN_LEVELS + 1; eid <= maxEndlessPreview; eid++) {
-      const spec = getLevelSpec(eid);
-      const isUnlocked = eid <= unlockedMax || app.activeRoadmapRange === 'endless';
-      const record = save.levelRecords[eid];
 
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.setAttribute('role', 'listitem');
-      btn.dataset.levelId = String(eid);
-      btn.className = [
-        'level-node-card',
-        `tier-${spec.difficulty.toLowerCase()}`,
-        !isUnlocked ? 'locked-level' : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
+    const rawWindows: Array<[number, number]> = [];
+    if (unlockedMax <= TOTAL_CAMPAIGN_LEVELS + 24) {
+      rawWindows.push([endlessStart, Math.max(TOTAL_CAMPAIGN_LEVELS + 6, unlockedMax + 3)]);
+    } else {
+      rawWindows.push([endlessStart, endlessStart + 5]);
+      const focusLevel = save.currentLevelId >= endlessStart ? save.currentLevelId : unlockedMax;
+      rawWindows.push([
+        Math.max(endlessStart + 6, focusLevel - 8),
+        Math.min(unlockedMax + 3, focusLevel + 8),
+      ]);
+      rawWindows.push([Math.max(endlessStart + 6, unlockedMax - 8), unlockedMax + 3]);
+    }
+    rawWindows.sort((a, b) => a[0] - b[0]);
+    const windows: Array<[number, number]> = [];
+    for (const [wStart, wEnd] of rawWindows) {
+      if (wEnd < wStart) continue;
+      const prev = windows[windows.length - 1];
+      if (prev && wStart <= prev[1] + 1) {
+        prev[1] = Math.max(prev[1], wEnd);
+      } else {
+        windows.push([wStart, wEnd]);
+      }
+    }
 
-      const topRow = document.createElement('div');
-      topRow.className = 'node-top-row';
+    let prevEnd = endlessStart - 1;
+    for (const [wStart, wEnd] of windows) {
+      if (wStart > prevEnd + 1) {
+        const archivedCount = wStart - prevEnd - 1;
+        fragment.appendChild(
+          createChapterBanner(
+            `ENDLESS ARCHIVE · STAGES #${prevEnd + 1}–#${wStart - 1}`,
+            `${archivedCount} Cleared Stages Archived`,
+            'Enter any stage number in the Lvl # jump box above to replay.',
+            `✓ ${archivedCount}`
+          )
+        );
+      }
+      for (let eid = wStart; eid <= wEnd; eid++) {
+        const spec = getLevelSpec(eid);
+        const isUnlocked = eid <= unlockedMax || app.activeRoadmapRange === 'endless';
+        const isCurrent = eid === save.currentLevelId;
+        const isCompleted = isUnlocked && !isCurrent && eid < unlockedMax;
+        const record = save.levelRecords[eid];
 
-      const numSpan = document.createElement('span');
-      numSpan.className = 'node-level-num';
-      numSpan.textContent = `♾️ #${eid}`;
+        let starDisplay = isUnlocked ? '☆☆☆' : '🔒';
+        if (record) {
+          if (record.skipped && record.stars === 0) {
+            starDisplay = 'Skipped';
+          } else if (record.stars > 0) {
+            starDisplay = '★'.repeat(record.stars) + '☆'.repeat(3 - record.stars);
+          }
+        }
 
-      const badgeSpan = document.createElement('span');
-      badgeSpan.className = `badge-difficulty diff-${spec.difficulty.toLowerCase()}`;
-      badgeSpan.textContent = spec.difficulty.replace('_', ' ');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'listitem');
+        btn.dataset.levelId = String(eid);
+        btn.className = [
+          'level-node-card',
+          `tier-${spec.difficulty.toLowerCase()}`,
+          isCurrent ? 'current-level' : '',
+          isCompleted ? 'completed-level' : '',
+          !isUnlocked ? 'locked-level' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
 
-      const starsSpan = document.createElement('span');
-      starsSpan.className = 'node-stars';
-      starsSpan.textContent =
-        record && record.stars > 0 ? '★'.repeat(record.stars) : isUnlocked ? '☆☆☆' : '🔒';
+        const topRow = document.createElement('div');
+        topRow.className = 'node-top-row';
 
-      topRow.append(numSpan, badgeSpan, starsSpan);
+        const numSpan = document.createElement('span');
+        numSpan.className = 'node-level-num';
+        numSpan.textContent = isCurrent ? `✦ STAGE #${eid}` : `♾️ #${eid}`;
 
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'node-name';
-      const endlessPrefix =
-        spec.barriers && spec.barriers.length > 0
-          ? '⛩️ '
-          : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
-            ? '🏛️ '
-            : '';
-      nameDiv.textContent = `${endlessPrefix}${spec.name}`;
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = `badge-difficulty diff-${spec.difficulty.toLowerCase()}`;
+        badgeSpan.textContent = spec.difficulty.replace('_', ' ');
 
-      btn.append(topRow, nameDiv);
+        const starsSpan = document.createElement('span');
+        starsSpan.className = 'node-stars';
+        starsSpan.textContent = starDisplay;
 
-      btn.addEventListener('click', () => {
-        app.sound.playButtonTap();
-        app.loadLevel(eid, true);
-      });
+        topRow.append(numSpan, badgeSpan, starsSpan);
 
-      fragment.appendChild(btn);
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'node-name';
+        const endlessPrefix =
+          spec.barriers && spec.barriers.length > 0
+            ? '⛩️ '
+            : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
+              ? '🏛️ '
+              : '';
+        nameDiv.textContent = `${endlessPrefix}${spec.name}`;
+
+        btn.append(topRow, nameDiv);
+
+        btn.addEventListener('click', () => {
+          if (!isUnlocked) {
+            app.sound.playWallClack();
+            app.showGameToast(`🔒 Clear or Skip up to Level ${eid} to unlock!`);
+            return;
+          }
+          app.sound.playButtonTap();
+          app.loadLevel(eid, true);
+        });
+
+        fragment.appendChild(btn);
+      }
+      prevEnd = wEnd;
     }
   }
 

@@ -410,8 +410,8 @@ body {
   color: var(--text-primary);
   background: linear-gradient(
     180deg var(--in-oklab),
-    rgba(74, 58, 118, 0.86) 0%,
-    rgba(46, 35, 80, 0.92) 100%
+    rgba(74, 58, 118, 0.88) 0%,
+    rgba(46, 35, 80, 0.94) 100%
   );
   box-shadow:
     inset 0 1px 0 rgba(255, 248, 236, 0.2),
@@ -430,12 +430,14 @@ body {
     transform 0.1s ease;
 }
 
-.btn-tactile:hover:not(:disabled) {
-  background: linear-gradient(
-    180deg var(--in-oklab),
-    rgba(92, 72, 142, 0.92) 0%,
-    rgba(58, 44, 98, 0.96) 100%
-  );
+@media (hover: hover) {
+  .btn-tactile:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(92, 72, 142, 0.94) 0%,
+      rgba(58, 44, 98, 0.98) 100%
+    );
+  }
 }
 
 .btn-tactile:active:not(:disabled) {
@@ -460,8 +462,10 @@ body {
     0 6px 16px rgba(40, 181, 167, 0.25);
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg var(--in-oklab), #56ebd9 0%, #28beaf 100%);
+@media (hover: hover) {
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg var(--in-oklab), #56ebd9 0%, #28beaf 100%);
+  }
 }
 
 .btn-primary:active:not(:disabled) {
@@ -472,16 +476,22 @@ body {
 }
 
 .btn-secondary {
-  background: linear-gradient(180deg var(--in-oklab), rgba(72, 56, 114, 0.84) 0%, rgba(44, 33, 76, 0.9) 100%);
+  background: linear-gradient(
+    180deg var(--in-oklab),
+    rgba(74, 58, 118, 0.88) 0%,
+    rgba(46, 35, 80, 0.94) 100%
+  );
   color: var(--text-primary);
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background: linear-gradient(
-    180deg var(--in-oklab),
-    rgba(90, 70, 138, 0.92) 0%,
-    rgba(56, 43, 94, 0.95) 100%
-  );
+@media (hover: hover) {
+  .btn-secondary:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(92, 72, 142, 0.94) 0%,
+      rgba(58, 44, 98, 0.98) 100%
+    );
+  }
 }
 
 .btn-warning {
@@ -494,9 +504,11 @@ body {
     0 4px 12px rgba(229, 178, 93, 0.2);
 }
 
-.btn-warning:hover:not(:disabled) {
-  background: linear-gradient(180deg var(--in-oklab), #fad88c 0%, #e0a844 100%);
-  color: #140c02;
+@media (hover: hover) {
+  .btn-warning:hover:not(:disabled) {
+    background: linear-gradient(180deg var(--in-oklab), #fad88c 0%, #e0a844 100%);
+    color: #140c02;
+  }
 }
 
 .btn-danger {
@@ -511,20 +523,22 @@ body {
     0 2px 0 rgba(68, 16, 14, 0.75);
 }
 
-.btn-danger:hover:not(:disabled) {
-  background: linear-gradient(
-    180deg var(--in-oklab),
-    rgba(206, 78, 74, 0.92) 0%,
-    rgba(154, 48, 44, 0.96) 100%
-  );
-  color: #ffffff;
+@media (hover: hover) {
+  .btn-danger:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(206, 78, 74, 0.92) 0%,
+      rgba(154, 48, 44, 0.96) 100%
+    );
+    color: #ffffff;
+  }
 }
 
 .btn-sanctuary {
   background: linear-gradient(
     180deg var(--in-oklab),
-    rgba(176, 98, 72, 0.86) 0%,
-    rgba(128, 66, 48, 0.92) 100%
+    rgba(176, 98, 72, 0.88) 0%,
+    rgba(128, 66, 48, 0.94) 100%
   );
   color: #fff3eb;
   box-shadow:
@@ -532,13 +546,38 @@ body {
     0 2px 0 rgba(62, 26, 18, 0.72);
 }
 
-.btn-sanctuary:hover:not(:disabled) {
+@media (hover: hover) {
+  .btn-sanctuary:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(196, 112, 84, 0.94) 0%,
+      rgba(146, 76, 56, 0.98) 100%
+    );
+    color: #ffffff;
+  }
+}
+
+.btn-install {
   background: linear-gradient(
     180deg var(--in-oklab),
-    rgba(196, 112, 84, 0.92) 0%,
-    rgba(146, 76, 56, 0.96) 100%
+    rgba(46, 138, 128, 0.88) 0%,
+    rgba(28, 92, 86, 0.94) 100%
   );
-  color: #ffffff;
+  color: #d8fcf7;
+  box-shadow:
+    inset 0 1px 0 rgba(196, 255, 248, 0.28),
+    0 2px 0 rgba(10, 46, 42, 0.72);
+}
+
+@media (hover: hover) {
+  .btn-install:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(58, 158, 147, 0.94) 0%,
+      rgba(36, 110, 102, 0.98) 100%
+    );
+    color: #ffffff;
+  }
 }
 
 .btn-compact {
@@ -555,20 +594,26 @@ body {
   border-radius: var(--radius-sm);
   background: linear-gradient(
     180deg var(--in-oklab),
-    rgba(74, 58, 118, 0.82) 0%,
-    rgba(46, 35, 80, 0.88) 100%
+    rgba(74, 58, 118, 0.88) 0%,
+    rgba(46, 35, 80, 0.94) 100%
   );
   color: var(--text-primary);
   border: none;
   box-shadow:
-    inset 0 1px 0 rgba(255, 248, 236, 0.18),
-    0 2px 0 rgba(8, 5, 18, 0.6);
+    inset 0 1px 0 rgba(255, 248, 236, 0.2),
+    0 2px 0 rgba(8, 5, 18, 0.65);
   font-size: 1.05rem;
 }
 
-.btn-icon:hover:not(:disabled) {
-  background: linear-gradient(180deg var(--in-oklab), rgba(92, 72, 142, 0.9) 0%, rgba(58, 44, 98, 0.94) 100%);
-  color: #ffffff;
+@media (hover: hover) {
+  .btn-icon:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(92, 72, 142, 0.94) 0%,
+      rgba(58, 44, 98, 0.98) 100%
+    );
+    color: #ffffff;
+  }
 }
 
 .btn-hero {

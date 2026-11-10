@@ -593,10 +593,20 @@ export class SaveManager {
 
   private writeLocalStorage(key: string, data: SavePayloadV1): void {
     if (typeof localStorage === 'undefined') return;
+    const serialized = JSON.stringify(data);
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(key, serialized);
     } catch {
-      // Ignore quota errors
+      // If a massive Infinite Mode save + pre-import backup reaches the 5MB localStorage ceiling,
+      // evict the pre-import backup slot so the active primary save snapshot never lags IndexedDB.
+      if (key === SAVE_STORAGE_KEY) {
+        try {
+          localStorage.removeItem(PRE_IMPORT_BACKUP_KEY);
+          localStorage.setItem(key, serialized);
+        } catch {
+          // IndexedDB remains the unbounded primary store
+        }
+      }
     }
   }
 
