@@ -25,11 +25,28 @@
   color: rgba(232, 184, 118, 0.3);
 }
 
+@keyframes mysticRelicAura {
+  0%,
+  100% {
+    filter: drop-shadow(0 20px 34px rgba(5, 3, 14, 0.74)) drop-shadow(0 0 22px rgba(238, 174, 72, 0.22))
+      drop-shadow(0 0 38px rgba(46, 214, 186, 0.12));
+  }
+  50% {
+    filter: drop-shadow(0 26px 42px rgba(5, 3, 14, 0.82)) drop-shadow(0 0 32px rgba(248, 188, 84, 0.38))
+      drop-shadow(0 0 54px rgba(52, 232, 198, 0.24));
+  }
+}
+
 #screen-game.title-backdrop-mode #game-canvas {
   border-color: transparent;
   box-shadow: none;
   background: transparent;
-  filter: drop-shadow(0 18px 36px rgba(6, 3, 15, 0.65));
+  filter: drop-shadow(0 22px 38px rgba(6, 3, 15, 0.76)) drop-shadow(0 0 26px rgba(242, 180, 78, 0.28))
+    drop-shadow(0 0 44px rgba(48, 224, 192, 0.16));
+  animation: mysticRelicAura 3.4s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 .title-overlay {
@@ -546,6 +563,7 @@
 }
 
 /* User-configurable Accessibility & Motion Overrides (`AX-02`, `UX-10`, `IDLE-01`) */
+body.reduced-motion #screen-game.title-backdrop-mode #game-canvas,
 body.reduced-motion .ornament-outer-wheel,
 body.reduced-motion .ornament-inner-star,
 body.reduced-motion .astrolabe-ring-outer,

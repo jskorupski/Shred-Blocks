@@ -424,8 +424,11 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
 
     const shadersTs = fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8');
     expect(shadersTs).toContain('float zRelief = mix(1.0, 0.22, u_blueprintMix)');
+    expect(shadersTs).toContain('rotateRelicVec');
     expect(shadersTs).toContain('quarryStone');
     expect(shadersTs).toContain('stoneCrack');
+    expect(shadersTs).toContain('ancientEarthDirt');
+    expect(shadersTs).toContain('totalMysticGlow');
     expect(shadersTs).toContain('blueprintAlpha = 1.0');
 
     const pass1Gates = fs.readFileSync(path.join(repoRoot, 'src/render/pass1-gates-barriers.ts'), 'utf8');

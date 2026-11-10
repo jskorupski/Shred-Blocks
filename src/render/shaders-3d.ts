@@ -16,11 +16,24 @@ uniform float u_rotX;
 uniform float u_rotZ;
 uniform vec4 u_uvRect;
 uniform float u_blueprintMix;
+uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec (-1.0 when reducedMotion)
 
 out vec3 v_worldPos;
 out vec3 v_localPos;
 out vec3 v_normal;
 out vec2 v_uv;
+
+vec3 rotateRelicVec(vec3 v, float rx, float ry, float rz) {
+  float cz = cos(rz);
+  float sz = sin(rz);
+  vec3 r1 = vec3(v.x * cz - v.y * sz, v.x * sz + v.y * cz, v.z);
+  float cx = cos(rx);
+  float sx = sin(rx);
+  vec3 r2 = vec3(r1.x, r1.y * cx - r1.z * sx, r1.y * sx + r1.z * cx);
+  float cy = cos(ry);
+  float sy = sin(ry);
+  return vec3(r2.x * cy + r2.z * sy, r2.y, -r2.x * sy + r2.z * cy);
+}
 
 void main() {
   vec3 p = a_position * u_scale;
@@ -43,15 +56,34 @@ void main() {
   vec3 rawWorldPos = p + u_translate;
   v_worldPos = rawWorldPos;
   v_localPos = p;
-  v_normal = normalize(n);
   v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
 
-  // In Discovered Stone Tablet Artifact Mode (u_blueprintMix = 1.0), compress Z relief
-  // into a solid bas-relief stone frieze (0.22) that clearly preserves bevel normals and depth
-  // ordering without z-fighting, then swells 4.5x taller into bold 3D blocks when play begins.
+  // In Mystic Stone Relic Title Mode (u_blueprintMix = 1.0), compress Z relief into a carved
+  // stone bas-relief (0.22) and levitate the entire relic with a subtle floating & twisting motion
+  // that settles seamlessly into grounded 3D gameplay as u_blueprintMix fades to 0.0.
   float zRelief = mix(1.0, 0.22, u_blueprintMix);
   vec3 stagePos = vec3(rawWorldPos.x, rawWorldPos.y, rawWorldPos.z * zRelief);
+  vec3 worldNorm = normalize(n);
 
+  if (u_blueprintMix > 0.001) {
+    float relicEnv = smoothstep(0.0, 1.0, u_blueprintMix);
+    if (u_boardInfo.z >= 0.0) {
+      float t = u_boardInfo.z;
+      float hoverZ = (0.14 + 0.11 * sin(t * 1.18) + 0.032 * sin(t * 2.36 + 0.7)) * relicEnv;
+      vec2 driftXY = vec2(sin(t * 0.76) * 0.072, cos(t * 0.62 + 0.5) * 0.056) * relicEnv;
+      float tiltX = sin(t * 0.94 + 0.3) * 0.054 * relicEnv;
+      float tiltY = cos(t * 0.78 + 1.1) * 0.060 * relicEnv;
+      float twistZ = (sin(t * 0.58) * 0.045 + sin(t * 1.22 + 1.7) * 0.014) * relicEnv;
+
+      vec3 pivot = vec3(u_boardInfo.x, u_boardInfo.y, 0.08);
+      stagePos = pivot + rotateRelicVec(stagePos - pivot, tiltX, tiltY, twistZ) + vec3(driftXY, hoverZ);
+      worldNorm = normalize(rotateRelicVec(worldNorm, tiltX, tiltY, twistZ));
+    } else {
+      stagePos.z += 0.12 * relicEnv;
+    }
+  }
+
+  v_normal = worldNorm;
   gl_Position = u_viewProj * vec4(stagePos, 1.0);
 }
 `;
@@ -77,6 +109,50 @@ uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
 uniform int u_highContrast;
 
 out vec4 outColor;
+
+vec2 hashRelic22(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// Euclidean Voronoi edge distance for authentic angular geological stone fractures (zero sine loops)
+vec2 voronoiRockCrack(vec2 x) {
+  vec2 n = floor(x);
+  vec2 f = fract(x);
+  vec2 mg = vec2(0.0);
+  vec2 mr = vec2(0.0);
+  float md = 8.0;
+  float shardHash = 0.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 o = hashRelic22(n + g);
+      vec2 r = g + (0.14 + 0.72 * o) - f;
+      float d = dot(r, r);
+      if (d < md) {
+        md = d;
+        mr = r;
+        mg = g;
+        shardHash = o.x;
+      }
+    }
+  }
+  md = 8.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      if (abs(g.x - mg.x) + abs(g.y - mg.y) > 0.01) {
+        vec2 o = hashRelic22(n + g);
+        vec2 r = g + (0.14 + 0.72 * o) - f;
+        if (dot(mr - r, mr - r) > 0.00001) {
+          md = min(md, dot(0.5 * (mr + r), normalize(r - mr)));
+        }
+      }
+    }
+  }
+  return vec2(md, shardHash);
+}
 
 void main() {
   if (u_useClipPlane == 1) {
@@ -190,112 +266,213 @@ void main() {
     float rakeDot = dot(N, L_rake);
     float rakeShade = clamp(0.83 + rakeDot * 0.30, 0.58, 1.15);
 
-    // Ancient stone weathering: organic patina mottling + pitted pores + sparse hairline fissures
+    // Ancient stone weathering: organic patina mottling + deep pitting + angular Voronoi rock cracks & dirt
     vec2 wp = v_worldPos.xy;
-    float warpA = sin(wp.x * 2.3 + wp.y * 1.7) * 0.55 + cos(wp.x * 4.1 - wp.y * 3.3) * 0.28;
-    float warpB = cos(wp.y * 2.6 - wp.x * 1.9) * 0.55 + sin(wp.y * 4.7 + wp.x * 2.9) * 0.28;
-    float ageMottle = sin(wp.x * 1.85 + warpA) * cos(wp.y * 2.05 + warpB);
+    float warpA =
+      sin(wp.x * 2.1 + wp.y * 1.6) * 0.52 +
+      cos(wp.x * 4.3 - wp.y * 3.1) * 0.28 +
+      sin(wp.x * 8.7 + wp.y * 7.3) * 0.12;
+    float warpB =
+      cos(wp.y * 2.4 - wp.x * 1.8) * 0.52 +
+      sin(wp.y * 4.9 + wp.x * 2.7) * 0.28 +
+      cos(wp.y * 9.1 - wp.x * 6.5) * 0.12;
+    float ageMottle = sin(wp.x * 1.75 + warpA) * cos(wp.y * 1.95 + warpB);
     float grainCoarse =
       sin(wp.x * 19.0 + cos(wp.y * 17.0) * 1.4) *
-      cos(wp.y * 21.0 - sin(wp.x * 15.0) * 1.3) * 0.016;
+      cos(wp.y * 21.0 - sin(wp.x * 15.0) * 1.3) * 0.024;
     float grainFine =
       sin(wp.x * 49.0 + sin(wp.y * 37.0)) *
-      cos(wp.y * 53.0 + sin(wp.x * 31.0)) * 0.013;
-    float stonePitting = smoothstep(0.76, 0.98, sin(wp.x * 67.0 + warpA * 4.0) * cos(wp.y * 71.0 + warpB * 4.0)) * -0.032;
+      cos(wp.y * 53.0 + sin(wp.x * 31.0)) * 0.018;
+    float stonePitting =
+      smoothstep(0.62, 0.95, sin(wp.x * 59.0 + warpA * 4.2) * cos(wp.y * 63.0 + warpB * 4.2)) * -0.064;
     float stoneGrain = grainCoarse + grainFine + stonePitting;
 
-    // Sparse weathered hairline stone fissures
-    float crackCoord = (wp.x * 1.35 + wp.y * 0.92) * 3.4 + warpA * 1.85 + sin(wp.y * 9.5) * 0.18;
-    float crackMask = smoothstep(0.32, 0.78, sin(wp.x * 1.9 - wp.y * 2.3 + 1.1) * cos(wp.x * 1.3 + wp.y * 1.7));
-    float stoneCrack = (1.0 - smoothstep(0.0, 0.055, abs(sin(crackCoord)))) * crackMask * 0.34;
+    // Angular Voronoi geological fractures (sharp jagged straight fissures & 3-way Y-junctions, zero loops)
+    vec2 rockJag =
+      vec2(sin(wp.y * 8.5 + wp.x * 5.2), cos(wp.x * 8.1 - wp.y * 5.8)) * 0.030 +
+      vec2(sin(wp.y * 22.0 - wp.x * 14.0), cos(wp.x * 20.0 + wp.y * 16.0)) * 0.010;
+    vec2 vorMajor = voronoiRockCrack(wp * 0.88 + rockJag);
+    vec2 vorMinor = voronoiRockCrack(wp * 2.05 - rockJag * 1.35 + vec2(5.7, 3.1));
+
+    float pxScale = clamp(fwidth(wp.x) * 0.85, 0.004, 0.028);
+    float majorRegionMask = smoothstep(-0.08, 0.56, sin(wp.x * 0.95 - wp.y * 0.82 + 0.8) * cos(wp.y * 0.88 + wp.x * 0.64) + 0.24);
+    float minorRegionMask = clamp(majorRegionMask * 0.85 + smoothstep(0.14, 0.0, vorMajor.x) * 0.65, 0.0, 1.0);
+
+    // Wide dark eroded crack bevel + crisp anti-aliased inner fissure core
+    float majorCrackValley = (1.0 - smoothstep(0.008, 0.072 + pxScale, vorMajor.x)) * majorRegionMask;
+    float deepRelicCrack = (1.0 - smoothstep(0.0, 0.030 + pxScale, vorMajor.x)) * majorRegionMask;
+    float mysticCrackCore =
+      (1.0 - smoothstep(0.0, 0.015 + pxScale * 0.85, vorMajor.x)) * smoothstep(0.18, 0.68, majorRegionMask);
+    float branchCrack =
+      (1.0 - smoothstep(0.0, 0.022 + pxScale * 0.75, vorMinor.x)) * minorRegionMask * 0.62;
+    float stoneCrack = clamp(majorCrackValley * 0.48 + deepRelicCrack * 0.65 + branchCrack, 0.0, 0.92);
+    float shardTiltTone = (vorMajor.y - 0.5) * 0.055 + (vorMinor.y - 0.5) * 0.024;
 
     // A. Recessed Carved Slate-Limestone Bed vs. Chiseled Warm Travertine Tablet Rim/Pillars
     vec3 recessedBed = mix(
-      vec3(0.215, 0.198, 0.214),
-      vec3(0.268, 0.246, 0.254),
+      vec3(0.192, 0.178, 0.190),
+      vec3(0.248, 0.228, 0.232),
       radialWarmth
     );
     vec3 chiseledFrame = mix(
-      vec3(0.358, 0.324, 0.292),
-      vec3(0.428, 0.388, 0.346),
+      vec3(0.338, 0.305, 0.274),
+      vec3(0.408, 0.368, 0.326),
       radialWarmth
     );
     vec3 neutralStone = mix(recessedBed, chiseledFrame, isElevatedStone);
-    neutralStone += vec3(0.024, 0.018, 0.008) * ageMottle;
+    neutralStone += vec3(0.028, 0.021, 0.010) * ageMottle + vec3(shardTiltTone * 0.65);
     neutralStone *= mix(1.0, 0.80, isSunkenRoom) * caveVignette;
 
     // B. Monochrome Ancient Limestone & Sandstone Pieces (~98.5% pure weathered stone)
-    // Pieces vary only in natural monochrome quarry-stone value (aged dark sandstone -> pale carved limestone)
-    // so every block and gate reads as pure ancient stone before popping into vibrant 3D color on play.
     float pieceLum = dot(restoredRgb, vec3(0.299, 0.587, 0.114));
     float valueIndex = clamp(
       pieceLum * 0.62 + (restoredRgb.r * 0.21 + restoredRgb.g * 0.11 + restoredRgb.b * 0.06),
       0.0,
       1.0
     );
-    vec3 darkSandstone = vec3(0.395, 0.362, 0.328);
-    vec3 paleLimestone = vec3(0.535, 0.494, 0.448);
+    vec3 darkSandstone = vec3(0.368, 0.336, 0.302);
+    vec3 paleLimestone = vec3(0.518, 0.476, 0.428);
     vec3 quarryStone = mix(darkSandstone, paleLimestone, valueIndex);
-    vec3 mineralPigment = mix(quarryStone, restoredRgb, 0.018);
-    mineralPigment += vec3(0.026, 0.020, 0.012) * ageMottle;
+    vec3 mineralPigment = mix(quarryStone, restoredRgb, 0.015);
+    mineralPigment += vec3(0.030, 0.023, 0.013) * ageMottle + vec3(shardTiltTone);
     mineralPigment *= mix(1.0, 0.80, isSunkenRoom) * caveVignette;
 
     vec3 tabletSurface = mix(neutralStone, mineralPigment, isPiece) * rakeShade + vec3(stoneGrain);
 
-    // 1. Dark Carved Mortar Joints (strong on recessed floor, subtle mason scribe on elevated slabs/pieces)
+    // Unearthed ancient dirt, earthy soot/moss grime blotches & spalled stone edges
     vec2 cellUv = fract(v_worldPos.xy);
     float borderDist = min(min(cellUv.x, 1.0 - cellUv.x), min(cellUv.y, 1.0 - cellUv.y));
+    float dirtPatchLarge = smoothstep(
+      -0.22,
+      0.68,
+      sin(wp.x * 1.08 - wp.y * 0.92 + warpB * 1.65) * cos(wp.y * 1.28 + wp.x * 0.82 - warpA * 1.45)
+    );
+    float dirtPatchFine = smoothstep(
+      0.02,
+      0.80,
+      sin(wp.x * 5.4 + warpA * 3.2) * cos(wp.y * 6.1 - warpB * 3.0)
+    );
+    float edgeChipMask =
+      (1.0 - smoothstep(0.012, 0.095, borderDist)) *
+      smoothstep(0.08, 0.72, sin(wp.x * 13.5 + warpB * 4.0) * cos(wp.y * 14.5 - warpA * 4.0));
+    float creviceGrime =
+      (1.0 - smoothstep(0.008, 0.118, borderDist)) * mix(0.60, 0.40, isPiece) +
+      smoothstep(0.95, 0.42, abs(N.z)) * 0.36 +
+      majorCrackValley * 0.48;
+    float grimeAmount = clamp(
+      dirtPatchLarge * 0.42 + dirtPatchFine * 0.28 + creviceGrime * 0.48 + edgeChipMask * 0.46,
+      0.0,
+      0.84
+    );
+    vec3 sootUmber = vec3(0.096, 0.084, 0.076);
+    vec3 weatheredSilt = vec3(0.222, 0.194, 0.160);
+    vec3 ancientEarthDirt = mix(sootUmber, weatheredSilt, dirtPatchFine);
+    tabletSurface = mix(tabletSurface, ancientEarthDirt, grimeAmount * 0.64);
+
+    // 1. Dark Carved Mortar Joints, Chipped Edges & Deep Fracture Shadows
     float cellMortarGroove =
-      (1.0 - smoothstep(0.014, 0.044, borderDist)) * mix(mix(0.38, 0.07, isElevatedStone), 0.05, isPiece);
+      (1.0 - smoothstep(0.016, 0.050, borderDist)) * mix(mix(0.48, 0.14, isElevatedStone), 0.10, isPiece);
     float innerInscribedGroove =
-      (1.0 - smoothstep(0.006, 0.020, abs(borderDist - 0.108))) * isPiece * 0.07;
+      (1.0 - smoothstep(0.006, 0.022, abs(borderDist - 0.108))) * isPiece * 0.10;
     float shadowBevelGroove =
-      smoothstep(0.96, 0.52, abs(N.z)) * smoothstep(0.14, -0.48, rakeDot) * mix(0.40, 0.50, isPiece);
+      smoothstep(0.96, 0.50, abs(N.z)) * smoothstep(0.16, -0.48, rakeDot) * mix(0.46, 0.56, isPiece);
     float studCarveGroove =
-      (v_localPos.z > 0.555 && N.z < 0.965) ? (0.34 * smoothstep(0.25, -0.45, rakeDot) + 0.14) : 0.0;
+      (v_localPos.z > 0.555 && N.z < 0.965) ? (0.40 * smoothstep(0.25, -0.45, rakeDot) + 0.18) : 0.0;
 
     float grooveDarkness = clamp(
-      cellMortarGroove + innerInscribedGroove + shadowBevelGroove + studCarveGroove + stoneCrack,
+      cellMortarGroove + innerInscribedGroove + shadowBevelGroove + studCarveGroove + stoneCrack + edgeChipMask * 0.32,
       0.0,
-      0.68
+      0.82
     );
     tabletSurface *= (1.0 - grooveDarkness);
 
-    // 2. Sunlit Limestone Chisel Catch-Lights, Mason Corner Ticks & Diagonal Chisel Tool-Marks
+    // 2. Sunlit Limestone Chisel Catch-Lights & Broken Shard Lip Highlights
+    float cleanHighlightMask = clamp(1.0 - grimeAmount * 0.58 - stoneCrack * 0.80, 0.16, 1.0);
     float litBevelCatch =
-      smoothstep(0.96, 0.50, abs(N.z)) * smoothstep(-0.04, 0.55, rakeDot) * mix(0.34, 0.50, isPiece);
+      smoothstep(0.96, 0.50, abs(N.z)) * smoothstep(-0.04, 0.55, rakeDot) * mix(0.30, 0.46, isPiece);
     float litStudCatch =
-      (v_localPos.z > 0.56 && N.z < 0.965) ? (0.42 * smoothstep(-0.04, 0.55, rakeDot)) : 0.0;
+      (v_localPos.z > 0.56 && N.z < 0.965) ? (0.36 * smoothstep(-0.04, 0.55, rakeDot)) : 0.0;
     float innerRimCatch =
-      (1.0 - smoothstep(0.006, 0.018, abs(borderDist - 0.090))) * isPiece * 0.06;
+      (1.0 - smoothstep(0.006, 0.018, abs(borderDist - 0.090))) * isPiece * 0.05;
+    float crackLipCatch =
+      clamp(majorCrackValley - deepRelicCrack, 0.0, 1.0) * smoothstep(-0.05, 0.45, rakeDot) * 0.28;
 
     float cornerCross =
       (1.0 - smoothstep(0.010, 0.028, min(cellUv.x, 1.0 - cellUv.x))) *
       (1.0 - smoothstep(0.055, 0.135, min(cellUv.y, 1.0 - cellUv.y))) +
       (1.0 - smoothstep(0.010, 0.028, min(cellUv.y, 1.0 - cellUv.y))) *
       (1.0 - smoothstep(0.055, 0.135, min(cellUv.x, 1.0 - cellUv.x)));
-    float masonTicks = clamp(cornerCross, 0.0, 1.0) * (1.0 - isPiece) * (1.0 - isElevatedStone) * 0.20;
+    float masonTicks = clamp(cornerCross, 0.0, 1.0) * (1.0 - isPiece) * (1.0 - isElevatedStone) * 0.14;
 
     float hatchA = sin((v_worldPos.x + v_worldPos.y) * 46.0);
     float hatchB = sin((v_worldPos.x - v_worldPos.y) * 46.0);
     float chiselHatch =
-      smoothstep(0.80, 0.97, hatchA) * mix(0.04, 0.12, isPiece) +
-      smoothstep(0.88, 0.985, hatchB) * 0.06 * isPiece;
+      smoothstep(0.80, 0.97, hatchA) * mix(0.025, 0.075, isPiece) +
+      smoothstep(0.88, 0.985, hatchB) * 0.04 * isPiece;
 
     float highlightStrength = clamp(
-      max(litBevelCatch, litStudCatch) + innerRimCatch + masonTicks + chiselHatch,
+      (max(litBevelCatch, litStudCatch) + innerRimCatch + masonTicks + chiselHatch) * cleanHighlightMask + crackLipCatch,
       0.0,
-      0.82
+      0.76
     );
 
-    vec3 warmLimestoneHighlight = vec3(0.75, 0.68, 0.58);
+    vec3 warmLimestoneHighlight = vec3(0.71, 0.64, 0.54);
     vec3 stoneArtifact = mix(tabletSurface, warmLimestoneHighlight, highlightStrength);
 
     if (u_highContrast == 1) {
-      vec3 hcStone = mix(neutralStone * 0.84, mix(quarryStone * 1.08, restoredRgb, 0.08) * rakeShade, isPiece);
-      hcStone *= (1.0 - grooveDarkness * 1.15);
+      vec3 hcStone = mix(neutralStone * 0.80, mix(quarryStone * 1.08, restoredRgb, 0.06) * rakeShade, isPiece);
+      hcStone = mix(hcStone, ancientEarthDirt, grimeAmount * 0.45);
+      hcStone *= (1.0 - grooveDarkness * 1.12);
       stoneArtifact = mix(hcStone, vec3(0.94, 0.88, 0.76), clamp(highlightStrength * 1.15, 0.0, 0.90));
     }
+
+    // 3. Pulsating Mystic Ancient Relic Glow (ethereal jade-teal & warm arcane gold seeping from deep rock cracks & beneath blocks)
+    float animTime = max(u_boardInfo.z, 0.0);
+    float isAnimated = step(0.0, u_boardInfo.z);
+    float breathPrimary = mix(0.68, 0.5 + 0.5 * sin(animTime * 1.85), isAnimated);
+    float breathWave = mix(
+      0.64,
+      0.5 + 0.5 * sin(animTime * 2.30 - normDist * 2.8 + warpA * 0.8),
+      isAnimated
+    );
+    float mysticPulse = mix(0.38, 1.0, breathPrimary * 0.64 + breathWave * 0.36);
+
+    float leyToneMix = clamp(
+      0.5 + 0.5 * sin(wp.x * 0.72 - wp.y * 0.68 + animTime * 0.50 * isAnimated + warpB * 0.7),
+      0.0,
+      1.0
+    );
+    vec3 arcaneJade = vec3(0.20, 0.92, 0.78);
+    vec3 arcaneGold = vec3(0.98, 0.74, 0.28);
+    vec3 mysticColor = mix(arcaneJade, arcaneGold, leyToneMix * 0.54);
+
+    // Incandescent arcane energy inside deep Voronoi stone fractures + soft subsurface bleed into crack walls
+    float crackGlow = mysticCrackCore * (0.48 + 0.68 * mysticPulse);
+    float crackHalo = majorCrackValley * smoothstep(0.22, 0.72, majorRegionMask) * 0.20 * mysticPulse;
+
+    // Soft localized ley-seam glow around the base of stone blocks & central sanctuary channels (never uniform grid lines)
+    float centerMask = exp(-normDist * normDist * 1.45);
+    float mortarLey =
+      (1.0 - smoothstep(0.004, 0.030, borderDist)) *
+      (1.0 - isPiece * 0.80) *
+      (0.10 + 0.24 * breathWave) *
+      (0.28 + 0.72 * centerMask);
+    float blockBaseUnderGlow =
+      isPiece * smoothstep(0.36, 0.01, localWorldZ) * smoothstep(0.94, 0.32, abs(N.z)) * 0.42 * mysticPulse;
+    float heartAura = centerMask * 0.12 * mysticPulse;
+    float mysticRim = rim * (0.08 + 0.15 * mysticPulse) * caveVignette;
+
+    float totalMysticGlow = clamp(
+      crackGlow + crackHalo + mortarLey + blockBaseUnderGlow + heartAura + mysticRim,
+      0.0,
+      1.15
+    );
+    stoneArtifact += mysticColor * totalMysticGlow;
+    stoneArtifact = mix(
+      stoneArtifact,
+      vec3(0.94, 0.99, 0.90),
+      clamp(crackGlow * mysticPulse * 0.44, 0.0, 0.50)
+    );
 
     lit = mix(lit, stoneArtifact, u_blueprintMix);
     // Keep opaque 3D stone geometry 100% solid (blueprintAlpha = 1.0) so plinth, floor, walls,

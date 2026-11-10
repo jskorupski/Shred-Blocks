@@ -47,8 +47,9 @@ export interface ShredBlocksDebugBridge {
   openModal: (id: ModalId) => void;
   closeAllModals: () => void;
   openTitleScreen: () => void;
-  dismissTitleScreen: (targetScreen?: 'game' | 'home' | 'themes') => void;
+  dismissTitleScreen: (targetScreen?: 'game' | 'home' | 'themes', animateAwakening?: boolean) => void;
   isTitleScreenOpen: () => boolean;
+  getBlueprintMix: () => number;
   setPwaUpdateBannerVisible: (visible: boolean) => void;
   previewSaveImport: (code: string) => boolean;
   getTelemetry: () => PerfTelemetry;
@@ -279,7 +280,7 @@ export interface AppViewContext {
   continueFailedLevel(): void;
   activateBooster(type: BoosterType): void;
   openTitleScreen(): void;
-  dismissTitleScreen(targetScreen?: 'game' | 'home' | 'themes'): void;
+  dismissTitleScreen(targetScreen?: 'game' | 'home' | 'themes', animateAwakening?: boolean): void;
   switchScreen(screen: 'home' | 'game' | 'themes'): void;
   syncAllUiFromSave(): void;
   syncInGameHud(): void;

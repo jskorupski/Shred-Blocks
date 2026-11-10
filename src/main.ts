@@ -256,6 +256,7 @@ export class ShredBlocksApp implements AppViewContext {
     }
 
     if (switchToGameScreen) {
+      this.blueprintMix = 0;
       this.closeAllModals();
       this.switchScreen('game');
     }
@@ -678,8 +679,11 @@ export class ShredBlocksApp implements AppViewContext {
   public openTitleScreen(): void {
     openTitleScreenImpl(this);
   }
-  public dismissTitleScreen(targetScreen: 'game' | 'home' | 'themes' = 'game'): void {
-    dismissTitleScreenImpl(this, targetScreen);
+  public dismissTitleScreen(
+    targetScreen: 'game' | 'home' | 'themes' = 'game',
+    animateAwakening = true
+  ): void {
+    dismissTitleScreenImpl(this, targetScreen, animateAwakening);
   }
   public switchScreen(screen: 'home' | 'game' | 'themes'): void {
     switchScreenImpl(this, screen);

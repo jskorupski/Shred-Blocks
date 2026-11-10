@@ -707,7 +707,7 @@ export class Renderer3D implements RenderPassContext {
     gl.uniform4f(this.uClipPlane, 0, 0, 1, 0);
     gl.uniform3f(this.uCapColor, 0.2, 0.2, 0.2);
     gl.uniform1f(this.uBlueprintMix, blueprintMix);
-    gl.uniform3f(this.uBoardInfo, board.cols * 0.5, board.rows * 0.5, timeSec);
+    gl.uniform3f(this.uBoardInfo, board.cols * 0.5, board.rows * 0.5, options.reducedMotion ? -1.0 : timeSec);
     gl.uniform1i(this.uHighContrast, highContrast ? 1 : 0);
 
     if (this.atlasTexture) {

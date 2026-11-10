@@ -201,4 +201,95 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     expect(errors).toEqual([]);
   });
+
+  test('MYSTIC-RELIC-01: animates levitating glowing stone relic on Title Screen, smoothly fades into play, and never leaks into game mode', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await page.goto('/');
+    await expect(page.locator('#title-overlay')).toBeVisible();
+
+    const titleState = await page.evaluate(() => {
+      const canvas = document.getElementById('game-canvas');
+      const cs = canvas ? window.getComputedStyle(canvas) : null;
+      return {
+        backend: window.__SHREDBLOCKS_DEBUG__.getTelemetry().rendererBackend,
+        mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
+        hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
+        canvasFilter: cs ? cs.filter : '',
+        canvasAnim: cs ? cs.animationName : '',
+      };
+    });
+    expect(titleState.backend).toBe('WEBGL2');
+    expect(titleState.mix).toBe(1);
+    expect(titleState.hasBackdropClass).toBe(true);
+    expect(titleState.canvasAnim).toBe('mysticRelicAura');
+
+    // Verify subtle levitating/twisting + pulsating glow animates live frames on Title Screen
+    const frameA = await page.evaluate(() =>
+      (document.getElementById('game-canvas') as HTMLCanvasElement).toDataURL()
+    );
+    await page.waitForTimeout(280);
+    const frameB = await page.evaluate(() =>
+      (document.getElementById('game-canvas') as HTMLCanvasElement).toDataURL()
+    );
+    expect(frameA).not.toBe(frameB);
+
+    // Clicking Play smoothly fades mystic relic -> normal 3D gameplay (0 < mix < 1 mid-transition -> 0 settled)
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#title-overlay')).toBeHidden();
+    await page.waitForTimeout(120);
+    const midTransitionMix = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBlueprintMix());
+    expect(midTransitionMix).toBeGreaterThan(0);
+    expect(midTransitionMix).toBeLessThan(1);
+
+    await page.waitForTimeout(820);
+    const settledGameState = await page.evaluate(() => {
+      const canvas = document.getElementById('game-canvas');
+      const cs = canvas ? window.getComputedStyle(canvas) : null;
+      return {
+        mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
+        hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
+        canvasFilter: cs ? cs.filter : '',
+        canvasAnim: cs ? cs.animationName : '',
+      };
+    });
+    expect(settledGameState.mix).toBe(0);
+    expect(settledGameState.hasBackdropClass).toBe(false);
+    expect(settledGameState.canvasAnim).toBe('none');
+    expect(settledGameState.canvasFilter).not.toBe(titleState.canvasFilter);
+
+    // Re-open Title Screen, then load a level directly -> ZERO blueprintMix or backdrop leak!
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openTitleScreen());
+    await expect(page.locator('#title-overlay')).toBeVisible();
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBlueprintMix())).toBe(1);
+
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(11));
+    const directLoadState = await page.evaluate(() => {
+      const canvas = document.getElementById('game-canvas');
+      const cs = canvas ? window.getComputedStyle(canvas) : null;
+      return {
+        mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
+        isTitleOpen: window.__SHREDBLOCKS_DEBUG__.isTitleScreenOpen(),
+        hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
+        canvasAnim: cs ? cs.animationName : '',
+      };
+    });
+    expect(directLoadState).toEqual({
+      mix: 0,
+      isTitleOpen: false,
+      hasBackdropClass: false,
+      canvasAnim: 'none',
+    });
+
+    // Re-open Title Screen, dismiss to Map -> blueprintMix immediately 0!
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openTitleScreen());
+    await page.locator('#btn-title-map').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBlueprintMix())).toBe(0);
+
+    expect(errors).toEqual([]);
+  });
 });

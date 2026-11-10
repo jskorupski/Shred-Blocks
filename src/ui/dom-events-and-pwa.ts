@@ -16,10 +16,9 @@ export function bindDomEventsImpl(app: AppViewContext): void {
       ? 1
       : Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
     if (app.board.levelId !== targetId) {
-      app.loadLevel(targetId, true);
-    } else {
-      app.dismissTitleScreen('game');
+      app.loadLevel(targetId, false, true);
     }
+    app.dismissTitleScreen('game', true);
   });
   document.getElementById('btn-title-map')?.addEventListener('click', () => {
     app.sound.playButtonTap();

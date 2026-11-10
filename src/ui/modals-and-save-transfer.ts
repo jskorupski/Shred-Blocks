@@ -304,8 +304,10 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
     openModal: (id: ModalId) => app.openModal(id),
     closeAllModals: () => app.closeAllModals(),
     openTitleScreen: () => app.openTitleScreen(),
-    dismissTitleScreen: (targetScreen = 'game') => app.dismissTitleScreen(targetScreen),
+    dismissTitleScreen: (targetScreen = 'game', animateAwakening = false) =>
+      app.dismissTitleScreen(targetScreen, animateAwakening),
     isTitleScreenOpen: () => app.titleOverlayOpen,
+    getBlueprintMix: () => app.blueprintMix,
     setPwaUpdateBannerVisible: (visible: boolean) => {
       app.pwaUpdateAvailable = visible;
       app.pwaUpdateDismissedInSession = false;
@@ -436,8 +438,12 @@ export function openTitleScreenImpl(app: AppViewContext): void {
 
 export function dismissTitleScreenImpl(
   app: AppViewContext,
-  targetScreen: 'game' | 'home' | 'themes' = 'game'
+  targetScreen: 'game' | 'home' | 'themes' = 'game',
+  animateAwakening = true
 ): void {
+  if (targetScreen !== 'game' || !animateAwakening || app.saveManager.getPayload().settings.reducedMotion) {
+    app.blueprintMix = 0;
+  }
   app.switchScreen(targetScreen);
   if (targetScreen === 'game' && app.board.movesCommitted === 0) {
     const spec = getLevelSpec(app.board.levelId);
@@ -450,6 +456,9 @@ export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 
   const wasTitleOpen = app.titleOverlayOpen;
   app.activeScreen = screen;
   app.titleOverlayOpen = false;
+  if (screen !== 'game') {
+    app.blueprintMix = 0;
+  }
   app.syncTitleOverlayDom();
   app.syncPwaUpdateBanner();
 
