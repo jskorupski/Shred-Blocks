@@ -423,10 +423,20 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(homeCss).toContain('.level-node-card.milestone-node:not(.current-level)');
 
     const shadersTs = fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8');
-    expect(shadersTs).toContain('float zRelief = mix(1.0, 0.08, u_blueprintMix)');
-    expect(shadersTs).toContain('caveVignette');
-    expect(shadersTs).toContain('sizeFade');
-    expect(shadersTs).toContain('blueprintAlpha');
+    expect(shadersTs).toContain('float zRelief = mix(1.0, 0.22, u_blueprintMix)');
+    expect(shadersTs).toContain('quarryStone');
+    expect(shadersTs).toContain('stoneCrack');
+    expect(shadersTs).toContain('blueprintAlpha = 1.0');
+
+    const pass1Gates = fs.readFileSync(path.join(repoRoot, 'src/render/pass1-gates-barriers.ts'), 'utf8');
+    const pass2Barriers = fs.readFileSync(
+      path.join(repoRoot, 'src/render/pass2-barriers-and-reticles.ts'),
+      'utf8'
+    );
+    const pass3Blocks = fs.readFileSync(path.join(repoRoot, 'src/render/pass3-block-shells.ts'), 'utf8');
+    expect(pass1Gates).toContain('const isStoneRuin =');
+    expect(pass2Barriers).toContain('const isStoneRuin =');
+    expect(pass3Blocks).toContain('const isStoneRuin =');
 
     const dialogsCss = fs.readFileSync(path.join(repoRoot, 'src/styles/dialogs.css'), 'utf8');
     expect(dialogsCss).toContain('.pwa-update-badge');

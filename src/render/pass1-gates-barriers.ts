@@ -13,7 +13,8 @@ export function renderPass1WallsAndGates(
   timeSec: number
 ): void {
   const { rows, cols, occupancy } = board;
-  const live3DMix = Math.max(0, 1.0 - (rctx.lastOptions.blueprintMix ?? 0) * 0.92);
+  const isStoneRuin = (rctx.lastOptions.blueprintMix ?? 0) > 0.45;
+  const live3DMix = Math.max(0, 1.0 - (rctx.lastOptions.blueprintMix ?? 0));
   const isCellPlayable = (r: number, c: number): boolean =>
     r >= 0 && r < rows && c >= 0 && c < cols && occupancy[r * cols + c] !== -1;
 
@@ -335,8 +336,8 @@ export function renderPass1WallsAndGates(
       rollerRotZ = Math.PI * 0.5;
     }
 
-    // Sliding / Size-Changing Gate Rail Track (`R3D-08`)
-    if (gate.slidesOnClear || gate.sizeChangesOnClear) {
+    // Sliding / Size-Changing Gate Rail Track (`R3D-08` — hidden in static Stone Ruin mode)
+    if (!isStoneRuin && (gate.slidesOnClear || gate.sizeChangesOnClear)) {
       const railMin = gate.slidesOnClear ? gate.slideMin : gate.spanStart;
       const railSpan = gate.slidesOnClear
         ? Math.max(gate.spanLength, gate.slideMax - gate.slideMin + gate.spanLength)
@@ -384,7 +385,7 @@ export function renderPass1WallsAndGates(
     const gatePulse = !rctx.lastOptions.reducedMotion
       ? 0.5 + 0.5 * Math.sin(timeSec * 2.2 + gate.index * 1.4)
       : 0.5;
-    const rollerGlint = !rctx.lastOptions.reducedMotion && gateReady ? 0.08 * gatePulse : 0;
+    const rollerGlint = !isStoneRuin && !rctx.lastOptions.reducedMotion && gateReady ? 0.08 * gatePulse : 0;
     const rollerSpeed =
       !gateReady || rctx.lastOptions.reducedMotion
         ? 0.0
@@ -452,6 +453,11 @@ export function renderPass1WallsAndGates(
         0,
         4
       );
+    }
+
+    // In static Stone Ruin Title Screen mode, omit all gate modifiers, lock/frost medallions, star/CB badges & queue pips
+    if (isStoneRuin) {
+      continue;
     }
 
     // Toggling Shutter Side-Posts & Status Bar (`R3D-08`)

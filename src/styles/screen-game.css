@@ -273,10 +273,10 @@
   overflow: hidden;
   padding: 0.35rem;
   background: radial-gradient(
-    circle at 50% 48%,
+    closest-side at 50% 48%,
     rgba(246, 189, 96, 0.2) 0%,
-    rgba(115, 70, 99, 0.14) 52%,
-    transparent 100%
+    rgba(115, 70, 99, 0.13) 56%,
+    rgba(115, 70, 99, 0) 100%
   );
 }
 

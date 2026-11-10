@@ -46,10 +46,10 @@ void main() {
   v_normal = normalize(n);
   v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
 
-  // In Sacred-Geometry Cave-Wall Etching Preview Mode (u_blueprintMix = 1.0), compress Z relief
-  // so the board lies flush like an ancient weathered stone carving, then extrudes
-  // smoothly into bold 3D relief (0.08 -> 1.0) when the player starts the level.
-  float zRelief = mix(1.0, 0.08, u_blueprintMix);
+  // In Discovered Stone Tablet Artifact Mode (u_blueprintMix = 1.0), compress Z relief
+  // into a solid bas-relief stone frieze (0.22) that clearly preserves bevel normals and depth
+  // ordering without z-fighting, then swells 4.5x taller into bold 3D blocks when play begins.
+  float zRelief = mix(1.0, 0.22, u_blueprintMix);
   vec3 stagePos = vec3(rawWorldPos.x, rawWorldPos.y, rawWorldPos.z * zRelief);
 
   gl_Position = u_viewProj * vec4(stagePos, 1.0);
@@ -99,10 +99,10 @@ void main() {
       vec3 badgeRgb = texel.rgb * u_color.rgb;
       if (u_blueprintMix > 0.001) {
         float bLum = dot(badgeRgb, vec3(0.299, 0.587, 0.114));
-        vec3 chalkBadge = mix(vec3(0.52, 0.40, 0.28), vec3(0.74, 0.60, 0.44), bLum);
-        badgeRgb = mix(badgeRgb, chalkBadge, u_blueprintMix);
+        vec3 carvedBadge = mix(vec3(0.22, 0.18, 0.20), vec3(0.90, 0.82, 0.68), smoothstep(0.08, 0.72, bLum));
+        badgeRgb = mix(badgeRgb, carvedBadge, u_blueprintMix);
       }
-      outColor = vec4(badgeRgb, texel.a * u_color.a * mix(1.0, 0.40, u_blueprintMix));
+      outColor = vec4(badgeRgb, texel.a * u_color.a * mix(1.0, 0.90, u_blueprintMix));
       return;
     }
   }
@@ -110,9 +110,9 @@ void main() {
   if (u_materialStyle == 4) {
     vec3 flatRgb = u_color.rgb;
     if (u_blueprintMix > 0.001) {
-      flatRgb = mix(flatRgb, vec3(0.66, 0.52, 0.36), u_blueprintMix * 0.88);
+      flatRgb = mix(flatRgb, vec3(0.76, 0.66, 0.52), u_blueprintMix * 0.88);
     }
-    outColor = vec4(flatRgb, u_color.a * mix(1.0, 0.28, u_blueprintMix));
+    outColor = vec4(flatRgb, u_color.a * mix(1.0, 0.52, u_blueprintMix));
     return;
   }
 
@@ -164,99 +164,143 @@ void main() {
   float blueprintAlpha = 1.0;
 
   if (u_blueprintMix > 0.001) {
-    // Weathered Cave-Wall Stone Etching Mode:
-    // Fades the 3D board into the dark twilight sanctuary background like an ancient
-    // chalk-and-ochre relief carving that scales down intensity on larger boards and
-    // materializes into bold 3D reality when gameplay begins.
-    float maxC = max(u_color.r, max(u_color.g, u_color.b));
-    float minC = min(u_color.r, min(u_color.g, u_color.b));
-    float sat = (maxC - minC) / max(maxC, 0.12);
-    float isPiece = smoothstep(0.14, 0.30, sat);
+    // Discovered Monochrome Ancient Stone Tablet Artifact Mode (STONE-TABLET-01 / CAVE-ETCH-01):
+    // Renders the board as a 100% solid (alpha = 1.0) monochrome weathered stone bas-relief
+    // (aged limestone, sandstone, and travertine with organic patina mottling, hairline fissures,
+    // pitted grain, and chiseled bevels) that pops into vibrant 3D color when play begins.
     float isSunkenRoom = smoothstep(-0.02, -0.10, v_worldPos.z);
+    vec3 restoredRgb = clamp(u_color.rgb / mix(1.0, 0.58, isSunkenRoom), 0.0, 1.0);
+    float maxC = max(restoredRgb.r, max(restoredRgb.g, restoredRgb.b));
+    float minC = min(restoredRgb.r, min(restoredRgb.g, restoredRgb.b));
+    float chroma = maxC - minC;
+    // Separates all 9 block/gate colors (chroma >= 0.50) from all 5 tray floors/walls (chroma <= 0.28)
+    float isPiece = smoothstep(0.30, 0.44, chroma);
+    float localWorldZ = v_worldPos.z + isSunkenRoom * 0.18;
+    float isElevatedStone = smoothstep(0.035, 0.18, localWorldZ);
 
     vec2 relCenter = v_worldPos.xy - u_boardInfo.xy;
     float distCenter = length(relCenter);
     float maxHalfSpan = max(u_boardInfo.x, u_boardInfo.y);
-    float normDist = clamp(distCenter / max(maxHalfSpan * 1.18, 2.5), 0.0, 1.4);
-    float radialGlow = clamp(1.0 - normDist * 0.68, 0.0, 1.0);
-    float caveVignette = clamp(1.0 - smoothstep(0.32, 1.12, normDist) * 0.58, 0.28, 1.0);
-    float sizeFade = clamp(1.0 - max(0.0, maxHalfSpan - 2.6) * 0.11, 0.66, 1.0);
+    float normDist = clamp(distCenter / max(maxHalfSpan * 1.22, 2.5), 0.0, 1.35);
+    float radialWarmth = clamp(1.0 - normDist * 0.42, 0.0, 1.0);
+    float caveVignette = clamp(1.0 - smoothstep(0.52, 1.28, normDist) * 0.22, 0.78, 1.0);
 
-    vec3 scrollPaper = mix(
-      vec3(0.115, 0.09, 0.20),
-      vec3(0.155, 0.12, 0.25),
-      radialGlow
+    // Directional top-left raking sanctuary light for bas-relief stone carving
+    vec3 L_rake = normalize(vec3(-0.58, -0.66, 0.48));
+    float rakeDot = dot(N, L_rake);
+    float rakeShade = clamp(0.83 + rakeDot * 0.30, 0.58, 1.15);
+
+    // Ancient stone weathering: organic patina mottling + pitted pores + sparse hairline fissures
+    vec2 wp = v_worldPos.xy;
+    float warpA = sin(wp.x * 2.3 + wp.y * 1.7) * 0.55 + cos(wp.x * 4.1 - wp.y * 3.3) * 0.28;
+    float warpB = cos(wp.y * 2.6 - wp.x * 1.9) * 0.55 + sin(wp.y * 4.7 + wp.x * 2.9) * 0.28;
+    float ageMottle = sin(wp.x * 1.85 + warpA) * cos(wp.y * 2.05 + warpB);
+    float grainCoarse =
+      sin(wp.x * 19.0 + cos(wp.y * 17.0) * 1.4) *
+      cos(wp.y * 21.0 - sin(wp.x * 15.0) * 1.3) * 0.016;
+    float grainFine =
+      sin(wp.x * 49.0 + sin(wp.y * 37.0)) *
+      cos(wp.y * 53.0 + sin(wp.x * 31.0)) * 0.013;
+    float stonePitting = smoothstep(0.76, 0.98, sin(wp.x * 67.0 + warpA * 4.0) * cos(wp.y * 71.0 + warpB * 4.0)) * -0.032;
+    float stoneGrain = grainCoarse + grainFine + stonePitting;
+
+    // Sparse weathered hairline stone fissures
+    float crackCoord = (wp.x * 1.35 + wp.y * 0.92) * 3.4 + warpA * 1.85 + sin(wp.y * 9.5) * 0.18;
+    float crackMask = smoothstep(0.32, 0.78, sin(wp.x * 1.9 - wp.y * 2.3 + 1.1) * cos(wp.x * 1.3 + wp.y * 1.7));
+    float stoneCrack = (1.0 - smoothstep(0.0, 0.055, abs(sin(crackCoord)))) * crackMask * 0.34;
+
+    // A. Recessed Carved Slate-Limestone Bed vs. Chiseled Warm Travertine Tablet Rim/Pillars
+    vec3 recessedBed = mix(
+      vec3(0.215, 0.198, 0.214),
+      vec3(0.268, 0.246, 0.254),
+      radialWarmth
     );
-    scrollPaper *= mix(1.0, 0.82, isSunkenRoom) * mix(0.84, 1.0, caveVignette);
-    float stoneGrain =
-      sin(v_worldPos.x * 38.0 + sin(v_worldPos.y * 29.0)) *
-      cos(v_worldPos.y * 41.0 + sin(v_worldPos.x * 23.0)) * 0.012;
-    scrollPaper += vec3(stoneGrain);
+    vec3 chiseledFrame = mix(
+      vec3(0.358, 0.324, 0.292),
+      vec3(0.428, 0.388, 0.346),
+      radialWarmth
+    );
+    vec3 neutralStone = mix(recessedBed, chiseledFrame, isElevatedStone);
+    neutralStone += vec3(0.024, 0.018, 0.008) * ageMottle;
+    neutralStone *= mix(1.0, 0.80, isSunkenRoom) * caveVignette;
 
-    // Whisper-soft mineral pigment trace for colored blocks & exit gates (11% hue wash)
-    vec3 normPieceRgb = u_color.rgb / max(1.0 - isSunkenRoom * 0.40, 0.58);
-    vec3 warmPieceHue = mix(clamp(normPieceRgb, 0.0, 1.0), vec3(0.76, 0.58, 0.38), 0.46);
-    vec3 pieceWash = mix(scrollPaper + vec3(0.016, 0.011, 0.024), warmPieceHue, mix(0.11, 0.08, isSunkenRoom));
-    vec3 scrollFill = mix(scrollPaper, pieceWash, isPiece);
-
-    // 1. Weathered Chisel & Stud Rim Etching Contours
-    float bevelInk = smoothstep(0.95, 0.56, abs(N.z)) * mix(0.20, 0.46, isPiece);
-    float studOutline = (v_localPos.z > 0.56 && N.z < 0.965) ? 0.36 : 0.0;
-
-    // 2. Subtle Stone GridGrooves & Inner Framing Rules
-    vec2 cellUv = fract(v_worldPos.xy);
-    float borderDist = min(min(cellUv.x, 1.0 - cellUv.x), min(cellUv.y, 1.0 - cellUv.y));
-    float gridDraftLine = (1.0 - smoothstep(0.014, 0.042, borderDist)) * mix(0.12, 0.28, isPiece);
-    float innerFrameRule =
-      (1.0 - smoothstep(0.007, 0.022, abs(borderDist - 0.115))) * isPiece * 0.22;
-    float cornerCross =
-      (1.0 - smoothstep(0.01, 0.028, min(cellUv.x, 1.0 - cellUv.x))) *
-      (1.0 - smoothstep(0.06, 0.14, min(cellUv.y, 1.0 - cellUv.y))) +
-      (1.0 - smoothstep(0.01, 0.028, min(cellUv.y, 1.0 - cellUv.y))) *
-      (1.0 - smoothstep(0.06, 0.14, min(cellUv.x, 1.0 - cellUv.x)));
-    float floorTicks = clamp(cornerCross, 0.0, 1.0) * (1.0 - isPiece) * 0.15;
-
-    // 3. Fine Weathered Stone Cross-Hatching
-    float hatchA = sin((v_worldPos.x + v_worldPos.y) * 52.0);
-    float hatchB = sin((v_worldPos.x - v_worldPos.y) * 52.0);
-    float penHatch =
-      smoothstep(0.78, 0.96, hatchA) * mix(0.03, 0.12, isPiece) +
-      smoothstep(0.86, 0.98, hatchB) * 0.06 * isPiece;
-
-    // 4. Faint Sacred-Geometry Astrolabe Rings Across the Cave Wall
-    float angle = atan(relCenter.y, relCenter.x);
-    float ringWave = sin(distCenter * 8.37758 - u_boardInfo.z * 0.45);
-    float astrolabeRing = smoothstep(0.93, 0.992, ringWave) * 0.12;
-    float compassSpoke =
-      smoothstep(0.97, 0.997, cos(angle * 12.0 + u_boardInfo.z * 0.14)) *
-      smoothstep(0.25, 1.4, distCenter) * 0.08;
-
-    float rawEtch = clamp(
-      max(bevelInk, studOutline) +
-      gridDraftLine +
-      innerFrameRule +
-      floorTicks +
-      penHatch +
-      astrolabeRing +
-      compassSpoke,
+    // B. Monochrome Ancient Limestone & Sandstone Pieces (~98.5% pure weathered stone)
+    // Pieces vary only in natural monochrome quarry-stone value (aged dark sandstone -> pale carved limestone)
+    // so every block and gate reads as pure ancient stone before popping into vibrant 3D color on play.
+    float pieceLum = dot(restoredRgb, vec3(0.299, 0.587, 0.114));
+    float valueIndex = clamp(
+      pieceLum * 0.62 + (restoredRgb.r * 0.21 + restoredRgb.g * 0.11 + restoredRgb.b * 0.06),
       0.0,
       1.0
     );
-    float inkStrength = rawEtch * caveVignette * sizeFade;
+    vec3 darkSandstone = vec3(0.395, 0.362, 0.328);
+    vec3 paleLimestone = vec3(0.535, 0.494, 0.448);
+    vec3 quarryStone = mix(darkSandstone, paleLimestone, valueIndex);
+    vec3 mineralPigment = mix(quarryStone, restoredRgb, 0.018);
+    mineralPigment += vec3(0.026, 0.020, 0.012) * ageMottle;
+    mineralPigment *= mix(1.0, 0.80, isSunkenRoom) * caveVignette;
 
-    vec3 baseChalk = mix(vec3(0.56, 0.43, 0.32), warmPieceHue, isPiece * 0.22);
-    vec3 brightChalk = vec3(0.78, 0.64, 0.48);
-    vec3 chalkInk = mix(baseChalk, brightChalk, clamp(inkStrength * 0.85, 0.0, 1.0));
+    vec3 tabletSurface = mix(neutralStone, mineralPigment, isPiece) * rakeShade + vec3(stoneGrain);
+
+    // 1. Dark Carved Mortar Joints (strong on recessed floor, subtle mason scribe on elevated slabs/pieces)
+    vec2 cellUv = fract(v_worldPos.xy);
+    float borderDist = min(min(cellUv.x, 1.0 - cellUv.x), min(cellUv.y, 1.0 - cellUv.y));
+    float cellMortarGroove =
+      (1.0 - smoothstep(0.014, 0.044, borderDist)) * mix(mix(0.38, 0.07, isElevatedStone), 0.05, isPiece);
+    float innerInscribedGroove =
+      (1.0 - smoothstep(0.006, 0.020, abs(borderDist - 0.108))) * isPiece * 0.07;
+    float shadowBevelGroove =
+      smoothstep(0.96, 0.52, abs(N.z)) * smoothstep(0.14, -0.48, rakeDot) * mix(0.40, 0.50, isPiece);
+    float studCarveGroove =
+      (v_localPos.z > 0.555 && N.z < 0.965) ? (0.34 * smoothstep(0.25, -0.45, rakeDot) + 0.14) : 0.0;
+
+    float grooveDarkness = clamp(
+      cellMortarGroove + innerInscribedGroove + shadowBevelGroove + studCarveGroove + stoneCrack,
+      0.0,
+      0.68
+    );
+    tabletSurface *= (1.0 - grooveDarkness);
+
+    // 2. Sunlit Limestone Chisel Catch-Lights, Mason Corner Ticks & Diagonal Chisel Tool-Marks
+    float litBevelCatch =
+      smoothstep(0.96, 0.50, abs(N.z)) * smoothstep(-0.04, 0.55, rakeDot) * mix(0.34, 0.50, isPiece);
+    float litStudCatch =
+      (v_localPos.z > 0.56 && N.z < 0.965) ? (0.42 * smoothstep(-0.04, 0.55, rakeDot)) : 0.0;
+    float innerRimCatch =
+      (1.0 - smoothstep(0.006, 0.018, abs(borderDist - 0.090))) * isPiece * 0.06;
+
+    float cornerCross =
+      (1.0 - smoothstep(0.010, 0.028, min(cellUv.x, 1.0 - cellUv.x))) *
+      (1.0 - smoothstep(0.055, 0.135, min(cellUv.y, 1.0 - cellUv.y))) +
+      (1.0 - smoothstep(0.010, 0.028, min(cellUv.y, 1.0 - cellUv.y))) *
+      (1.0 - smoothstep(0.055, 0.135, min(cellUv.x, 1.0 - cellUv.x)));
+    float masonTicks = clamp(cornerCross, 0.0, 1.0) * (1.0 - isPiece) * (1.0 - isElevatedStone) * 0.20;
+
+    float hatchA = sin((v_worldPos.x + v_worldPos.y) * 46.0);
+    float hatchB = sin((v_worldPos.x - v_worldPos.y) * 46.0);
+    float chiselHatch =
+      smoothstep(0.80, 0.97, hatchA) * mix(0.04, 0.12, isPiece) +
+      smoothstep(0.88, 0.985, hatchB) * 0.06 * isPiece;
+
+    float highlightStrength = clamp(
+      max(litBevelCatch, litStudCatch) + innerRimCatch + masonTicks + chiselHatch,
+      0.0,
+      0.82
+    );
+
+    vec3 warmLimestoneHighlight = vec3(0.75, 0.68, 0.58);
+    vec3 stoneArtifact = mix(tabletSurface, warmLimestoneHighlight, highlightStrength);
 
     if (u_highContrast == 1) {
-      scrollFill *= 0.72;
-      inkStrength = clamp(rawEtch * 1.15 + bevelInk * 0.2, 0.0, 1.0);
-      chalkInk = mix(vec3(0.92, 0.78, 0.42), vec3(1.0, 0.96, 0.86), clamp(inkStrength, 0.0, 1.0));
+      vec3 hcStone = mix(neutralStone * 0.84, mix(quarryStone * 1.08, restoredRgb, 0.08) * rakeShade, isPiece);
+      hcStone *= (1.0 - grooveDarkness * 1.15);
+      stoneArtifact = mix(hcStone, vec3(0.94, 0.88, 0.76), clamp(highlightStrength * 1.15, 0.0, 0.90));
     }
 
-    vec3 scrollDiagram = mix(scrollFill, chalkInk, inkStrength);
-    lit = mix(lit, scrollDiagram, u_blueprintMix);
-    blueprintAlpha = mix(1.0, (0.36 + 0.34 * caveVignette) * sizeFade, u_blueprintMix);
+    lit = mix(lit, stoneArtifact, u_blueprintMix);
+    // Keep opaque 3D stone geometry 100% solid (blueprintAlpha = 1.0) so plinth, floor, walls,
+    // and blocks never alpha-bleed through one another like a ghosted rendering error.
+    blueprintAlpha = 1.0;
   }
 
   outColor = vec4(clamp(lit, 0.0, 1.0), u_color.a * blueprintAlpha);

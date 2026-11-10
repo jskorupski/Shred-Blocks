@@ -26,7 +26,8 @@ export function renderPass3BlocksImpl(
   const matStyle = rctx.getMaterialStyleCode(skinId);
   const dtMs = dtSec * 1000;
   const reducedMotion = Boolean(options.reducedMotion);
-  const live3DMix = Math.max(0, 1.0 - (options.blueprintMix ?? 0) * 0.92);
+  const isStoneRuin = (options.blueprintMix ?? 0) > 0.45;
+  const live3DMix = Math.max(0, 1.0 - (options.blueprintMix ?? 0));
 
   // Identify all blocks in the currently grabbed/dragged group (`F-03`)
   const draggedGroupIds = new Set<number>();
@@ -310,9 +311,9 @@ export function renderPass3BlocksImpl(
       }
     }
 
-    // 3A. Outer Morphological Shell (`meshOuter`; un-studded collar when `layersLeft > 1`, `R3D-11`)
+    // 3A. Outer Morphological Shell (`meshOuter`; un-studded collar when `layersLeft > 1` in gameplay, pure solid block in Stone Ruin mode)
     const outerMesh =
-      layersLeft > 1 && skinId === 'classic_studs'
+      !isStoneRuin && layersLeft > 1 && skinId === 'classic_studs'
         ? (POLYOMINO_MESH_CATALOG[block.shapeId]?.meshOuter ?? meshPair.meshOuter)
         : meshPair.meshOuter;
 
@@ -333,6 +334,14 @@ export function renderPass3BlocksImpl(
       0,
       activeColor === 0 ? 0 : matStyle
     );
+
+    if (isStoneRuin) {
+      if (useClip) {
+        gl.uniform1i(rctx.uUseClipPlane, 0);
+        gl.enable(gl.CULL_FACE);
+      }
+      continue;
+    }
 
     // 3B. Nested Inner Core Shell (`meshInnerCore`) if multi-layered (`layersLeft > 1`)
     if (layersLeft > 1) {
@@ -515,15 +524,17 @@ export function renderPass3BlocksImpl(
     }
   }
 
-  renderGhostAndWeldClamps3D(
-    rctx,
-    gl,
-    board,
-    options,
-    skinId,
-    highContrast,
-    timeSec,
-    anyDragActive,
-    reducedMotion
-  );
+  if (!isStoneRuin) {
+    renderGhostAndWeldClamps3D(
+      rctx,
+      gl,
+      board,
+      options,
+      skinId,
+      highContrast,
+      timeSec,
+      anyDragActive,
+      reducedMotion
+    );
+  }
 }

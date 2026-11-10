@@ -17,7 +17,8 @@ export function renderPass1PortcullisBarriers(
   palette: TrayPalette,
   timeSec: number
 ): void {
-  const live3DMix = Math.max(0, 1.0 - (rctx.lastOptions.blueprintMix ?? 0) * 0.92);
+  const isStoneRuin = (rctx.lastOptions.blueprintMix ?? 0) > 0.45;
+  const live3DMix = Math.max(0, 1.0 - (rctx.lastOptions.blueprintMix ?? 0));
   // 1G. 3D Sanctuary Portcullis Barriers (`board.barriers`, `SANCTUM-01`, `SANCTUM-02`)
   for (const bar of board.barriers) {
     if (bar.cells.length === 0) continue;
@@ -37,9 +38,10 @@ export function renderPass1PortcullisBarriers(
     const barLen = Math.max(spanW, spanH);
     const bcx = minC + spanW * 0.5;
     const bcy = minR + spanH * 0.5;
-    const portPulse = !rctx.lastOptions.reducedMotion
-      ? 0.5 + 0.5 * Math.sin(timeSec * 3.2 + bar.id * 1.3)
-      : 0.5;
+    const portPulse =
+      !isStoneRuin && !rctx.lastOptions.reducedMotion
+        ? 0.5 + 0.5 * Math.sin(timeSec * 3.2 + bar.id * 1.3)
+        : 0.5;
 
     if (bar.isVault) {
       if (bar.open) {
@@ -132,6 +134,9 @@ export function renderPass1PortcullisBarriers(
             1.0
           );
         }
+      }
+      if (isStoneRuin) {
+        continue;
       }
       const isKeyOnly = Boolean(bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0);
       const medBobZ = !rctx.lastOptions.reducedMotion
@@ -236,24 +241,26 @@ export function renderPass1PortcullisBarriers(
       continue;
     }
 
-    // Subtle golden threshold floor aura beneath the closed portcullis
-    rctx.drawMesh(
-      gl,
-      ENVIRONMENT_MESHES.overlayQuad,
-      minC + 0.06,
-      minR + 0.06,
-      0.018,
-      spanW - 0.12,
-      spanH - 0.12,
-      1.0,
-      0.98,
-      0.8,
-      0.32,
-      0.18 + 0.1 * portPulse,
-      0,
-      0,
-      4
-    );
+    // Subtle golden threshold floor aura beneath the closed portcullis (hidden in static Stone Ruin mode)
+    if (!isStoneRuin) {
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.overlayQuad,
+        minC + 0.06,
+        minR + 0.06,
+        0.018,
+        spanW - 0.12,
+        spanH - 0.12,
+        1.0,
+        0.98,
+        0.8,
+        0.32,
+        0.18 + 0.1 * portPulse,
+        0,
+        0,
+        4
+      );
+    }
 
     // Twin sculpted stone-and-brass jamb pillars at the two ends of the portcullis span
     const pillarOffset = Math.max(0.32, barLen * 0.5 - 0.16);
@@ -346,6 +353,9 @@ export function renderPass1PortcullisBarriers(
     }
 
     // Central 3D Sculpted Portcullis Medallion (`BADGE_PORTCULLIS` + `shredsRemaining` or `BADGE_KEY`)
+    if (isStoneRuin) {
+      continue;
+    }
     const isKeyOnly = Boolean(bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0);
     const medBobZ = !rctx.lastOptions.reducedMotion
       ? Math.sin(timeSec * 2.6 + bar.id) * 0.015 * live3DMix
@@ -403,6 +413,9 @@ export function renderPass2ReticleAndPromptsImpl(
   highContrast: boolean,
   pulse: number
 ): void {
+  if ((options.blueprintMix ?? 0) > 0.45) {
+    return;
+  }
   // 2A. Active Drag Floor Target Reticle & Gate Alignment Beam (`UX-01`)
   let draggedId = options.draggedBlockId ?? null;
   if (draggedId === null) {

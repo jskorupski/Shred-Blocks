@@ -13,6 +13,7 @@ export function renderPass1Courtyard(
   timeSec: number
 ): void {
   const { rows, cols, occupancy, floorColor } = board;
+  const isStoneRuin = (rctx.lastOptions.blueprintMix ?? 0) > 0.45;
   const isCellPlayable = (r: number, c: number): boolean =>
     r >= 0 && r < rows && c >= 0 && c < cols && occupancy[r * cols + c] !== -1;
 
@@ -150,8 +151,10 @@ export function renderPass1Courtyard(
       const primaryWave = Math.max(0, Math.sin(timeSec * 1.1 - (c * 0.58 + r * 0.46))) ** 3;
       const crossWave = Math.max(0, Math.cos(timeSec * 0.8 + (c - r) * 0.52)) ** 4;
       const sheen =
-        !rctx.lastOptions.reducedMotion && !roomVis.isLocked ? primaryWave * 0.048 + crossWave * 0.022 : 0;
-      const pathColorId = (floorColor[idx] ?? 0) as ColorId;
+        !isStoneRuin && !rctx.lastOptions.reducedMotion && !roomVis.isLocked
+          ? primaryWave * 0.048 + crossWave * 0.022
+          : 0;
+      const pathColorId = isStoneRuin ? (0 as ColorId) : ((floorColor[idx] ?? 0) as ColorId);
 
       if (pathColorId > 0) {
         const [pr, pg, pb] = rctx.getColorRgb(pathColorId, highContrast);
@@ -200,49 +203,51 @@ export function renderPass1Courtyard(
         );
       }
 
-      // Interior Stone Pillar (`occ === -2`): Fixed architectural wall column with 3D carved diamond capital
+      // Interior Stone Pillar (`occ === -2`): Fixed architectural wall column (devoid of floating UI badges in Stone Ruin mode)
       if (occ === -2) {
         const pr = Math.min(1, palette.wallColor[0] * 1.38 * lum);
         const pg = Math.min(1, palette.wallColor[1] * 1.38 * lum);
         const pb = Math.min(1, palette.wallColor[2] * 1.38 * lum);
         rctx.drawMesh(gl, ENVIRONMENT_MESHES.pillarMesh, c, r, zOff, 1.0, 1.0, 1.0, pr, pg, pb, 1.0);
-        const pillarBobZ =
-          !rctx.lastOptions.reducedMotion && !roomVis.isLocked
-            ? Math.sin(timeSec * 2.8 + r * 0.9 + c * 1.1) * 0.024
-            : 0;
-        const pillarSpinZ =
-          !rctx.lastOptions.reducedMotion && !roomVis.isLocked
-            ? Math.PI * 0.25 + timeSec * 0.95
-            : Math.PI * 0.25;
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.unitParticleCube,
-          c + 0.5,
-          r + 0.5,
-          zOff + 0.652 + pillarBobZ,
-          0.38,
-          0.38,
-          0.056,
-          Math.min(1, pr * 0.85 + 0.22 * lum),
-          Math.min(1, pg * 0.82 + 0.18 * lum),
-          Math.min(1, pb * 0.78 + 0.12 * lum),
-          1.0,
-          0,
-          pillarSpinZ,
-          0
-        );
-        rctx.drawAtlasBadge(
-          gl,
-          'DIAMOND',
-          c + 0.5,
-          r + 0.5,
-          zOff + 0.686 + pillarBobZ,
-          0.36,
-          0.98 * lum,
-          0.86 * lum,
-          0.58 * lum,
-          0.95
-        );
+        if (!isStoneRuin) {
+          const pillarBobZ =
+            !rctx.lastOptions.reducedMotion && !roomVis.isLocked
+              ? Math.sin(timeSec * 2.8 + r * 0.9 + c * 1.1) * 0.024
+              : 0;
+          const pillarSpinZ =
+            !rctx.lastOptions.reducedMotion && !roomVis.isLocked
+              ? Math.PI * 0.25 + timeSec * 0.95
+              : Math.PI * 0.25;
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.unitParticleCube,
+            c + 0.5,
+            r + 0.5,
+            zOff + 0.652 + pillarBobZ,
+            0.38,
+            0.38,
+            0.056,
+            Math.min(1, pr * 0.85 + 0.22 * lum),
+            Math.min(1, pg * 0.82 + 0.18 * lum),
+            Math.min(1, pb * 0.78 + 0.12 * lum),
+            1.0,
+            0,
+            pillarSpinZ,
+            0
+          );
+          rctx.drawAtlasBadge(
+            gl,
+            'DIAMOND',
+            c + 0.5,
+            r + 0.5,
+            zOff + 0.686 + pillarBobZ,
+            0.36,
+            0.98 * lum,
+            0.86 * lum,
+            0.58 * lum,
+            0.95
+          );
+        }
       }
     }
   }
@@ -262,7 +267,7 @@ export function renderPass1Courtyard(
     const spanR = Math.abs(targetR - elev.row) + elev.height;
     const spanC = Math.abs(targetC - elev.col) + elev.width;
     const isHorizTrack = Math.abs(elev.deltaCol) >= Math.abs(elev.deltaRow);
-    if (isHorizTrack) {
+    if (!isStoneRuin && isHorizTrack) {
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
@@ -297,7 +302,7 @@ export function renderPass1Courtyard(
         0,
         0
       );
-    } else {
+    } else if (!isStoneRuin) {
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
@@ -348,30 +353,32 @@ export function renderPass1Courtyard(
       0.78 * lum,
       1.0
     );
-    const chevronKey = isHorizTrack ? 'LOCK_H' : 'LOCK_V';
-    const elevBadgeZ = rctx.drawBadgeMedallion3D(
-      gl,
-      elev.col + elev.width * 0.5,
-      elev.row + elev.height * 0.5,
-      zOff + 0.032,
-      isHorizTrack ? 0.52 : 0.38,
-      isHorizTrack ? 0.38 : 0.52,
-      0.32 * lum,
-      0.58 * lum,
-      0.78 * lum
-    );
-    rctx.drawAtlasBadge(
-      gl,
-      chevronKey,
-      elev.col + elev.width * 0.5,
-      elev.row + elev.height * 0.5,
-      elevBadgeZ,
-      0.42,
-      0.92 * lum,
-      0.98 * lum,
-      1.0 * lum,
-      0.95
-    );
+    if (!isStoneRuin) {
+      const chevronKey = isHorizTrack ? 'LOCK_H' : 'LOCK_V';
+      const elevBadgeZ = rctx.drawBadgeMedallion3D(
+        gl,
+        elev.col + elev.width * 0.5,
+        elev.row + elev.height * 0.5,
+        zOff + 0.032,
+        isHorizTrack ? 0.52 : 0.38,
+        isHorizTrack ? 0.38 : 0.52,
+        0.32 * lum,
+        0.58 * lum,
+        0.78 * lum
+      );
+      rctx.drawAtlasBadge(
+        gl,
+        chevronKey,
+        elev.col + elev.width * 0.5,
+        elev.row + elev.height * 0.5,
+        elevBadgeZ,
+        0.42,
+        0.92 * lum,
+        0.98 * lum,
+        1.0 * lum,
+        0.95
+      );
+    }
   }
 
   // 1D. Wooden Crates (`board.crates`)
@@ -402,28 +409,30 @@ export function renderPass1Courtyard(
       0,
       2
     );
-    const crateBadgeZ = rctx.drawBadgeMedallion3D(
-      gl,
-      crate.col + 0.5,
-      crate.row + 0.5,
-      zOff + 0.585,
-      0.46,
-      0.42,
-      cr,
-      cg,
-      cb
-    );
-    rctx.drawNumberBadges(
-      gl,
-      crate.hp,
-      crate.col + 0.5,
-      crate.row + 0.5,
-      crateBadgeZ,
-      0.38,
-      1.0 * lum,
-      0.96 * lum,
-      0.84 * lum
-    );
+    if (!isStoneRuin) {
+      const crateBadgeZ = rctx.drawBadgeMedallion3D(
+        gl,
+        crate.col + 0.5,
+        crate.row + 0.5,
+        zOff + 0.585,
+        0.46,
+        0.42,
+        cr,
+        cg,
+        cb
+      );
+      rctx.drawNumberBadges(
+        gl,
+        crate.hp,
+        crate.col + 0.5,
+        crate.row + 0.5,
+        crateBadgeZ,
+        0.38,
+        1.0 * lum,
+        0.96 * lum,
+        0.84 * lum
+      );
+    }
   }
 
   // 1E. Block Generators (`board.generators`)
@@ -451,7 +460,7 @@ export function renderPass1Courtyard(
       1.0
     );
 
-    if (!depleted) {
+    if (!depleted && !isStoneRuin) {
       const nextSpec = gen.queue[gen.queueCursor];
       if (nextSpec && nextSpec.colorStack.length > 0) {
         const nextColor = nextSpec.colorStack[0];

@@ -8,6 +8,7 @@
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
+  transition: none;
 }
 
 #screen-game.title-backdrop-mode #unlock-toast,
@@ -21,14 +22,14 @@
 }
 
 #screen-game.title-backdrop-mode .sacred-geometry-ornament {
-  color: rgba(232, 184, 118, 0.24);
+  color: rgba(232, 184, 118, 0.3);
 }
 
 #screen-game.title-backdrop-mode #game-canvas {
   border-color: transparent;
   box-shadow: none;
   background: transparent;
-  filter: drop-shadow(0 8px 18px rgba(8, 5, 20, 0.28));
+  filter: drop-shadow(0 18px 36px rgba(6, 3, 15, 0.65));
 }
 
 .title-overlay {
@@ -50,10 +51,10 @@
     calc(0.75rem + var(--safe-bottom)) calc(0.85rem + var(--safe-left));
   background: linear-gradient(
     180deg,
-    rgba(14, 10, 28, 0.78) 0%,
-    rgba(14, 10, 28, 0.34) 28%,
-    rgba(14, 10, 28, 0.08) 62%,
-    rgba(12, 9, 24, 0.76) 100%
+    rgba(14, 10, 28, 0.68) 0%,
+    rgba(14, 10, 28, 0) 20%,
+    rgba(14, 10, 28, 0) 78%,
+    rgba(12, 9, 24, 0.72) 100%
   );
   overflow: hidden;
   overscroll-behavior: none;
@@ -74,15 +75,15 @@
   gap: 0.32rem;
   padding: 1.35rem 1.15rem 1.85rem;
   background: radial-gradient(
-    ellipse 94% 88% at 50% 38%,
-    rgba(20, 14, 38, 0.94) 0%,
-    rgba(20, 14, 38, 0.76) 58%,
-    rgba(20, 14, 38, 0) 100%
+    ellipse 68% 66% at 50% 42%,
+    rgba(20, 14, 38, 0.88) 0%,
+    rgba(20, 14, 38, 0.52) 48%,
+    rgba(20, 14, 38, 0) 88%
   );
   border: none;
   border-radius: var(--radius-lg);
   box-shadow: none;
-  width: min(100%, 480px);
+  width: min(100%, 660px);
   flex-shrink: 0;
 }
 
