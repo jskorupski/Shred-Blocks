@@ -22,12 +22,12 @@ This document provides the deep-dive technical specification for **ShredBlocks: 
 
 ## 2. Physics, Swept Raycast & Gate Clearance Invariants
 
-### 2.1 Channel-Locked Orthogonal Swept Grid Raycast ([`src/core/physics.ts`](../src/core/physics.ts))
-- **`clampGroupDragDelta(board, leadBlockId, rawDeltaX, rawDeltaY)` & `sweepBlockToTarget`**:
-  - Subdivides any pointer delta $(\Delta x, \Delta y)$ into sub-steps of at most `0.05` grid cells (`MAX_SWEEP_STEP = 0.05`).
-  - At each sub-step, tests the full swept bounding footprint of the dragged block **and** all active members sharing its `groupId` (`F-03` Glued Linked Groups).
-  - **Channel-Locked Orthogonal Sweep (`DRAG-02`)**: Blocks move strictly along orthogonal integer grid corridors (`|row - round(row)| <= 1e-4` when moving horizontally, or `|col - round(col)| <= 1e-4` when moving vertically). A block can never occupy a diagonal half-cell `(row + 0.4, col + 0.4)`, preventing diagonal corner clipping while preserving fluid L-turn and U-turn gestures in a single continuous drag.
-  - **Corner Bevel Assist (`CORNER_ASSIST_THRESHOLD = 0.30`)**: When sliding along one axis within `0.30` cells of a perpendicular integer corridor while pulling into that perpendicular lane, smoothly snaps the block onto the integer intersection and transitions into the perpendicular corridor.
+### 2.1 Dominant-Axis Swept Grid Raycast & Open-Space 2D Glide ([`src/core/physics.ts`](../src/core/physics.ts))
+- **`sweepBlockToTarget(board, blockId, targetX, targetY, onSubstep)` (`DRAG-02`, `DRAG-04`)**:
+  - Subdivides any pointer delta $(\Delta x, \Delta y)$ into sub-steps of at most `0.18` grid cells (`MAX_SWEEP_SUBSTEP = 0.18`).
+  - At each sub-step, tests the full continuous bounding footprint (`isContinuousOffsetValid`) of the dragged block **and** all active members sharing its `groupId` (`F-03` Glued Linked Groups).
+  - **Open-Space 2D Glide + Exact Obstacle-Edge Clamping (`DRAG-04`, `F-04`)**: Sweeps the dominant remaining axis first and the secondary axis second (`sweepSingleAxisWithClamp`). In unobstructed open space, both axes glide smoothly and continuously (`0` artificial 1D rail-locks or half-cell `[0.30, 0.70]` deadzones); when an obstacle or wall is encountered, movement clamps cleanly to the exact integer contact boundary (`F-04`).
+  - **Grid-Intersection Landing & Corner Bevel Assist (`DRAG-02`, `CORNER_BEVEL_THRESHOLD = 0.35`)**: When a substep has significant perpendicular pull (`> 0.12`), `computeSubstepDelta` lands cleanly on any crossed integer grid line so the block can turn `90°` into narrow perpendicular corridors (`DRAG-02`). When an axis is blocked by an obstacle corner within `0.35` cells (`CORNER_BEVEL_THRESHOLD`), `tryCornerBevelAssist` smoothly snaps the perpendicular offset to the unobstructed integer lane (`with 0.08 hysteresis` to prevent diagonal corner oscillation).
 
 ### 2.2 Gate Aperture Span, Axis-Lock Exit & Mid-Drag Capture ([`src/core/gate-clearance.ts`](../src/core/gate-clearance.ts))
 - **`checkBlockGateClearance(board, block, gate, candidateRow, candidateCol)` (`F-02`, `DRAG-01`)**:
@@ -40,9 +40,9 @@ This document provides the deep-dive technical specification for **ShredBlocks: 
     6. No occupied cell (`occupancy !== 0` and not `block.id`) blocks the straight-line extrusion corridor between any cell of the block and `gate.edgeLine`.
     7. **Multi-Room Portcullis Sanctum Gating (`SANCTUM-01`, `SANCTUM-02`)**: Neither the block (`isBlockInLockedRoom`) nor the gate (`isGateInLockedRoom`) may belong to a sealed room (`roomId > 0` where an active `BarrierState` with `unlocksRoomId === roomId` has `open === false`).
 - **`checkMidDragGateCapture(board, blockId, stepVecX, stepVecY, rawPullX, rawPullY)` (`F-01`, `MECH-04`)**:
-  - Captures and shreds a block mid-drag when it is within `0.15` cells of an integer alignment at an eligible gate lip (`gate.edgeLine`) AND either:
+  - Captures and shreds a block mid-drag when it is within `0.18` cells of an eligible gate lip (`gate.edgeLine`), lies anywhere across the gate's continuous parallel span aperture (`[minSpan - 0.45, maxSpan + 0.45]` — eliminating mid-gate `Math.round` deadzones at half-cell `0.50` offsets on wide gates), AND either:
     - The incremental step vector has positive dot product toward the gate's outward normal (`dot > 1e-4`), OR
-    - The raw pointer pull vector from the block's center has outward component `pullDot >= 0.12` (allowing blocks that start at `gate.edgeLine` to shred when pulled outward against the wall clamp).
+    - The raw pointer pull vector from the block's center has outward component `pullDot >= 0.08` (`>= 0.12` on the outer `0.25..0.45` bevel jaw), allowing both smooth curved/diagonal entries into wide gates and outward pulls from blocks starting at `gate.edgeLine`.
 - **Outward Gate Funnel & Pointer Cancel Safety ([`src/input/pointer-controller.ts`](../src/input/pointer-controller.ts))**:
   - When a dragged block is touching `gate.edgeLine` and aligned with a matching gate, outward pointer pulls up to `32px` beyond the gate lip clamp tangential jitter (`rawDeltaX *= 0.25` or `rawDeltaY *= 0.25`) so the block funnels cleanly into the shredder mouth.
   - Tapping a dormant block inside a sealed Sunken Twilight Chamber (`isBlockInLockedRoom`) triggers a gentle rebound shake and displays a clear `"⛩ Chamber Sealed! Shred N more blocks to open the Portcullis."` toast.

@@ -1,5 +1,10 @@
 import { findEligibleGateForBlockAt } from "../core/gate-clearance";
-import { getBlockRoomId, isBlockInLockedRoom } from "../core/physics";
+import {
+  canGroupOccupyOffset,
+  getBlockRoomId,
+  getMovedGroupBlocks,
+  isBlockInLockedRoom,
+} from "../core/physics";
 import type { RenderSceneOptions } from "../render/renderer-3d";
 import { getActiveColor } from "../core/polyomino";
 import {
@@ -546,10 +551,45 @@ export function buildRenderOptionsImpl(
   if (hover.activeBlockId !== null) {
     const blk = app.board.blocks.find((b) => b.id === hover.activeBlockId);
     if (blk) {
-      dragTargetRow = Math.round(blk.y);
-      dragTargetCol = Math.round(blk.x);
-      const gIdx = findEligibleGateForBlockAt(app.board, blk, dragTargetRow, dragTargetCol);
-      if (gIdx >= 0) dragEligibleGateIndex = gIdx;
+      const group = getMovedGroupBlocks(app.board, blk.id);
+      const rawDRow = Math.round(blk.y - blk.row);
+      const rawDCol = Math.round(blk.x - blk.col);
+      let chosenDRow = 0;
+      let chosenDCol = 0;
+      if (canGroupOccupyOffset(app.board, group, rawDRow, rawDCol)) {
+        chosenDRow = rawDRow;
+        chosenDCol = rawDCol;
+      } else {
+        const contDCol = blk.x - blk.col;
+        const contDRow = blk.y - blk.row;
+        let bestDist = Infinity;
+        for (let dr = rawDRow - 1; dr <= rawDRow + 1; dr++) {
+          for (let dc = rawDCol - 1; dc <= rawDCol + 1; dc++) {
+            if (canGroupOccupyOffset(app.board, group, dr, dc)) {
+              const d = Math.hypot(contDCol - dc, contDRow - dr);
+              if (d < bestDist) {
+                bestDist = d;
+                chosenDRow = dr;
+                chosenDCol = dc;
+              }
+            }
+          }
+        }
+      }
+      dragTargetRow = blk.row + chosenDRow;
+      dragTargetCol = blk.col + chosenDCol;
+      for (const member of group) {
+        const gIdx = findEligibleGateForBlockAt(
+          app.board,
+          member,
+          member.row + chosenDRow,
+          member.col + chosenDCol
+        );
+        if (gIdx >= 0) {
+          dragEligibleGateIndex = gIdx;
+          break;
+        }
+      }
     }
   } else if (app.board.hintMove) {
     dragTargetRow = app.board.hintMove.targetRow;

@@ -1,4 +1,5 @@
 import {
+  canGroupOccupyOffset,
   getMovedGroupBlocks,
   isBlockInLockedRoom,
   isGateInLockedRoom,
@@ -243,9 +244,10 @@ export function findEligibleGateForBlockAt(
 /**
  * F-01 Intentional Mid-Drag Gate Capture:
  * Checks whether a dragged block (or any member of its glued group) has reached a gate lip
- * within `0.15` cells of an integer alignment AND has a positive motion component toward
- * the gate's outward normal (or is axis-locked moving tangentially into an aligned gate),
- * preventing accidental perpendicular walk-by suction.
+ * within `0.18` cells along the gate's normal axis AND lies anywhere within the gate's
+ * continuous parallel span aperture (`[minSpan - 0.45, maxSpan + 0.45]`) with a positive
+ * motion or pull component toward the gate's outward normal, preventing both mid-gate
+ * deadzones on wide gates and accidental perpendicular walk-by suction.
  */
 export function checkMidDragGateCapture(
   board: BoardState,
@@ -259,22 +261,85 @@ export function checkMidDragGateCapture(
   if (group.length === 0) return null;
 
   for (const b of group) {
-    const nearCol = Math.round(b.x);
-    const nearRow = Math.round(b.y);
-    if (Math.abs(b.x - nearCol) > 0.15 || Math.abs(b.y - nearRow) > 0.15) {
-      continue;
-    }
+    const shape = getShape(b.shapeId);
 
     for (let i = 0; i < board.gates.length; i++) {
       const gate = board.gates[i];
-      if (!checkBlockGateClearance(board, b, gate, nearRow, nearCol)) {
-        continue;
-      }
       const [nx, ny] = getGateOutwardNormal(gate.edge);
       const dot = stepVecX * nx + stepVecY * ny;
       const pullDot = rawPullX * nx + rawPullY * ny;
-      if (dot > 1e-4 || pullDot >= 0.12) {
-        return { capturedBlockId: b.id, gateIndex: i };
+      const tanStep = Math.abs(stepVecX * ny - stepVecY * nx);
+      const tanPull = Math.abs(rawPullX * ny - rawPullY * nx);
+      if (pullDot < -0.02) {
+        continue;
+      }
+      const hasIntentionalStep = dot >= 0.015 && dot >= tanStep * 0.25;
+      const hasIntentionalPull = pullDot >= 0.08 && pullDot >= tanPull * 0.25;
+      if (!hasIntentionalStep && !hasIntentionalPull) {
+        continue;
+      }
+
+      const edgeLine =
+        gate.edgeLine ??
+        (gate.edge === 'TOP' || gate.edge === 'LEFT'
+          ? 0
+          : gate.edge === 'BOTTOM'
+            ? board.rows - 1
+            : board.cols - 1);
+
+      if (gate.edge === 'TOP' || gate.edge === 'BOTTOM') {
+        const targetRow = gate.edge === 'TOP' ? edgeLine : edgeLine - (shape.rows - 1);
+        if (Math.abs(b.y - targetRow) > 0.18) continue;
+
+        const minCol = gate.spanStart;
+        const maxCol = gate.spanStart + gate.spanLength - shape.cols;
+        if (maxCol < minCol) continue;
+        if (b.x < minCol - 0.45 || b.x > maxCol + 0.45) continue;
+
+        // Outer jaw bevel zone requires deliberate inward motion or pull toward the gate
+        if ((b.x < minCol - 0.25 || b.x > maxCol + 0.25) && dot < 0.03 && pullDot < 0.12) {
+          continue;
+        }
+
+        const candCols = [
+          Math.max(minCol, Math.min(maxCol, Math.round(b.x))),
+          Math.max(minCol, Math.min(maxCol, Math.floor(b.x))),
+          Math.max(minCol, Math.min(maxCol, Math.ceil(b.x))),
+        ];
+        for (const cCol of candCols) {
+          if (
+            canGroupOccupyOffset(board, group, targetRow - b.row, cCol - b.col) &&
+            checkBlockGateClearance(board, b, gate, targetRow, cCol)
+          ) {
+            return { capturedBlockId: b.id, gateIndex: i };
+          }
+        }
+      } else {
+        const targetCol = gate.edge === 'LEFT' ? edgeLine : edgeLine - (shape.cols - 1);
+        if (Math.abs(b.x - targetCol) > 0.18) continue;
+
+        const minRow = gate.spanStart;
+        const maxRow = gate.spanStart + gate.spanLength - shape.rows;
+        if (maxRow < minRow) continue;
+        if (b.y < minRow - 0.45 || b.y > maxRow + 0.45) continue;
+
+        if ((b.y < minRow - 0.25 || b.y > maxRow + 0.25) && dot < 0.03 && pullDot < 0.12) {
+          continue;
+        }
+
+        const candRows = [
+          Math.max(minRow, Math.min(maxRow, Math.round(b.y))),
+          Math.max(minRow, Math.min(maxRow, Math.floor(b.y))),
+          Math.max(minRow, Math.min(maxRow, Math.ceil(b.y))),
+        ];
+        for (const cRow of candRows) {
+          if (
+            canGroupOccupyOffset(board, group, cRow - b.row, targetCol - b.col) &&
+            checkBlockGateClearance(board, b, gate, cRow, targetCol)
+          ) {
+            return { capturedBlockId: b.id, gateIndex: i };
+          }
+        }
       }
     }
   }

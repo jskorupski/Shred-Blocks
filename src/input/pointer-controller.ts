@@ -8,6 +8,7 @@ import {
   getGateOutwardNormal,
 } from "../core/gate-clearance";
 import {
+  canGroupOccupyOffset,
   getMovedGroupBlocks,
   isBlockMovable,
   rebuildOccupancyGrid,
@@ -307,7 +308,7 @@ export class BoardInputController {
       return;
     }
 
-    // PERF-02: Sample at most 3 coalesced events + final pointer position
+    // PERF-02: Sample at most 3 coalesced events + final pointer position (deduplicated)
     const samples: Array<{ clientX: number; clientY: number }> = [];
     if (typeof e.getCoalescedEvents === 'function') {
       const coalesced = e.getCoalescedEvents();
@@ -316,13 +317,24 @@ export class BoardInputController {
         for (let i = 0; i < maxCoalesced; i++) {
           const idx = Math.floor(((i + 1) * coalesced.length) / (maxCoalesced + 1));
           const ce = coalesced[idx];
-          if (ce) {
+          if (
+            ce &&
+            (samples.length === 0 ||
+              samples[samples.length - 1].clientX !== ce.clientX ||
+              samples[samples.length - 1].clientY !== ce.clientY)
+          ) {
             samples.push({ clientX: ce.clientX, clientY: ce.clientY });
           }
         }
       }
     }
-    samples.push({ clientX: e.clientX, clientY: e.clientY });
+    if (
+      samples.length === 0 ||
+      samples[samples.length - 1].clientX !== e.clientX ||
+      samples[samples.length - 1].clientY !== e.clientY
+    ) {
+      samples.push({ clientX: e.clientX, clientY: e.clientY });
+    }
 
     const blockId = this.activeBlockId;
 
@@ -417,10 +429,13 @@ export class BoardInputController {
       b.liftAlpha = 0;
     }
 
+    const contLeadX = lead ? lead.x : 0;
+    const contLeadY = lead ? lead.y : 0;
+
     // Use snapGroupToNearestGrid to determine the exact valid integer (snappedRow, snappedCol)
     snapGroupToNearestGrid(board, blockId);
-    const snappedRow = lead ? lead.row : 0;
-    const snappedCol = lead ? lead.col : 0;
+    let snappedRow = lead ? lead.row : 0;
+    let snappedCol = lead ? lead.col : 0;
 
     // Restore group blocks to their starting integer coordinates before commitBlockMove
     // so Undo snapshots see the clean pre-drag state and commitBlockMove sees true dRow/dCol.
@@ -447,6 +462,38 @@ export class BoardInputController {
       Math.hypot(this.lastVelX, this.lastVelY) > 1e-4 ? this.lastVelX : this.lastPullX;
     const effVelY =
       Math.hypot(this.lastVelX, this.lastVelY) > 1e-4 ? this.lastVelY : this.lastPullY;
+
+    // If captured mid-drag across a wide gate span, ensure (snappedRow, snappedCol) is a gate-clearing
+    // anchor if rounding landed on an adjacent non-clearing cell (`F-01`).
+    if (lead && capturedMidDrag) {
+      const baseDRow = snappedRow - lead.row;
+      const baseDCol = snappedCol - lead.col;
+      const clearsAtSnapped = group.some(
+        (b) => findEligibleGateForBlockAt(board, b, b.row + baseDRow, b.col + baseDCol, effVelX, effVelY) >= 0
+      );
+      if (!clearsAtSnapped) {
+        let bestDist = Infinity;
+        for (let dr = baseDRow - 1; dr <= baseDRow + 1; dr++) {
+          for (let dc = baseDCol - 1; dc <= baseDCol + 1; dc++) {
+            if (!canGroupOccupyOffset(board, group, dr, dc)) continue;
+            const clearsHere = group.some(
+              (b) => findEligibleGateForBlockAt(board, b, b.row + dr, b.col + dc, effVelX, effVelY) >= 0
+            );
+            if (clearsHere) {
+              const candRow = lead.row + dr;
+              const candCol = lead.col + dc;
+              const dist = Math.hypot(contLeadX - candCol, contLeadY - candRow);
+              if (dist < bestDist) {
+                bestDist = dist;
+                snappedRow = candRow;
+                snappedCol = candCol;
+                changedFromStart = true;
+              }
+            }
+          }
+        }
+      }
+    }
 
     // If a boundary-aligned block was pulled outward toward an eligible gate without changing integer cells,
     // allow commitBlockMove to evaluate the outward exit (`DRAG-03`).

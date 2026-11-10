@@ -126,10 +126,39 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     expect(telemetry.rendererBackend).toBe('WEBGL2');
 
     // LEVEL 1:
-    // Drag Block 1 (1x2 at row 1, col 1) up into the TOP red gate (row 0, col 1) via real mouse drag
-    await dragBoardCellToCell(page, 1, 1, 1, 0);
+    // Drag Block 1 (1x2 at row 1, col 1) along a realistic human curved/diagonal trajectory
+    // through the half-cell center (col = 1.50) of the 3-wide TOP red gate (cols 1..3),
+    // verifying smooth monotonic movement on every intermediate pointer step without hitching (`DRAG-04`).
+    const curvedPts = await page.evaluate(() => {
+      const waypoints: Array<[number, number]> = [
+        [2.0, 1.5],
+        [2.18, 1.38],
+        [2.36, 1.22],
+        [2.48, 1.02],
+        [2.52, 0.82],
+        [2.5, 0.62],
+        [2.5, 0.42],
+      ];
+      return waypoints.map(([cx, ry]) => window.__SHREDBLOCKS_DEBUG__.boardToScreen(cx, ry));
+    });
 
-    // Verify Block 1 was shredded by mid-drag gate capture (only 1 active block left)
+    await page.mouse.move(curvedPts[0].x, curvedPts[0].y);
+    await page.mouse.down();
+    let lastObservedY = 1.0;
+    for (let i = 1; i < curvedPts.length; i++) {
+      await page.mouse.move(curvedPts[i].x, curvedPts[i].y);
+      const b1State = await page.evaluate(() => {
+        const b = window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0];
+        return { status: b.status, x: b.x, y: b.y };
+      });
+      if (b1State.status === 'ACTIVE') {
+        expect(b1State.y).toBeLessThan(lastObservedY - 0.05);
+        lastObservedY = b1State.y;
+      }
+    }
+    await page.mouse.up();
+
+    // Verify Block 1 was shredded by mid-drag gate capture at the center of the wide gate (only 1 active block left)
     const activeAfterDrag1 = await page.evaluate(
       () => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks.filter((b) => b.status === 'ACTIVE').length
     );

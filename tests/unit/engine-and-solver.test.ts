@@ -514,4 +514,76 @@ describe('All 5 Boosters & Zero-Softlock Law', () => {
     expect(cascade.clearedBlockIds).toContain(1);
     expect(autoAdvanceColorQueues(board)).toBe(false);
   });
+
+  it('glides smoothly without hitching or deadzones during curved/diagonal drags into wide gates on Level 1 (DRAG-04 / F-01)', () => {
+    const board = createBoardState(getLevelSpec(1));
+
+    // 1. Drag Block 1 (1x2 at row=1, col=1) along a curved trajectory through x=1.50 (half-cell center of the 3-wide TOP gate)
+    let capturedGate1 = -1;
+    let prevY = board.blocks[0].y;
+    const totalFrames = 20;
+    for (let f = 1; f <= totalFrames; f++) {
+      const t = f / totalFrames;
+      // Curved trajectory: swings right to x = 1.52 (right inside the [1.30, 1.70] mid-cell zone) while moving up to y = -0.05
+      const targetX = 1.0 + 0.52 * Math.sin(t * Math.PI * 0.65);
+      const targetY = 1.0 - 1.05 * t;
+
+      const res = sweepBlockToTarget(board, 1, targetX, targetY, (lx, ly, svx, svy) => {
+        const cap = checkMidDragGateCapture(board, 1, svx, svy, targetX - lx, targetY - ly);
+        return cap ? cap.gateIndex : -1;
+      });
+
+      const stepDeltaY = prevY - res.leadY;
+      // Must make smooth monotonic upward progress on every frame before capture (zero stuck frames, zero sudden snap jumps)
+      expect(stepDeltaY).toBeGreaterThan(0.02);
+      expect(stepDeltaY).toBeLessThan(0.12);
+      prevY = res.leadY;
+
+      if (res.capturedGateIndex >= 0) {
+        capturedGate1 = res.capturedGateIndex;
+        break;
+      }
+    }
+    expect(capturedGate1).toBe(0);
+
+    // 2. Verify zero mid-gate deadzones across the entire continuous aperture of Gate 0 (cols 1..3 for a 1x2 block -> minCol=1, maxCol=2)
+    for (let x = 0.6; x <= 2.4 + 1e-6; x += 0.1) {
+      const testBoard = createBoardState(getLevelSpec(1));
+      testBoard.blocks[0].x = x;
+      testBoard.blocks[0].y = 0.08;
+      // Upward motion into gate must capture at every continuous X offset (including x = 1.50 dead-center)
+      const cap = checkMidDragGateCapture(testBoard, 1, 0, -0.08, 0, -0.15);
+      expect(cap).toEqual({ capturedBlockId: 1, gateIndex: 0 });
+      // Purely horizontal or nearly-horizontal walk-by slide with slight upward drift must NOT accidentally suck the block in
+      const walkBy = checkMidDragGateCapture(testBoard, 1, 0.12, 0, 0.12, 0);
+      expect(walkBy).toBeNull();
+      const driftedWalkBy = checkMidDragGateCapture(testBoard, 1, 0.18, -0.01, 1.2, -0.01);
+      expect(driftedWalkBy).toBeNull();
+    }
+
+    // 3. Drag Block 2 (2x1 at row=2, col=3) along a curved diagonal trajectory to y=1.50 (center of 3-tall RIGHT gate)
+    let capturedGate2 = -1;
+    let prevX = board.blocks[1].x;
+    for (let f = 1; f <= totalFrames; f++) {
+      const t = f / totalFrames;
+      const targetX = 3.0 + 1.05 * t;
+      const targetY = 2.0 - 0.5 * Math.sin(t * Math.PI * 0.65);
+
+      const res = sweepBlockToTarget(board, 2, targetX, targetY, (lx, ly, svx, svy) => {
+        const cap = checkMidDragGateCapture(board, 2, svx, svy, targetX - lx, targetY - ly);
+        return cap ? cap.gateIndex : -1;
+      });
+
+      const stepDeltaX = res.leadX - prevX;
+      expect(stepDeltaX).toBeGreaterThan(0.02);
+      expect(stepDeltaX).toBeLessThan(0.12);
+      prevX = res.leadX;
+
+      if (res.capturedGateIndex >= 0) {
+        capturedGate2 = res.capturedGateIndex;
+        break;
+      }
+    }
+    expect(capturedGate2).toBe(1);
+  });
 });

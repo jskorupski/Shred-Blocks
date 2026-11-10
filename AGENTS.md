@@ -140,6 +140,9 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
 7. **Single-Call Agentic File-Size Invariant (`ARCH-ERGONOMICS-01`) & Atomic Commit Hygiene**:
    - Never allow any `.ts`, `.css`, `.html`, `.md`, `.js`, `.json`, `.jsonc`, or `.svg` file in the repository to exceed `800 lines` or `45,000 bytes` (aim for `<= 750 lines`). When adding new features, place them in focused domain sub-modules (`src/core/`, `src/levels/`, `src/render/`, `src/ui/`, `src/styles/`, `tests/unit/`) and re-export public symbols through the domain barrel.
    - Keep git commits focused on cohesive logical units: isolate pure internal refactors in their own dedicated commit separate from user-facing feature/fix commits, while grouping tightly interconnected changes that depend on each other into a single verified commit after iterative adversarial sign-off.
+8. **Open-Space 2D Drag Glide & Continuous Wide-Gate Span Capture (`DRAG-04` / `F-01`)**:
+   - Never lock dragged blocks to a single 1D axis in unobstructed open space (`sweepBlockToTarget` in [`src/core/physics.ts`](src/core/physics.ts) sweeps both axes continuously while clamping to exact integer obstacle boundaries and beveling around obstacle corners within `CORNER_BEVEL_THRESHOLD = 0.35`).
+   - Never require `Math.abs(b.x - Math.round(b.x)) <= 0.15` along the parallel span of a wide gate in `checkMidDragGateCapture` ([`src/core/gate-clearance.ts`](src/core/gate-clearance.ts)), as that creates a `0.70`-cell deadzone at the `0.50` half-cell center of wide gates (such as the 3-wide gates on Level 1). Always evaluate continuous span containment (`[minSpan - 0.45, maxSpan + 0.45]`) and test curved/diagonal pointer trajectories in both unit and E2E suites.
 
 ---
 
