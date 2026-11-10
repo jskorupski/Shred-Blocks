@@ -30,11 +30,11 @@ Every change to the codebase must preserve these invariants:
    - **First-Move Safety Invariant (`UX-03`)**: On levels `1..30`, every legal first move must lead to a solvable board state (`verifyFirstMoveSafety()`).
    - **Fun-First Difficulty Ramping Invariants (`RAMP-01`–`RAMP-05`)**:
      - **Breather Rhythm (`RAMP-01`)**: Every `5th` level (`15, 20, 25, ...`) is a flow-state breather level (`difficulty: 'NORMAL'`, generous gate apertures, zero bombs/tight shutters).
-     - **Progressive Courtyard Scaling & Sculpted Multi-Room Sanctums**: Boards expand gradually across 6 architectural epochs (`5×5` on `L1–15` $\rightarrow$ `6×6` on `L16–40` $\rightarrow$ `6×7` on `L41–80` $\rightarrow$ `7×7` on `L81–140` $\rightarrow$ `7×8`/`8×8` on `L141–220` $\rightarrow$ `8×8`/`9×9` Grand Citadel on `L221–300`), incorporating **Sculpted 3D Courtyards (`L14+`)**, **Stepped-Edge Exit Gates (`gate.edgeLine`, `L18+`)**, and **Multi-Room Portcullis Sanctums & Sunken Twilight Chambers (`board.barriers`, `board.roomMap`, `L25+`)**.
+     - **Progressive Courtyard Scaling & Sculpted Multi-Room Sanctums**: Boards expand gradually across 6 architectural epochs (`5×5` on `L1–15` $\rightarrow$ `6×6` / `8×6` on `L16–40` $\rightarrow$ `6×7` / `8×6` / `9×7` on `L41–80` $\rightarrow$ `7×7` / `9×7` on `L81–140` $\rightarrow$ `7×8` / `8×8` / `9×7` on `L141–220` $\rightarrow$ `8×8` / `9×9` / `10×8` Grand Citadel on `L221–300`), incorporating **Sculpted 3D Courtyards (`L14+`)**, **Stepped-Edge Exit Gates (`gate.edgeLine`, `L18+`)**, **Multi-Room Portcullis Sanctums & Sunken Twilight Chambers (`board.barriers`, `board.roomMap`, `L25+`)**, **Sealed Mystery Vaults (`bar.isVault: true`, `layoutId: 'MYSTERY_VAULT'`, `L28+`, `VAULT-01`..`02`)**, **Tall Portrait Big Maps (`rows > cols`, `PORTRAIT-01`..`02`)**, **Synchronized Staggered Multi-Gate Ice Countdowns (`GATE-ICE-01`)**, and **3-Tier Stage-Partitioned Brick Density (`DENSITY-01`: `4–5` breather/early, `5–7` standard `L20+`, and `7–12` stage-partitioned blocks on `MYSTERY_VAULT` & `SUPER_HARD` showcase boards)**.
      - **Per-Block & Per-Board Modifier Budgets (`RAMP-02` & `RAMP-03`)**: Never stack two primary movement-blocking modifiers (`axisLock`, `iceCount`, `chained`, `ropeColor`, `bombCount`) on the same block (`canAddBlockModifier`), and cap active obstacle families to `1` (`L1–70`), `2` (`L71–170`), or `3` (`L171+`).
      - **Generous Gate Apertures & Bomb Buffers (`RAMP-04` & `RAMP-05`)**: Keep gate `spanLength >= maxPerpendicularBlockSpan` (`>= 3` on `7×7+` boards) and `bombCount >= Math.max(10, coloredBlocks.length * 2 + 4)` so puzzles remain fun and tactile rather than frustrating.
 4. **Sacred-Geometry Architectural Sanctuary & Tactile 3D Design Language**:
-   - **Visual Identity**: Atmospheric twilight-to-terracotta `oklab` gradient skies, sacred-geometry SVG astrolabe accents (`.sacred-geometry-ornament`), sculpted cell-aware 3D architectural sanctuary plinths under non-rectangular & multi-room boards (`plinthSpans`), warm sunlit top lighting paired with cool lavender-indigo shadow fill, and chamfered 3D circular block studs.
+   - **Visual Identity**: Atmospheric twilight-to-terracotta `oklab` gradient skies, sacred-geometry SVG astrolabe accents (`.sacred-geometry-ornament`), sculpted cell-aware 3D architectural sanctuary plinths under non-rectangular & multi-room boards (`plinthSpans`), warm sunlit top lighting paired with cool lavender-indigo shadow fill, chamfered 3D circular block studs, **3D Carved Sanctuary Vault Lids (`bar.isVault`, `materialStyle = 2`)** with gilded bronze bezels, horizontal louver ribs, and `[🔒 N]` medallions, and **3D Sculpted Frost Medallions (`[❄️ N]`)** on Frozen Exit Gates.
    - **Full Settings × Custom Theme Compatibility (`AX-01`, `AX-02`, `UX-10`)**:
      - All 8 user settings (`playMode`, `sfxEnabled`, `musicEnabled`, `hapticsEnabled`, `colorblindSymbols`, `highContrast`, `reducedMotion`, `qualityTier`) must work in every combination across all 5 Block Skins, 5 Board Trays (`HIGH_CONTRAST_TRAY_PALETTES` / `getEffectiveTrayPalette`), and 5 Particle Styles.
      - Colorblind symbols (`CB_0..9` on dark obsidian circular medallions) must render at `zCbSymbol = zLift + 0.692 * scaleZ` above all studs, 3D medallions, and straps, and shift cleanly to the top-left collar `(0.21, 0.21)` on multi-layer or center-badged cells so outer vs. inner layer symbols never collide.
@@ -103,7 +103,7 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
    ```bash
    npm run test:unit
    ```
-   Must pass all 44+ tests in `< 2.0s`, including 100% solvability, non-overlapping cell verification across all 300 campaign levels, and `ARCH-ERGONOMICS-01` file-size enforcement.
+   Must pass all 45+ tests in `< 4.0s`, including 100% solvability, non-overlapping cell verification across all 300 campaign levels, `VAULT-01`–`02` / `PORTRAIT-01` / `GATE-ICE-01` / `DENSITY-01` invariants, and `ARCH-ERGONOMICS-01` file-size enforcement.
 3. **TypeScript Typecheck & Production Build**:
    ```bash
    npm run build
@@ -113,17 +113,18 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
    ```bash
    npm run test:e2e
    ```
-   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (New & Returning Player flows), real pointer drag-and-drop (including curved/diagonal trajectories), keyboard controls, all 5 boosters, all 8 user settings across custom themes, and all 18 obstacle + multi-room sanctum mechanics.
+   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (New & Returning Player flows), real pointer drag-and-drop (including curved/diagonal trajectories), keyboard controls, all 5 boosters, all 8 user settings across custom themes, and all 18 obstacle + multi-room sanctum + Sealed Mystery Vault & Tall Portrait mechanics.
 5. **Multi-Viewport Visual Screenshot & Launcher Icon Harness (when touching UI/CSS/3D rendering/icons)**:
    ```bash
    npm run verify:visual
    ./node_modules/.bin/tsx scripts/generate-icons.ts
    ```
-   Captures 34+ screenshots across `360×640`, `390×844`, `768×1024`, and `1440×900` plus the cross-platform launcher icon mask sheet (`29-launcher-icons-preview.png`) and verifies zero orphan server/browser processes afterward.
+   Captures 39+ screenshots (`00..42`) across `360×640`, `390×844`, `768×1024`, and `1440×900` plus the cross-platform launcher icon mask sheet (`29-launcher-icons-preview.png`) and verifies zero orphan server/browser processes afterward.
 6. **Multi-Level Subagent Adversarial Audit & UX Sign-Off (MANDATORY FOR UI / UX / GAMEPLAY UPDATES)**:
    - Every non-trivial UI, UX, icon, or gameplay change must be independently audited by dedicated subagents (`invoke_subagent` / `send_message`):
-     1. **Visual Aesthetics & UX Design Critic**: Inspects the rendered multi-viewport screenshots (`00-title-screen-new-player-mobile.png`, `30-title-screen-returning-player-mobile.png`, `01-home-roadmap-mobile.png`, `02-level-001-gameplay-mobile.png`, `29-launcher-icons-preview.png`, `32..37`, etc.) for Sacred-Geometry Architectural Sanctuary cohesion, typography, hierarchy, navigation clarity, and zero clipping/overlap across mobile, tablet, and desktop.
-     2. **Gameplay Mechanics & Playtest Auditor**: Audits interactive flows (New vs. Returning player onboarding, 1-tap Map/Title navigation, progressive power-up unlocking & rarity scarcity, solver-verified level ramping, and E2E playtest coverage).
+     1. **Visual Aesthetics & UX Design Critic**: Inspects the rendered multi-viewport screenshots (`00-title-screen-new-player-mobile.png`, `30-title-screen-returning-player-mobile.png`, `01-home-roadmap-mobile.png`, `02-level-001-gameplay-mobile.png`, `29-launcher-icons-preview.png`, `32..42`, etc.) for Sacred-Geometry Architectural Sanctuary cohesion, typography, hierarchy, navigation clarity, and zero clipping/overlap across mobile, tablet, and desktop.
+     2. **Gameplay Mechanics & Playtest Auditor**: Audits interactive flows (New vs. Returning player onboarding, 1-tap Map/Title navigation, progressive power-up unlocking & rarity scarcity, solver-verified level ramping, Sealed Mystery Vault stasis & progressive countdowns, and E2E playtest coverage).
+     3. **Architecture & Agentic Ergonomics Auditor**: Audits module boundaries, `ARCH-ERGONOMICS-01` (`<= 800 lines` and `<= 45,000 bytes` per file), zero `biome-ignore` suppressions in `src/**/*.ts`, and 4-pass WebGL2 / Canvas2D render parity.
    - Address all P0/P1/P2 findings raised by the review subagents and re-verify in iterative cycles until zero issues remain (`0 P0`, `0 P1`, `0 P2`), always adding regression tests whenever bugs or regressions not caught by existing tests are uncovered.
 
 ---
@@ -148,6 +149,10 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
 8. **Open-Space 2D Drag Glide & Continuous Wide-Gate Span Capture (`DRAG-04` / `F-01`)**:
    - Never lock dragged blocks to a single 1D axis in unobstructed open space (`sweepBlockToTarget` in [`src/core/physics.ts`](src/core/physics.ts) sweeps both axes continuously while clamping to exact integer obstacle boundaries and beveling around obstacle corners within `CORNER_BEVEL_THRESHOLD = 0.35`).
    - Never require `Math.abs(b.x - Math.round(b.x)) <= 0.15` along the parallel span of a wide gate in `checkMidDragGateCapture` ([`src/core/gate-clearance.ts`](src/core/gate-clearance.ts)), as that creates a `0.70`-cell deadzone at the `0.50` half-cell center of wide gates (such as the 3-wide gates on Level 1). Always evaluate continuous span containment (`[minSpan - 0.45, maxSpan + 0.45]`) and test curved/diagonal pointer trajectories in both unit and E2E suites.
+9. **Sealed Mystery Vault Stasis, Progressive Multi-Vault Clamping & Color-Queue Unlocked Supply (`VAULT-01` / `VAULT-02`)**:
+   - While a Sealed Mystery Vault (`bar.isVault === true && !bar.open`) is closed, `rebuildOccupancyGrid` must preserve `-3` (`BARRIER`) across all `bar.cells` and skip stamping `block.id` for concealed blocks (`isBlockInSealedVault`), while `pickBlockAtBoardPoint` checks `getSealedVaultAtCell` before the `0.32`-cell halo fallback so tapping near a vault edge triggers `onLockedVaultTap` instead of grabbing an exterior block.
+   - In `stepPortcullisBarriersOnShred` ([`src/core/shred-side-effects.ts`](src/core/shred-side-effects.ts)), always sort closed barriers/vaults in ascending `shredsRemaining` order and accumulate reachable layers across progressively unlocked rooms so multi-vault levels (`Level 74`) never prematurely clamp higher-threshold vaults.
+   - In `autoAdvanceColorQueues`, track `unlockedSupply[c]` alongside total `supply[c]` and swap any queued color stalled on a vault-sealed color with the next immediately unlocked color in `gate.colorQueue`.
 
 ---
 

@@ -14,6 +14,7 @@ export interface CandidateMechanicsContext {
   generators: NonNullable<LevelSpec['generators']>;
   floorPaths: NonNullable<LevelSpec['floorPaths']>;
   elevators: NonNullable<LevelSpec['elevators']>;
+  barriers: NonNullable<LevelSpec['barriers']>;
   getSculptedEdgeSpanBounds: (edge: EdgeDir) => { minStart: number; maxEnd: number };
 }
 
@@ -30,8 +31,24 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     generators,
     floorPaths,
     elevators,
+    barriers,
     getSculptedEdgeSpanBounds,
   } = ctx;
+  const lockedCellKeys = new Set<number>();
+  for (const bar of barriers) {
+    const cells = bar.roomCells ?? bar.cells;
+    for (const [r, c] of cells) {
+      lockedCellKeys.add(r * cols + c);
+    }
+  }
+  const isInStartingRoom = (b: LevelSpec['blocks'][number]): boolean => {
+    if (layoutId === 'TWIN_SANCTUM' && b.row <= 2) return false;
+    const sh = getShape(b.shapeId);
+    for (const [dr, dc] of sh.cells) {
+      if (lockedCellKeys.has((b.row + dr) * cols + (b.col + dc))) return false;
+    }
+    return true;
+  };
   const useAxisLock = activeMechanics.has('AXIS_LOCK');
   const useMultiLayer = activeMechanics.has('MULTI_LAYER');
   const useIceBlocks = activeMechanics.has('ICE_BLOCKS');
@@ -92,7 +109,9 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
 
   // Multi-Layer Blocks (L31+)
   if (useMultiLayer && coloredBlocks.length >= 2 && activeColors.length >= 2) {
-    const target = coloredBlocks.find((b) => canAddBlockModifier(b, 'OTHER') && !b.axisLock);
+    const target = coloredBlocks.find(
+      (b) => isInStartingRoom(b) && canAddBlockModifier(b, 'OTHER') && !b.axisLock
+    );
     if (target) {
       const innerColor = activeColors.find((c) => c !== target.colorStack[0]) ?? activeColors[0];
       target.colorStack = [target.colorStack[0], innerColor];
@@ -101,7 +120,9 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
 
   // Ice Blocks (L41+)
   if (useIceBlocks && coloredBlocks.length >= 3) {
-    const target = [...coloredBlocks].reverse().find((b) => canAddBlockModifier(b, 'IMMOBILIZER'));
+    const target = [...coloredBlocks]
+      .reverse()
+      .find((b) => isInStartingRoom(b) && canAddBlockModifier(b, 'IMMOBILIZER'));
     if (target) {
       target.iceCount = 1;
     }
@@ -110,8 +131,9 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
   // Star Blocks & Star Gates (L51+)
   if (useStar && coloredBlocks.length >= 2) {
     const starCandidate =
-      coloredBlocks.find((b) => b.colorStack.length === 1 && canAddBlockModifier(b, 'PAYLOAD')) ??
-      coloredBlocks.find((b) => canAddBlockModifier(b, 'PAYLOAD'));
+      coloredBlocks.find(
+        (b) => isInStartingRoom(b) && b.colorStack.length === 1 && canAddBlockModifier(b, 'PAYLOAD')
+      ) ?? coloredBlocks.find((b) => isInStartingRoom(b) && canAddBlockModifier(b, 'PAYLOAD'));
     if (starCandidate) {
       for (const layerColor of starCandidate.colorStack) {
         const gate = gates.find((g) => g.colorQueue.includes(layerColor));
@@ -121,26 +143,18 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     }
   }
 
-  const isInStartingRoom = (b: LevelSpec['blocks'][number]): boolean =>
-    layoutId !== 'TWIN_SANCTUM' || b.row > 2;
-
   // Key & Lock (Chained) Blocks (L61+)
   if (useKeyLock && coloredBlocks.length >= 3) {
-    const keyCarrier =
-      coloredBlocks.find(
-        (b) =>
-          isInStartingRoom(b) &&
-          !b.iceCount &&
-          !b.chained &&
-          !b.ropeColor &&
-          canAddBlockModifier(b, 'PAYLOAD')
-      ) ??
-      coloredBlocks.find(
-        (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
-      );
+    const keyCarrier = coloredBlocks.find(
+      (b) =>
+        isInStartingRoom(b) && !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
+    );
     const lockedTarget = [...coloredBlocks]
       .reverse()
-      .find((b) => b.id !== keyCarrier?.id && !b.hasKey && canAddBlockModifier(b, 'IMMOBILIZER'));
+      .find(
+        (b) =>
+          isInStartingRoom(b) && b.id !== keyCarrier?.id && !b.hasKey && canAddBlockModifier(b, 'IMMOBILIZER')
+      );
     if (keyCarrier && lockedTarget) {
       keyCarrier.hasKey = 1;
       lockedTarget.chained = true;
@@ -150,18 +164,10 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
 
   // Bomb Blocks (L91+, `RAMP-04`: generous countdown so players never feel cheated)
   if (useBombs && coloredBlocks.length >= 2) {
-    const bombCandidate =
-      coloredBlocks.find(
-        (b) =>
-          isInStartingRoom(b) &&
-          !b.iceCount &&
-          !b.chained &&
-          !b.ropeColor &&
-          canAddBlockModifier(b, 'PAYLOAD')
-      ) ??
-      coloredBlocks.find(
-        (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
-      );
+    const bombCandidate = coloredBlocks.find(
+      (b) =>
+        isInStartingRoom(b) && !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
+    );
     if (bombCandidate) {
       bombCandidate.bombCount = Math.max(16, coloredBlocks.length * 3 + 2);
     }
@@ -169,23 +175,19 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
 
   // Colored Ropes & Scissors (L111+)
   if (useRopes && coloredBlocks.length >= 3) {
-    const scissorHolder =
-      coloredBlocks.find(
-        (b) =>
-          isInStartingRoom(b) &&
-          !b.iceCount &&
-          !b.chained &&
-          !b.ropeColor &&
-          canAddBlockModifier(b, 'PAYLOAD')
-      ) ??
-      coloredBlocks.find(
-        (b) => !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
-      );
+    const scissorHolder = coloredBlocks.find(
+      (b) =>
+        isInStartingRoom(b) && !b.iceCount && !b.chained && !b.ropeColor && canAddBlockModifier(b, 'PAYLOAD')
+    );
     const ropedTarget = [...coloredBlocks]
       .reverse()
       .find(
         (b) =>
-          b.id !== scissorHolder?.id && !b.hasKey && !b.scissorColor && canAddBlockModifier(b, 'IMMOBILIZER')
+          isInStartingRoom(b) &&
+          b.id !== scissorHolder?.id &&
+          !b.hasKey &&
+          !b.scissorColor &&
+          canAddBlockModifier(b, 'IMMOBILIZER')
       );
     if (scissorHolder && ropedTarget) {
       const ropeCol = activeColors[0];
@@ -194,15 +196,15 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     }
   }
 
-  // Frozen Gates (L131+)
-  if (useFrozenGates && gates.length >= 3) {
+  // Frozen Gates (L131+ or synchronized MYSTERY_VAULT gate countdowns `GATE-ICE-01`)
+  if ((useFrozenGates || layoutId === 'MYSTERY_VAULT') && gates.length >= 3) {
     const lastGate = gates[gates.length - 1];
     const lastColor = lastGate.colorQueue[0];
-    const otherBlocks = coloredBlocks.filter(
-      (b) => b.colorStack[0] !== lastColor && !b.iceCount && !b.chained && !b.ropeColor
+    const unlockedOtherBlocks = coloredBlocks.filter(
+      (b) => isInStartingRoom(b) && b.colorStack[0] !== lastColor && !b.iceCount && !b.chained && !b.ropeColor
     );
-    if (otherBlocks.length >= 2) {
-      lastGate.iceCount = 1;
+    if (unlockedOtherBlocks.length >= 2) {
+      lastGate.iceCount = layoutId === 'MYSTERY_VAULT' ? 2 : 1;
     }
   }
 
@@ -210,24 +212,15 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
   if (useShutterLock && gates.length >= 3 && coloredBlocks.length >= 3) {
     const lockedGate = gates[gates.length - 1];
     const lockedGateColor = lockedGate.colorQueue[0];
-    const gemCarrier =
-      coloredBlocks.find(
-        (b) =>
-          isInStartingRoom(b) &&
-          b.colorStack[0] !== lockedGateColor &&
-          !b.iceCount &&
-          !b.chained &&
-          !b.ropeColor &&
-          canAddBlockModifier(b, 'PAYLOAD')
-      ) ??
-      coloredBlocks.find(
-        (b) =>
-          b.colorStack[0] !== lockedGateColor &&
-          !b.iceCount &&
-          !b.chained &&
-          !b.ropeColor &&
-          canAddBlockModifier(b, 'PAYLOAD')
-      );
+    const gemCarrier = coloredBlocks.find(
+      (b) =>
+        isInStartingRoom(b) &&
+        b.colorStack[0] !== lockedGateColor &&
+        !b.iceCount &&
+        !b.chained &&
+        !b.ropeColor &&
+        canAddBlockModifier(b, 'PAYLOAD')
+    );
     if (gemCarrier && !lockedGate.iceCount) {
       const gemColor = gemCarrier.colorStack[0];
       gemCarrier.shutterGemColor = gemColor;

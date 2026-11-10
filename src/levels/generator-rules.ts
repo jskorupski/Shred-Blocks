@@ -278,16 +278,24 @@ export function selectCourtyardTopologyForLevel(
 ): CourtyardLayoutId {
   if (levelId < 14 || attempt >= 2) return 'RECTANGLE';
 
-  if (
-    levelId >= 25 &&
-    (levelId % 6 === 0 || levelId % 9 === 0) &&
-    rows >= 7 &&
+  const canUseSanctumOrVault =
     !activeMechanics.has('ELEVATORS') &&
     !activeMechanics.has('GENERATORS') &&
     !activeMechanics.has('GLUED') &&
     !activeMechanics.has('SLIDING_GATE') &&
-    !activeMechanics.has('SIZE_CHANGING_GATE')
+    !activeMechanics.has('SIZE_CHANGING_GATE');
+
+  if (
+    levelId >= 28 &&
+    (levelId % 7 === 0 || levelId % 10 === 4 || levelId % 10 === 8) &&
+    rows >= 7 &&
+    cols >= 6 &&
+    canUseSanctumOrVault
   ) {
+    return 'MYSTERY_VAULT';
+  }
+
+  if (levelId >= 25 && (levelId % 6 === 0 || levelId % 9 === 0) && rows >= 7 && canUseSanctumOrVault) {
     return 'TWIN_SANCTUM';
   }
 

@@ -199,6 +199,7 @@ export interface AppViewContext {
   activeRoadmapRange: string;
   freeUndosRemaining: number;
   levelOutcomeHandled: boolean;
+  bombSecondAccumulator: number;
   lastPointerActivityMs: number;
   toastTimerId: ReturnType<typeof setTimeout> | null;
   unlockToastTimerId: ReturnType<typeof setTimeout> | null;

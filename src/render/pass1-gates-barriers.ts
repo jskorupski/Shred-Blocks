@@ -214,13 +214,13 @@ export function renderPass1WallsAndGates(
         }
       }
 
-      // Convex outer corner posts
-      if (topOpen && leftOpen) {
+      // Convex outer corner posts & concave inner elbow posts when stepped-edge gates abut an inward corner
+      const drawCornerPost = (px: number, py: number): void => {
         rctx.drawMesh(
           gl,
           ENVIRONMENT_MESHES.wallSegment,
-          c - wallThick,
-          r - wallThick,
+          px,
+          py,
           zOff,
           wallThick,
           wallThick,
@@ -229,54 +229,11 @@ export function renderPass1WallsAndGates(
           cwg,
           cwb
         );
-      }
-      if (topOpen && rightOpen) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.wallSegment,
-          c + 1,
-          r - wallThick,
-          zOff,
-          wallThick,
-          wallThick,
-          1,
-          cwr,
-          cwg,
-          cwb
-        );
-      }
-      if (botOpen && leftOpen) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.wallSegment,
-          c - wallThick,
-          r + 1,
-          zOff,
-          wallThick,
-          wallThick,
-          1,
-          cwr,
-          cwg,
-          cwb
-        );
-      }
-      if (botOpen && rightOpen) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.wallSegment,
-          c + 1,
-          r + 1,
-          zOff,
-          wallThick,
-          wallThick,
-          1,
-          cwr,
-          cwg,
-          cwb
-        );
-      }
-
-      // Concave inner elbow posts when stepped-edge gates abut an inward corner
+      };
+      if (topOpen && leftOpen) drawCornerPost(c - wallThick, r - wallThick);
+      if (topOpen && rightOpen) drawCornerPost(c + 1, r - wallThick);
+      if (botOpen && leftOpen) drawCornerPost(c - wallThick, r + 1);
+      if (botOpen && rightOpen) drawCornerPost(c + 1, r + 1);
       if (
         !topOpen &&
         !leftOpen &&
@@ -284,19 +241,7 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('LEFT', c, r - 1) &&
         isUnitEdgeCoveredByGate('TOP', r, c - 1)
       ) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.wallSegment,
-          c - wallThick,
-          r - wallThick,
-          zOff,
-          wallThick,
-          wallThick,
-          1,
-          cwr,
-          cwg,
-          cwb
-        );
+        drawCornerPost(c - wallThick, r - wallThick);
       }
       if (
         !topOpen &&
@@ -305,19 +250,7 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('RIGHT', c, r - 1) &&
         isUnitEdgeCoveredByGate('TOP', r, c + 1)
       ) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.wallSegment,
-          c + 1,
-          r - wallThick,
-          zOff,
-          wallThick,
-          wallThick,
-          1,
-          cwr,
-          cwg,
-          cwb
-        );
+        drawCornerPost(c + 1, r - wallThick);
       }
       if (
         !botOpen &&
@@ -326,19 +259,7 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('LEFT', c, r + 1) &&
         isUnitEdgeCoveredByGate('BOTTOM', r, c - 1)
       ) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.wallSegment,
-          c - wallThick,
-          r + 1,
-          zOff,
-          wallThick,
-          wallThick,
-          1,
-          cwr,
-          cwg,
-          cwb
-        );
+        drawCornerPost(c - wallThick, r + 1);
       }
       if (
         !botOpen &&
@@ -347,19 +268,7 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('RIGHT', c, r + 1) &&
         isUnitEdgeCoveredByGate('BOTTOM', r, c + 1)
       ) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.wallSegment,
-          c + 1,
-          r + 1,
-          zOff,
-          wallThick,
-          wallThick,
-          1,
-          cwr,
-          cwg,
-          cwb
-        );
+        drawCornerPost(c + 1, r + 1);
       }
     }
   }
@@ -632,8 +541,10 @@ export function renderPass1WallsAndGates(
       }
     }
 
-    // Frozen Gate Overlay (`R3D-04`, `R3D-11`)
+    // Frozen Gate Overlay (`R3D-04`, `R3D-11`, `GATE-ICE-01`: 3D Sculpted Frost Medallion + crisp 1/2-digit countdown)
     if (gate.iceCount > 0) {
+      const twoDigitIce = gate.iceCount >= 10;
+      const iceInwardX = !isHorizEdge && twoDigitIce ? (gate.edge === 'LEFT' ? 0.04 : -0.04) : 0;
       gl.depthMask(false);
       rctx.drawMesh(
         gl,
@@ -653,25 +564,43 @@ export function renderPass1WallsAndGates(
         1
       );
       gl.depthMask(true);
+      const medW = isHorizEdge ? (twoDigitIce ? 0.76 : 0.64) : 0.38;
+      const medH = isHorizEdge ? 0.38 : twoDigitIce ? 0.72 : 0.66;
+      const iceMedZ = rctx.drawBadgeMedallion3D(
+        gl,
+        rollerX + iceInwardX * 0.5,
+        rollerY,
+        zOff + 0.642,
+        medW,
+        medH,
+        0.09 * lum,
+        0.19 * lum,
+        0.32 * lum,
+        0.56 * lum,
+        0.9 * lum,
+        1.0 * lum
+      );
+      const iceIconOffset = isHorizEdge ? (twoDigitIce ? 0.18 : 0.14) : 0.15;
+      const iceNumOffset = isHorizEdge ? (twoDigitIce ? 0.15 : 0.14) : 0.15;
       rctx.drawAtlasBadge(
         gl,
         'BADGE_ICE',
-        rollerX - spanAxisX * 0.12,
-        rollerY - spanAxisY * 0.12,
-        zOff + 0.72,
-        0.28,
-        0.85 * lum,
-        0.97 * lum,
+        rollerX - spanAxisX * iceIconOffset + iceInwardX * 0.5,
+        rollerY - spanAxisY * iceIconOffset,
+        iceMedZ,
+        twoDigitIce ? 0.26 : 0.28,
+        0.78 * lum,
+        0.96 * lum,
         1.0 * lum,
         1.0
       );
       rctx.drawNumberBadges(
         gl,
         gate.iceCount,
-        rollerX + spanAxisX * 0.12,
-        rollerY + spanAxisY * 0.12,
-        zOff + 0.725,
-        0.3,
+        rollerX + spanAxisX * iceNumOffset + iceInwardX,
+        rollerY + spanAxisY * iceNumOffset,
+        iceMedZ + 0.002,
+        twoDigitIce ? 0.25 : 0.3,
         lum,
         lum,
         lum
@@ -680,7 +609,8 @@ export function renderPass1WallsAndGates(
 
     // Star Gate Emblem (`R3D-04`: separated along span axis and elevated to z = 0.72)
     if (gate.isStar) {
-      const starOffset = gate.iceCount > 0 || gate.shutterLockColor > 0 ? 0.28 : 0.0;
+      const starOffset =
+        gate.iceCount > 0 ? (gate.iceCount >= 10 ? 0.52 : 0.46) : gate.shutterLockColor > 0 ? 0.28 : 0.0;
       rctx.drawAtlasBadge(
         gl,
         'BADGE_STAR',
@@ -698,9 +628,12 @@ export function renderPass1WallsAndGates(
     // Colorblind symbol on gate housing (`UX-10`, `R3D-04`: clear of center badges and outward queue pips)
     if (colorblind) {
       const hasCenterGateBadge = gate.iceCount > 0 || gate.shutterLockColor > 0 || gate.isStar;
-      const symSpanOffset = hasCenterGateBadge
-        ? -Math.max(0.34, Math.min(0.46, gate.spanLength * 0.5 - 0.22))
-        : 0.0;
+      const symSpanOffset =
+        gate.iceCount > 0
+          ? -Math.max(0.54, Math.min(0.68, gate.spanLength * 0.5 - 0.22))
+          : hasCenterGateBadge
+            ? -Math.max(0.34, Math.min(0.46, gate.spanLength * 0.5 - 0.22))
+            : 0.0;
       const inwardX = gate.edge === 'LEFT' ? 0.06 : gate.edge === 'RIGHT' ? -0.06 : 0;
       const inwardY = gate.edge === 'TOP' ? 0.06 : gate.edge === 'BOTTOM' ? -0.06 : 0;
       rctx.drawAtlasBadge(

@@ -132,6 +132,8 @@ export class Renderer3D implements RenderPassContext {
 
   private resizeObserver: ResizeObserver | null = null;
   private currentDpr = 1;
+  private lastAspectRows = 0;
+  private lastAspectCols = 0;
   private lastBoard: BoardState | null = null;
   public lastOptions: RenderSceneOptions = {};
   public startTimeMs = performance.now();
@@ -523,7 +525,17 @@ export class Renderer3D implements RenderPassContext {
     const maxDpr = this.qualityGovernor.getTargetMaxDpr();
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     const expectedDpr = Math.min(maxDpr, rawDpr);
-    if (Math.abs(expectedDpr - this.currentDpr) > 0.01) {
+    const boardDimsChanged = board.rows !== this.lastAspectRows || board.cols !== this.lastAspectCols;
+    if (boardDimsChanged) {
+      this.lastAspectRows = board.rows;
+      this.lastAspectCols = board.cols;
+      const targetAspect =
+        board.rows === board.cols
+          ? 1
+          : Math.max(0.65, Math.min(1.25, (board.cols + 1.55) / (board.rows + 1.55)));
+      this.canvas.style.setProperty('--board-aspect', targetAspect.toFixed(4));
+      this.resize();
+    } else if (Math.abs(expectedDpr - this.currentDpr) > 0.01) {
       this.resize();
     }
 

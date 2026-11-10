@@ -119,8 +119,10 @@ export function createBoardState(spec: LevelSpec): BoardState {
     const unlocksRoomId = bar.unlocksRoomId ?? idx + 1;
     const shredsRemaining = Math.max(0, bar.shredsRemaining ?? 0);
     const lockId = bar.lockId ?? 0;
-    if (bar.roomCells) {
-      for (const [rr, cc] of bar.roomCells) {
+    const isVault = Boolean(bar.isVault);
+    const effectiveRoomCells = bar.roomCells ?? (isVault ? bar.cells : undefined);
+    if (effectiveRoomCells) {
+      for (const [rr, cc] of effectiveRoomCells) {
         if (rr >= 0 && rr < rows && cc >= 0 && cc < cols) {
           roomMap[rr * cols + cc] = unlocksRoomId;
         }
@@ -135,12 +137,19 @@ export function createBoardState(spec: LevelSpec): BoardState {
       lockId,
       unlocksRoomId,
       open: shredsRemaining <= 0 && lockId === 0,
+      isVault,
     };
   });
 
   const inferredLayoutId: CourtyardLayoutId =
     spec.layoutId ??
-    (barriers.length > 0 ? 'TWIN_SANCTUM' : (spec.cutouts?.length ?? 0) > 0 ? 'CROSS_ATRIUM' : 'RECTANGLE');
+    (barriers.some((b) => b.isVault)
+      ? 'MYSTERY_VAULT'
+      : barriers.length > 0
+        ? 'TWIN_SANCTUM'
+        : (spec.cutouts?.length ?? 0) > 0
+          ? 'CROSS_ATRIUM'
+          : 'RECTANGLE');
 
   let maxBlockId = 0;
   const blocks: BlockState[] = spec.blocks.map((b) => {

@@ -24,7 +24,11 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
   const decPos = levelId % 10; // 1..9, 0
   const isBreatherWave = levelId >= 11 && (decPos === 1 || decPos === 2 || decPos === 6);
 
-  // Decade-Aligned Spacious Board Size Curve (`PROG-01`, `RAMP-05`: `5x5` -> `9x9`)
+  // Decade-Aligned Spacious Board Size Curve (`PROG-01`, `RAMP-05`, `PORTRAIT-01`: `5x5` -> `9x9` & tall portrait maps)
+  const usePortraitTall =
+    attempt <= 1 &&
+    levelId >= 28 &&
+    (levelId % 7 === 0 || levelId % 10 === 4 || levelId % 10 === 8 || levelId % 3 === 0);
   let rows = 6;
   let cols = 6;
   if (levelId <= 4) {
@@ -34,26 +38,26 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     rows = 6;
     cols = 5;
   } else if (levelId <= 40) {
-    rows = levelId >= 30 && difficulty === 'SUPER_HARD' ? 7 : 6;
+    rows = usePortraitTall ? 8 : levelId >= 30 && difficulty === 'SUPER_HARD' ? 7 : 6;
     cols = 6;
   } else if (levelId <= 80) {
-    rows = 7;
+    rows = usePortraitTall ? 8 : 7;
     cols = levelId >= 70 && difficulty === 'SUPER_HARD' ? 7 : 6;
   } else if (levelId <= 130) {
-    rows = levelId >= 110 && difficulty === 'SUPER_HARD' ? 8 : 7;
+    rows = usePortraitTall ? 9 : levelId >= 110 && difficulty === 'SUPER_HARD' ? 8 : 7;
     cols = 7;
   } else if (levelId <= 180) {
-    rows = 8;
+    rows = usePortraitTall ? 9 : 8;
     cols = levelId >= 160 && difficulty === 'SUPER_HARD' ? 8 : 7;
   } else if (levelId <= 240) {
-    rows = levelId >= 220 && difficulty === 'SUPER_HARD' ? 9 : 8;
-    cols = 8;
+    rows = usePortraitTall ? 9 : levelId >= 220 && difficulty === 'SUPER_HARD' ? 9 : 8;
+    cols = usePortraitTall ? 7 : 8;
   } else if (levelId <= 280) {
-    rows = 9;
-    cols = levelId >= 270 && difficulty === 'SUPER_HARD' ? 9 : 8;
+    rows = usePortraitTall ? 10 : 9;
+    cols = usePortraitTall ? 8 : levelId >= 270 && difficulty === 'SUPER_HARD' ? 9 : 8;
   } else {
-    rows = 9;
-    cols = isBreatherWave ? 8 : 9;
+    rows = usePortraitTall ? 10 : 9;
+    cols = usePortraitTall ? 8 : isBreatherWave ? 8 : 9;
   }
 
   // On late retry attempts (`attempt >= 3`), step down very large grids by 1 cell to guarantee fast solver verification
@@ -93,6 +97,10 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
       if (edge === 'LEFT' || edge === 'RIGHT') return { minStart: 3, maxEnd: limit };
       if (edge === 'TOP') return { minStart: 1, maxEnd: limit - 1 };
       return { minStart: 0, maxEnd: limit };
+    }
+    if (layoutId === 'MYSTERY_VAULT') {
+      if (edge === 'TOP' || edge === 'BOTTOM') return { minStart: 1, maxEnd: limit - 1 };
+      return { minStart: 1, maxEnd: limit - 2 };
     }
     if (layoutId === 'L_WING') {
       if (edge === 'TOP') return { minStart: 0, maxEnd: limit - 1 };
@@ -280,6 +288,24 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
       unlocksRoomId: 1,
       roomCells: room1Cells,
     });
+  } else if (layoutId === 'MYSTERY_VAULT') {
+    const vaultRows = [rows - 2, rows - 1];
+    const vaultMaxCol = Math.min(cols - 2, 4);
+    const vaultCells: Array<[number, number]> = [];
+    for (const vr of vaultRows) {
+      for (let vc = 1; vc <= vaultMaxCol; vc++) {
+        vaultCells.push([vr, vc]);
+        grid[vr * cols + vc] = -3;
+      }
+    }
+    barriers.push({
+      id: 1,
+      cells: vaultCells,
+      orientation: 'H',
+      shredsRemaining: 2,
+      unlocksRoomId: 1,
+      isVault: true,
+    });
   } else if (useCutoutsOrPillars) {
     addCutout(0, 0);
     if (levelId >= 24 && attempt < 2 && !isBreatherWave) {
@@ -297,7 +323,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     }
   }
 
-  // 3. Place Blocks — `RAMP-02` Sawtooth Flow Wave (`mod 1, 2, 6` Breathers drop block count for joyful flow)
+  // 3. Place Blocks — `RAMP-02` & `DENSITY-01` 3-Tier Stage-Partitioned Brick Density
   const baseTargetBlocks =
     attempt >= 2
       ? Math.min(5, levelId <= 10 ? 4 : 5)
@@ -309,21 +335,23 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
             ? levelId <= 180
               ? 4
               : 5
-            : levelId >= 220
-              ? difficulty === 'SUPER_HARD'
-                ? 6
-                : difficulty === 'HARD'
-                  ? 6
-                  : 5
-              : levelId >= 80
-                ? difficulty === 'NORMAL'
-                  ? 5
+            : layoutId === 'MYSTERY_VAULT'
+              ? rows >= 9
+                ? 7
+                : 6
+              : levelId >= 220
+                ? difficulty === 'SUPER_HARD'
+                  ? 7
                   : 6
-                : difficulty === 'SUPER_HARD'
-                  ? 6
-                  : difficulty === 'HARD'
+                : levelId >= 80
+                  ? difficulty === 'NORMAL'
                     ? 5
-                    : 4;
+                    : 6
+                  : difficulty === 'SUPER_HARD'
+                    ? 6
+                    : difficulty === 'HARD'
+                      ? 5
+                      : 5;
   const targetBlocks = Math.max(numColors, baseTargetBlocks);
 
   // `RAMP-03`: Keep EARLY_SHAPES through L40 and use NIMBLE_SHAPES on breather waves and non-lead blocks
@@ -410,6 +438,53 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
     const shape = getShape(chosenShape);
     let placed = false;
+
+    // In MYSTERY_VAULT, conceal blocks 0 and 1 inside the bottom Sealed Mystery Vault (rows-2..rows-1) and place remaining blocks in the open upper pocket (rows 1..rows-3)
+    if (layoutId === 'MYSTERY_VAULT') {
+      if (bIdx === 0 || bIdx === 1) {
+        const vr = bIdx === 0 ? rows - 2 : rows - 1;
+        const vc = 2;
+        if (grid[vr * cols + vc] === -3 && grid[vr * cols + (vc + 1)] === -3) {
+          const id = nextId++;
+          grid[vr * cols + vc] = id;
+          grid[vr * cols + (vc + 1)] = id;
+          blocks.push({
+            id,
+            shapeId: '1x2',
+            row: vr,
+            col: vc,
+            colorStack: [color],
+          });
+          placed = true;
+        }
+      } else {
+        for (let pTry = 0; pTry < 24 && !placed; pTry++) {
+          const maxR = Math.max(1, rows - 3 - shape.rows + 1);
+          const r = 1 + Math.floor(rng() * maxR);
+          const c = 1 + Math.floor(rng() * Math.max(1, cols - shape.cols - 1));
+          let fits = true;
+          for (const [dr, dc] of shape.cells) {
+            if (grid[(r + dr) * cols + (c + dc)] !== 0) {
+              fits = false;
+              break;
+            }
+          }
+          if (!fits) continue;
+          const id = nextId++;
+          for (const [dr, dc] of shape.cells) {
+            grid[(r + dr) * cols + (c + dc)] = id;
+          }
+          blocks.push({
+            id,
+            shapeId: chosenShape,
+            row: r,
+            col: c,
+            colorStack: [color],
+          });
+          placed = true;
+        }
+      }
+    }
 
     // In TWIN_SANCTUM, place block 0 in North Chamber (Room 1, row 1) and all other blocks in South Courtyard (Room 0, rows 3..rows-2)
     if (layoutId === 'TWIN_SANCTUM') {
@@ -588,6 +663,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
     generators,
     floorPaths,
     elevators,
+    barriers,
     getSculptedEdgeSpanBounds,
   });
 

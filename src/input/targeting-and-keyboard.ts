@@ -10,11 +10,14 @@ import { findEligibleGateForBlockAt, getGateOutwardNormal } from '../core/gate-c
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
+  getSealedVaultAtCell,
   isBlockInLockedRoom,
+  isBlockInSealedVault,
   isBlockMovable,
 } from '../core/physics';
 import { getActiveColor, getShape } from '../core/polyomino';
 import type {
+  BarrierState,
   BlockState,
   BoardState,
   BoosterType,
@@ -57,6 +60,8 @@ export interface BoardInputCallbacks {
   onMoveCommitted?: (outcome: CommitMoveOutcome) => void;
   /** Called when a player taps an immobile block (Stone, Frozen, Chained, Roped) */
   onImmobileBlockTap?: (block: BlockState) => void;
+  /** Called when a player taps a closed Sealed Mystery Vault lid (`bar.isVault`) */
+  onLockedVaultTap?: (vault: BarrierState) => void;
   /** Called when a targeted booster (Hammer, Rocket, Vacuum) is executed on a valid target */
   onExecuteBooster?: (type: BoosterType, target: BoosterTargetPayload) => boolean;
   /** Called when a keyboard shortcut triggers a quick action or booster slot 1..5 */
@@ -76,6 +81,10 @@ export interface BoardInputCallbacks {
  * a non-convex `U` or `L` pocket is always easy to grab.
  */
 export function pickBlockAtBoardPoint(board: BoardState, boardX: number, boardY: number): BlockState | null {
+  if (getSealedVaultAtCell(board, Math.floor(boardY), Math.floor(boardX)) !== null) {
+    return null;
+  }
+
   interface Candidate {
     block: BlockState;
     isMono: boolean;
@@ -90,6 +99,7 @@ export function pickBlockAtBoardPoint(board: BoardState, boardX: number, boardY:
 
   for (const block of board.blocks) {
     if (block.status !== 'ACTIVE') continue;
+    if (isBlockInSealedVault(board, block)) continue;
     const shape = getShape(block.shapeId);
     const isMono = block.shapeId === '1x1';
     const weight = isMono ? MONO_PRIORITY_WEIGHT : 1.0;

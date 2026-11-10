@@ -12,7 +12,6 @@ import {
   isBoardFailed,
   isBoardWon,
 } from './core/board';
-import { isBlockInLockedRoom } from './core/physics';
 import { getShape } from './core/polyomino';
 import type { BlockState, BoardState, BoosterType, InputMode, SavePayloadV1 } from './core/types';
 import { BoardInputController, type BoosterTargetPayload, type HoverState } from './input/pointer-controller';
@@ -42,8 +41,10 @@ import {
   buildRenderOptionsImpl,
   handleImmobileBlockTapImpl,
   handleLevelFailureImpl,
+  handleLockedVaultTapImpl,
   isNewPlayerSaveImpl,
   populateVictoryModalImpl,
+  stepSimulationImpl,
   syncAllUiFromSaveImpl,
   syncBoosterTargetingBannerImpl,
   syncInGameHudImpl,
@@ -95,7 +96,7 @@ export class ShredBlocksApp implements AppViewContext {
   private preRestartFreeUndos = 3;
   public freeUndosRemaining = 3;
   public levelOutcomeHandled = false;
-  private bombSecondAccumulator = 0;
+  public bombSecondAccumulator = 0;
   private lastRafMs = performance.now();
   public toastTimerId: ReturnType<typeof setTimeout> | null = null;
   public unlockToastTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -142,6 +143,9 @@ export class ShredBlocksApp implements AppViewContext {
       },
       onImmobileBlockTap: (block) => {
         this.handleImmobileBlockTap(block);
+      },
+      onLockedVaultTap: (vault) => {
+        handleLockedVaultTapImpl(this, vault);
       },
       onExecuteBooster: (type, target) => {
         return this.executeTargetedBooster(type, target);
@@ -336,7 +340,14 @@ export class ShredBlocksApp implements AppViewContext {
       unlockToast.hidden = true;
     }
     if (outcome.unlockedBarrierIds && outcome.unlockedBarrierIds.length > 0) {
-      this.showGameToast('⛩️ Portcullis Opened! New chamber unlocked!');
+      const openedVault = this.board.barriers.some(
+        (b) => b.isVault && outcome.unlockedBarrierIds.includes(b.id)
+      );
+      this.showGameToast(
+        openedVault
+          ? '🔓 Mystery Vault Unlocked! Hidden blocks revealed!'
+          : '⛩️ Portcullis Opened! New chamber unlocked!'
+      );
     }
     this.lastPointerActivityMs = performance.now();
     this.syncInGameHud();
@@ -593,9 +604,14 @@ export class ShredBlocksApp implements AppViewContext {
     this.preRestartSnapshot = null;
     this.preRestartUndoStack = [];
     this.saveManager.spendBooster(type);
-    const newlyOpened = this.board.barriers.some((b) => b.open && closedBefore.has(b.id));
-    if (newlyOpened) {
-      this.showGameToast('⛩️ Portcullis Opened! New chamber unlocked!');
+    const newlyOpened = this.board.barriers.filter((b) => b.open && closedBefore.has(b.id));
+    if (newlyOpened.length > 0) {
+      const openedVault = newlyOpened.some((b) => b.isVault);
+      this.showGameToast(
+        openedVault
+          ? '🔓 Mystery Vault Unlocked! Hidden blocks revealed!'
+          : '⛩️ Portcullis Opened! New chamber unlocked!'
+      );
     }
     this.syncInGameHud();
     this.checkWinOrLossAfterAction();
@@ -615,7 +631,7 @@ export class ShredBlocksApp implements AppViewContext {
       const dtSec = Math.min(0.1, Math.max(0.001, (nowMs - this.lastRafMs) / 1000));
       this.lastRafMs = nowMs;
 
-      this.stepSimulation(dtSec);
+      stepSimulationImpl(this, dtSec);
       if (this.activeScreen === 'game' || this.titleOverlayOpen) {
         this.renderNow(dtSec, nowMs * 0.001);
       }
@@ -629,66 +645,6 @@ export class ShredBlocksApp implements AppViewContext {
     };
 
     requestAnimationFrame(tick);
-  }
-
-  private stepSimulation(dtSec: number): void {
-    // Smoothly transition Sacred-Geometry Astrolabe Wall-Scroll Diagram (`blueprintMix: 1.0 -> 0.0`)
-    // into the full 3D tactile board when entering gameplay from the Title Screen
-    if (this.titleOverlayOpen) {
-      this.blueprintMix = 1.0;
-    } else if (this.blueprintMix > 0) {
-      if (this.saveManager.getPayload().settings.reducedMotion) {
-        this.blueprintMix = 0;
-      } else {
-        this.blueprintMix = Math.max(0, this.blueprintMix - dtSec / 0.72);
-      }
-    }
-
-    // Decay rebound animations on blocks
-    for (const b of this.board.blocks) {
-      if (b.reboundTimerMs > 0) {
-        b.reboundTimerMs = Math.max(0, b.reboundTimerMs - dtSec * 1000);
-      }
-    }
-
-    // Pause timers when not in game screen, when title overlay or modal is open, or during Booster Targeting (UX-04)
-    if (
-      this.titleOverlayOpen ||
-      this.activeScreen !== 'game' ||
-      this.levelOutcomeHandled ||
-      !this.board.timerRunning ||
-      this.inputController.getInputMode() !== 'DRAG' ||
-      this.isAnyModalOpen()
-    ) {
-      return;
-    }
-
-    if (this.board.freezeRemainingSec > 0) {
-      this.board.freezeRemainingSec = Math.max(0, this.board.freezeRemainingSec - dtSec);
-      this.syncTimerPillOnly();
-      return;
-    }
-
-    const playMode = this.saveManager.getPayload().settings.playMode;
-    if (playMode === 'TIMED') {
-      this.board.timeRemainingSec = Math.max(0, this.board.timeRemainingSec - dtSec);
-      this.bombSecondAccumulator += dtSec;
-      while (this.bombSecondAccumulator >= 1.0) {
-        this.bombSecondAccumulator -= 1.0;
-        for (const b of this.board.blocks) {
-          if (
-            b.status === 'ACTIVE' &&
-            b.bombMax > 0 &&
-            b.bombCount > 0 &&
-            !isBlockInLockedRoom(this.board, b)
-          ) {
-            b.bombCount = Math.max(0, b.bombCount - 1);
-          }
-        }
-      }
-      this.syncTimerPillOnly();
-      this.checkWinOrLossAfterAction();
-    }
   }
 
   public renderNow(dtSec = 1 / 60, timeSec?: number): void {

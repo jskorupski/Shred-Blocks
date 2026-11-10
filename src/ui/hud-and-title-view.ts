@@ -6,7 +6,13 @@ import {
   isBlockInLockedRoom,
 } from '../core/physics';
 import { getActiveColor } from '../core/polyomino';
-import { type BlockState, type BoosterType, COLOR_PALETTE, type SavePayloadV1 } from '../core/types';
+import {
+  type BarrierState,
+  type BlockState,
+  type BoosterType,
+  COLOR_PALETTE,
+  type SavePayloadV1,
+} from '../core/types';
 import type { HoverState } from '../input/pointer-controller';
 import { getLevelSpec } from '../levels/catalog';
 import type { RenderSceneOptions } from '../render/renderer-3d';
@@ -624,4 +630,69 @@ export function buildRenderOptionsImpl(
     dtSec,
     timeSec,
   };
+}
+
+export function handleLockedVaultTapImpl(app: AppViewContext, vault: BarrierState): void {
+  if (vault.shredsRemaining > 0 && vault.lockId > 0) {
+    app.showGameToast(
+      `🔒 Sealed Mystery Vault: Shred ${vault.shredsRemaining} more block${vault.shredsRemaining > 1 ? 's' : ''} + Key #${vault.lockId} to reveal!`
+    );
+  } else if (vault.shredsRemaining > 0) {
+    app.showGameToast(
+      `🔒 Sealed Mystery Vault: Shred ${vault.shredsRemaining} more block${vault.shredsRemaining > 1 ? 's' : ''} to reveal hidden blocks!`
+    );
+  } else if (vault.lockId > 0) {
+    app.showGameToast(`🔑 Sealed Mystery Vault: Shred the Key #${vault.lockId} block to reveal!`);
+  }
+}
+
+export function stepSimulationImpl(app: AppViewContext, dtSec: number): void {
+  if (app.titleOverlayOpen) {
+    app.blueprintMix = 1.0;
+  } else if (app.blueprintMix > 0) {
+    if (app.saveManager.getPayload().settings.reducedMotion) {
+      app.blueprintMix = 0;
+    } else {
+      app.blueprintMix = Math.max(0, app.blueprintMix - dtSec / 0.72);
+    }
+  }
+
+  for (const b of app.board.blocks) {
+    if (b.reboundTimerMs > 0) {
+      b.reboundTimerMs = Math.max(0, b.reboundTimerMs - dtSec * 1000);
+    }
+  }
+
+  if (
+    app.titleOverlayOpen ||
+    app.activeScreen !== 'game' ||
+    app.levelOutcomeHandled ||
+    !app.board.timerRunning ||
+    app.inputController.getInputMode() !== 'DRAG' ||
+    app.isAnyModalOpen()
+  ) {
+    return;
+  }
+
+  if (app.board.freezeRemainingSec > 0) {
+    app.board.freezeRemainingSec = Math.max(0, app.board.freezeRemainingSec - dtSec);
+    app.syncTimerPillOnly();
+    return;
+  }
+
+  const playMode = app.saveManager.getPayload().settings.playMode;
+  if (playMode === 'TIMED') {
+    app.board.timeRemainingSec = Math.max(0, app.board.timeRemainingSec - dtSec);
+    app.bombSecondAccumulator += dtSec;
+    while (app.bombSecondAccumulator >= 1.0) {
+      app.bombSecondAccumulator -= 1.0;
+      for (const b of app.board.blocks) {
+        if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0 && !isBlockInLockedRoom(app.board, b)) {
+          b.bombCount = Math.max(0, b.bombCount - 1);
+        }
+      }
+    }
+    app.syncTimerPillOnly();
+    app.checkWinOrLossAfterAction();
+  }
 }

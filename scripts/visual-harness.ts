@@ -511,6 +511,59 @@ async function runVisualHarness(): Promise<void> {
       path: join(ARTIFACT_SCRATCH_DIR, '37-level-025-frosted-quartz-high-contrast-colorblind-mobile.png'),
     });
 
+    // 38. Level 28: Gilded Vault (8x6 Tall Portrait Sealed Mystery Vault + Synchronized Frozen Gate)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
+      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(28);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '38-level-028-mystery-vault-sealed-mobile.png'),
+    });
+
+    // 41. Level 28: Unsealed Mystery Vault Reveal + Thawed Bottom Gate after 3 Shreds
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.commitMove(1, 0, 2);
+      window.__SHREDBLOCKS_DEBUG__.commitMove(2, 0, 2);
+      window.__SHREDBLOCKS_DEBUG__.commitMove(4, 2, 0);
+    });
+    await mobileL11Page.waitForTimeout(220);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '41-level-028-mystery-vault-unsealed-reveal-mobile.png'),
+    });
+
+    // 39. Level 38: Hourglass Vault (8x6 Central Mystery Vault Island)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(38);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '39-level-038-central-hourglass-vault-mobile.png'),
+    });
+
+    // 40. Level 74: Quad Vault Sanctum (9x7 Tall Portrait Multi-Vault Puzzle Box)
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(74);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '40-level-074-quad-vault-tall-portrait-mobile.png'),
+    });
+
+    // 42. Level 74: Quad Vault Sanctum with High Contrast + Colorblind Symbols + Frosted Quartz Theme
+    await mobileL11Page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setTheme('gummy_jelly', 'frosted_quartz', 'soap_bubbles');
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(true);
+      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(true);
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(74);
+    });
+    await mobileL11Page.waitForTimeout(180);
+    await mobileL11Page.screenshot({
+      path: join(ARTIFACT_SCRATCH_DIR, '42-level-074-quad-vault-high-contrast-colorblind-mobile.png'),
+    });
+
     // 34. Level 25: Title Screen Wall-Scroll Diagram over Twin Sanctum Multi-Room Courtyard
     await mobileL11Page.evaluate(() => {
       window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
@@ -530,7 +583,7 @@ async function runVisualHarness(): Promise<void> {
       throw new Error(`Visual harness encountered runtime errors:\n${errors.join('\n')}`);
     }
 
-    console.log('✅ Captured all 34 multi-viewport visual verification screenshots cleanly with 0 errors.');
+    console.log('✅ Captured all 39 multi-viewport visual verification screenshots cleanly with 0 errors.');
   } finally {
     if (browser) {
       await browser.close().catch(() => {});

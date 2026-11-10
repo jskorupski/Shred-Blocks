@@ -416,7 +416,7 @@ export function applyBoosterRocket(board: BoardState, row: number, col: number, 
 
   if (board.barriers) {
     for (const bar of board.barriers) {
-      if (bar.open) continue;
+      if (bar.open || bar.isVault) continue;
       if (bar.cells.some(([br, bc]) => (axis === 'ROW' && br === row) || (axis === 'COL' && bc === col))) {
         bar.shredsRemaining = 0;
         bar.lockId = 0;

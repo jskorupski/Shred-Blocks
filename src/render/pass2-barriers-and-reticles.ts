@@ -37,6 +37,150 @@ export function renderPass1PortcullisBarriers(
     const barLen = Math.max(spanW, spanH);
     const bcx = minC + spanW * 0.5;
     const bcy = minR + spanH * 0.5;
+    const portPulse = !rctx.lastOptions.reducedMotion
+      ? 0.5 + 0.5 * Math.sin(timeSec * 3.2 + bar.id * 1.3)
+      : 0.5;
+
+    if (bar.isVault) {
+      if (bar.open) {
+        // Flush inlaid brass corner brackets (`Z <= 0.014` so sliding blocks never clip)
+        for (const cx of [minC + 0.14, maxC + 0.86]) {
+          for (const cy of [minR + 0.14, maxR + 0.86]) {
+            rctx.drawMesh(
+              gl,
+              ENVIRONMENT_MESHES.unitParticleCube,
+              cx,
+              cy,
+              0.008,
+              0.22,
+              0.22,
+              0.012,
+              0.78,
+              0.62,
+              0.3,
+              0.92
+            );
+          }
+        }
+        continue;
+      }
+
+      // Closed 3D Carved Sanctuary Vault Lid (`VAULT-01`)
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        bcx,
+        bcy,
+        0.28,
+        spanW - 0.06,
+        spanH - 0.06,
+        0.54,
+        0.86 + 0.06 * portPulse,
+        0.68 + 0.06 * portPulse,
+        0.3,
+        1.0
+      );
+      const slabR = Math.min(1, palette.wallColor[0] * 0.45 + 0.16);
+      const slabG = Math.min(1, palette.wallColor[1] * 0.42 + 0.14);
+      const slabB = Math.min(1, palette.wallColor[2] * 0.55 + 0.3);
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        bcx,
+        bcy,
+        0.31,
+        spanW - 0.22,
+        spanH - 0.22,
+        0.56,
+        slabR,
+        slabG,
+        slabB,
+        1.0
+      );
+      const ribCount = Math.max(3, spanH * 2);
+      for (let ri = 0; ri < ribCount; ri++) {
+        const ry = minR + 0.22 + ((ri + 0.5) / ribCount) * (spanH - 0.44);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          bcx,
+          ry,
+          0.6,
+          spanW - 0.3,
+          0.1,
+          0.036,
+          Math.min(1, slabR + 0.08),
+          Math.min(1, slabG + 0.07),
+          Math.min(1, slabB + 0.1),
+          1.0
+        );
+      }
+      for (const cx of [minC + 0.2, maxC + 0.8]) {
+        for (const cy of [minR + 0.2, maxR + 0.8]) {
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.unitParticleCube,
+            cx,
+            cy,
+            0.6,
+            0.18,
+            0.18,
+            0.05,
+            0.94,
+            0.78,
+            0.38,
+            1.0
+          );
+        }
+      }
+      const isKeyOnly = Boolean(bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0);
+      const medBobZ = !rctx.lastOptions.reducedMotion
+        ? Math.sin(timeSec * 2.6 + bar.id) * 0.014 * live3DMix
+        : 0;
+      const medZ = rctx.drawBadgeMedallion3D(
+        gl,
+        bcx,
+        bcy,
+        0.635 + medBobZ,
+        isKeyOnly ? 0.58 : 0.84,
+        0.52,
+        0.36,
+        0.24,
+        0.12,
+        0.98,
+        0.84,
+        0.44
+      );
+      if (isKeyOnly) {
+        rctx.drawAtlasBadge(gl, 'BADGE_KEY', bcx, bcy, medZ, 0.44, 1.0, 0.9, 0.35, 1.0);
+      } else {
+        const twoDigit = bar.shredsRemaining >= 10;
+        rctx.drawAtlasBadge(
+          gl,
+          'BADGE_LOCK',
+          bcx - (twoDigit ? 0.22 : 0.17),
+          bcy,
+          medZ,
+          twoDigit ? 0.34 : 0.38,
+          1.0,
+          0.9,
+          0.38,
+          1.0
+        );
+        rctx.drawNumberBadges(
+          gl,
+          bar.shredsRemaining,
+          bcx + (twoDigit ? 0.14 : 0.16),
+          bcy,
+          medZ,
+          twoDigit ? 0.29 : 0.35,
+          1.0,
+          0.98,
+          0.92
+        );
+      }
+      continue;
+    }
 
     // Flush inlaid brass & obsidian threshold track across the barrier cells (visible both open and closed)
     rctx.drawMesh(
@@ -91,11 +235,6 @@ export function renderPass1PortcullisBarriers(
       }
       continue;
     }
-
-    // Closed 3D Sanctuary Portcullis Archway & Golden Slotted Lattice
-    const portPulse = !rctx.lastOptions.reducedMotion
-      ? 0.5 + 0.5 * Math.sin(timeSec * 3.2 + bar.id * 1.3)
-      : 0.5;
 
     // Subtle golden threshold floor aura beneath the closed portcullis
     rctx.drawMesh(

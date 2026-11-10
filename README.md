@@ -23,7 +23,7 @@
 
 **ShredBlocks: Color Jam** is a tactile 3D polyomino puzzle game built for the web with zero runtime dependencies. Slide colorful 3D blocks across a floating twilight courtyard into matching perimeter shredder gates—and watch rotating teeth slice them into bursts of 3D particles.
 
-- **🧩 300 Campaign Levels + Infinite Endless Mode**: Hand-tuned progression from cozy `5×5` courtyards to sculpted non-rectangular atriums, multi-room portcullis sanctums, and `9×9` Grand Citadels—backed by a deterministic puzzle solver so every board is 100% solvable without boosters.
+- **🧩 300 Campaign Levels + Infinite Endless Mode**: Hand-tuned progression from cozy `5×5` courtyards to sculpted non-rectangular atriums, **Tall Portrait Sanctums (`8×6`, `9×7`, `10×8`)**, **Multi-Room Portcullis Sanctums**, **Sealed Mystery Vaults (`🔒 N`)** that unseal to reveal hidden blocks underneath, and `9×9` Grand Citadels—backed by a deterministic puzzle solver so every board is 100% solvable without boosters.
 - **🧘 Two Play Modes (Switch Anytime)**:
   - **Zen Mode (Default)**: Untimed, meditative puzzle solving where move efficiency earns **1–3 Stars**.
   - **Timed Rush**: Optional arcade countdown clock for speedrunners.
@@ -73,13 +73,13 @@ npm run dev:lan
 # Run Biome TypeScript & CSS linter/formatter check (< 150ms)
 npm run lint
 
-# Run Vitest unit & 300-level BFS solver verification suite (< 2.0s, 44 tests)
+# Run Vitest unit & 300-level BFS solver verification suite (< 4.0s, 45 tests)
 npm run test:unit
 
 # Run Playwright E2E interactive browser playtest suite
 npm run test:e2e
 
-# Capture multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
+# Capture 39 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
 npm run verify:visual
 ```
 </details>
@@ -89,10 +89,10 @@ npm run verify:visual
 ## ✨ Gameplay & Features
 
 ### 1. Progressive Courtyard Campaign
-The campaign spans **6 architectural chapters**, introducing **18 distinct puzzle mechanics**, **Sculpted 3D Courtyards & Stepped-Edge Exit Gates (`L14` / `L18`)**, and **Multi-Room Portcullis Sanctums (`L25+`)** one by one with non-blocking tutorial banners and breather levels every 5th stage:
-- **Early Chapters (`Levels 1–40`, `5×5`–`6×6`)**: Core polyomino sliding, directional **Axis-Locked Rails (`↔` / `↕`)**, **Sculpted Courtyards (`L14`)**, **Stepped-Edge Exit Gates (`L18`)**, interior stone pillars (`L21`), **Multi-Room Portcullis Sanctums (`L25`)**, and **Multi-Layer Blocks (`L31`)** that peel away to reveal inner colors.
-- **Mid Chapters (`Levels 41–120`, `6×7`–`7×7`)**: **Frozen Ice Blocks**, **Star Gates**, **Keys & Chained Locks**, movable **Neutral Stone Sliders**, destructible **Wooden Crates**, **Time-Bombs**, **Linked Block Groups**, and **Colored Ropes & Scissors**.
-- **Late Chapters (`Levels 121–300`, `7×7`–`9×9`)**: **Color-Changing Gates**, **Frozen Gates**, **Jewel-Locked & Toggling Shutters**, **Sliding/Resizing Gates**, **Block Generators**, **Colored Floor Paths**, and **Moving Elevators**.
+The campaign spans **6 architectural chapters**, introducing **18 distinct puzzle mechanics**, **Sculpted 3D Courtyards & Stepped-Edge Exit Gates (`L14` / `L18`)**, **Multi-Room Portcullis Sanctums (`L25+`)**, **Sealed Mystery Vaults (`L28+` / `L38` / `L74`)**, and **Tall Portrait Big Maps (`8×6`, `9×7`, `10×8`)** across a **3-Tier Stage-Partitioned Brick Density** rhythm with non-blocking tutorial banners and breather levels every 5th stage:
+- **Early Chapters (`Levels 1–40`, `5×5`–`6×6` & `8×6` Tall Portrait)**: Core polyomino sliding, directional **Axis-Locked Rails (`↔` / `↕`)**, **Sculpted Courtyards (`L14`)**, **Stepped-Edge Exit Gates (`L18`)**, interior stone pillars (`L21`), **Multi-Room Portcullis Sanctums (`L25`)**, **Sealed Mystery Vaults & Synchronized Frozen Gates (`L28`, `L38`)** that conceal hidden blocks until `N` blocks shred, and **Multi-Layer Blocks (`L31`)** that peel away to reveal inner colors.
+- **Mid Chapters (`Levels 41–120`, `6×7`–`7×7` & `8×6` / `9×7` Tall Portrait)**: **Frozen Ice Blocks**, **Star Gates**, **Keys & Chained Locks**, movable **Neutral Stone Sliders**, **Multi-Stage Mystery Vault Puzzle Boxes (`L74`)**, destructible **Wooden Crates**, **Time-Bombs**, **Linked Block Groups**, and **Colored Ropes & Scissors**.
+- **Late Chapters (`Levels 121–300`, `7×7`–`9×9` & `9×7` / `10×8` Tall Portrait)**: **Color-Changing Gates**, **Frozen Gates (`❄️ N`)**, **Jewel-Locked & Toggling Shutters**, **Sliding/Resizing Gates**, **Block Generators**, **Colored Floor Paths**, and **Moving Elevators**.
 
 <details>
 <summary><strong>📖 View Complete 18-Obstacle & Architectural Reference Table (Levels 1–300)</strong></summary>
@@ -101,19 +101,19 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
 | :-: | :-: | :--- | :--- |
 | **1** | **Lvl 1** | **Polyomino Blocks & Shredder Gates** | Slide `1×1`, `1×2`, `1×3`, `2×2`, `L`, `T`, `Z`, and `+` blocks into matching perimeter gates whose span fits the block's profile. |
 | **2** | **Lvl 11** | **Axis-Locked Blocks (`↔` / `↕`)** | Side-flange guide rails restrict movement strictly to the Horizontal (`H`) or Vertical (`V`) axis. |
-| **3** | **Lvl 14 / 18 / 21** | **Sculpted Courtyards & Stepped Gates** | Non-rectangular courtyard footprints (`CROSS_ATRIUM`, `L_WING`, `T_PAVILION`, `HOURGLASS_BRIDGE`, `H_SANCTUM`, `CITADEL_OCTAGON`) with **Stepped-Edge Exit Gates (`Lvl 18`)** mounted directly on recessed inner ledges. |
-| **4** | **Lvl 21 / 25** | **Stone Pillars & Multi-Room Sanctums (`⛩ N`)** | Immovable interior stone columns (`Lvl 21`) and **3D Sanctuary Portcullis Barriers (`Lvl 25`)** that seal sunken twilight chambers until `N` blocks shred (or a matching `🔑` Key shreds). |
+| **3** | **Lvl 14 / 18 / 21** | **Sculpted Courtyards & Stepped Gates** | Non-rectangular courtyard footprints (`CROSS_ATRIUM`, `L_WING`, `T_PAVILION`, `HOURGLASS_BRIDGE`, `H_SANCTUM`, `CITADEL_OCTAGON`, `MYSTERY_VAULT`) with **Stepped-Edge Exit Gates (`Lvl 18`)** mounted directly on recessed inner ledges. |
+| **4** | **Lvl 21 / 25 / 28** | **Stone Pillars, Portcullis Sanctums (`⛩ N`) & Sealed Mystery Vaults (`🔒 N`)** | Immovable interior stone columns (`Lvl 21`), **3D Sanctuary Portcullis Barriers (`Lvl 25`)** sealing sunken twilight chambers, and **3D Carved Sanctuary Mystery Vault Lids (`Lvl 28`, `Lvl 38`, `Lvl 74`)** that physically cover `W×H` sub-regions and conceal hidden blocks in stasis until `N` blocks shred. |
 | **5** | **Lvl 31** | **Multi-Layer Blocks** | Outer color shells peel away at a matching gate, revealing an inner core color that remains on the board. |
 | **6** | **Lvl 41** | **Frozen Ice Blocks (`❄️ N`)** | Encased in translucent ice; thaws by `1` whenever another block or layer is shredded. |
 | **7** | **Lvl 51** | **Star Blocks & Star Gates (`★`)** | Star-badged blocks can only shred through matching-color Star Gates (`★`). |
 | **8** | **Lvl 61** | **Key (`🔑`) & Chained Lock (`🔒`)** | Chained blocks are immobilized until the block carrying the matching Key is shredded. |
 | **9** | **Lvl 71** | **Neutral Stone Sliders** | Heavy charcoal monoliths that never shred through any gate but slide freely to unblock lanes. |
 | **10** | **Lvl 81** | **Wooden Crates (`📦`)** | Destructible `1×1` crates (`1–3 HP`) that crack and shatter whenever an adjacent block shreds at a gate. |
-| **11** | **Lvl 91** | **Time-Bomb Blocks (`💣 N`)** | Tick down by `1` per move in Zen Mode (or `1` per second in Timed Rush); shred before `0` to defuse. |
+| **11** | **Lvl 91** | **Time-Bombs (`💣 N`)** | Tick down by `1` per move in Zen Mode (or `1` per second in Timed Rush); shred before `0` to defuse. |
 | **12** | **Lvl 101** | **Glued Linked Groups** | Separate blocks bonded by golden solder bars move together as a rigid multi-block assembly. |
 | **13** | **Lvl 111** | **Colored Ropes (`🪢`) & Scissors (`✂️`)** | Blocks tied in colored rope untie automatically when matching-color Scissors are shredded. |
 | **14** | **Lvl 121** | **Color-Changing Gates** | Gates with a multi-color queue advance to their next queued color after each shred. |
-| **15** | **Lvl 131** | **Frozen Gates (`❄️ N`)** | Perimeter gates encased in ice that thaw by `1` whenever a block shreds through any other gate. |
+| **15** | **Lvl 28 / 131** | **Frozen Gates (`❄️ N`)** | Perimeter gates encased in translucent ice with a 3D Sculpted Frost Medallion that thaw by `1` on every shred (including synchronized staggered gate + vault countdowns from `Lvl 28+`). |
 | **16** | **Lvl 141 / 145** | **Jewel-Locked & Toggling Shutters** | Steel shutter bars unlock when a matching Shutter Gem (`💎`) is shredded (`Lvl 141`) or toggle open/closed after every shred (`Lvl 145`). |
 | **17** | **Lvl 151 / 155** | **Sliding & Resizing Gates** | Dynamic gates that shift along the wall (`Lvl 151`) or expand/contract their aperture (`Lvl 155`) after each shred. |
 | **18** | **Lvl 161 / 171 / 181** | **Generators, Floor Paths & Elevators** | **Generators (`Lvl 161`)** spawn queued blocks; **Colored Floor Paths (`Lvl 171`)** restrict lane colors; **Moving Elevators (`Lvl 181`)** shift blocks after each shred. |
@@ -124,8 +124,8 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
 - **5 Progressive Power-Ups**: Unlock gradually across the first 30 levels with rarity-weighted Shredder Chest drops:
   - **Undo (`COMMON`, Lvl 1)**: Reverts the last move (first 3 per level are always free, plus 1-tap recovery after an accidental level restart).
   - **Hint / Freeze (`UNCOMMON`, Lvl 2)**: Shows the solver's optimal next move in Zen Mode, or freezes timers/bombs for `+10s` in Timed Rush.
-  - **Hammer (`RARE`, Lvl 8)**: Smashes or peels one layer from any block, Neutral Stone Slider, Crate, Portcullis Barrier (`⛩`), or Frozen/Locked Shutter Gate.
-  - **Row / Col Rocket (`EPIC`, Lvl 18)**: Blasts one layer across an entire row (`↔`) or column (`↕`) in any unlocked chamber.
+  - **Hammer (`RARE`, Lvl 8)**: Smashes or peels one layer from any unlocked block, Neutral Stone Slider, Crate, Portcullis Barrier (`⛩`), Sealed Mystery Vault Lid (`🔒`), or Frozen/Locked Shutter Gate.
+  - **Row / Col Rocket (`EPIC`, Lvl 18)**: Blasts one layer across an entire row (`↔`) or column (`↕`) in any unlocked chamber (while leaving Sealed Mystery Vaults intact until unsealed).
   - **Color Vacuum (`LEGENDARY`, Lvl 30)**: Sweeps every unlocked block of a chosen color off the board at once.
 - **Themes Studio (`15 Unlockable Cosmetics`)**: Spend earned Coins (`150 Coins` each) on **5 Block Skins** (*Classic Studs*, *Smooth Bevel*, *Gummy Jelly*, *Carved Wood*, *Neon Cyber*), **5 Board Trays** (*Industrial Slate*, *Warm Birch*, *Midnight Arcade*, *Frosted Quartz*, *Mint Studio*), and **5 Shred Particle Styles** (*Micro-Cubes*, *Star Confetti*, *Pixel Sparks*, *Soap Bubbles*, *Lightning Bolts*)—all 100% compatible with High-Contrast and Colorblind Symbol modes.
 - **Sacred-Geometry Wall-Scroll Title Preview**: On the Title Screen, the live 3D puzzle courtyard is rendered as an animated parchment-and-gold-ink architectural blueprint that smoothly materializes into full tactile 3D when you begin playing.

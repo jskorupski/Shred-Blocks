@@ -701,6 +701,49 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await dragBoardCellToCell(page, 4, 1, 5, 1); // Shred Block 2 -> Elevator shifts Block 1 from col 1 to col 2
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].col)).toBe(2);
 
+    // 19. Level 28: Sealed Mystery Vault (`Gilded Vault`, 8x6 Tall Portrait) + Tap Toast + Synchronized Frozen Gate
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(28));
+    const l28CanvasCheck = await page.evaluate(() => {
+      const c = document.getElementById('game-canvas');
+      if (!c) return { aspectVar: 1, w: 0, h: 0 };
+      const rect = c.getBoundingClientRect();
+      return {
+        aspectVar: Number.parseFloat(c.style.getPropertyValue('--board-aspect') || '1'),
+        w: rect.width,
+        h: rect.height,
+      };
+    });
+    expect(l28CanvasCheck.aspectVar).toBeCloseTo(0.7906, 2);
+    expect(l28CanvasCheck.h).toBeGreaterThan(l28CanvasCheck.w);
+
+    // Tapping the sealed vault lid at (col 2, row 5) triggers the Sealed Mystery Vault toast without moving hidden blocks
+    const vaultTapPt = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.boardToScreen(2.5, 5.5));
+    await page.mouse.click(vaultTapPt.x, vaultTapPt.y);
+    await expect(page.locator('#game-toast')).toContainText('Sealed Mystery Vault: Shred 3 more blocks');
+
+    // Shred Blocks 1, 2, and 3 in Room 0 to unlock the vault and thaw the bottom Frozen Gate
+    await dragBoardCellToCell(page, 2, 0, 2, -1);
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
+    await dragBoardCellToCell(page, 4, 1, 5, 1);
+    const l28Unlocked = await page.evaluate(() => {
+      const b = window.__SHREDBLOCKS_DEBUG__.getBoard();
+      return {
+        vaultOpen: b.barriers[0].open,
+        bottomGateIce: b.gates.find((g) => g.edge === 'BOTTOM')?.iceCount ?? -1,
+        occAt52: b.occupancy[5 * b.cols + 2],
+      };
+    });
+    expect(l28Unlocked).toEqual({ vaultOpen: true, bottomGateIce: 0, occAt52: 6 });
+
+    // 20. Level 74: Quad Vault Sanctum (9x7 Tall Portrait Multi-Vault Puzzle Box)
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(74));
+    await dragBoardCellToCell(page, 3, 0, 3, -1); // Shred Block 1 -> all 3 vaults step from [3, 6, 9] to [2, 5, 8]
+    expect(
+      await page.evaluate(() =>
+        window.__SHREDBLOCKS_DEBUG__.getBoard().barriers.map((b) => b.shredsRemaining)
+      )
+    ).toEqual([2, 5, 8]);
+
     expect(errors).toEqual([]);
   });
 });

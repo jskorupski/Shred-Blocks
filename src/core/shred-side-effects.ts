@@ -1,4 +1,5 @@
 import {
+  getBlockRoomId,
   getPlayableEdgeSpanBounds,
   isBlockInLockedRoom,
   isGateInLockedRoom,
@@ -159,21 +160,34 @@ export function autoAdvanceColorQueues(board: BoardState): boolean {
 
   for (let pass = 0; pass < 8; pass++) {
     const supply = new Int32Array(10);
+    const unlockedSupply = new Int32Array(10);
 
     for (const b of board.blocks) {
       if (b.status !== 'ACTIVE') continue;
+      const inLocked = isBlockInLockedRoom(board, b);
       for (let i = b.colorCursor; i < b.colorStack.length; i++) {
         const c = b.colorStack[i];
-        if (c > 0 && c <= 9) supply[c]++;
+        if (c > 0 && c <= 9) {
+          supply[c]++;
+          if (!inLocked) unlockedSupply[c]++;
+        }
       }
     }
 
     for (const gen of board.generators) {
       if (gen.state === 'DEPLETED') continue;
+      const genRoom =
+        board.roomMap && gen.row >= 0 && gen.row < board.rows && gen.col >= 0 && gen.col < board.cols
+          ? board.roomMap[gen.row * board.cols + gen.col]
+          : 0;
+      const genUnlocked = isRoomUnlocked(board, genRoom);
       for (let q = gen.queueCursor; q < gen.queue.length; q++) {
         const spec = gen.queue[q];
         for (const c of spec.colorStack) {
-          if (c > 0 && c <= 9) supply[c]++;
+          if (c > 0 && c <= 9) {
+            supply[c]++;
+            if (genUnlocked) unlockedSupply[c]++;
+          }
         }
       }
     }
@@ -189,6 +203,23 @@ export function autoAdvanceColorQueues(board: BoardState): boolean {
           gate.colorCursor++;
           passChanged = true;
           advancedAny = true;
+        } else if (unlockedSupply[frontColor] === 0) {
+          // If frontColor only exists inside sealed vaults/rooms, swap with the next color present in unlocked rooms
+          let swapIdx = -1;
+          for (let k = gate.colorCursor + 1; k < gate.colorQueue.length; k++) {
+            const nextC = gate.colorQueue[k];
+            if (unlockedSupply[nextC] > 0) {
+              swapIdx = k;
+              break;
+            }
+          }
+          if (swapIdx > gate.colorCursor) {
+            gate.colorQueue[gate.colorCursor] = gate.colorQueue[swapIdx];
+            gate.colorQueue[swapIdx] = frontColor;
+            passChanged = true;
+            advancedAny = true;
+          }
+          break;
         } else {
           break;
         }
@@ -404,18 +435,47 @@ export function stepPortcullisBarriersOnShred(board: BoardState): number[] {
     }
 
     let passOpened = false;
-    for (const bar of board.barriers) {
-      if (bar.open) continue;
-      if (bar.lockId > 0 && !availableKeys.has(bar.lockId)) {
+    const closedBarriers = board.barriers
+      .filter((bar) => !bar.open)
+      .sort((a, b) => a.shredsRemaining - b.shredsRemaining || a.id - b.id);
+
+    let cumulativeLayers = unlockedLayers;
+    const cumulativeKeys = new Set(availableKeys);
+    const countedRooms = new Set<number>();
+
+    for (const bar of closedBarriers) {
+      if (bar.lockId > 0 && !cumulativeKeys.has(bar.lockId)) {
         bar.lockId = 0;
       }
-      if (bar.shredsRemaining > unlockedLayers) {
-        bar.shredsRemaining = unlockedLayers;
+      if (bar.shredsRemaining > cumulativeLayers) {
+        bar.shredsRemaining = cumulativeLayers;
       }
       if (bar.shredsRemaining <= 0 && bar.lockId === 0) {
         bar.open = true;
         openedIds.push(bar.id);
         passOpened = true;
+      }
+
+      // Once this barrier's threshold is within cumulative reachable layers, its room's blocks
+      // will become available to help unlock higher-threshold progressive vaults/barriers.
+      const roomId = bar.unlocksRoomId;
+      if (roomId > 0 && !countedRooms.has(roomId) && board.roomMap) {
+        const otherClosedForRoom = board.barriers.some(
+          (other) => other.id !== bar.id && other.unlocksRoomId === roomId && !other.open
+        );
+        if (!otherClosedForRoom) {
+          countedRooms.add(roomId);
+          for (const b of board.blocks) {
+            if (b.status !== 'ACTIVE') continue;
+            if (getBlockRoomId(board, b) !== roomId) continue;
+            if (getActiveColor(b.colorStack, b.colorCursor) !== 0) {
+              cumulativeLayers += getLayersRemaining(b.colorStack, b.colorCursor);
+            }
+            if (b.hasKey > 0) {
+              cumulativeKeys.add(b.hasKey);
+            }
+          }
+        }
       }
     }
     if (!passOpened) break;

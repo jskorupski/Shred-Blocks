@@ -7,6 +7,7 @@ import {
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
+  getSealedVaultAtCell,
   isBlockMovable,
   rebuildOccupancyGrid,
   snapGroupToNearestGrid,
@@ -216,6 +217,11 @@ export class BoardInputController {
 
     const picked = pickBlockAtBoardPoint(board, pt.x, pt.y);
     if (!picked) {
+      const sealedVault = getSealedVaultAtCell(board, Math.floor(pt.y), Math.floor(pt.x));
+      if (sealedVault) {
+        this.callbacks.sound?.playWallClack();
+        this.callbacks.onLockedVaultTap?.(sealedVault);
+      }
       return;
     }
 

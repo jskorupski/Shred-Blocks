@@ -306,11 +306,13 @@
 }
 
 #game-canvas {
+  --board-aspect: 1;
   position: relative;
   z-index: 2;
-  width: min(94dvw, 60dvh, 620px);
-  height: min(94dvw, 60dvh, 620px);
-  aspect-ratio: 1 / 1;
+  aspect-ratio: var(--board-aspect);
+  width: min(94dvw, calc(60dvh * var(--board-aspect)), calc(660px * var(--board-aspect)));
+  height: auto;
+  max-height: min(60dvh, 660px);
   border-radius: var(--radius-lg);
   border: none;
   background: transparent;
@@ -324,20 +326,21 @@
 /* Floating Banners Over 3D Stage */
 .unlock-banner {
   position: absolute;
-  top: 0.65rem;
+  top: 0.45rem;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(24, 18, 44, 0.94);
   border: 1px solid rgba(246, 213, 168, 0.55);
-  border-radius: var(--radius-pill);
-  padding: 0.38rem 0.85rem;
-  font-size: clamp(0.75rem, 1dvw + 0.42rem, 0.88rem);
+  border-radius: var(--radius-md);
+  padding: 0.32rem 0.72rem;
+  font-size: clamp(0.72rem, 0.95dvw + 0.38rem, 0.84rem);
+  line-height: 1.28;
   font-weight: 700;
   color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  max-width: 92%;
+  max-width: min(92%, 460px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.48);
   pointer-events: none;
   z-index: 5;

@@ -14,8 +14,18 @@ import {
   createBoardState,
   isBoardWon,
 } from '../../src/core/board';
-import { getBlockRoomId, isBlockInLockedRoom, isBlockMovable, isRoomUnlocked } from '../../src/core/physics';
+import {
+  getBlockRoomId,
+  getSealedVaultAtCell,
+  isBlockInLockedRoom,
+  isBlockInSealedVault,
+  isBlockMovable,
+  isGateInLockedRoom,
+  isRoomUnlocked,
+} from '../../src/core/physics';
 import type { LevelSpec } from '../../src/core/types';
+import { pickBlockAtBoardPoint } from '../../src/input/pointer-controller';
+import { getAllCampaignLevels, getLevelSpec } from '../../src/levels/catalog';
 import { computeStateHash, solveBoard } from '../../src/levels/solver';
 
 describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
@@ -278,6 +288,78 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(boosterShieldBoard.barriers[0].shredsRemaining).toBe(0);
     expect(boosterShieldBoard.barriers[0].open).toBe(true);
     expect(boosterShieldBoard.generators[0].queueCursor).toBe(1);
+  });
+
+  it('VAULT-01, VAULT-02, PORTRAIT-01 & GATE-ICE-01: validates Sealed Mystery Vaults, concealed block stasis, progressive multi-vault countdowns, synchronized Frozen Gates, and tall portrait campaign levels', () => {
+    // 1. Level 28 (`Gilded Vault`, 8x6 tall portrait MYSTERY_VAULT)
+    const lvl28 = createBoardState(getLevelSpec(28));
+    expect(lvl28.rows).toBe(8);
+    expect(lvl28.cols).toBe(6);
+    expect(lvl28.layoutId).toBe('MYSTERY_VAULT');
+    expect(lvl28.barriers.length).toBe(1);
+    expect(lvl28.barriers[0].isVault).toBe(true);
+    expect(lvl28.barriers[0].shredsRemaining).toBe(3);
+
+    // Hidden blocks 6 and 7 inside the sealed vault leave occupancy at -3 and cannot be picked
+    const hidden6 = lvl28.blocks.find((b) => b.id === 6);
+    const hidden7 = lvl28.blocks.find((b) => b.id === 7);
+    if (!hidden6 || !hidden7) throw new Error('Expected hidden blocks 6 & 7 on Level 28');
+    expect(isBlockInSealedVault(lvl28, hidden6)).toBe(true);
+    expect(isBlockInSealedVault(lvl28, hidden7)).toBe(true);
+    expect(lvl28.occupancy[5 * lvl28.cols + 2]).toBe(-3);
+    expect(lvl28.occupancy[6 * lvl28.cols + 2]).toBe(-3);
+    expect(pickBlockAtBoardPoint(lvl28, 2.5, 5.5)).toBeNull();
+    expect(getSealedVaultAtCell(lvl28, 5, 2)?.id).toBe(1);
+
+    // Perimeter Frozen Gate at BOTTOM (iceCount: 3) is NOT locked by the vault room so it thaws on every shred
+    const bottomGate28 = lvl28.gates.find((g) => g.edge === 'BOTTOM');
+    if (!bottomGate28) throw new Error('Expected BOTTOM gate on Level 28');
+    expect(isGateInLockedRoom(lvl28, bottomGate28)).toBe(false);
+    expect(bottomGate28.iceCount).toBe(3);
+
+    // Rocket fired along ROW 5 crossing the sealed vault does NOT pop open the vault or destroy hidden6
+    expect(applyBoosterRocket(lvl28, 5, 2, 'ROW')).toBe(false);
+    expect(lvl28.barriers[0].open).toBe(false);
+    expect(hidden6.status).toBe('ACTIVE');
+
+    // Shredding blocks 1, 2, and 3 in Room 0 ticks down both the Mystery Vault (3 -> 2 -> 1 -> 0) and the Frozen Gate (3 -> 2 -> 1 -> 0) in lockstep!
+    commitBlockMove(lvl28, 1, 0, 2, 'ZEN');
+    expect(lvl28.barriers[0].shredsRemaining).toBe(2);
+    expect(lvl28.barriers[0].open).toBe(false);
+    expect(bottomGate28.iceCount).toBe(2);
+
+    commitBlockMove(lvl28, 2, 0, 2, 'ZEN');
+    expect(lvl28.barriers[0].shredsRemaining).toBe(1);
+    expect(lvl28.barriers[0].open).toBe(false);
+    expect(bottomGate28.iceCount).toBe(1);
+
+    commitBlockMove(lvl28, 3, 1, 5, 'ZEN');
+    expect(lvl28.barriers[0].shredsRemaining).toBe(0);
+    expect(lvl28.barriers[0].open).toBe(true);
+    expect(bottomGate28.iceCount).toBe(0);
+
+    // Once the vault opens, hidden6 and hidden7 become visible in occupancy (> 0) and pickable!
+    expect(isBlockInSealedVault(lvl28, hidden6)).toBe(false);
+    expect(lvl28.occupancy[5 * lvl28.cols + 2]).toBe(6);
+    expect(pickBlockAtBoardPoint(lvl28, 2.5, 5.5)?.id).toBe(6);
+
+    // 2. Level 74 (`Quad Vault Sanctum`, 9x7 tall portrait with 3 progressive Mystery Vaults: 3, 6, 9)
+    const lvl74 = createBoardState(getLevelSpec(74));
+    expect(lvl74.rows).toBe(9);
+    expect(lvl74.cols).toBe(7);
+    expect(lvl74.barriers.map((b) => b.shredsRemaining)).toEqual([3, 6, 9]);
+
+    // Shredding block 1 in Room 0 decrements the 3 vaults to [2, 5, 8] without prematurely clamping Vault 2 or Vault 3!
+    commitBlockMove(lvl74, 1, 0, 3, 'ZEN');
+    expect(lvl74.barriers.map((b) => b.shredsRemaining)).toEqual([2, 5, 8]);
+    expect(lvl74.barriers.map((b) => b.open)).toEqual([false, false, false]);
+
+    // Verify campaign catalog includes tall portrait maps (rows > cols) and MYSTERY_VAULT levels
+    const allCampaign = getAllCampaignLevels();
+    const portraitCount = allCampaign.filter((s) => s.rows > s.cols).length;
+    const vaultCount = allCampaign.filter((s) => s.barriers?.some((b) => b.isVault)).length;
+    expect(portraitCount).toBeGreaterThanOrEqual(40);
+    expect(vaultCount).toBeGreaterThanOrEqual(25);
   });
 
   it('ARCH-ERGONOMICS-01: enforces single-call agentic file-size limits (<= 800 lines and <= 45,000 bytes) across all repository source, style, test, script, and doc files', () => {

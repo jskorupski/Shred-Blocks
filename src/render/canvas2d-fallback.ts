@@ -1,5 +1,10 @@
 import { getGateActiveColor, getGateOutwardNormal } from '../core/gate-clearance';
-import { canGroupOccupyOffset, getBlockRoomId, getMovedGroupBlocks } from '../core/physics';
+import {
+  canGroupOccupyOffset,
+  getBlockRoomId,
+  getMovedGroupBlocks,
+  isBlockInSealedVault,
+} from '../core/physics';
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import { type BoardState, COLOR_PALETTE, type ColorId } from '../core/types';
 import { BLOCK_LIFT_DELTA_Z, BLOCK_TOP_Z } from './camera-3d';
@@ -442,12 +447,14 @@ export function renderCanvas2DFallbackImpl(
         minC + spanW - 0.08,
         minR + spanH - 0.08,
         0.56,
-        '#B45309',
+        bar.isVault ? '#312E81' : '#B45309',
         '#FDE047',
         2
       );
       const label =
-        bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0 ? '🔑' : `⛩${bar.shredsRemaining}`;
+        bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0
+          ? '🔑'
+          : `${bar.isVault ? '🔒' : '⛩'}${bar.shredsRemaining}`;
       drawCenteredText(
         label,
         minC + spanW * 0.5,
@@ -499,7 +506,7 @@ export function renderCanvas2DFallbackImpl(
   const fallbackTimeSec = options.timeSec ?? (performance.now() - rctx.startTimeMs) * 0.001;
   const fallbackReducedMotion = Boolean(options.reducedMotion);
   for (const block of board.blocks) {
-    if (block.status === 'CLEARED') continue;
+    if (block.status === 'CLEARED' || isBlockInSealedVault(board, block)) continue;
     const shape = getShape(block.shapeId);
     const cId: ColorId = getActiveColor(block.colorStack, block.colorCursor);
     const entry = COLOR_PALETTE[cId] ?? COLOR_PALETTE[1];
@@ -716,7 +723,7 @@ export function renderCanvas2DFallbackImpl(
   // 9. Draw Weld Clamps between adjacent blocks sharing `groupId > 0`
   for (let i = 0; i < board.blocks.length; i++) {
     const a = board.blocks[i];
-    if (a.status !== 'ACTIVE' || a.groupId <= 0) continue;
+    if (a.status !== 'ACTIVE' || a.groupId <= 0 || isBlockInSealedVault(board, a)) continue;
     const shapeA = getShape(a.shapeId);
     for (let j = i + 1; j < board.blocks.length; j++) {
       const b = board.blocks[j];

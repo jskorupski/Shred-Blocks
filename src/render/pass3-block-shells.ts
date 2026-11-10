@@ -1,5 +1,10 @@
 import { getGateOutwardNormal } from '../core/gate-clearance';
-import { getBlockRoomId, getMovedGroupBlocks, isBlockInLockedRoom } from '../core/physics';
+import {
+  getBlockRoomId,
+  getMovedGroupBlocks,
+  isBlockInLockedRoom,
+  isBlockInSealedVault,
+} from '../core/physics';
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import type { BoardState, ColorId, SkinId } from '../core/types';
 import { ENVIRONMENT_MESHES, getPolyominoMeshPair, POLYOMINO_MESH_CATALOG } from './mesh-generator';
@@ -136,6 +141,7 @@ export function renderPass3BlocksImpl(
 
   for (const block of board.blocks) {
     if (block.status === 'CLEARED') continue;
+    if (isBlockInSealedVault(board, block)) continue;
 
     const shape = getShape(block.shapeId);
     const meshPair = getPolyominoMeshPair(block.shapeId, skinId);

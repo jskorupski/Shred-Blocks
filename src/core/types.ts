@@ -161,21 +161,24 @@ export type CourtyardLayoutId =
   | 'HOURGLASS_BRIDGE'
   | 'H_SANCTUM'
   | 'TWIN_SANCTUM'
-  | 'CITADEL_OCTAGON';
+  | 'CITADEL_OCTAGON'
+  | 'MYSTERY_VAULT';
 
 export interface BarrierSpec {
   id: number;
-  /** Contiguous 1xK or Kx1 archway cells separating Room A and Room B */
+  /** Contiguous 1xK or Kx1 archway cells (or WxH vault cells when `isVault` is true) */
   cells: Array<[number, number]>;
   orientation: 'H' | 'V';
-  /** Number of block/layer shreds required to retract this portcullis (0 if Key-only) */
+  /** Number of block/layer shreds required to retract this portcullis or vault cover (0 if Key-only) */
   shredsRemaining?: number;
-  /** Optional Key ID (`hasKey`) that unlocks this portcullis when shredded */
+  /** Optional Key ID (`hasKey`) that unlocks this portcullis or vault when shredded */
   lockId?: number;
-  /** Room ID (`>= 1`) whose floor and blocks awaken when this barrier opens */
+  /** Room ID (`>= 1`) whose floor and blocks awaken when this barrier/vault opens */
   unlocksRoomId?: number;
-  /** Explicit `[row, col]` cells belonging to `unlocksRoomId` */
+  /** Explicit `[row, col]` cells belonging to `unlocksRoomId` (defaults to `cells` when `isVault` is true) */
   roomCells?: Array<[number, number]>;
+  /** When true, renders as a 3D Sealed Mystery Vault lid covering `cells` and concealing blocks underneath until opened */
+  isVault?: boolean;
 }
 
 export interface BarrierState {
@@ -187,6 +190,7 @@ export interface BarrierState {
   lockId: number;
   unlocksRoomId: number;
   open: boolean;
+  isVault?: boolean;
 }
 
 export interface BlockState {

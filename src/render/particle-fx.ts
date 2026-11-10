@@ -1,5 +1,5 @@
 import { getGateActiveColor, getGateOutwardNormal } from '../core/gate-clearance';
-import { getBlockRoomId, isBlockInLockedRoom, isGateInLockedRoom, isRoomUnlocked } from '../core/physics';
+import { getBlockRoomId, isBlockInLockedRoom, isGateInLockedRoom } from '../core/physics';
 import { getActiveColor, getShape } from '../core/polyomino';
 import {
   type BlockState,
@@ -307,11 +307,14 @@ export function getRoomVisualStateImpl(
   if (roomId <= 0) {
     return { zOffset: 0, luminanceMul: 1.0, isLocked: false };
   }
-  if (!isRoomUnlocked(board, roomId)) {
+  const lockedByNonVault =
+    board.barriers?.some((b) => b.unlocksRoomId === roomId && !b.open && !b.isVault) ?? false;
+  if (lockedByNonVault) {
     return { zOffset: -0.14, luminanceMul: 0.58, isLocked: true };
   }
+  const isVaultRoom = board.barriers?.some((b) => b.unlocksRoomId === roomId && b.isVault) ?? false;
   const elapsed = rctx.roomAwakenMap.get(roomId);
-  if (elapsed !== undefined && elapsed < 0.55 && !rctx.lastOptions.reducedMotion) {
+  if (!isVaultRoom && elapsed !== undefined && elapsed < 0.55 && !rctx.lastOptions.reducedMotion) {
     const t = Math.min(1, Math.max(0, elapsed / 0.55));
     const eased = 1 - (1 - t) ** 3;
     return {

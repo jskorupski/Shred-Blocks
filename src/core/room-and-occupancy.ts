@@ -1,5 +1,5 @@
 import { getShape } from './polyomino';
-import type { AxisLock, BlockState, BoardState, EdgeDir, GateState } from './types';
+import type { AxisLock, BarrierState, BlockState, BoardState, EdgeDir, GateState } from './types';
 
 /**
  * Computes the contiguous playable `[minSpan .. maxSpanEnd]` interval along `edgeLine` containing
@@ -101,7 +101,49 @@ export function isBlockInLockedRoom(board: BoardState, block: BlockState): boole
 }
 
 /**
- * Returns `true` if an Exit Gate sits along the wall of a currently sealed room (`MECH-18`).
+ * Returns `true` if `block` is concealed beneath a currently closed Sealed Mystery Vault (`bar.isVault`).
+ */
+export function isBlockInSealedVault(board: BoardState, block: BlockState): boolean {
+  if (!board.roomMap || !board.barriers || board.barriers.length === 0) return false;
+  const shape = getShape(block.shapeId);
+  for (const [dr, dc] of shape.cells) {
+    const r = block.row + dr;
+    const c = block.col + dc;
+    if (r >= 0 && r < board.rows && c >= 0 && c < board.cols) {
+      const rid = board.roomMap[r * board.cols + c];
+      if (rid > 0) {
+        for (const bar of board.barriers) {
+          if (bar.unlocksRoomId === rid && bar.isVault && !bar.open) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns the closed Sealed Mystery Vault (`BarrierState`) covering `(row, col)`, or `null` if none.
+ */
+export function getSealedVaultAtCell(board: BoardState, row: number, col: number): BarrierState | null {
+  if (!board.barriers || board.barriers.length === 0) return null;
+  if (row < 0 || row >= board.rows || col < 0 || col >= board.cols) return null;
+  for (const bar of board.barriers) {
+    if (!bar.isVault || bar.open) continue;
+    for (const [r, c] of bar.cells) {
+      if (r === row && c === col) {
+        return bar;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Returns `true` if an Exit Gate sits along the wall of a currently sealed non-vault room (`MECH-18`).
+ * Perimeter gates bordering a Sealed Mystery Vault (`bar.isVault`) remain active on the outer courtyard
+ * wall so their staggered ice countdowns thaw in lockstep with vault openings.
  */
 export function isGateInLockedRoom(board: BoardState, gate: GateState): boolean {
   if (!board.roomMap || !board.barriers || board.barriers.length === 0) return false;
@@ -123,7 +165,9 @@ export function isGateInLockedRoom(board: BoardState, gate: GateState): boolean 
       if (board.occupancy[idx] !== -1) {
         foundPlayableCell = true;
         const rid = board.roomMap[idx];
-        if (rid === 0 || isRoomUnlocked(board, rid)) {
+        const lockedByNonVaultRoom =
+          rid > 0 && board.barriers.some((bar) => bar.unlocksRoomId === rid && !bar.open && !bar.isVault);
+        if (!lockedByNonVaultRoom) {
           return false;
         }
       }
@@ -204,6 +248,7 @@ export function rebuildOccupancyGrid(board: BoardState): void {
 
   for (const block of board.blocks) {
     if (block.status !== 'ACTIVE') continue;
+    if (isBlockInSealedVault(board, block)) continue;
     const shape = getShape(block.shapeId);
     for (const [dr, dc] of shape.cells) {
       const r = block.row + dr;

@@ -1,4 +1,4 @@
-import { getBlockRoomId } from '../core/physics';
+import { getBlockRoomId, isBlockInSealedVault } from '../core/physics';
 import { getActiveColor, getShape, type PolyominoShape } from '../core/polyomino';
 import type { BlockState, BoardState, ColorId, SkinId } from '../core/types';
 import { BLOCK_LIFT_DELTA_Z } from './camera-3d';
@@ -602,7 +602,7 @@ export function renderGhostAndWeldClamps3D(
   // 3G. 3D Metallic Weld Clamps bridging adjacent blocks that share `groupId > 0`
   for (let i = 0; i < board.blocks.length; i++) {
     const a = board.blocks[i];
-    if (a.status !== 'ACTIVE' || a.groupId <= 0) continue;
+    if (a.status !== 'ACTIVE' || a.groupId <= 0 || isBlockInSealedVault(board, a)) continue;
     const shapeA = getShape(a.shapeId);
 
     for (let j = i + 1; j < board.blocks.length; j++) {

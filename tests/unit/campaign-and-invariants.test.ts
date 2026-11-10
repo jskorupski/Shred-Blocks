@@ -76,17 +76,27 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
         expect(occupiedCells.has(`${r},${c}`), `Level ${spec.id} pillar overlaps at (${r},${c})`).toBe(false);
         occupiedCells.add(`${r},${c}`);
       }
+      const barrierAndVaultCells = new Set<string>();
       for (const bar of spec.barriers ?? []) {
         for (const [br, bc] of bar.cells) {
-          expect(occupiedCells.has(`${br},${bc}`), `Level ${spec.id} barrier overlaps at (${br},${bc})`).toBe(
-            false
-          );
-          occupiedCells.add(`${br},${bc}`);
+          const key = `${br},${bc}`;
+          expect(occupiedCells.has(key), `Level ${spec.id} barrier overlaps at (${key})`).toBe(false);
+          expect(
+            barrierAndVaultCells.has(key),
+            `Level ${spec.id} barrier overlaps another barrier at (${key})`
+          ).toBe(false);
+          barrierAndVaultCells.add(key);
+          if (!bar.isVault) {
+            occupiedCells.add(key);
+          }
         }
       }
       for (const crate of spec.crates ?? []) {
         const key = `${crate.row},${crate.col}`;
-        expect(occupiedCells.has(key), `Level ${spec.id} crate overlaps at (${key})`).toBe(false);
+        expect(
+          occupiedCells.has(key) || barrierAndVaultCells.has(key),
+          `Level ${spec.id} crate overlaps at (${key})`
+        ).toBe(false);
         occupiedCells.add(key);
       }
       for (const blk of spec.blocks) {
