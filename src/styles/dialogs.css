@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SCREEN D: NATIVE <dialog> MODALS (modern-web-guidance compliant)
+   SCREEN D: NATIVE <dialog> MODALS — Minimalist Sanctuary Surfaces
    ========================================================================== */
 
 dialog:modal {
@@ -9,13 +9,13 @@ dialog:modal {
 dialog::backdrop {
   overflow: hidden;
   overscroll-behavior: contain;
-  background: rgba(12, 9, 24, 0.8);
+  background: rgba(12, 9, 24, 0.78);
   backdrop-filter: blur(8px);
 }
 
 #dialog-victory::backdrop {
-  background: radial-gradient(circle at 50% 45%, rgba(246, 189, 96, 0.24) 0%, rgba(16, 11, 32, 0.56) 100%);
-  backdrop-filter: blur(1.5px);
+  background: radial-gradient(circle at 50% 45%, rgba(246, 189, 96, 0.2) 0%, rgba(16, 11, 32, 0.56) 100%);
+  backdrop-filter: blur(2px);
 }
 
 .game-dialog {
@@ -30,24 +30,21 @@ dialog::backdrop {
 }
 
 .dialog-card {
-  background: linear-gradient(180deg var(--in-oklab), #3a2b63 0%, #21183b 100%);
-  border: 2px solid var(--border-bright);
+  background: rgba(26, 20, 48, 0.96);
+  border: 1px solid rgba(246, 213, 168, 0.18);
   border-radius: var(--radius-lg);
-  padding: 1.1rem;
-  box-shadow:
-    inset 0 2px 0 rgba(255, 244, 228, 0.32),
-    0 8px 0 #110c22,
-    0 22px 48px rgba(0, 0, 0, 0.68);
+  padding: 1.05rem;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
-  gap: 0.78rem;
+  gap: 0.72rem;
   max-height: min(90dvh, calc(var(--app-height, 100dvh) - 1.5rem));
   overflow-y: auto;
 }
 
 .victory-dialog-card {
-  padding: 0.92rem 1.05rem;
-  gap: 0.58rem;
+  padding: 0.9rem 1.02rem;
+  gap: 0.56rem;
 }
 
 .victory-header {
@@ -58,10 +55,9 @@ dialog::backdrop {
 }
 
 .victory-crest-ornament {
-  width: 56px;
-  height: 56px;
-  color: #f6bd60;
-  filter: drop-shadow(0 0 10px rgba(246, 189, 96, 0.45));
+  width: 52px;
+  height: 52px;
+  color: var(--accent-gold);
   translate: 0px;
   rotate: 0deg;
   scale: 1;
@@ -98,26 +94,34 @@ dialog::backdrop {
 
 .dialog-title {
   margin: 0;
-  font-size: clamp(1.1rem, 2.5dvw + 0.5rem, 1.55rem);
-  font-weight: 900;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "SOFT" 40,
+    "WONK" 0;
+  font-size: clamp(1.06rem, 2.2dvw + 0.45rem, 1.42rem);
+  font-weight: 600;
+  letter-spacing: 0.01em;
   text-wrap: balance;
 }
 
 .dialog-subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.86rem;
+  margin: 0.22rem 0 0;
+  font-size: 0.84rem;
+  font-weight: 400;
   color: var(--text-secondary);
   text-wrap: pretty;
 }
 
 .victory-stars {
-  font-size: 2.15rem;
+  font-size: 2.1rem;
   text-align: center;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.14em;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
+  color: rgba(255, 248, 238, 0.25);
 }
 
 .star-slot {
@@ -128,7 +132,8 @@ dialog::backdrop {
 }
 
 .star-slot.earned {
-  filter: drop-shadow(0 0 12px rgba(255, 224, 102, 0.55));
+  color: #f3d27a;
+  text-shadow: 0 0 16px rgba(243, 210, 122, 0.35);
   animation: starPopIn 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 
   @media (prefers-reduced-motion: reduce) {
@@ -158,7 +163,7 @@ dialog::backdrop {
   }
   70% {
     opacity: 1;
-    scale: 1.16;
+    scale: 1.14;
     rotate: 4deg;
   }
   100% {
@@ -171,79 +176,92 @@ dialog::backdrop {
 .victory-stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.6rem;
+  gap: 0.52rem;
 }
 
+/* Plane 0 Recessed Dark Wells for Passive Victory Stats & Chests */
 .stat-box {
-  background: rgba(9, 13, 26, 0.7);
-  border: 1px solid var(--border-subtle);
+  background: rgba(11, 8, 24, 0.62);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.48),
+    inset 0 -1px 0 rgba(255, 244, 224, 0.05);
+  border: none;
   border-radius: var(--radius-md);
-  padding: 0.6rem;
+  padding: 0.56rem;
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.18rem;
 }
 
 .stat-label {
-  font-size: 0.72rem;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
   color: var(--text-muted);
-  font-weight: 700;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .stat-value {
-  font-size: 1.1rem;
-  font-weight: 900;
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .text-gold {
-  color: #ffe570;
+  color: #f3d27a;
 }
 
 .coins-breakdown {
   margin: 0;
   text-align: center;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-secondary);
 }
 
 .victory-chests-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.48rem;
 }
 
 .victory-chest-mini {
-  background: rgba(11, 19, 43, 0.65);
-  border: 1px solid var(--border-subtle);
+  background: rgba(11, 8, 24, 0.62);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.48),
+    inset 0 -1px 0 rgba(255, 244, 224, 0.05);
+  border: none;
   border-radius: var(--radius-sm);
-  padding: 0.42rem 0.58rem;
+  padding: 0.4rem 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.24rem;
+  gap: 0.22rem;
 }
 
 .chest-fanfare-box {
-  background: rgba(255, 196, 0, 0.15);
-  border: 1px solid rgba(255, 196, 0, 0.45);
-  border-radius: var(--radius-md);
-  padding: 0.55rem 0.75rem;
+  background: rgba(229, 178, 93, 0.14);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
   text-align: center;
-  font-size: 0.82rem;
-  font-weight: 800;
-  color: #ffe570;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f3d27a;
 }
 
 .dialog-actions {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.65rem;
+  gap: 0.48rem;
 }
 
 .dialog-actions > .btn-tactile {
   flex: 1;
+  white-space: nowrap;
+  padding-inline: 0.62rem;
 }
 
 .dialog-actions-vertical {
@@ -254,55 +272,75 @@ dialog::backdrop {
 .dialog-actions-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
+  gap: 0.48rem;
 }
 
 /* Pause & Settings Modal — Above-the-Fold Navigation & 2-Column Toggles */
 .pause-dialog-card {
-  padding: 0.88rem 0.95rem;
-  gap: 0.56rem;
+  padding: 0.85rem 0.92rem;
+  gap: 0.52rem;
 }
 
 .pause-section-block {
   display: flex;
   flex-direction: column;
-  gap: 0.36rem;
+  gap: 0.34rem;
 }
 
 .pause-section-label {
-  font-size: 0.66rem;
-  font-weight: 900;
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #ffe299;
+  color: #e5c483;
 }
 
 .pause-primary-grid,
 .pause-utility-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.42rem;
+  gap: 0.38rem;
 }
 
 /* Settings List (2-Column Grid for Zero-Scroll Mobile Ergonomics) */
 .settings-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.38rem;
+  gap: 0.34rem;
 }
 
+/* Plane 1 Top-Lit Chiseled Stone Keys for Interactive Settings Rows */
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.38rem;
-  padding: 0.38rem 0.56rem;
-  background: rgba(16, 12, 34, 0.72);
-  border: 1px solid var(--border-subtle);
+  padding: 0.36rem 0.54rem;
+  background: linear-gradient(
+    180deg var(--in-oklab),
+    rgba(64, 50, 102, 0.78) 0%,
+    rgba(38, 29, 66, 0.88) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 236, 0.16),
+    0 2px 0 rgba(8, 5, 18, 0.58);
+  border: none;
   border-radius: var(--radius-sm);
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.setting-row:hover {
+  background: linear-gradient(
+    180deg var(--in-oklab),
+    rgba(82, 64, 128, 0.88) 0%,
+    rgba(50, 38, 84, 0.94) 100%
+  );
 }
 
 .setting-row-wide {
@@ -318,78 +356,76 @@ dialog::backdrop {
 .setting-row input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 38px;
-  height: 22px;
-  background: #0d1530;
-  border: 1.5px solid rgba(147, 197, 253, 0.35);
-  border-radius: var(--radius-pill);
+  width: 36px;
+  height: 20px;
+  background: rgba(255, 248, 238, 0.14);
+  border: none;
+  border-radius: var(--radius-xs);
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .setting-row input[type="checkbox"]::after {
   content: "";
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: #cbd5e1;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background: #d8cce6;
   transition:
     transform 0.15s ease,
-    background 0.15s ease;
+    background-color 0.15s ease;
 }
 
 .setting-row input[type="checkbox"]:checked {
   background: var(--accent-primary);
-  border-color: #86efac;
 }
 
 .setting-row input[type="checkbox"]:checked::after {
   transform: translateX(16px);
-  background: #ffffff;
+  background: #0c191b;
 }
 
 .select-tactile {
-  background: #0d1530;
+  background: rgba(14, 11, 28, 0.72);
   color: var(--text-primary);
-  border: 1.5px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 0.28rem 0.48rem;
-  font-size: 0.78rem;
-  font-weight: 800;
+  border: 1px solid rgba(246, 213, 168, 0.16);
+  border-radius: var(--radius-sm);
+  padding: 0.24rem 0.45rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .telemetry-details {
-  background: rgba(11, 19, 43, 0.55);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 248, 238, 0.035);
+  border: none;
   border-radius: var(--radius-sm);
-  padding: 0.35rem 0.6rem;
-  font-size: 0.75rem;
+  padding: 0.34rem 0.56rem;
+  font-family: var(--font-ui);
+  font-size: 0.73rem;
   color: var(--text-muted);
 }
 
 .telemetry-details summary {
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 500;
   user-select: none;
 }
 
 .telemetry-bar {
-  margin-top: 0.35rem;
-  background: rgba(9, 13, 26, 0.85);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.38rem 0.55rem;
+  margin-top: 0.32rem;
+  background: rgba(12, 9, 24, 0.68);
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 0.34rem 0.5rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.72rem;
-  color: #74f2f2;
+  font-size: 0.7rem;
+  color: #7de8dd;
   text-align: center;
 }
 
@@ -397,56 +433,61 @@ dialog::backdrop {
 .save-transfer-body {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
 .save-panel {
-  background: rgba(9, 13, 26, 0.6);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  border: none;
   border-radius: var(--radius-md);
-  padding: 0.75rem;
+  padding: 0.72rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.48rem;
 }
 
 .panel-heading {
   margin: 0;
-  font-size: 0.92rem;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "SOFT" 40,
+    "WONK" 0;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .panel-desc {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
 .code-textarea {
   width: 100%;
-  height: 3.4rem;
+  height: 3.2rem;
   line-height: 1.35;
-  background: #090d1a;
+  background: rgba(12, 9, 24, 0.75);
   color: #93c5fd;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(246, 213, 168, 0.14);
   border-radius: var(--radius-sm);
-  padding: 0.42rem 0.58rem;
+  padding: 0.4rem 0.55rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.73rem;
+  font-size: 0.72rem;
   resize: vertical;
 }
 
 .button-row-wrap {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
 .qr-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.25rem;
+  gap: 0.72rem;
+  padding-top: 0.22rem;
 }
 
 .qr-box {
@@ -455,7 +496,7 @@ dialog::backdrop {
   background: #ffffff;
   color: #0f172a;
   font-size: 0.65rem;
-  font-weight: 700;
+  font-weight: 600;
   text-align: center;
   display: flex;
   align-items: center;
@@ -472,60 +513,62 @@ dialog::backdrop {
 }
 
 .qr-caption {
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   color: var(--text-muted);
 }
 
 .transfer-status {
   margin: 0;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #ffe570;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #f3d27a;
 }
 
 .import-diff-panel {
-  background: rgba(30, 41, 59, 0.92);
-  border: 1px solid var(--accent-gold);
+  background: rgba(20, 15, 38, 0.85);
+  border: 1px solid rgba(229, 178, 93, 0.45);
   border-radius: var(--radius-md);
-  padding: 0.65rem;
+  padding: 0.62rem;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.5rem;
 }
 
 .diff-heading {
   margin: 0;
-  font-size: 0.86rem;
-  color: #ffe570;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #f3d27a;
 }
 
 .diff-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 .diff-col {
-  background: rgba(9, 13, 26, 0.75);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  border: none;
   border-radius: var(--radius-sm);
-  padding: 0.5rem;
+  padding: 0.48rem;
 }
 
 .diff-col-incoming {
-  border-color: rgba(36, 194, 84, 0.5);
+  background: rgba(40, 181, 167, 0.1);
 }
 
 .diff-col h5 {
-  margin: 0 0 0.35rem;
-  font-size: 0.76rem;
+  margin: 0 0 0.3rem;
+  font-size: 0.74rem;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
 .diff-list {
   margin: 0;
   padding-left: 1rem;
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   line-height: 1.45;
 }
 
@@ -533,66 +576,51 @@ dialog::backdrop {
 .install-steps-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0.65rem;
+  gap: 0.58rem;
 }
 
 .install-step-card {
-  background: rgba(9, 13, 26, 0.65);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  border: none;
   border-radius: var(--radius-md);
-  padding: 0.75rem;
+  padding: 0.7rem;
 }
 
 .install-step-card h3 {
-  margin: 0 0 0.4rem;
-  font-size: 0.9rem;
+  margin: 0 0 0.36rem;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "SOFT" 40,
+    "WONK" 0;
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 
 .install-step-card ol {
   margin: 0;
   padding-left: 1.15rem;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   line-height: 1.45;
   color: var(--text-secondary);
 }
 
 /* Contextual In-Flow App Update Notification Banner (STOR-03 / PWA-UPDATE-01) */
-@keyframes pwaUpdatePulse {
-  0%,
-  100% {
-    box-shadow:
-      inset 0 1px 0 rgba(255, 248, 220, 0.38),
-      0 0 14px rgba(255, 190, 11, 0.24),
-      0 6px 16px rgba(8, 6, 18, 0.52);
-  }
-  50% {
-    box-shadow:
-      inset 0 1px 0 rgba(255, 248, 220, 0.55),
-      0 0 22px rgba(255, 190, 11, 0.44),
-      0 8px 20px rgba(8, 6, 18, 0.6);
-  }
-}
-
 .pwa-update-toast {
   position: relative;
   width: min(100%, 1120px);
-  background: linear-gradient(
-    90deg var(--in-oklab),
-    rgba(82, 48, 10, 0.96) 0%,
-    rgba(54, 31, 18, 0.96) 55%,
-    rgba(36, 22, 48, 0.96) 100%
-  );
-  border: 1.5px solid rgba(255, 209, 102, 0.86);
-  border-left: 4px solid #ffbe0b;
-  border-radius: var(--radius-md);
-  padding: 0.38rem 0.56rem;
+  background: rgba(68, 44, 16, 0.88);
+  border: none;
+  border-left: 3px solid #ffbe0b;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.36rem 0.56rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.42rem;
-  animation: pwaUpdatePulse 2.8s ease-in-out infinite;
-  font-size: 0.76rem;
-  font-weight: 800;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
   flex-shrink: 0;
 }
 
@@ -611,14 +639,14 @@ dialog::backdrop {
 .pwa-update-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.26rem;
-  padding: 0.12rem 0.42rem;
-  border-radius: var(--radius-pill);
+  gap: 0.24rem;
+  padding: 0.1rem 0.36rem;
+  border-radius: var(--radius-xs);
   background: rgba(255, 190, 11, 0.22);
-  border: 1px solid rgba(255, 214, 102, 0.78);
+  border: none;
   color: #ffe89e;
-  font-size: 0.6rem;
-  font-weight: 900;
+  font-size: 0.58rem;
+  font-weight: 600;
   letter-spacing: 0.07em;
   white-space: nowrap;
   flex-shrink: 0;
@@ -629,14 +657,13 @@ dialog::backdrop {
   height: 6px;
   border-radius: 50%;
   background: #ffbe0b;
-  box-shadow: 0 0 6px #ffbe0b;
   flex-shrink: 0;
 }
 
 .pwa-update-label {
   color: #fffbeb;
   font-size: 0.74rem;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -651,8 +678,8 @@ dialog::backdrop {
 
 .pwa-btn-update,
 .pwa-btn-later {
-  min-height: 30px;
-  padding: 0.18rem 0.52rem;
-  font-size: 0.7rem;
-  border-radius: 9px;
+  min-height: 28px;
+  padding: 0.16rem 0.48rem;
+  font-size: 0.68rem;
+  border-radius: var(--radius-xs);
 }

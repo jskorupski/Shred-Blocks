@@ -72,6 +72,48 @@ export const BOOSTER_DEBUT_NOTES: Partial<Record<number, string>> = {
   30: 'LEGENDARY Power-Up Unlocked: Color Vacuum! Sweeps all unlocked blocks of a chosen color off the board.',
 };
 
+export const SANCTUARY_AWAKENING_MILESTONES: ReadonlyArray<{ levelId: number; label: string }> = [
+  { levelId: 2, label: 'Hint / Freeze Power-Up' },
+  { levelId: 8, label: 'Hammer Power-Up' },
+  { levelId: 11, label: 'Axis-Lock Guide Rails' },
+  { levelId: 14, label: 'Sculpted Sanctuary Courtyard' },
+  { levelId: 16, label: 'Chapter II · Frost & Multi-Layer Blocks' },
+  { levelId: 18, label: 'Rocket Power-Up & Stepped Gates' },
+  { levelId: 21, label: 'Frost-Encased Blocks' },
+  { levelId: 25, label: 'Twin Sanctum Portcullis Chamber' },
+  { levelId: 28, label: 'Sealed Mystery Vaults' },
+  { levelId: 30, label: 'Color Vacuum Power-Up' },
+  { levelId: 31, label: 'Padlock & Key Chains' },
+  { levelId: 41, label: 'Chapter III · Terrace of Tethers' },
+  { levelId: 51, label: 'Wooden Crates & Stone Pillars' },
+  { levelId: 61, label: 'Countdown Bombs' },
+  { levelId: 71, label: 'Dynamic Gate Shutters' },
+  { levelId: 81, label: 'Chapter IV · Clockwork Spires' },
+  { levelId: 91, label: 'Turn-Based Rotator Pivots' },
+  { levelId: 101, label: 'One-Way Directional Tiles' },
+  { levelId: 111, label: 'Conveyor Belt Streams' },
+  { levelId: 121, label: 'Color-Changing Gates' },
+  { levelId: 131, label: 'Block Spawner Generators' },
+  { levelId: 141, label: 'Chapter V · Astral Observatory' },
+  { levelId: 151, label: 'Linked Teleport Portals' },
+  { levelId: 171, label: 'Magnetic Attraction Blocks' },
+  { levelId: 191, label: 'Synchronized Linked Groups' },
+  { levelId: 221, label: 'Chapter VI · Grand Citadel' },
+  { levelId: 301, label: 'Endless Citadel Mastery' },
+];
+
+export function getNextSanctuaryAwakeningText(currentLevelId: number): string {
+  for (const m of SANCTUARY_AWAKENING_MILESTONES) {
+    if (m.levelId > currentLevelId) {
+      const delta = m.levelId - currentLevelId;
+      return `Next Awakening: Lvl ${m.levelId} · ${m.label} (${delta} ${delta === 1 ? 'stage' : 'stages'} away)`;
+    }
+  }
+  const nextDecade = Math.ceil((currentLevelId + 1) / 10) * 10;
+  const delta = nextDecade - currentLevelId;
+  return `Next Sanctuary Milestone: Lvl ${nextDecade} Chest (${delta} ${delta === 1 ? 'stage' : 'stages'} away)`;
+}
+
 export interface ChapterMeta {
   chapterNum: string;
   title: string;

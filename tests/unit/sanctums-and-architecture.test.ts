@@ -378,14 +378,35 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(getLevelSpec(256).blocks.length).toBeGreaterThanOrEqual(9);
   });
 
-  it('VIEWPORT-01 & PWA-UPDATE-01: enforces zero-cutoff viewport geometry rules (no viewport-fit=cover, container-query board stage, and in-flow PWA update ribbon)', () => {
+  it('VIEWPORT-01, PWA-UPDATE-01, TITLE-LOGO-01, CAVE-ETCH-01, UI-DEPTH-01 & MAP-JOURNEY-01: enforces zero-cutoff viewport geometry, monumental splash logo, cave-wall etching shader, 3-plane depth hierarchy, and progressive map journey invariants', () => {
     const repoRoot = path.resolve(process.cwd());
     const indexHtml = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
     expect(indexHtml).not.toContain('viewport-fit=cover');
+    expect(indexHtml).toContain('logo-word-shred');
+    expect(indexHtml).toContain('logo-word-blocks');
+    expect(indexHtml).toContain('id="hero-awakening-banner"');
+    expect(indexHtml).toContain('/fonts/fraunces-latin-var.woff2');
+    expect(indexHtml).toContain('/fonts/plus-jakarta-sans-latin-var.woff2');
+    expect(indexHtml).not.toContain('fonts.googleapis.com');
+
+    // TYPOGRAPHY-01: Verify self-hosted SIL OFL variable WOFF2 binaries exist, are non-empty, and are pre-cached in public/sw.js
+    const frauncesStat = fs.statSync(path.join(repoRoot, 'public/fonts/fraunces-latin-var.woff2'));
+    const jakartaStat = fs.statSync(path.join(repoRoot, 'public/fonts/plus-jakarta-sans-latin-var.woff2'));
+    expect(frauncesStat.size).toBeGreaterThan(50_000);
+    expect(jakartaStat.size).toBeGreaterThan(15_000);
+
+    const swJs = fs.readFileSync(path.join(repoRoot, 'public/sw.js'), 'utf8');
+    expect(swJs).toContain("'/fonts/fraunces-latin-var.woff2'");
+    expect(swJs).toContain("'/fonts/plus-jakarta-sans-latin-var.woff2'");
 
     const tokensCss = fs.readFileSync(path.join(repoRoot, 'src/styles/tokens-and-shell.css'), 'utf8');
     expect(tokensCss).toContain('--app-height');
     expect(tokensCss).toContain('height: var(--app-height, 100%)');
+    expect(tokensCss).toContain('--font-logo');
+    expect(tokensCss).toContain('font-family: "Fraunces"');
+    expect(tokensCss).toContain('font-family: "Plus Jakarta Sans"');
+    expect(tokensCss).toContain('font-size-adjust: from-font');
+    expect(tokensCss).toContain('inset 0 1px 0');
 
     const gameCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-game.css'), 'utf8');
     expect(gameCss).toContain('container-type: size');
@@ -395,6 +416,17 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     const titleCss = fs.readFileSync(path.join(repoRoot, 'src/styles/title-and-a11y.css'), 'utf8');
     expect(titleCss).toContain('visibility: hidden');
     expect(titleCss).not.toContain('#screen-game.title-backdrop-mode .board-stage');
+    expect(titleCss).toContain('var(--font-logo)');
+
+    const homeCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-home.css'), 'utf8');
+    expect(homeCss).toContain('.level-node-card:not(.current-level) .badge-difficulty');
+    expect(homeCss).toContain('.level-node-card.milestone-node:not(.current-level)');
+
+    const shadersTs = fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8');
+    expect(shadersTs).toContain('float zRelief = mix(1.0, 0.08, u_blueprintMix)');
+    expect(shadersTs).toContain('caveVignette');
+    expect(shadersTs).toContain('sizeFade');
+    expect(shadersTs).toContain('blueprintAlpha');
 
     const dialogsCss = fs.readFileSync(path.join(repoRoot, 'src/styles/dialogs.css'), 'utf8');
     expect(dialogsCss).toContain('.pwa-update-badge');

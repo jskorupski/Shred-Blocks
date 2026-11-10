@@ -28,11 +28,11 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
             <circle cx="60" cy="60" r="14" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="2" />
             <polygon points="60,49 63,57 71,60 63,63 60,71 57,63 49,60 57,57" fill="currentColor" />
           </svg>
-          <h2 id="victory-title" class="dialog-title">🎉 Level Cleared!</h2>
+          <h2 id="victory-title" class="dialog-title">Level Cleared!</h2>
           <p id="victory-subtitle" class="dialog-subtitle">Shredder Perfection!</p>
         </div>
 
-        <div id="victory-stars" class="victory-stars" aria-label="Earned Stars"><span class="star-slot earned">⭐</span><span class="star-slot earned">⭐</span><span class="star-slot earned">⭐</span></div>
+        <div id="victory-stars" class="victory-stars" aria-label="Earned Stars"><span class="star-slot earned">★</span><span class="star-slot earned">★</span><span class="star-slot earned">★</span></div>
 
         <div class="victory-stats-grid">
           <div class="stat-box">
@@ -53,7 +53,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         <div class="victory-chests-row">
           <div class="victory-chest-mini">
             <div class="chest-header">
-              <span>⚙️ Shred Chest</span>
+              <span>◇ Shred Chest</span>
               <span id="victory-shred-chest-text" class="chest-counter">2 / 100</span>
             </div>
             <div class="progress-track" aria-hidden="true">
@@ -62,7 +62,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           </div>
           <div class="victory-chest-mini">
             <div class="chest-header">
-              <span>🏆 Level Chest</span>
+              <span>★ Level Chest</span>
               <span id="victory-milestone-chest-text" class="chest-counter">Lvl 10</span>
             </div>
             <div class="progress-track" aria-hidden="true">
@@ -80,7 +80,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           <button type="button" id="btn-victory-replay" class="btn-tactile btn-secondary">
             ↻ Replay
           </button>
-          <button type="button" id="btn-next-level" class="btn-tactile btn-primary">
+          <button type="button" id="btn-next-level" class="btn-tactile btn-primary" autofocus>
             ▶ Next Level
           </button>
         </div>
@@ -91,7 +91,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
     <dialog id="dialog-failure" class="game-dialog" closedby="none" aria-labelledby="failure-title">
       <div class="dialog-card">
         <div class="dialog-header">
-          <h2 id="failure-title" class="dialog-title">⏰ Time's Up!</h2>
+          <h2 id="failure-title" class="dialog-title">Time Expired</h2>
           <p id="failure-reason" class="dialog-subtitle">
             Keep going with a time boost, retry for free, or skip ahead!
           </p>
@@ -101,7 +101,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           <button type="button" id="btn-continue-level" class="btn-tactile btn-warning">
             +15s / Defuse Bomb (50 Coins)
           </button>
-          <button type="button" id="btn-retry-level" class="btn-tactile btn-primary">
+          <button type="button" id="btn-retry-level" class="btn-tactile btn-primary" autofocus>
             ↻ Try Again (Free)
           </button>
           <button type="button" id="btn-skip-level" class="btn-tactile btn-secondary">
@@ -132,7 +132,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         <!-- Primary Navigation & Level Controls First (Zero Scrolling Needed) -->
         <div class="pause-nav-section">
           <div class="dialog-actions-grid pause-primary-grid">
-            <button type="button" id="btn-pause-resume" class="btn-tactile btn-primary">
+            <button type="button" id="btn-pause-resume" class="btn-tactile btn-primary" autofocus>
               ▶ Resume
             </button>
             <button type="button" id="btn-pause-home" class="btn-tactile btn-sanctuary">
@@ -174,7 +174,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
             <input type="checkbox" id="toggle-reduced-motion" />
           </label>
           <label class="setting-row setting-row-wide">
-            <span>⚡ Frame Rate</span>
+            <span>Frame Rate</span>
             <select id="select-quality-tier" class="select-tactile">
               <option value="AUTO">Auto (120Hz / 60Hz)</option>
               <option value="ULTRA_120">Ultra 120Hz</option>
@@ -210,7 +210,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
     >
       <div class="dialog-card dialog-card-wide">
         <div class="dialog-header-row">
-          <h2 id="save-transfer-title" class="dialog-title">💾 Backup, QR &amp; Cross-Device Sync</h2>
+          <h2 id="save-transfer-title" class="dialog-title">✦ Backup, QR &amp; Cross-Device Sync</h2>
           <button
             type="button"
             id="btn-save-transfer-close"
@@ -224,7 +224,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         <div class="save-transfer-body">
           <!-- Export Section -->
           <div class="save-panel">
-            <h3 class="panel-heading">📤 Export Your Progress</h3>
+            <h3 class="panel-heading">↗ Export Your Progress</h3>
             <p class="panel-desc">
               Copy your compact <code>SB1-...</code> Save Code, scan the offline QR code on another
               device, or download a JSON backup file.
@@ -242,21 +242,21 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
                 id="btn-copy-save-code"
                 class="btn-tactile btn-primary btn-compact"
               >
-                📋 Copy Code
+                Copy Code
               </button>
               <button
                 type="button"
                 id="btn-copy-sync-url"
                 class="btn-tactile btn-secondary btn-compact"
               >
-                🔗 Copy Magic Sync URL
+                Copy Magic Sync URL
               </button>
               <button
                 type="button"
                 id="btn-download-json"
                 class="btn-tactile btn-secondary btn-compact"
               >
-                📥 Download .json File
+                Download .json File
               </button>
             </div>
 
@@ -270,7 +270,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
 
           <!-- Import Section -->
           <div class="save-panel">
-            <h3 class="panel-heading">📥 Import Save Code or JSON</h3>
+            <h3 class="panel-heading">↙ Import Save Code or JSON</h3>
             <p class="panel-desc">
               Paste a <code>SB1-...</code> save code or upload a <code>.json</code> backup. You will
               see a side-by-side comparison before overwriting.
@@ -288,14 +288,14 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
                 id="btn-preview-import"
                 class="btn-tactile btn-primary btn-compact"
               >
-                🔍 Preview Import
+                Preview Import
               </button>
               <button
                 type="button"
                 id="btn-upload-json"
                 class="btn-tactile btn-secondary btn-compact"
               >
-                📂 Upload .json File
+                Upload .json File
               </button>
               <input
                 type="file"
@@ -309,14 +309,14 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
                 class="btn-tactile btn-warning btn-compact"
                 hidden
               >
-                ⏪ Undo Last Import (Restore Backup)
+                ↺ Undo Last Import (Restore Backup)
               </button>
             </div>
             <p id="save-transfer-status" class="transfer-status" role="status" aria-live="polite"></p>
 
             <!-- Side-by-Side Diff Confirmation View (UX-06) -->
             <div id="import-diff-panel" class="import-diff-panel" hidden>
-              <h4 class="diff-heading">⚖️ Confirm Save Overwrite</h4>
+              <h4 class="diff-heading">✦ Confirm Save Overwrite</h4>
               <div class="diff-columns">
                 <div class="diff-col">
                   <h5>Current Local Save</h5>
@@ -333,7 +333,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
                   id="btn-confirm-import"
                   class="btn-tactile btn-primary btn-compact"
                 >
-                  ✅ Confirm Overwrite
+                  ✓ Confirm Overwrite
                 </button>
                 <button
                   type="button"
@@ -353,7 +353,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
     <dialog id="dialog-install" class="game-dialog" closedby="any" aria-labelledby="install-title">
       <div class="dialog-card">
         <div class="dialog-header-row">
-          <h2 id="install-title" class="dialog-title">📲 Install ShredBlocks App</h2>
+          <h2 id="install-title" class="dialog-title">✦ Install ShredBlocks App</h2>
           <button
             type="button"
             id="btn-install-close"
@@ -369,16 +369,16 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         </p>
 
         <div id="native-install-banner" class="install-step-card" hidden>
-          <h3>⚡ 1-Tap Instant Install</h3>
+          <h3>✦ 1-Tap Instant Install</h3>
           <p>Your browser supports direct app installation:</p>
           <button type="button" id="btn-trigger-native-install" class="btn-tactile btn-primary">
-            📲 Install ShredBlocks Now
+            Install ShredBlocks Now
           </button>
         </div>
 
         <div class="install-steps-grid">
           <div class="install-step-card">
-            <h3>🤖 Android (Chrome / Edge)</h3>
+            <h3>◇ Android (Chrome / Edge)</h3>
             <ol>
               <li>Tap the browser menu icon (<strong>⋮</strong>) in the top-right corner.</li>
               <li>Select <strong>Add to Home screen</strong> or <strong>Install app</strong>.</li>
@@ -387,7 +387,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           </div>
 
           <div class="install-step-card">
-            <h3>🍎 iPhone &amp; iPad (Safari)</h3>
+            <h3>◇ iPhone &amp; iPad (Safari)</h3>
             <ol>
               <li>Tap the <strong>Share</strong> button (<strong>↑</strong>) in the Safari toolbar.</li>
               <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>

@@ -26,6 +26,7 @@ import {
   type AppViewContext,
   BOOSTER_DISPLAY_NAMES,
   getChapterMetaForLevel,
+  getNextSanctuaryAwakeningText,
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
 
@@ -45,7 +46,7 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   const save = app.saveManager.getPayload();
 
   if (titleEl) {
-    titleEl.textContent = `🎉 Level ${app.board.levelId} Cleared!`;
+    titleEl.textContent = `Level ${app.board.levelId} Cleared!`;
   }
   if (subtitleEl) {
     subtitleEl.textContent =
@@ -61,7 +62,7 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
       const span = document.createElement('span');
       const isEarned = i < summary.starsEarned;
       span.className = isEarned ? 'star-slot earned' : 'star-slot unearned';
-      span.textContent = isEarned ? '⭐' : '☆';
+      span.textContent = isEarned ? '★' : '☆';
       slots.push(span);
     }
     starsEl.replaceChildren(...slots);
@@ -104,14 +105,14 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
               .map((b) => `+1 ${BOOSTER_DISPLAY_NAMES[b]} [${BOOSTER_RARITY[b]}]`)
               .join(', ')
           : 'Free Booster';
-      chestNotes.push(`⚙️ Shredder Chest Opened! (+100 Coins & ${rewardPart})`);
+      chestNotes.push(`◇ Shredder Chest Opened! (+100 Coins & ${rewardPart})`);
     }
     if (summary.milestoneChestOpened) {
       const lastBooster = summary.rewardedBoosters[summary.rewardedBoosters.length - 1];
       const rewardPart = lastBooster
         ? `+1 ${BOOSTER_DISPLAY_NAMES[lastBooster]} [${BOOSTER_RARITY[lastBooster]}]`
         : 'Free Booster';
-      chestNotes.push(`🏆 Milestone Chest Opened! (+150 Coins & ${rewardPart})`);
+      chestNotes.push(`★ Milestone Chest Opened! (+150 Coins & ${rewardPart})`);
     }
     if (chestNotes.length > 0) {
       chestFanfareEl.textContent = chestNotes.join(' | ');
@@ -330,6 +331,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   const heroDiff = document.getElementById('hero-badge-difficulty');
   const heroHeading = document.getElementById('hero-level-heading');
   const heroNote = document.getElementById('hero-level-note');
+  const heroAwakeningText = document.getElementById('hero-awakening-text');
   const playBtn = document.getElementById('btn-play-current');
   const tabPlayLabel = document.getElementById('tab-play-label');
 
@@ -346,6 +348,9 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (heroNote) {
     heroNote.textContent =
       targetSpec.unlockNote ?? `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`;
+  }
+  if (heroAwakeningText) {
+    heroAwakeningText.textContent = getNextSanctuaryAwakeningText(targetSpec.id);
   }
   if (playBtn) {
     playBtn.textContent = `▶ PLAY LEVEL ${targetSpec.id}`;

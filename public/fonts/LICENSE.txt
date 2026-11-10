@@ -1,0 +1,11 @@
+Self-Hosted Web Fonts — SIL Open Font License 1.1 (OFL-1.1)
+
+1. Fraunces (fraunces-latin-var.woff2)
+   Copyright (c) 2020 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces)
+   Designed by Phaedra Charles & Flavia Zimbardi (Undercase Type).
+   Licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+
+2. Plus Jakarta Sans (plus-jakarta-sans-latin-var.woff2)
+   Copyright (c) 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)
+   Designed by Gumpita Rahayu (Tokotype).
+   Licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).

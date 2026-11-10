@@ -178,7 +178,7 @@ export function previewSaveImportImpl(app: AppViewContext, rawInput: string): bo
       const dateStr = new Date(p.updatedAt || Date.now()).toLocaleString();
       const items = [
         `Max Level: Level ${p.highestLevelUnlocked}`,
-        `Total Stars: ⭐ ${p.totalStars}`,
+        `Total Stars: ★ ${p.totalStars}`,
         `Coins: ${p.coins} Coins`,
         `Updated: ${dateStr}`,
       ];
@@ -199,7 +199,7 @@ export function previewSaveImportImpl(app: AppViewContext, rawInput: string): bo
       diffPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     if (statusEl) {
-      statusEl.textContent = '✅ Valid save verified! Review the comparison below to confirm.';
+      statusEl.textContent = '✓ Valid save verified! Review the comparison below to confirm.';
     }
     return true;
   } catch (err) {
@@ -390,6 +390,10 @@ export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 
   document.getElementById('tab-btn-themes')?.classList.toggle('active', screen === 'themes');
 
   if (screen === 'home') {
+    app.activeRoadmapRange = 'all';
+    document.querySelectorAll<HTMLElement>('.chip-filter[data-range]').forEach((c) => {
+      c.classList.toggle('active', c.dataset.range === 'all');
+    });
     app.renderRoadmap();
     app.checkForPwaUpdate(false);
   } else if (screen === 'themes') {

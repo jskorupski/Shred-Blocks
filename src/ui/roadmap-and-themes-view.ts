@@ -1,6 +1,7 @@
 import { getAllCampaignLevels, getLevelSpec, TOTAL_CAMPAIGN_LEVELS } from '../levels/catalog';
 import {
   type AppViewContext,
+  BOOSTER_DEBUT_NOTES,
   getChapterMetaForLevel,
   PARTICLE_CATALOG,
   SKIN_CATALOG,
@@ -14,7 +15,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
   const save = app.saveManager.getPayload();
   const allCampaign = getAllCampaignLevels();
-  const unlockedMax = Math.max(1, save.highestLevelUnlocked);
+  const unlockedMax = Math.max(1, save.highestLevelUnlocked, save.currentLevelId);
 
   let levelsToShow = allCampaign;
   if (app.activeRoadmapRange === '1-50') {
@@ -93,7 +94,10 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
     const isUnlocked = spec.id <= unlockedMax;
     const isCurrent = spec.id === save.currentLevelId;
+    const isCompleted = isUnlocked && !isCurrent && spec.id < save.currentLevelId;
     const record = save.levelRecords[spec.id];
+    const milestoneNote = spec.unlockNote ?? BOOSTER_DEBUT_NOTES[spec.id];
+    const isMilestone = Boolean(milestoneNote);
 
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -103,6 +107,8 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       'level-node-card',
       `tier-${spec.difficulty.toLowerCase()}`,
       isCurrent ? 'current-level' : '',
+      isCompleted ? 'completed-level' : '',
+      isMilestone ? 'milestone-node' : '',
       !isUnlocked ? 'locked-level' : '',
     ]
       .filter(Boolean)
@@ -111,9 +117,9 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     let starDisplay = isUnlocked ? '☆☆☆' : '🔒';
     if (record) {
       if (record.skipped && record.stars === 0) {
-        starDisplay = '⏭️ Skipped';
+        starDisplay = 'Skipped';
       } else if (record.stars > 0) {
-        starDisplay = '⭐'.repeat(record.stars) + '☆'.repeat(3 - record.stars);
+        starDisplay = '★'.repeat(record.stars) + '☆'.repeat(3 - record.stars);
       }
     }
 
@@ -122,7 +128,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
     const numSpan = document.createElement('span');
     numSpan.className = 'node-level-num';
-    numSpan.textContent = `#${spec.id}`;
+    numSpan.textContent = isCurrent ? `✦ STAGE #${spec.id}` : `#${spec.id}`;
 
     const badgeSpan = document.createElement('span');
     badgeSpan.className = `badge-difficulty diff-${spec.difficulty.toLowerCase()}`;
@@ -146,10 +152,10 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
     btn.append(topRow, nameDiv);
 
-    if (spec.unlockNote) {
+    if (milestoneNote) {
       const noteDiv = document.createElement('div');
       noteDiv.className = 'node-unlock-note';
-      noteDiv.textContent = `✨ ${spec.unlockNote}`;
+      noteDiv.textContent = `✦ ${milestoneNote}`;
       btn.appendChild(noteDiv);
     }
 
@@ -209,7 +215,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const starsSpan = document.createElement('span');
       starsSpan.className = 'node-stars';
       starsSpan.textContent =
-        record && record.stars > 0 ? '⭐'.repeat(record.stars) : isUnlocked ? '☆☆☆' : '🔒';
+        record && record.stars > 0 ? '★'.repeat(record.stars) : isUnlocked ? '☆☆☆' : '🔒';
 
       topRow.append(numSpan, badgeSpan, starsSpan);
 
@@ -235,6 +241,22 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   }
 
   container.replaceChildren(fragment);
+
+  // Auto-focus the player's Current Sanctuary Stage in the scrollable map trail
+  // when beyond Level 1 so the map opens directly to their active journey progression.
+  if (app.activeRoadmapRange === 'all' && save.currentLevelId > 1) {
+    const scrollCurrentStageIntoView = () => {
+      const currentNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
+      if (currentNode && container.clientHeight > 0) {
+        const containerRect = container.getBoundingClientRect();
+        const nodeRect = currentNode.getBoundingClientRect();
+        const relativeTop = nodeRect.top - containerRect.top + container.scrollTop;
+        container.scrollTop = Math.max(0, Math.round(relativeTop - container.clientHeight * 0.14));
+      }
+    };
+    scrollCurrentStageIntoView();
+    requestAnimationFrame(scrollCurrentStageIntoView);
+  }
 }
 
 export function renderThemesStudioImpl(app: AppViewContext): void {

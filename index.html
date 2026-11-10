@@ -27,6 +27,20 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link
+      rel="preload"
+      href="/fonts/fraunces-latin-var.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/plus-jakarta-sans-latin-var.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
   <body>
@@ -91,6 +105,10 @@
               <p id="hero-level-note" class="hero-level-subtitle">
                 Drag blocks into matching color shredder gates!
               </p>
+              <div id="hero-awakening-banner" class="hero-awakening-banner">
+                <span class="awakening-spark" aria-hidden="true">✦</span>
+                <span id="hero-awakening-text" class="awakening-text">Next Awakening · Lvl 2: Hint &amp; Freeze Power-Up</span>
+              </div>
             </div>
             <div class="hero-cta-group">
               <button type="button" id="btn-play-current" class="btn-tactile btn-primary btn-hero">
@@ -386,10 +404,10 @@
 
         <div class="themes-scroll">
           <div class="themes-category-tabs" role="tablist" aria-label="Cosmetic Categories">
-            <button type="button" class="chip-filter active" data-theme-tab="all">All</button>
-            <button type="button" class="chip-filter" data-theme-tab="skins">Block Skins</button>
-            <button type="button" class="chip-filter" data-theme-tab="trays">Board Trays</button>
-            <button type="button" class="chip-filter" data-theme-tab="particles">Particles</button>
+            <button type="button" role="tab" aria-selected="true" class="chip-filter active" data-theme-tab="all">All</button>
+            <button type="button" role="tab" aria-selected="false" class="chip-filter" data-theme-tab="skins">Block Skins</button>
+            <button type="button" role="tab" aria-selected="false" class="chip-filter" data-theme-tab="trays">Board Trays</button>
+            <button type="button" role="tab" aria-selected="false" class="chip-filter" data-theme-tab="particles">Particles</button>
           </div>
 
           <div class="theme-category" data-theme-section="skins">
@@ -528,7 +546,7 @@
           </div>
 
           <div class="title-brand-header">
-            <h1 id="title-crest-heading" class="title-crest-heading">ShredBlocks</h1>
+            <h1 id="title-crest-heading" class="title-crest-heading"><span class="logo-word-shred">Shred</span><span class="logo-word-blocks">Blocks</span></h1>
             <div class="title-subtitle-ribbon">
               <span class="ribbon-line" aria-hidden="true"></span>
               <span class="ribbon-text">COLOR JAM</span>

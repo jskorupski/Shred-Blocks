@@ -1,9 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-/**
- * Helper to drag from board coordinates `(fromCol, fromRow)` to `(toCol, toRow)`
- * using 100% genuine Playwright mouse pointer events on `#game-canvas`.
- */
+/** Drag from `(fromCol, fromRow)` to `(toCol, toRow)` using genuine Playwright pointer events on `#game-canvas`. */
 async function dragBoardCellToCell(
   page: Page,
   fromCol: number,
@@ -13,23 +10,19 @@ async function dragBoardCellToCell(
   steps = 10
 ): Promise<void> {
   const pts = await page.evaluate(
-    ({ c1, r1, c2, r2 }) => {
-      const start = window.__SHREDBLOCKS_DEBUG__.boardToScreen(c1 + 0.5, r1 + 0.5);
-      const end = window.__SHREDBLOCKS_DEBUG__.boardToScreen(c2 + 0.5, r2 + 0.5);
-      return { start, end };
-    },
+    ({ c1, r1, c2, r2 }) => ({
+      start: window.__SHREDBLOCKS_DEBUG__.boardToScreen(c1 + 0.5, r1 + 0.5),
+      end: window.__SHREDBLOCKS_DEBUG__.boardToScreen(c2 + 0.5, r2 + 0.5),
+    }),
     { c1: fromCol, r1: fromRow, c2: toCol, r2: toRow }
   );
-
   await page.mouse.move(pts.start.x, pts.start.y);
   await page.mouse.down();
   await page.mouse.move(pts.end.x, pts.end.y, { steps });
   await page.mouse.up();
 }
 
-/**
- * Helper to click a specific board cell `(col, row)` using a real mouse click on `#game-canvas`.
- */
+/** Click board cell `(col, row)` using a real mouse click on `#game-canvas`. */
 async function clickBoardCell(page: Page, col: number, row: number): Promise<void> {
   const pt = await page.evaluate(({ c, r }) => window.__SHREDBLOCKS_DEBUG__.boardToScreen(c + 0.5, r + 0.5), {
     c: col,
@@ -54,6 +47,14 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     // Verify Sacred-Geometry Title Screen launches in New Player mode over the live 3D board
     await expect(page.locator('#title-overlay')).toBeVisible();
     await expect(page.locator('#title-crest-heading')).toHaveText('ShredBlocks');
+    const fontsReady = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return [
+        document.fonts.check('800 32px "Fraunces"'),
+        document.fonts.check('600 14px "Plus Jakarta Sans"'),
+      ];
+    });
+    expect(fontsReady).toEqual([true, true]);
     await expect(page.locator('#title-new-player-tagline')).toBeVisible();
     await expect(page.locator('#title-returning-nav')).toBeHidden();
     await expect(page.locator('#btn-title-play')).toHaveText('▶ BEGIN JOURNEY');
@@ -112,11 +113,15 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 11');
 
-    // PWA-UPDATE-01 & VIEWPORT-01: Verify in-flow App Update Notification Banner & zero UI cutoff across browser & Android WebAPK viewports
+    // PWA-UPDATE-01, MAP-JOURNEY-01 & VIEWPORT-01: Verify in-flow App Update Notification Banner, Map Auto-Focus on Current Stage, & zero UI cutoff
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPwaUpdateBannerVisible(true));
     await expect(page.locator('#pwa-update-toast')).toBeHidden();
     await page.locator('#btn-hud-home').click();
     await expect(page.locator('#pwa-update-toast')).toBeVisible();
+    await expect(page.locator('#hero-awakening-text')).toContainText('Next Awakening:');
+    await expect(page.locator('#roadmap-list .level-node-card.current-level')).toContainText('STAGE #11');
+    const mapScrollTop = await page.evaluate(() => document.getElementById('roadmap-list')?.scrollTop ?? 0);
+    expect(mapScrollTop).toBeGreaterThan(0);
     await page.locator('#btn-home-title').click();
     await expect(page.locator('#pwa-update-toast')).toBeVisible();
     const titleToastCheck = await page.evaluate(() => {
@@ -221,7 +226,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#dialog-victory')).toBeVisible();
     await expect(page.locator('#victory-crest-ornament')).toBeVisible();
     await expect(page.locator('#victory-title')).toContainText('Cleared!');
-    await expect(page.locator('#victory-stars')).toContainText('⭐⭐⭐');
+    await expect(page.locator('#victory-stars')).toContainText('★★★');
     await expect(page.locator('#victory-stars .star-slot.earned')).toHaveCount(3);
 
     const saveAfterL1 = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave());
@@ -752,20 +757,18 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(28));
     const l28CanvasCheck = await page.evaluate(() => {
       const c = document.getElementById('game-canvas');
-      if (!c) return { aspectVar: 1, w: 0, h: 0 };
-      const rect = c.getBoundingClientRect();
+      const rect = c?.getBoundingClientRect();
       return {
-        aspectVar: Number.parseFloat(c.style.getPropertyValue('--board-aspect') || '1'),
-        w: rect.width,
-        h: rect.height,
+        aspectVar: Number.parseFloat(c?.style.getPropertyValue('--board-aspect') || '1'),
+        w: rect?.width ?? 0,
+        h: rect?.height ?? 0,
       };
     });
     expect(l28CanvasCheck.aspectVar).toBeCloseTo(0.7906, 2);
     expect(l28CanvasCheck.h).toBeGreaterThan(l28CanvasCheck.w);
 
     // Tapping the sealed vault lid at (col 2, row 5) triggers the Sealed Mystery Vault toast without moving hidden blocks
-    const vaultTapPt = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.boardToScreen(2.5, 5.5));
-    await page.mouse.click(vaultTapPt.x, vaultTapPt.y);
+    await clickBoardCell(page, 2, 5);
     await expect(page.locator('#game-toast')).toContainText('Sealed Mystery Vault: Shred 3 more blocks');
 
     // Shred Blocks 1, 2, and 3 in Room 0 to unlock the vault and thaw the bottom Frozen Gate
@@ -774,13 +777,13 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await dragBoardCellToCell(page, 4, 1, 5, 1);
     const l28Unlocked = await page.evaluate(() => {
       const b = window.__SHREDBLOCKS_DEBUG__.getBoard();
-      return {
-        vaultOpen: b.barriers[0].open,
-        bottomGateIce: b.gates.find((g) => g.edge === 'BOTTOM')?.iceCount ?? -1,
-        occAt52: b.occupancy[5 * b.cols + 2],
-      };
+      return [
+        b.barriers[0].open,
+        b.gates.find((g) => g.edge === 'BOTTOM')?.iceCount ?? -1,
+        b.occupancy[5 * b.cols + 2],
+      ];
     });
-    expect(l28Unlocked).toEqual({ vaultOpen: true, bottomGateIce: 0, occAt52: 6 });
+    expect(l28Unlocked).toEqual([true, 0, 6]);
 
     // 20. Level 74: Quad Vault Sanctum (9x7 Tall Portrait Multi-Vault Puzzle Box)
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(74));

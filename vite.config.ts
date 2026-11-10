@@ -38,6 +38,16 @@ function pwaAutoVersionPlugin(): Plugin {
         }
       }
 
+      const fontsDir = resolve(distDir, 'fonts');
+      if (existsSync(fontsDir)) {
+        const fontFiles = readdirSync(fontsDir).sort();
+        for (const file of fontFiles) {
+          if (file.endsWith('.woff2')) {
+            hash.update(readFileSync(resolve(fontsDir, file)));
+          }
+        }
+      }
+
       const shortHash = hash.digest('hex').slice(0, 8);
       let pkgVersion = '1.2.0';
       if (existsSync(pkgPath)) {

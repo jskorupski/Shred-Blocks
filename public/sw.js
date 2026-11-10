@@ -17,6 +17,8 @@ const APP_SHELL_URLS = [
   '/icon-maskable-192.png',
   '/icon-maskable-512.png',
   '/apple-touch-icon.png',
+  '/fonts/fraunces-latin-var.woff2',
+  '/fonts/plus-jakarta-sans-latin-var.woff2',
 ];
 
 /**

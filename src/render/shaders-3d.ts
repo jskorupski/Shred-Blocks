@@ -46,10 +46,10 @@ void main() {
   v_normal = normalize(n);
   v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
 
-  // In Sacred-Geometry Wall-Scroll Preview Mode (u_blueprintMix = 1.0), compress Z relief
-  // so the board lies flat like an etched celestial astrolabe parchment diagram, then extrudes
-  // smoothly into full 3D relief (0.22 -> 1.0) when the player starts the level.
-  float zRelief = mix(1.0, 0.22, u_blueprintMix);
+  // In Sacred-Geometry Cave-Wall Etching Preview Mode (u_blueprintMix = 1.0), compress Z relief
+  // so the board lies flush like an ancient weathered stone carving, then extrudes
+  // smoothly into bold 3D relief (0.08 -> 1.0) when the player starts the level.
+  float zRelief = mix(1.0, 0.08, u_blueprintMix);
   vec3 stagePos = vec3(rawWorldPos.x, rawWorldPos.y, rawWorldPos.z * zRelief);
 
   gl_Position = u_viewProj * vec4(stagePos, 1.0);
@@ -99,10 +99,10 @@ void main() {
       vec3 badgeRgb = texel.rgb * u_color.rgb;
       if (u_blueprintMix > 0.001) {
         float bLum = dot(badgeRgb, vec3(0.299, 0.587, 0.114));
-        vec3 goldBadge = mix(vec3(0.76, 0.58, 0.32), vec3(1.0, 0.90, 0.68), bLum);
-        badgeRgb = mix(badgeRgb, goldBadge, u_blueprintMix);
+        vec3 chalkBadge = mix(vec3(0.52, 0.40, 0.28), vec3(0.74, 0.60, 0.44), bLum);
+        badgeRgb = mix(badgeRgb, chalkBadge, u_blueprintMix);
       }
-      outColor = vec4(badgeRgb, texel.a * u_color.a * mix(1.0, 0.86, u_blueprintMix));
+      outColor = vec4(badgeRgb, texel.a * u_color.a * mix(1.0, 0.40, u_blueprintMix));
       return;
     }
   }
@@ -110,9 +110,9 @@ void main() {
   if (u_materialStyle == 4) {
     vec3 flatRgb = u_color.rgb;
     if (u_blueprintMix > 0.001) {
-      flatRgb = mix(flatRgb, vec3(0.95, 0.77, 0.44), u_blueprintMix * 0.85);
+      flatRgb = mix(flatRgb, vec3(0.66, 0.52, 0.36), u_blueprintMix * 0.88);
     }
-    outColor = vec4(flatRgb, u_color.a * mix(1.0, 0.62, u_blueprintMix));
+    outColor = vec4(flatRgb, u_color.a * mix(1.0, 0.28, u_blueprintMix));
     return;
   }
 
@@ -161,10 +161,13 @@ void main() {
     lit = mix(min(vec3(1.0), lit * 1.08), lit * 0.34, edgeBevel * 0.58);
   }
 
+  float blueprintAlpha = 1.0;
+
   if (u_blueprintMix > 0.001) {
-    // Sacred-Geometry Astrolabe Wall-Scroll Diagram Mode:
-    // Transforms the 3D board into an illuminated nocturnal parchment & gilded brass architectural
-    // blueprint matching the counter-rotating sacred-geometry astrolabe rings behind the board.
+    // Weathered Cave-Wall Stone Etching Mode:
+    // Fades the 3D board into the dark twilight sanctuary background like an ancient
+    // chalk-and-ochre relief carving that scales down intensity on larger boards and
+    // materializes into bold 3D reality when gameplay begins.
     float maxC = max(u_color.r, max(u_color.g, u_color.b));
     float minC = min(u_color.r, min(u_color.g, u_color.b));
     float sat = (maxC - minC) / max(maxC, 0.12);
@@ -173,58 +176,62 @@ void main() {
 
     vec2 relCenter = v_worldPos.xy - u_boardInfo.xy;
     float distCenter = length(relCenter);
-    float radialGlow = clamp(1.0 - distCenter * 0.14, 0.0, 1.0);
+    float maxHalfSpan = max(u_boardInfo.x, u_boardInfo.y);
+    float normDist = clamp(distCenter / max(maxHalfSpan * 1.18, 2.5), 0.0, 1.4);
+    float radialGlow = clamp(1.0 - normDist * 0.68, 0.0, 1.0);
+    float caveVignette = clamp(1.0 - smoothstep(0.32, 1.12, normDist) * 0.58, 0.28, 1.0);
+    float sizeFade = clamp(1.0 - max(0.0, maxHalfSpan - 2.6) * 0.11, 0.66, 1.0);
 
     vec3 scrollPaper = mix(
-      vec3(0.11, 0.085, 0.195),
-      vec3(0.165, 0.125, 0.265),
+      vec3(0.115, 0.09, 0.20),
+      vec3(0.155, 0.12, 0.25),
       radialGlow
     );
-    scrollPaper *= mix(1.0, 0.78, isSunkenRoom);
-    float paperGrain =
+    scrollPaper *= mix(1.0, 0.82, isSunkenRoom) * mix(0.84, 1.0, caveVignette);
+    float stoneGrain =
       sin(v_worldPos.x * 38.0 + sin(v_worldPos.y * 29.0)) *
-      cos(v_worldPos.y * 41.0 + sin(v_worldPos.x * 23.0)) * 0.015;
-    scrollPaper += vec3(paperGrain);
+      cos(v_worldPos.y * 41.0 + sin(v_worldPos.x * 23.0)) * 0.012;
+    scrollPaper += vec3(stoneGrain);
 
-    // Delicate architectural ink-wash for colored blocks & exit gates (28% hue + warm vellum)
+    // Whisper-soft mineral pigment trace for colored blocks & exit gates (11% hue wash)
     vec3 normPieceRgb = u_color.rgb / max(1.0 - isSunkenRoom * 0.40, 0.58);
-    vec3 warmPieceHue = mix(clamp(normPieceRgb, 0.0, 1.0), vec3(0.96, 0.78, 0.48), 0.26);
-    vec3 pieceWash = mix(scrollPaper + vec3(0.035, 0.025, 0.055), warmPieceHue, mix(0.29, 0.21, isSunkenRoom));
+    vec3 warmPieceHue = mix(clamp(normPieceRgb, 0.0, 1.0), vec3(0.76, 0.58, 0.38), 0.46);
+    vec3 pieceWash = mix(scrollPaper + vec3(0.016, 0.011, 0.024), warmPieceHue, mix(0.11, 0.08, isSunkenRoom));
     vec3 scrollFill = mix(scrollPaper, pieceWash, isPiece);
 
-    // 1. 3D Bevel, Chamfer & Circular Stud Rim Drafting Contours
-    float bevelInk = smoothstep(0.95, 0.56, abs(N.z)) * mix(0.46, 0.92, isPiece);
-    float studOutline = (v_localPos.z > 0.56 && N.z < 0.965) ? 0.95 : 0.0;
+    // 1. Weathered Chisel & Stud Rim Etching Contours
+    float bevelInk = smoothstep(0.95, 0.56, abs(N.z)) * mix(0.20, 0.46, isPiece);
+    float studOutline = (v_localPos.z > 0.56 && N.z < 0.965) ? 0.36 : 0.0;
 
-    // 2. Crisp World-Grid Blueprint Sub-Divisions & Inner Block Framing Rules
+    // 2. Subtle Stone GridGrooves & Inner Framing Rules
     vec2 cellUv = fract(v_worldPos.xy);
     float borderDist = min(min(cellUv.x, 1.0 - cellUv.x), min(cellUv.y, 1.0 - cellUv.y));
-    float gridDraftLine = (1.0 - smoothstep(0.014, 0.042, borderDist)) * mix(0.30, 0.64, isPiece);
+    float gridDraftLine = (1.0 - smoothstep(0.014, 0.042, borderDist)) * mix(0.12, 0.28, isPiece);
     float innerFrameRule =
-      (1.0 - smoothstep(0.007, 0.022, abs(borderDist - 0.115))) * isPiece * 0.50;
+      (1.0 - smoothstep(0.007, 0.022, abs(borderDist - 0.115))) * isPiece * 0.22;
     float cornerCross =
       (1.0 - smoothstep(0.01, 0.028, min(cellUv.x, 1.0 - cellUv.x))) *
       (1.0 - smoothstep(0.06, 0.14, min(cellUv.y, 1.0 - cellUv.y))) +
       (1.0 - smoothstep(0.01, 0.028, min(cellUv.y, 1.0 - cellUv.y))) *
       (1.0 - smoothstep(0.06, 0.14, min(cellUv.x, 1.0 - cellUv.x)));
-    float floorTicks = clamp(cornerCross, 0.0, 1.0) * (1.0 - isPiece) * 0.36;
+    float floorTicks = clamp(cornerCross, 0.0, 1.0) * (1.0 - isPiece) * 0.15;
 
-    // 3. Fine 45-Degree Architectural Pen Cross-Hatching
+    // 3. Fine Weathered Stone Cross-Hatching
     float hatchA = sin((v_worldPos.x + v_worldPos.y) * 52.0);
     float hatchB = sin((v_worldPos.x - v_worldPos.y) * 52.0);
     float penHatch =
-      smoothstep(0.76, 0.96, hatchA) * mix(0.07, 0.32, isPiece) +
-      smoothstep(0.84, 0.98, hatchB) * 0.15 * isPiece;
+      smoothstep(0.78, 0.96, hatchA) * mix(0.03, 0.12, isPiece) +
+      smoothstep(0.86, 0.98, hatchB) * 0.06 * isPiece;
 
-    // 4. Sacred-Geometry Astrolabe Concentric Rings & 12-Spoke Compass Rays Across the Board
+    // 4. Faint Sacred-Geometry Astrolabe Rings Across the Cave Wall
     float angle = atan(relCenter.y, relCenter.x);
     float ringWave = sin(distCenter * 8.37758 - u_boardInfo.z * 0.45);
-    float astrolabeRing = smoothstep(0.92, 0.992, ringWave) * 0.28;
+    float astrolabeRing = smoothstep(0.93, 0.992, ringWave) * 0.12;
     float compassSpoke =
-      smoothstep(0.965, 0.997, cos(angle * 12.0 + u_boardInfo.z * 0.14)) *
-      smoothstep(0.25, 1.4, distCenter) * 0.18;
+      smoothstep(0.97, 0.997, cos(angle * 12.0 + u_boardInfo.z * 0.14)) *
+      smoothstep(0.25, 1.4, distCenter) * 0.08;
 
-    float inkStrength = clamp(
+    float rawEtch = clamp(
       max(bevelInk, studOutline) +
       gridDraftLine +
       innerFrameRule +
@@ -235,22 +242,24 @@ void main() {
       0.0,
       1.0
     );
+    float inkStrength = rawEtch * caveVignette * sizeFade;
 
-    vec3 baseGold = mix(vec3(0.96, 0.74, 0.38), warmPieceHue, isPiece * 0.28);
-    vec3 brightGold = vec3(1.0, 0.94, 0.78);
-    vec3 goldInk = mix(baseGold, brightGold, clamp(inkStrength * 0.7, 0.0, 1.0));
+    vec3 baseChalk = mix(vec3(0.56, 0.43, 0.32), warmPieceHue, isPiece * 0.22);
+    vec3 brightChalk = vec3(0.78, 0.64, 0.48);
+    vec3 chalkInk = mix(baseChalk, brightChalk, clamp(inkStrength * 0.85, 0.0, 1.0));
 
     if (u_highContrast == 1) {
-      scrollFill *= 0.65;
-      inkStrength = clamp(inkStrength * 1.25 + bevelInk * 0.22, 0.0, 1.0);
-      goldInk = mix(vec3(1.0, 0.88, 0.40), vec3(1.0, 0.99, 0.92), clamp(inkStrength, 0.0, 1.0));
+      scrollFill *= 0.72;
+      inkStrength = clamp(rawEtch * 1.15 + bevelInk * 0.2, 0.0, 1.0);
+      chalkInk = mix(vec3(0.92, 0.78, 0.42), vec3(1.0, 0.96, 0.86), clamp(inkStrength, 0.0, 1.0));
     }
 
-    vec3 scrollDiagram = mix(scrollFill, goldInk, inkStrength);
+    vec3 scrollDiagram = mix(scrollFill, chalkInk, inkStrength);
     lit = mix(lit, scrollDiagram, u_blueprintMix);
+    blueprintAlpha = mix(1.0, (0.36 + 0.34 * caveVignette) * sizeFade, u_blueprintMix);
   }
 
-  outColor = vec4(clamp(lit, 0.0, 1.0), u_color.a);
+  outColor = vec4(clamp(lit, 0.0, 1.0), u_color.a * blueprintAlpha);
 }
 `;
 

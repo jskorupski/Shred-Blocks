@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SCREEN C: THEMES STUDIO
+   SCREEN C: THEMES STUDIO — Minimalist Tonal Cards
    ========================================================================== */
 
 .themes-scroll {
@@ -7,93 +7,97 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0.75rem 0.85rem 1.25rem;
+  padding: 0.68rem 0.85rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.92rem;
 }
 
 .themes-category-tabs {
   display: flex;
   align-items: center;
-  gap: 0.38rem;
+  gap: 0.28rem;
   overflow-x: auto;
   padding-bottom: 2px;
   flex-shrink: 0;
 }
 
 .theme-section-title {
-  margin: 0 0 0.5rem;
-  font-size: clamp(0.95rem, 1.5dvw + 0.45rem, 1.15rem);
-  font-weight: 800;
-  text-wrap: balance;
+  margin: 0 0 0.45rem;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "SOFT" 40,
+    "WONK" 0;
+  font-size: clamp(0.92rem, 1.3dvw + 0.42rem, 1.08rem);
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  color: var(--text-secondary);
 }
 
 .theme-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.65rem;
+  gap: 0.55rem;
 }
 
+/* Plane 0 Recessed Dark Wells for Theme Cards so Inner CTA Buttons Pop */
 .theme-card {
-  background: var(--bg-card);
-  border: 1.5px solid var(--border-subtle);
+  background: rgba(16, 12, 32, 0.66);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  padding: 0.72rem;
+  padding: 0.68rem 0.75rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 0.55rem;
+  gap: 0.52rem;
   box-shadow:
-    inset 0 2px 0 rgba(255, 240, 218, 0.2),
-    0 4px 0 #140f26;
+    inset 0 1px 2px rgba(0, 0, 0, 0.45),
+    inset 0 -1px 0 rgba(255, 244, 224, 0.05);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.theme-card:hover {
+  background: rgba(24, 18, 46, 0.76);
 }
 
 .theme-card-top {
   display: flex;
   align-items: center;
-  gap: 0.68rem;
+  gap: 0.65rem;
 }
 
 .theme-swatch {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
   position: relative;
-  border: 1.5px solid rgba(255, 240, 218, 0.4);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.45),
-    0 3px 0 rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 248, 238, 0.14);
+  box-shadow: none;
 }
 
 /* 3D Swatch Previews for Block Skins, Trays & Particles */
 .swatch-classic_studs {
-  background: linear-gradient(145deg, #ff4b55 0%, #d91b26 100%);
+  background: linear-gradient(145deg, #f04852 0%, #c91e28 100%);
 }
 .swatch-classic_studs::after {
   content: "";
   position: absolute;
-  inset: 11px;
+  inset: 10px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ff858d 0%, #e02430 70%);
-  box-shadow:
-    0 2px 3px rgba(0, 0, 0, 0.45),
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.65);
+  background: radial-gradient(circle at 35% 35%, #ff858d 0%, #d9232e 70%);
 }
 
 .swatch-smooth_bevel {
   background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
-  box-shadow:
-    inset 0 0 0 5px rgba(255, 255, 255, 0.24),
-    0 3px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.2);
 }
 
 .swatch-gummy_jelly {
   background: radial-gradient(circle at 30% 28%, #a7f3d0 0%, #10b981 55%, #047857 100%);
-  box-shadow:
-    inset 0 4px 8px rgba(255, 255, 255, 0.7),
-    0 3px 0 rgba(0, 0, 0, 0.35);
 }
 
 .swatch-carved_wood {
@@ -102,10 +106,7 @@
 
 .swatch-neon_cyber {
   background: #090d1a;
-  border: 2px solid #00f5d4;
-  box-shadow:
-    inset 0 0 12px #00f5d4,
-    0 0 10px rgba(0, 245, 212, 0.45);
+  border: 1.5px solid #28b5a7;
 }
 
 .swatch-industrial_slate {
@@ -133,40 +134,50 @@
 .swatch-pixel_sparks,
 .swatch-soap_bubbles,
 .swatch-lightning_bolts {
-  background: radial-gradient(circle at 50% 50%, #5c3d82 0%, #241838 100%);
+  background: radial-gradient(circle at 50% 50%, #4a3269 0%, #201633 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.45rem;
+  font-size: 1.3rem;
 }
 
 .theme-card.equipped {
-  border: 2px solid var(--accent-primary);
-  background: linear-gradient(180deg var(--in-oklab), #235757 0%, #222b52 100%);
+  border-color: rgba(40, 181, 167, 0.58);
+  background: linear-gradient(135deg var(--in-oklab), rgba(22, 54, 64, 0.72) 0%, rgba(18, 38, 52, 0.78) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(125, 232, 221, 0.18),
+    0 4px 14px rgba(10, 8, 22, 0.45);
 }
 
 .theme-card-title {
-  font-size: 0.9rem;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "SOFT" 40,
+    "WONK" 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   margin: 0;
 }
 
 .theme-card-desc {
-  font-size: 0.75rem;
+  font-size: 0.74rem;
+  font-weight: 400;
   color: var(--text-muted);
-  margin: 0.2rem 0 0;
+  margin: 0.16rem 0 0;
 }
 
 /* ==========================================================================
-   BOTTOM NAVIGATION TAB BAR
+   BOTTOM NAVIGATION TAB BAR — Minimalist Tonal Bar, Zero Borders
    ========================================================================== */
 
 .bottom-tab-bar {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.35rem;
-  padding: 0.4rem 0.65rem calc(0.45rem + var(--safe-bottom));
-  background: rgba(18, 14, 34, 0.95);
+  gap: 0.3rem;
+  padding: 0.36rem 0.65rem calc(0.42rem + var(--safe-bottom));
+  background: rgba(16, 12, 30, 0.92);
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
   max-width: 1120px;
@@ -176,51 +187,70 @@
 
 .tab-item {
   appearance: none;
-  border: 1px solid transparent;
+  border: none;
   background: transparent;
   color: var(--text-muted);
-  border-radius: var(--radius-md);
-  min-height: 48px;
-  padding: 0.3rem 0.2rem;
+  border-radius: var(--radius-sm);
+  min-height: 44px;
+  padding: 0.26rem 0.2rem;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  font-family: inherit;
+  gap: 0.14rem;
+  font-family: var(--font-ui);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.tab-item:hover:not(:disabled) {
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
 }
 
 .tab-item.active {
-  color: var(--text-primary);
-  background: rgba(246, 189, 96, 0.16);
-  border-color: rgba(246, 213, 168, 0.42);
+  color: #ffe08c;
+  background: linear-gradient(180deg var(--in-oklab), rgba(72, 56, 114, 0.84) 0%, rgba(44, 33, 76, 0.9) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 236, 0.2),
+    0 2px 0 rgba(8, 5, 18, 0.62);
 }
 
 .tab-item.tab-play-cta {
-  background: linear-gradient(180deg var(--in-oklab), #4be3d4 0%, var(--accent-primary) 100%);
-  color: #ffffff;
-  box-shadow: 0 3px 0 var(--accent-primary-lip);
+  background: linear-gradient(180deg var(--in-oklab), #42e0cd 0%, #22ab9d 100%);
+  color: #07191a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    0 2px 0 #105e56,
+    0 4px 12px rgba(40, 181, 167, 0.25);
+}
+
+.tab-item.tab-play-cta:hover:not(:disabled) {
+  background: linear-gradient(180deg var(--in-oklab), #56ebd9 0%, #28beaf 100%);
+  color: #07191a;
 }
 
 .tab-icon {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   line-height: 1;
 }
 
 .tab-label {
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   white-space: nowrap;
 }
 
 @media (max-width: 520px), (max-height: 740px) {
   .bottom-tab-bar {
-    gap: 0.28rem;
-    padding: 0.34rem 0.5rem calc(0.42rem + var(--safe-bottom));
+    gap: 0.24rem;
+    padding: 0.32rem 0.5rem calc(0.38rem + var(--safe-bottom));
   }
   .tab-item {
-    min-height: 44px;
-    padding: 0.24rem 0.16rem;
+    min-height: 42px;
+    padding: 0.22rem 0.14rem;
   }
 }
