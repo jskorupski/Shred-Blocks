@@ -56,6 +56,9 @@
   --accent-cyan: #64dfdf;
   --accent-purple: #9b72cf;
 
+  --scrollbar-thumb: rgba(229, 200, 166, 0.56);
+  --scrollbar-track: transparent;
+
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -79,6 +82,19 @@
   font-family: var(--font-sans);
   font-size-adjust: from-font;
   color-scheme: dark;
+  accent-color: var(--accent-primary);
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --scrollbar-thumb: #ffea00;
+    --scrollbar-track: #090b14;
+  }
+}
+
+::selection {
+  background: rgba(40, 181, 167, 0.36);
+  color: #fffaf2;
 }
 
 @supports (background: linear-gradient(in oklab, white, black)) {
@@ -194,6 +210,64 @@ body {
   padding-right: var(--safe-right);
   overflow: hidden;
   overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app-shell img {
+  -webkit-user-drag: none;
+}
+
+/* Preserve native text selection & copy-paste on inputs and copy-worthy content (browser-ui-theming) */
+:where(
+  input,
+  textarea,
+  [contenteditable="true"],
+  .selectable-text,
+  .code-textarea,
+  .telemetry-bar,
+  .panel-desc,
+  .qr-caption,
+  .transfer-status,
+  .diff-list,
+  .install-step-card p,
+  .install-step-card ol
+) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Sanctuary Scrollbars (customize-scrollbar-color-and-thickness & adapt-scrollbar-to-contrast-preferences) */
+:where(.roadmap-scroll, .themes-scroll, .dialog-card, .code-textarea) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+@supports not (scrollbar-color: auto) {
+  .roadmap-scroll::-webkit-scrollbar,
+  .themes-scroll::-webkit-scrollbar,
+  .dialog-card::-webkit-scrollbar,
+  .code-textarea::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .roadmap-scroll::-webkit-scrollbar-thumb,
+  .themes-scroll::-webkit-scrollbar-thumb,
+  .dialog-card::-webkit-scrollbar-thumb,
+  .code-textarea::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .roadmap-scroll::-webkit-scrollbar-track,
+  .themes-scroll::-webkit-scrollbar-track,
+  .dialog-card::-webkit-scrollbar-track,
+  .code-textarea::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
 }
 
 .screen {

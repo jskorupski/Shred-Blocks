@@ -254,8 +254,10 @@
   scrollbar-width: none;
 }
 
-.filter-pills::-webkit-scrollbar {
-  display: none;
+@supports not (scrollbar-width: none) {
+  .filter-pills::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Plane 1 Chiseled Stone Filter Chips */
@@ -349,6 +351,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
   padding-block: 0.42rem 1.4rem;
   padding-inline: 0.78rem;
   display: flex;

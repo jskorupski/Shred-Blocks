@@ -27,6 +27,8 @@ dialog::backdrop {
   max-height: min(92dvh, calc(var(--app-height, 100dvh) - 1rem));
   width: 100%;
   margin: auto;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .dialog-card {
@@ -622,6 +624,8 @@ dialog::backdrop {
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .title-overlay > .pwa-update-toast {

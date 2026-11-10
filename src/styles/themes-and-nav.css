@@ -7,6 +7,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 0.68rem 0.85rem 1.25rem;
   display: flex;
   flex-direction: column;
@@ -18,8 +19,15 @@
   align-items: center;
   gap: 0.28rem;
   overflow-x: auto;
+  scrollbar-width: none;
   padding-bottom: 2px;
   flex-shrink: 0;
+}
+
+@supports not (scrollbar-width: none) {
+  .themes-category-tabs::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .theme-section-title {

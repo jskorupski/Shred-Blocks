@@ -618,6 +618,8 @@ body.high-contrast {
   --accent-primary-lip: #008b76;
   --accent-gold: #ffea00;
   --accent-gold-lip: #b48600;
+  --scrollbar-thumb: #ffea00;
+  --scrollbar-track: #090b14;
 }
 
 body.high-contrast .title-crest-banner {

@@ -517,7 +517,58 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
       });
     }
 
-    // 4. Verify clicking Skipped Stage #2 cleanly opens Level 2 so players can replay & clear skipped stages!
+    // 4. UI-SELECT-01 & UI-SCROLLBAR-01: prevent errant desktop text selection on UI chrome & style scrollbars
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.mouse.move(280, 24);
+    await page.mouse.down();
+    await page.mouse.move(960, 620, { steps: 10 });
+    await page.mouse.up();
+
+    const desktopPolish = await page.evaluate(() => {
+      const cs = (sel: string) => {
+        const el = document.querySelector(sel);
+        return el ? window.getComputedStyle(el) : null;
+      };
+      const roadmapCs = cs('#roadmap-list');
+      const defaultThumbColor = roadmapCs?.scrollbarColor ?? '';
+      const roadmapEl = document.getElementById('roadmap-list');
+      document.body.classList.add('high-contrast');
+      const hcThumbColor = roadmapEl ? window.getComputedStyle(roadmapEl).scrollbarColor : '';
+      document.body.classList.remove('high-contrast');
+
+      return {
+        dragSelection: window.getSelection()?.toString() ?? '',
+        shellUserSelect: cs('#app-shell')?.userSelect,
+        nodeUserSelect: cs('.level-node-card')?.userSelect,
+        dialogUserSelect: cs('#dialog-pause')?.userSelect,
+        jumpInputUserSelect: cs('#level-jump-input')?.userSelect,
+        saveTextareaUserSelect: cs('#save-code-output')?.userSelect,
+        telemetryUserSelect: cs('#telemetry-readout')?.userSelect,
+        roadmapScrollbarWidth: roadmapCs?.scrollbarWidth,
+        themesScrollbarWidth: cs('.themes-scroll')?.scrollbarWidth,
+        dialogScrollbarWidth: cs('#dialog-save-transfer .dialog-card')?.scrollbarWidth,
+        filterPillsScrollbarWidth: cs('.filter-pills')?.scrollbarWidth,
+        themeTabsScrollbarWidth: cs('.themes-category-tabs')?.scrollbarWidth,
+        defaultThumbColor,
+        hcThumbColor,
+      };
+    });
+    expect(desktopPolish.dragSelection).toBe('');
+    expect(desktopPolish.shellUserSelect).toBe('none');
+    expect(desktopPolish.nodeUserSelect).toBe('none');
+    expect(desktopPolish.dialogUserSelect).toBe('none');
+    expect(desktopPolish.jumpInputUserSelect).toBe('text');
+    expect(desktopPolish.saveTextareaUserSelect).toBe('text');
+    expect(desktopPolish.telemetryUserSelect).toBe('text');
+    expect(desktopPolish.roadmapScrollbarWidth).toBe('thin');
+    expect(desktopPolish.themesScrollbarWidth).toBe('thin');
+    expect(desktopPolish.dialogScrollbarWidth).toBe('thin');
+    expect(desktopPolish.filterPillsScrollbarWidth).toBe('none');
+    expect(desktopPolish.themeTabsScrollbarWidth).toBe('none');
+    expect(desktopPolish.defaultThumbColor).not.toBe('auto');
+    expect(desktopPolish.hcThumbColor).not.toBe(desktopPolish.defaultThumbColor);
+
+    // 5. Verify clicking Skipped Stage #2 cleanly opens Level 2 so players can replay & clear skipped stages!
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('.level-node-card[data-level-id="2"]').click();
     await expect(page.locator('#screen-game')).toBeVisible();
