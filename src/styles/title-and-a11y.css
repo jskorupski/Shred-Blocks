@@ -4,7 +4,12 @@
    ========================================================================== */
 
 #screen-game.title-backdrop-mode .hud-top-bar,
-#screen-game.title-backdrop-mode .booster-dock,
+#screen-game.title-backdrop-mode .booster-dock {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 #screen-game.title-backdrop-mode #unlock-toast,
 #screen-game.title-backdrop-mode #booster-target-banner {
   display: none;
@@ -18,11 +23,6 @@
 #screen-game.title-backdrop-mode .sacred-geometry-ornament {
   color: rgba(246, 202, 128, 0.58);
   filter: drop-shadow(0 0 16px rgba(246, 189, 96, 0.36));
-}
-
-#screen-game.title-backdrop-mode .board-stage {
-  padding-top: calc(4.2rem + var(--safe-top));
-  padding-bottom: calc(10.6rem + var(--safe-bottom));
 }
 
 #screen-game.title-backdrop-mode #game-canvas {
@@ -445,6 +445,25 @@
   .title-astrolabe-wrap {
     width: 38px;
     height: 38px;
+  }
+}
+
+@media (max-height: 700px) {
+  .title-overlay {
+    padding-top: calc(0.42rem + var(--safe-top));
+    padding-bottom: calc(0.48rem + var(--safe-bottom));
+    gap: 0.28rem;
+  }
+  .title-crest-banner {
+    padding: 0.32rem 0.85rem;
+  }
+  .title-crest-card {
+    padding: 0.44rem 0.65rem 0.42rem;
+    gap: 0.28rem;
+  }
+  .btn-title-hero {
+    min-height: 40px;
+    font-size: 0.88rem;
   }
 }
 

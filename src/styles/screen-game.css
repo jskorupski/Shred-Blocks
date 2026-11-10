@@ -18,6 +18,9 @@
     inset 0 -1px 0 rgba(255, 236, 209, 0.16),
     0 6px 18px rgba(10, 7, 22, 0.42);
   flex-shrink: 0;
+  transition:
+    opacity 0.28s ease,
+    visibility 0.28s ease;
 }
 
 .hud-arch-primary {
@@ -274,8 +277,8 @@
 
 @supports (width: 100cqw) {
   .sacred-geometry-ornament {
-    width: min(96cqw, 96cqh, 660px);
-    height: min(96cqw, 96cqh, 660px);
+    width: min(96cqw, 82cqh, 550px);
+    height: min(96cqw, 82cqh, 550px);
   }
 }
 
@@ -333,8 +336,8 @@
 
 @supports (width: 100cqw) {
   #game-canvas {
-    width: min(98cqw, calc(98cqh * var(--board-aspect)), calc(660px * var(--board-aspect)));
-    max-height: min(98cqh, 660px);
+    width: min(96cqw, calc(82cqh * var(--board-aspect)), calc(550px * var(--board-aspect)));
+    max-height: min(82cqh, 550px);
   }
 }
 
@@ -424,6 +427,9 @@
     inset 0 1px 0 rgba(255, 244, 228, 0.18),
     0 -6px 18px rgba(8, 6, 18, 0.42);
   flex-shrink: 0;
+  transition:
+    opacity 0.28s ease,
+    visibility 0.28s ease;
 }
 
 .booster-btn {

@@ -389,8 +389,12 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
 
     const gameCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-game.css'), 'utf8');
     expect(gameCss).toContain('container-type: size');
-    expect(gameCss).toContain('98cqh');
+    expect(gameCss).toContain('82cqh');
     expect(gameCss).not.toContain('min-height: 250px');
+
+    const titleCss = fs.readFileSync(path.join(repoRoot, 'src/styles/title-and-a11y.css'), 'utf8');
+    expect(titleCss).toContain('visibility: hidden');
+    expect(titleCss).not.toContain('#screen-game.title-backdrop-mode .board-stage');
 
     const dialogsCss = fs.readFileSync(path.join(repoRoot, 'src/styles/dialogs.css'), 'utf8');
     expect(dialogsCss).toContain('.pwa-update-badge');

@@ -58,11 +58,21 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#title-returning-nav')).toBeHidden();
     await expect(page.locator('#btn-title-play')).toHaveText('▶ BEGIN JOURNEY');
 
-    // Tapping '▶ BEGIN JOURNEY' launches a brand-new player straight into Level 1 (FTUE)
+    // TITLE-TRANSITION-01: Verify zero visual shift (0px delta) when transitioning from Title Screen to Gameplay
+    const readStageRects = () =>
+      page.evaluate(() => {
+        const c = document.getElementById('game-canvas')?.getBoundingClientRect();
+        const o = document.querySelector('.sacred-geometry-ornament')?.getBoundingClientRect();
+        return [c?.x ?? 0, c?.y ?? 0, c?.width ?? 0, c?.height ?? 0, o?.y ?? 0, o?.height ?? 0];
+      });
+    const b0 = await readStageRects();
+    expect(Math.abs(b0[1] + b0[3] / 2 - (b0[4] + b0[5] / 2))).toBeLessThanOrEqual(1);
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#title-overlay')).toBeHidden();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
+    const b1 = await readStageRects();
+    expect(b1.map((v, i) => Math.abs(v - b0[i]) < 0.5)).toEqual([true, true, true, true, true, true]);
 
     // Tapping '‹ Map' (#btn-hud-home) navigates to the 300-Level Sanctuary Map (#screen-home)
     await page.locator('#btn-hud-home').click();
