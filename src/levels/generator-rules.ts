@@ -1,7 +1,4 @@
-import type {
-  CourtyardLayoutId,
-  LevelSpec,
-} from "../core/types";
+import type { CourtyardLayoutId, LevelSpec } from '../core/types';
 
 export const MAX_MODIFIERS_PER_BLOCK = 2;
 
@@ -145,13 +142,7 @@ export const MID_SHAPES = [
   'T4_R',
   'T4_L',
 ];
-export const LATE_SHAPES = [
-  ...MID_SHAPES,
-  'S4_H',
-  'Z4_H',
-  'U5_U',
-  'U5_D',
-];
+export const LATE_SHAPES = [...MID_SHAPES, 'S4_H', 'Z4_H', 'U5_U', 'U5_D'];
 
 export type MechanicId =
   | 'NONE'
@@ -257,11 +248,7 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
     'SLIDING_GATE',
     'SIZE_CHANGING_GATE',
   ]);
-  if (
-    levelId >= 35 &&
-    !isBreatherOrOnboardingWave &&
-    (!highFrictionPrimaries.has(primary) || decPos === 0)
-  ) {
+  if (levelId >= 35 && !isBreatherOrOnboardingWave && (!highFrictionPrimaries.has(primary) || decPos === 0)) {
     const unlockedSecondaries = HARMONIOUS_SECONDARY_POOL.filter((m) => {
       if (m === primary) return false;
       if (m === 'AXIS_LOCK') return levelId > 20;
@@ -269,7 +256,8 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
       if (m === 'MULTI_LAYER') return levelId > 40;
       if (m === 'ICE_BLOCKS') return levelId > 50 && primary !== 'BOMBS';
       if (m === 'STAR') return levelId > 60 && primary !== 'TOGGLING_GATE';
-      if (m === 'COLOR_QUEUE_GATES') return levelId > 130 && primary !== 'SLIDING_GATE' && primary !== 'SIZE_CHANGING_GATE';
+      if (m === 'COLOR_QUEUE_GATES')
+        return levelId > 130 && primary !== 'SLIDING_GATE' && primary !== 'SIZE_CHANGING_GATE';
       return false;
     });
     if (unlockedSecondaries.length > 0) {
@@ -303,11 +291,7 @@ export function selectCourtyardTopologyForLevel(
     return 'TWIN_SANCTUM';
   }
 
-  if (
-    levelId % 2 === 0 ||
-    levelId % 5 === 0 ||
-    activeMechanics.has('CUTOUTS_PILLARS')
-  ) {
+  if (levelId % 2 === 0 || levelId % 5 === 0 || activeMechanics.has('CUTOUTS_PILLARS')) {
     if (rows >= 8 && cols >= 8 && levelId % 4 === 0) {
       return 'CITADEL_OCTAGON';
     }

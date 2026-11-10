@@ -65,11 +65,7 @@ export function triggerCarrierItems(board: BoardState, block: BlockState): void 
     // Second pass: locked rooms with matching lockId (if no unlocked room block matched)
     if (!unlockedAny) {
       for (const other of board.blocks) {
-        if (
-          other.status === 'ACTIVE' &&
-          other.chained &&
-          (other.lockId === keyId || other.lockId === 0)
-        ) {
+        if (other.status === 'ACTIVE' && other.chained && (other.lockId === keyId || other.lockId === 0)) {
           other.chained = false;
           unlockedAny = true;
           break;
@@ -114,11 +110,7 @@ export function triggerCarrierItems(board: BoardState, block: BlockState): void 
     block.scissorColor = 0;
     let cutUnlocked = false;
     for (const other of board.blocks) {
-      if (
-        other.status === 'ACTIVE' &&
-        other.ropeColor === cutColor &&
-        !isBlockInLockedRoom(board, other)
-      ) {
+      if (other.status === 'ACTIVE' && other.ropeColor === cutColor && !isBlockInLockedRoom(board, other)) {
         other.ropeColor = 0;
         cutUnlocked = true;
       }
@@ -452,11 +444,7 @@ export function stepDynamicGatesOnShred(board: BoardState, exitedGate?: GateStat
     if (isGateInLockedRoom(board, g)) continue;
     const edgeLine =
       g.edgeLine ??
-      (g.edge === 'TOP' || g.edge === 'LEFT'
-        ? 0
-        : g.edge === 'BOTTOM'
-          ? board.rows - 1
-          : board.cols - 1);
+      (g.edge === 'TOP' || g.edge === 'LEFT' ? 0 : g.edge === 'BOTTOM' ? board.rows - 1 : board.cols - 1);
     const { minSpan, maxSpanEnd } = getPlayableEdgeSpanBounds(
       board.rows,
       board.cols,
@@ -488,17 +476,11 @@ export function stepDynamicGatesOnShred(board: BoardState, exitedGate?: GateStat
     }
     if (g.slidesOnClear) {
       const clampSlideMin = Math.max(minSpan, g.slideMin);
-      const clampSlideMax = Math.max(
-        clampSlideMin,
-        Math.min(g.slideMax, maxSpanEnd - g.spanLength)
-      );
+      const clampSlideMax = Math.max(clampSlideMin, Math.min(g.slideMax, maxSpanEnd - g.spanLength));
       let nextStart = g.spanStart + g.slideDir;
       if (nextStart < clampSlideMin || nextStart > clampSlideMax) {
         g.slideDir = (g.slideDir * -1) as 1 | -1;
-        nextStart = Math.max(
-          clampSlideMin,
-          Math.min(clampSlideMax, g.spanStart + g.slideDir)
-        );
+        nextStart = Math.max(clampSlideMin, Math.min(clampSlideMax, g.spanStart + g.slideDir));
       }
       g.spanStart = nextStart;
     }
@@ -646,10 +628,7 @@ export function stepMovingElevators(board: BoardState): void {
     for (const p of passengers) {
       if (p.groupId > 0) {
         const hasOutsideSibling = board.blocks.some(
-          (other) =>
-            other.status === 'ACTIVE' &&
-            other.groupId === p.groupId &&
-            !passengerIds.has(other.id)
+          (other) => other.status === 'ACTIVE' && other.groupId === p.groupId && !passengerIds.has(other.id)
         );
         if (hasOutsideSibling) {
           partialOverlap = true;

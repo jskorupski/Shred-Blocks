@@ -27,7 +27,7 @@ const APP_SHELL_URLS = [
  * `ERR_FAILED` ("Can't reach this page") before retrying.
  */
 async function stripRedirectFlag(response) {
-  if (!response || !response.redirected) {
+  if (!response?.redirected) {
     return response;
   }
   const body = await response.clone().arrayBuffer();
@@ -46,7 +46,7 @@ self.addEventListener('install', (event) => {
       await Promise.all(
         APP_SHELL_URLS.map(async (url) => {
           const res = await fetch(url, { cache: 'no-cache' });
-          if (res && res.ok) {
+          if (res?.ok) {
             const cleanRes = await stripRedirectFlag(res);
             await cache.put(url, cleanRes);
           }
@@ -118,7 +118,7 @@ self.addEventListener('fetch', (event) => {
 
         const networkFetch = fetch(request)
           .then(async (response) => {
-            if (response && response.ok) {
+            if (response?.ok) {
               const cleanResponse = await stripRedirectFlag(response);
               await shellCache.put('/', cleanResponse.clone());
               return cleanResponse;
@@ -159,11 +159,9 @@ self.addEventListener('fetch', (event) => {
 
       try {
         const response = await fetch(request);
-        if (response && response.ok && response.type === 'basic') {
+        if (response?.ok && response.type === 'basic') {
           const cleanResponse = await stripRedirectFlag(response);
-          const targetCacheName = APP_SHELL_URLS.includes(url.pathname)
-            ? SHELL_CACHE
-            : RUNTIME_CACHE;
+          const targetCacheName = APP_SHELL_URLS.includes(url.pathname) ? SHELL_CACHE : RUNTIME_CACHE;
           const cache = await caches.open(targetCacheName);
           await cache.put(request, cleanResponse.clone());
           return cleanResponse;

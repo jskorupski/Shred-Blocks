@@ -1,17 +1,14 @@
-import {
-  findEligibleGateForBlockAt,
-  getGateOutwardNormal,
-} from "../core/gate-clearance";
+import { findEligibleGateForBlockAt, getGateOutwardNormal } from '../core/gate-clearance';
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
   isBlockInLockedRoom,
   isRoomUnlocked,
-} from "../core/physics";
-import { getActiveColor, getShape } from "../core/polyomino";
-import type { BoardState, ColorId } from "../core/types";
-import { ENVIRONMENT_MESHES } from "./mesh-generator";
-import type { RenderPassContext, RenderSceneOptions, TrayPalette } from "./render-types";
+} from '../core/physics';
+import { getActiveColor, getShape } from '../core/polyomino';
+import type { BoardState, ColorId } from '../core/types';
+import { ENVIRONMENT_MESHES } from './mesh-generator';
+import type { RenderPassContext, RenderSceneOptions, TrayPalette } from './render-types';
 
 export function renderPass1PortcullisBarriers(
   rctx: RenderPassContext,
@@ -229,18 +226,7 @@ export function renderPass1PortcullisBarriers(
       0.42
     );
     if (isKeyOnly) {
-      rctx.drawAtlasBadge(
-        gl,
-        'BADGE_KEY',
-        bcx,
-        bcy,
-        medZ,
-        0.44,
-        1.0,
-        0.9,
-        0.35,
-        1.0
-      );
+      rctx.drawAtlasBadge(gl, 'BADGE_KEY', bcx, bcy, medZ, 0.44, 1.0, 0.9, 0.35, 1.0);
     } else {
       const twoDigit = bar.shredsRemaining >= 10;
       rctx.drawAtlasBadge(
@@ -423,10 +409,7 @@ export function renderPass2ReticleAndPromptsImpl(
       if (isBlockInLockedRoom(board, b)) continue;
       const cId: ColorId = getActiveColor(b.colorStack, b.colorCursor);
       if (cId === 0 && inputMode === 'TARGET_VACUUM') continue;
-      if (
-        inputMode === 'TARGET_VACUUM' &&
-        (b.chained || b.ropeColor > 0 || b.iceCount > 0)
-      ) {
+      if (inputMode === 'TARGET_VACUUM' && (b.chained || b.ropeColor > 0 || b.iceCount > 0)) {
         continue;
       }
       const shape = getShape(b.shapeId);
@@ -503,9 +486,7 @@ export function renderPass2ReticleAndPromptsImpl(
   // 2C. ZEN Mode Hint & Early-Stage Auto-Guide Trail (`board.hintMove` / `options.autoGuideMove`)
   const guideMove = board.hintMove ?? (draggedId === null ? options.autoGuideMove : null) ?? null;
   if (guideMove) {
-    const hintBlock = board.blocks.find(
-      (b) => b.id === guideMove.blockId && b.status === 'ACTIVE'
-    );
+    const hintBlock = board.blocks.find((b) => b.id === guideMove.blockId && b.status === 'ACTIVE');
     if (hintBlock) {
       const shape = getShape(hintBlock.shapeId);
       const { targetRow, targetCol } = guideMove;
@@ -609,9 +590,7 @@ export function renderPass2ReticleAndPromptsImpl(
         const steps = 3;
         const timeSec = options.timeSec ?? (performance.now() - rctx.startTimeMs) * 0.001;
         for (let s = 0; s < steps; s++) {
-          const rawT = options.reducedMotion
-            ? (s + 1) / (steps + 1)
-            : ((s / steps + timeSec * 0.75) % 1.0);
+          const rawT = options.reducedMotion ? (s + 1) / (steps + 1) : (s / steps + timeSec * 0.75) % 1.0;
           const px = startCx + dx * rawT;
           const py = startCy + dy * rawT;
           const alpha = Math.sin(rawT * Math.PI) * 0.78;

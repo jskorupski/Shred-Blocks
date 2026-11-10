@@ -66,9 +66,7 @@ export function computeStateHash(board: BoardState): bigint {
 
   for (const g of board.gates) {
     const gFlags =
-      (g.shutterOpen ? 1 : 0) |
-      ((g.shutterLockColor & 0xf) << 1) |
-      ((g.sizeDir > 0 ? 1 : 0) << 5);
+      (g.shutterOpen ? 1 : 0) | ((g.shutterLockColor & 0xf) << 1) | ((g.sizeDir > 0 ? 1 : 0) << 5);
     const hg1 = hashTuple(0x2001n, g.index, g.colorCursor, g.iceCount, gFlags);
     const hg2 = hashTuple(
       0x2002n,
@@ -99,13 +97,7 @@ export function computeStateHash(board: BoardState): bigint {
 
   if (board.barriers) {
     for (const bar of board.barriers) {
-      const hbar = hashTuple(
-        0x6001n,
-        bar.id,
-        bar.open ? 1 : 0,
-        bar.shredsRemaining,
-        bar.lockId
-      );
+      const hbar = hashTuple(0x6001n, bar.id, bar.open ? 1 : 0, bar.shredsRemaining, bar.lockId);
       h = (h ^ hbar) & MASK_64;
     }
   }
@@ -127,11 +119,7 @@ function getCandidateExitAnchorsForColor(
     const maxSpanEnd = (g.slidesOnClear ? g.slideMax : g.spanStart) + maxLen;
     const edgeLine =
       g.edgeLine ??
-      (g.edge === 'TOP' || g.edge === 'LEFT'
-        ? 0
-        : g.edge === 'BOTTOM'
-          ? board.rows - 1
-          : board.cols - 1);
+      (g.edge === 'TOP' || g.edge === 'LEFT' ? 0 : g.edge === 'BOTTOM' ? board.rows - 1 : board.cols - 1);
 
     if (g.edge === 'TOP' || g.edge === 'BOTTOM') {
       const r = g.edge === 'TOP' ? edgeLine : edgeLine - shapeRows + 1;
@@ -290,7 +278,7 @@ function isPureSafeExit(board: BoardState, block: BlockState, gateIndex: number)
   if (gateIndex < 0 || gateIndex >= board.gates.length) return false;
   if (board.elevators.length > 0 || board.generators.length > 0) return false;
   if (board.crates.some((c) => !c.destroyed && c.hp > 0)) return false;
-  if (board.barriers && board.barriers.some((b) => !b.open)) return false;
+  if (board.barriers?.some((b) => !b.open)) return false;
   if (block.groupId > 0) return false;
   if (block.hasKey > 0 || block.scissorColor > 0 || block.shutterGemColor > 0) return false;
   if (getLayersRemaining(block.colorStack, block.colorCursor) > 1) return false;
@@ -418,12 +406,7 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
       let matchedGateIdx = -1;
       let exitingMember: BlockState = lead;
       for (const member of group) {
-        const gIdx = findEligibleGateForBlockAt(
-          board,
-          member,
-          member.row + dRow,
-          member.col + dCol
-        );
+        const gIdx = findEligibleGateForBlockAt(board, member, member.row + dRow, member.col + dCol);
         if (gIdx >= 0) {
           matchedGateIdx = gIdx;
           exitingMember = member;
@@ -446,11 +429,7 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
         const pureSafe = isPureSafeExit(board, exitingMember, matchedGateIdx);
         let urgency = 0;
         if (exitingMember.bombMax > 0) urgency += 100 - exitingMember.bombCount;
-        if (
-          exitingMember.hasKey > 0 ||
-          exitingMember.scissorColor > 0 ||
-          exitingMember.shutterGemColor > 0
-        ) {
+        if (exitingMember.hasKey > 0 || exitingMember.scissorColor > 0 || exitingMember.shutterGemColor > 0) {
           urgency += 40;
         }
         if (getLayersRemaining(exitingMember.colorStack, exitingMember.colorCursor) > 1) {
@@ -584,10 +563,7 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
     board: startBoard,
     g: 0,
     hAdm: startHAdm,
-    priority:
-      startMetrics.totalLayers * 1.15 +
-      startMetrics.restrictionScore * 0.1 +
-      startHAdm * 0.01,
+    priority: startMetrics.totalLayers * 1.15 + startMetrics.restrictionScore * 0.1 + startHAdm * 0.01,
     firstMove: null,
     path: [],
   });
@@ -601,13 +577,7 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
     const moves = generateMacroMoves(current.board);
     for (const move of moves) {
       const nextBoard = cloneBoardState(current.board);
-      const outcome = commitBlockMove(
-        nextBoard,
-        move.blockId,
-        move.targetRow,
-        move.targetCol,
-        'ZEN'
-      );
+      const outcome = commitBlockMove(nextBoard, move.blockId, move.targetRow, move.targetCol, 'ZEN');
 
       if (!outcome.moved) continue;
       if (isBoardFailed(nextBoard, 'ZEN').failed) continue;
@@ -642,10 +612,7 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
       const nextHAdm = computeAdmissibleHeuristic(nextBoard);
       const metrics = computeRemainingLayersAndObstacles(nextBoard);
       const nextPriority =
-        nextG +
-        metrics.totalLayers * 1.15 +
-        metrics.restrictionScore * 0.1 +
-        nextHAdm * 0.01;
+        nextG + metrics.totalLayers * 1.15 + metrics.restrictionScore * 0.1 + nextHAdm * 0.01;
 
       open.push({
         board: nextBoard,

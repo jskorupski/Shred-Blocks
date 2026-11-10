@@ -1,9 +1,8 @@
-import { chromium } from '@playwright/test';
-
 // @ts-expect-error Node built-in module resolved at runtime by tsx
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 // @ts-expect-error Node built-in module resolved at runtime by tsx
 import { resolve } from 'node:path';
+import { chromium } from '@playwright/test';
 
 declare const process: {
   cwd: () => string;
@@ -81,13 +80,17 @@ async function main(): Promise<void> {
       deviceScaleFactor: 2,
     });
     const b64Maskable = (
-      readFileSync(resolve(publicDir, 'icon-maskable-512.png')) as { toString: (enc: string) => string }
+      readFileSync(resolve(publicDir, 'icon-maskable-512.png')) as {
+        toString: (enc: string) => string;
+      }
     ).toString('base64');
     const b64Any = (
       readFileSync(resolve(publicDir, 'icon-512.png')) as { toString: (enc: string) => string }
     ).toString('base64');
     const b64Apple = (
-      readFileSync(resolve(publicDir, 'apple-touch-icon.png')) as { toString: (enc: string) => string }
+      readFileSync(resolve(publicDir, 'apple-touch-icon.png')) as {
+        toString: (enc: string) => string;
+      }
     ).toString('base64');
 
     await previewPage.setContent(`<!doctype html>

@@ -14,11 +14,7 @@ dialog::backdrop {
 }
 
 #dialog-victory::backdrop {
-  background: radial-gradient(
-    circle at 50% 45%,
-    rgba(246, 189, 96, 0.24) 0%,
-    rgba(16, 11, 32, 0.56) 100%
-  );
+  background: radial-gradient(circle at 50% 45%, rgba(246, 189, 96, 0.24) 0%, rgba(16, 11, 32, 0.56) 100%);
   backdrop-filter: blur(1.5px);
 }
 
@@ -38,7 +34,9 @@ dialog::backdrop {
   border: 2px solid var(--border-bright);
   border-radius: var(--radius-lg);
   padding: 1.1rem;
-  box-shadow: inset 0 2px 0 rgba(255, 244, 228, 0.32), 0 8px 0 #110c22,
+  box-shadow:
+    inset 0 2px 0 rgba(255, 244, 228, 0.32),
+    0 8px 0 #110c22,
     0 22px 48px rgba(0, 0, 0, 0.68);
   display: flex;
   flex-direction: column;
@@ -317,7 +315,7 @@ dialog::backdrop {
   text-overflow: ellipsis;
 }
 
-.setting-row input[type='checkbox'] {
+.setting-row input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 38px;
@@ -328,11 +326,13 @@ dialog::backdrop {
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
-.setting-row input[type='checkbox']::after {
-  content: '';
+.setting-row input[type="checkbox"]::after {
+  content: "";
   position: absolute;
   top: 2px;
   left: 2px;
@@ -341,15 +341,17 @@ dialog::backdrop {
   border-radius: 50%;
   background: #cbd5e1;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
 }
 
-.setting-row input[type='checkbox']:checked {
+.setting-row input[type="checkbox"]:checked {
   background: var(--accent-primary);
   border-color: #86efac;
 }
 
-.setting-row input[type='checkbox']:checked::after {
+.setting-row input[type="checkbox"]:checked::after {
   transform: translateX(16px);
   background: #ffffff;
 }
@@ -570,4 +572,3 @@ dialog::backdrop {
   display: flex;
   gap: 0.4rem;
 }
-

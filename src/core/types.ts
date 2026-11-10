@@ -146,7 +146,12 @@ export type QualityTier = 'AUTO' | 'ULTRA_120' | 'BALANCED_60';
 
 export type SkinId = 'classic_studs' | 'smooth_bevel' | 'gummy_jelly' | 'carved_wood' | 'neon_cyber';
 export type TrayId = 'industrial_slate' | 'warm_birch' | 'midnight_arcade' | 'frosted_quartz' | 'mint_studio';
-export type ParticleStyleId = 'micro_cubes' | 'star_confetti' | 'pixel_sparks' | 'soap_bubbles' | 'lightning_bolts';
+export type ParticleStyleId =
+  | 'micro_cubes'
+  | 'star_confetti'
+  | 'pixel_sparks'
+  | 'soap_bubbles'
+  | 'lightning_bolts';
 
 export type CourtyardLayoutId =
   | 'RECTANGLE'
@@ -334,7 +339,12 @@ export interface BoardState {
   movesCommitted: number;
   sessionBlocksShredded: number;
   nextDynamicBlockId: number;
-  hintMove: { blockId: number; targetRow: number; targetCol: number; exitsGateIndex: number } | null;
+  hintMove: {
+    blockId: number;
+    targetRow: number;
+    targetCol: number;
+    exitsGateIndex: number;
+  } | null;
 }
 
 export interface LevelSpec {

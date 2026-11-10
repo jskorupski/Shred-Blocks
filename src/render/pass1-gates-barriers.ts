@@ -1,12 +1,7 @@
-import {
-  getGateActiveColor,
-} from "../core/gate-clearance";
-import {
-  type BoardState,
-  type GateState,
-} from "../core/types";
-import { ENVIRONMENT_MESHES } from "./mesh-generator";
-import type { RenderPassContext, TrayPalette } from "./render-types";
+import { getGateActiveColor } from '../core/gate-clearance';
+import type { BoardState, GateState } from '../core/types';
+import { ENVIRONMENT_MESHES } from './mesh-generator';
+import type { RenderPassContext, TrayPalette } from './render-types';
 
 export function renderPass1WallsAndGates(
   rctx: RenderPassContext,
@@ -27,11 +22,7 @@ export function renderPass1WallsAndGates(
   const [wr, wg, wb] = palette.wallColor;
   const [rhr, rhg, rhb] = palette.rimHighlight;
 
-  const isUnitEdgeCoveredByGate = (
-    edge: GateState['edge'],
-    edgeLine: number,
-    spanCell: number
-  ): boolean => {
+  const isUnitEdgeCoveredByGate = (edge: GateState['edge'], edgeLine: number, spanCell: number): boolean => {
     for (const gate of board.gates) {
       if (
         gate.edge === edge &&
@@ -68,32 +59,74 @@ export function renderPass1WallsAndGates(
       const gateThick = wallThick - 0.03;
       if (topOpen && !isUnitEdgeCoveredByGate('TOP', r, c)) {
         const trimLeft =
-          isCellPlayable(r - 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r - 1)
-            ? gateThick
-            : 0;
+          isCellPlayable(r - 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r - 1) ? gateThick : 0;
         const trimRight =
-          isCellPlayable(r - 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r - 1)
-            ? gateThick
-            : 0;
+          isCellPlayable(r - 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r - 1) ? gateThick : 0;
         const segW = 1 - trimLeft - trimRight;
         if (segW > 0.02) {
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + trimLeft, r - wallThick, zOff, segW, wallThick, 1, cwr, cwg, cwb);
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c + trimLeft, r - 0.09, zOff + 0.682, segW, 0.08, 1, crhr, crhg, crhb, 0.9);
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.wallSegment,
+            c + trimLeft,
+            r - wallThick,
+            zOff,
+            segW,
+            wallThick,
+            1,
+            cwr,
+            cwg,
+            cwb
+          );
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.overlayQuad,
+            c + trimLeft,
+            r - 0.09,
+            zOff + 0.682,
+            segW,
+            0.08,
+            1,
+            crhr,
+            crhg,
+            crhb,
+            0.9
+          );
         }
       }
       if (botOpen && !isUnitEdgeCoveredByGate('BOTTOM', r, c)) {
         const trimLeft =
-          isCellPlayable(r + 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r + 1)
-            ? gateThick
-            : 0;
+          isCellPlayable(r + 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r + 1) ? gateThick : 0;
         const trimRight =
-          isCellPlayable(r + 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r + 1)
-            ? gateThick
-            : 0;
+          isCellPlayable(r + 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r + 1) ? gateThick : 0;
         const segW = 1 - trimLeft - trimRight;
         if (segW > 0.02) {
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + trimLeft, r + 1, zOff, segW, wallThick, 1, cwr, cwg, cwb);
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c + trimLeft, r + 1.01, zOff + 0.682, segW, 0.08, 1, crhr, crhg, crhb, 0.9);
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.wallSegment,
+            c + trimLeft,
+            r + 1,
+            zOff,
+            segW,
+            wallThick,
+            1,
+            cwr,
+            cwg,
+            cwb
+          );
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.overlayQuad,
+            c + trimLeft,
+            r + 1.01,
+            zOff + 0.682,
+            segW,
+            0.08,
+            1,
+            crhr,
+            crhg,
+            crhb,
+            0.9
+          );
         }
       }
       if (leftOpen && !isUnitEdgeCoveredByGate('LEFT', c, r)) {
@@ -109,8 +142,33 @@ export function renderPass1WallsAndGates(
           : 0;
         const segH = 1 - trimTop - trimBot;
         if (segH > 0.02) {
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r + trimTop, zOff, wallThick, segH, 1, cwr, cwg, cwb);
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c - 0.09, r + trimTop, zOff + 0.682, 0.08, segH, 1, crhr, crhg, crhb, 0.9);
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.wallSegment,
+            c - wallThick,
+            r + trimTop,
+            zOff,
+            wallThick,
+            segH,
+            1,
+            cwr,
+            cwg,
+            cwb
+          );
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.overlayQuad,
+            c - 0.09,
+            r + trimTop,
+            zOff + 0.682,
+            0.08,
+            segH,
+            1,
+            crhr,
+            crhg,
+            crhb,
+            0.9
+          );
         }
       }
       if (rightOpen && !isUnitEdgeCoveredByGate('RIGHT', c, r)) {
@@ -126,23 +184,96 @@ export function renderPass1WallsAndGates(
           : 0;
         const segH = 1 - trimTop - trimBot;
         if (segH > 0.02) {
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r + trimTop, zOff, wallThick, segH, 1, cwr, cwg, cwb);
-          rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, c + 1.01, r + trimTop, zOff + 0.682, 0.08, segH, 1, crhr, crhg, crhb, 0.9);
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.wallSegment,
+            c + 1,
+            r + trimTop,
+            zOff,
+            wallThick,
+            segH,
+            1,
+            cwr,
+            cwg,
+            cwb
+          );
+          rctx.drawMesh(
+            gl,
+            ENVIRONMENT_MESHES.overlayQuad,
+            c + 1.01,
+            r + trimTop,
+            zOff + 0.682,
+            0.08,
+            segH,
+            1,
+            crhr,
+            crhg,
+            crhb,
+            0.9
+          );
         }
       }
 
       // Convex outer corner posts
       if (topOpen && leftOpen) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c - wallThick,
+          r - wallThick,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
       if (topOpen && rightOpen) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c + 1,
+          r - wallThick,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
       if (botOpen && leftOpen) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c - wallThick,
+          r + 1,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
       if (botOpen && rightOpen) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c + 1,
+          r + 1,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
 
       // Concave inner elbow posts when stepped-edge gates abut an inward corner
@@ -153,7 +284,19 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('LEFT', c, r - 1) &&
         isUnitEdgeCoveredByGate('TOP', r, c - 1)
       ) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c - wallThick,
+          r - wallThick,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
       if (
         !topOpen &&
@@ -162,7 +305,19 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('RIGHT', c, r - 1) &&
         isUnitEdgeCoveredByGate('TOP', r, c + 1)
       ) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r - wallThick, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c + 1,
+          r - wallThick,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
       if (
         !botOpen &&
@@ -171,7 +326,19 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('LEFT', c, r + 1) &&
         isUnitEdgeCoveredByGate('BOTTOM', r, c - 1)
       ) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c - wallThick, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c - wallThick,
+          r + 1,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
       if (
         !botOpen &&
@@ -180,7 +347,19 @@ export function renderPass1WallsAndGates(
         isUnitEdgeCoveredByGate('RIGHT', c, r + 1) &&
         isUnitEdgeCoveredByGate('BOTTOM', r, c + 1)
       ) {
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.wallSegment, c + 1, r + 1, zOff, wallThick, wallThick, 1, cwr, cwg, cwb);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          c + 1,
+          r + 1,
+          zOff,
+          wallThick,
+          wallThick,
+          1,
+          cwr,
+          cwg,
+          cwb
+        );
       }
     }
   }
@@ -196,9 +375,7 @@ export function renderPass1WallsAndGates(
     const adjR = isHorizEdge ? gate.edgeLine : gate.spanStart;
     const adjC = isHorizEdge ? gate.spanStart : gate.edgeLine;
     const gateRoomId =
-      adjR >= 0 && adjR < rows && adjC >= 0 && adjC < cols
-        ? (board.roomMap[adjR * cols + adjC] ?? 0)
-        : 0;
+      adjR >= 0 && adjR < rows && adjC >= 0 && adjC < cols ? (board.roomMap[adjR * cols + adjC] ?? 0) : 0;
     const gateVis = rctx.getRoomVisualState(board, gateRoomId);
     const zOff = gateVis.zOffset;
     const lum = gateVis.luminanceMul;
@@ -288,37 +465,17 @@ export function renderPass1WallsAndGates(
     }
 
     // Gate colored base sill
-    rctx.drawMesh(
-      gl,
-      ENVIRONMENT_MESHES.gateHousing,
-      gx,
-      gy,
-      zOff,
-      gw,
-      gh,
-      0.42,
-      gr,
-      gg,
-      gb,
-      1.0
-    );
+    rctx.drawMesh(gl, ENVIRONMENT_MESHES.gateHousing, gx, gy, zOff, gw, gh, 0.42, gr, gg, gb, 1.0);
 
     // Spinning 3D Shredder Roller cylinder + Breathing Threshold Floor Aura (`IDLE-03`)
     const gateReady =
-      gate.shutterOpen &&
-      gate.shutterLockColor === 0 &&
-      gate.iceCount <= 0 &&
-      !gateVis.isLocked;
-    const isGateActivelyShredding = rctx.activeVisualShreds.some(
-      (a) => a.gateIndex === gate.index
-    );
+      gate.shutterOpen && gate.shutterLockColor === 0 && gate.iceCount <= 0 && !gateVis.isLocked;
+    const isGateActivelyShredding = rctx.activeVisualShreds.some((a) => a.gateIndex === gate.index);
     const isGateDragTargeted = rctx.lastOptions.dragEligibleGateIndex === gate.index;
     const gatePulse = !rctx.lastOptions.reducedMotion
       ? 0.5 + 0.5 * Math.sin(timeSec * 2.2 + gate.index * 1.4)
       : 0.5;
-    const rollerGlint = !rctx.lastOptions.reducedMotion && gateReady
-      ? 0.08 * gatePulse
-      : 0;
+    const rollerGlint = !rctx.lastOptions.reducedMotion && gateReady ? 0.08 * gatePulse : 0;
     const rollerSpeed =
       !gateReady || rctx.lastOptions.reducedMotion
         ? 0.0
@@ -540,15 +697,12 @@ export function renderPass1WallsAndGates(
 
     // Colorblind symbol on gate housing (`UX-10`, `R3D-04`: clear of center badges and outward queue pips)
     if (colorblind) {
-      const hasCenterGateBadge =
-        gate.iceCount > 0 || gate.shutterLockColor > 0 || gate.isStar;
+      const hasCenterGateBadge = gate.iceCount > 0 || gate.shutterLockColor > 0 || gate.isStar;
       const symSpanOffset = hasCenterGateBadge
         ? -Math.max(0.34, Math.min(0.46, gate.spanLength * 0.5 - 0.22))
         : 0.0;
-      const inwardX =
-        gate.edge === 'LEFT' ? 0.06 : gate.edge === 'RIGHT' ? -0.06 : 0;
-      const inwardY =
-        gate.edge === 'TOP' ? 0.06 : gate.edge === 'BOTTOM' ? -0.06 : 0;
+      const inwardX = gate.edge === 'LEFT' ? 0.06 : gate.edge === 'RIGHT' ? -0.06 : 0;
+      const inwardY = gate.edge === 'TOP' ? 0.06 : gate.edge === 'BOTTOM' ? -0.06 : 0;
       rctx.drawAtlasBadge(
         gl,
         `CB_${activeColor}`,
@@ -570,12 +724,8 @@ export function renderPass1WallsAndGates(
       const nextCol = gate.colorQueue[gate.colorCursor + 1 + q];
       const [qr, qg, qb] = rctx.getColorRgb(nextCol, highContrast);
       const pipOffset = (q - (visibleQueue - 1) * 0.5) * 0.62;
-      const px = isHorizEdge
-        ? rollerX + pipOffset
-        : rollerX + (gate.edge === 'LEFT' ? -0.18 : 0.18);
-      const py = !isHorizEdge
-        ? rollerY + pipOffset
-        : rollerY + (gate.edge === 'TOP' ? -0.18 : 0.18);
+      const px = isHorizEdge ? rollerX + pipOffset : rollerX + (gate.edge === 'LEFT' ? -0.18 : 0.18);
+      const py = !isHorizEdge ? rollerY + pipOffset : rollerY + (gate.edge === 'TOP' ? -0.18 : 0.18);
       const barW = isHorizEdge ? 0.5 : 0.16;
       const barH = !isHorizEdge ? 0.5 : 0.16;
       const pipBobZ =
@@ -612,20 +762,8 @@ export function renderPass1WallsAndGates(
         1.0
       );
       if (colorblind) {
-        rctx.drawAtlasBadge(
-          gl,
-          `CB_${nextCol}`,
-          px,
-          py,
-          zOff + 0.72 + pipBobZ,
-          0.15,
-          lum,
-          lum,
-          lum,
-          0.96
-        );
+        rctx.drawAtlasBadge(gl, `CB_${nextCol}`, px, py, zOff + 0.72 + pipBobZ, 0.15, lum, lum, lum, 0.96);
       }
     }
   }
-
 }

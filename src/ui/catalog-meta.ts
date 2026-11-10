@@ -1,5 +1,5 @@
-import type { SoundEngine } from "../audio/synth";
-import type { CommitMoveOutcome } from "../core/board";
+import type { SoundEngine } from '../audio/synth';
+import type { CommitMoveOutcome } from '../core/board';
 import type {
   Benchmark120HzResult,
   BoardState,
@@ -11,10 +11,10 @@ import type {
   SavePayloadV1,
   SkinId,
   TrayId,
-} from "../core/types";
-import type { BoardInputController, HoverState } from "../input/pointer-controller";
-import type { Renderer3D } from "../render/renderer-3d";
-import { BOOSTER_COIN_COSTS, type SaveManager } from "../storage/save-manager";
+} from '../core/types';
+import type { BoardInputController, HoverState } from '../input/pointer-controller';
+import type { Renderer3D } from '../render/renderer-3d';
+import { BOOSTER_COIN_COSTS, type SaveManager } from '../storage/save-manager';
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -142,7 +142,11 @@ export function getChapterMetaForLevel(levelId: number): ChapterMeta {
 export const THEME_UNLOCK_PRICE = 150;
 
 export const SKIN_CATALOG: ReadonlyArray<{ id: SkinId; name: string; desc: string }> = [
-  { id: 'classic_studs', name: 'Classic Studs', desc: 'Tactile toy-box blocks with raised top studs' },
+  {
+    id: 'classic_studs',
+    name: 'Classic Studs',
+    desc: 'Tactile toy-box blocks with raised top studs',
+  },
   { id: 'smooth_bevel', name: 'Smooth Bevel', desc: 'Sleek satin-matte chamfered acrylic blocks' },
   { id: 'gummy_jelly', name: 'Gummy Jelly', desc: 'Glossy translucent subsurface candy blocks' },
   { id: 'carved_wood', name: 'Carved Wood', desc: 'Warm artisan hardwood blocks with grain bands' },
@@ -150,22 +154,38 @@ export const SKIN_CATALOG: ReadonlyArray<{ id: SkinId; name: string; desc: strin
 ];
 
 export const TRAY_CATALOG: ReadonlyArray<{ id: TrayId; name: string; desc: string }> = [
-  { id: 'industrial_slate', name: 'Industrial Slate', desc: 'High-contrast dark steel puzzle tray' },
+  {
+    id: 'industrial_slate',
+    name: 'Industrial Slate',
+    desc: 'High-contrast dark steel puzzle tray',
+  },
   { id: 'warm_birch', name: 'Warm Birch', desc: 'Cozy Scandinavian wooden tabletop board' },
   { id: 'midnight_arcade', name: 'Midnight Arcade', desc: 'Deep synthwave indigo cabinet frame' },
-  { id: 'frosted_quartz', name: 'Frosted Quartz', desc: 'Crisp architectural alabaster stone tray' },
+  {
+    id: 'frosted_quartz',
+    name: 'Frosted Quartz',
+    desc: 'Crisp architectural alabaster stone tray',
+  },
   { id: 'mint_studio', name: 'Mint Studio', desc: 'Refreshing seafoam studio workbench' },
 ];
 
 export const PARTICLE_CATALOG: ReadonlyArray<{ id: ParticleStyleId; name: string; desc: string }> = [
-  { id: 'micro_cubes', name: 'Micro Cubes', desc: 'Crisp 3D voxel cubes flying from the rollers' },
+  {
+    id: 'micro_cubes',
+    name: 'Micro Cubes',
+    desc: 'Crisp 3D voxel cubes flying from the rollers',
+  },
   { id: 'star_confetti', name: 'Star Confetti', desc: 'Celebratory tumbling party bursts' },
   { id: 'pixel_sparks', name: 'Pixel Sparks', desc: 'High-velocity arcade energy sparks' },
-  { id: 'soap_bubbles', name: 'Soap Bubbles', desc: 'Floaty iridescent spheres with gentle drift' },
+  {
+    id: 'soap_bubbles',
+    name: 'Soap Bubbles',
+    desc: 'Floaty iridescent spheres with gentle drift',
+  },
   { id: 'lightning_bolts', name: 'Lightning Bolts', desc: 'Crackling electric shredder surges' },
 ];
 
-export const PWA_INSTALLED_STORAGE_KEY = "shredblocks_pwa_installed_v1";
+export const PWA_INSTALLED_STORAGE_KEY = 'shredblocks_pwa_installed_v1';
 
 export interface AppViewContext {
   readonly saveManager: SaveManager;
@@ -173,7 +193,7 @@ export interface AppViewContext {
   readonly renderer: Renderer3D;
   readonly inputController: BoardInputController;
   board: BoardState;
-  activeScreen: "home" | "game" | "themes";
+  activeScreen: 'home' | 'game' | 'themes';
   titleOverlayOpen: boolean;
   blueprintMix: number;
   activeRoadmapRange: string;
@@ -185,6 +205,8 @@ export interface AppViewContext {
   currentLevelHasUnlockNote: boolean;
   cachedAutoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null;
   commitMove(blockId: number, targetRow: number, targetCol: number): CommitMoveOutcome;
+  pushUndoSnapshot(boardState: BoardState): void;
+  checkWinOrLossAfterAction(): void;
   autoSolveCurrentLevel(): boolean;
   pendingImportPayload: SavePayloadV1 | null;
   pendingImportRawCode: string | null;
@@ -197,8 +219,8 @@ export interface AppViewContext {
   continueFailedLevel(): void;
   activateBooster(type: BoosterType): void;
   openTitleScreen(): void;
-  dismissTitleScreen(targetScreen?: "game" | "home" | "themes"): void;
-  switchScreen(screen: "home" | "game" | "themes"): void;
+  dismissTitleScreen(targetScreen?: 'game' | 'home' | 'themes'): void;
+  switchScreen(screen: 'home' | 'game' | 'themes'): void;
   syncAllUiFromSave(): void;
   syncInGameHud(): void;
   syncTimerPillOnly(): void;

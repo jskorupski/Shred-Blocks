@@ -1,23 +1,9 @@
-import {
-  getBlockRoomId,
-} from "../core/physics";
-import {
-  getActiveColor,
-  getShape,
-  type PolyominoShape,
-} from "../core/polyomino";
-import {
-  type BlockState,
-  type BoardState,
-  type ColorId,
-  type SkinId,
-} from "../core/types";
-import { BLOCK_LIFT_DELTA_Z } from "./camera-3d";
-import {
-  ENVIRONMENT_MESHES,
-  getPolyominoMeshPair,
-} from "./mesh-generator";
-import type { RenderPassContext, RenderSceneOptions } from "./render-types";
+import { getBlockRoomId } from '../core/physics';
+import { getActiveColor, getShape, type PolyominoShape } from '../core/polyomino';
+import type { BlockState, BoardState, ColorId, SkinId } from '../core/types';
+import { BLOCK_LIFT_DELTA_Z } from './camera-3d';
+import { ENVIRONMENT_MESHES, getPolyominoMeshPair } from './mesh-generator';
+import type { RenderPassContext, RenderSceneOptions } from './render-types';
 
 export function renderBlockSurfaceOverlays3D(
   rctx: RenderPassContext,
@@ -141,29 +127,8 @@ export function renderBlockSurfaceOverlays3D(
     lockBadgeCx = arrowCx;
     lockBadgeCy = arrowCy;
 
-    const lockBadgeZ = rctx.drawBadgeMedallion3D(
-      gl,
-      arrowCx,
-      arrowCy,
-      zMedallionBase,
-      medW,
-      medH,
-      r,
-      g,
-      b
-    );
-    rctx.drawAtlasBadge(
-      gl,
-      'LOCK_H',
-      arrowCx,
-      arrowCy,
-      lockBadgeZ,
-      iconSize,
-      1.0,
-      0.99,
-      0.94,
-      1.0
-    );
+    const lockBadgeZ = rctx.drawBadgeMedallion3D(gl, arrowCx, arrowCy, zMedallionBase, medW, medH, r, g, b);
+    rctx.drawAtlasBadge(gl, 'LOCK_H', arrowCx, arrowCy, lockBadgeZ, iconSize, 1.0, 0.99, 0.94, 1.0);
   } else if (block.axisLock === 'V') {
     const colCells = shape.cells.filter((c) => c[1] === anchor[1]);
     let minRow = anchor[0];
@@ -244,29 +209,8 @@ export function renderBlockSurfaceOverlays3D(
     lockBadgeCx = arrowCx;
     lockBadgeCy = arrowCy;
 
-    const lockBadgeZ = rctx.drawBadgeMedallion3D(
-      gl,
-      arrowCx,
-      arrowCy,
-      zMedallionBase,
-      medW,
-      medH,
-      r,
-      g,
-      b
-    );
-    rctx.drawAtlasBadge(
-      gl,
-      'LOCK_V',
-      arrowCx,
-      arrowCy,
-      lockBadgeZ,
-      iconSize,
-      1.0,
-      0.99,
-      0.94,
-      1.0
-    );
+    const lockBadgeZ = rctx.drawBadgeMedallion3D(gl, arrowCx, arrowCy, zMedallionBase, medW, medH, r, g, b);
+    rctx.drawAtlasBadge(gl, 'LOCK_V', arrowCx, arrowCy, lockBadgeZ, iconSize, 1.0, 0.99, 0.94, 1.0);
   }
 
   // Zone B: Decoupled Immobilizer Badge vs Payload / Modifier Badge (`R3D-03`, `UX-10`)
@@ -298,8 +242,7 @@ export function renderBlockSurfaceOverlays3D(
     return (
       (hasImmobilizer && Math.hypot(cellCx - immCx, cellCy - immCy) < 0.36) ||
       (hasPayload && Math.hypot(cellCx - payCx, cellCy - payCy) < 0.36) ||
-      (block.axisLock !== 'NONE' &&
-        Math.hypot(cellCx - lockBadgeCx, cellCy - lockBadgeCy) < 0.38) ||
+      (block.axisLock !== 'NONE' && Math.hypot(cellCx - lockBadgeCx, cellCy - lockBadgeCy) < 0.38) ||
       (block.ropeColor > 0 && ci === shape.anchorCellIndex) ||
       (block.chained && (cellR === anchor[0] || cellC === anchor[1]))
     );
@@ -434,9 +377,7 @@ export function renderBlockSurfaceOverlays3D(
 
   // 2) Payload / Modifier Badge (`bomb`, `hasKey`, `scissorColor`, `shutterGemColor`, `isStar`) via Sculpted 3D Medallion (`IDLE-05`)
   const payBobZ =
-    !reducedMotion && !isLockedRoom
-      ? Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.011 * live3DMix
-      : 0;
+    !reducedMotion && !isLockedRoom ? Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.011 * live3DMix : 0;
   const payPulseScale =
     !reducedMotion && !isLockedRoom
       ? payScale * (1.0 + Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.028 * live3DMix)
@@ -445,9 +386,7 @@ export function renderBlockSurfaceOverlays3D(
   if (block.bombMax > 0 && block.bombCount > 0) {
     const urgent = block.bombCount <= 3 && !isLockedRoom ? 0.65 + 0.35 * pulse : 1.0;
     const bombMedScale =
-      !reducedMotion && !isLockedRoom
-        ? payScale * (1.0 + bombHeartbeat * 1.2 * live3DMix)
-        : payScale;
+      !reducedMotion && !isLockedRoom ? payScale * (1.0 + bombHeartbeat * 1.2 * live3DMix) : payScale;
     const twoDigit = block.bombCount >= 10;
     const bombBadgeZ = rctx.drawBadgeMedallion3D(
       gl,
@@ -626,16 +565,13 @@ export function renderGhostAndWeldClamps3D(
   // 3F.2 Early-Stage & Hint 3D Sliding Ghost Polyomino (`UX-10`)
   const guideMove = board.hintMove ?? (!anyDragActive ? options.autoGuideMove : null) ?? null;
   if (guideMove && !anyDragActive && !reducedMotion) {
-    const ghostBlock = board.blocks.find(
-      (b) => b.id === guideMove.blockId && b.status === 'ACTIVE'
-    );
+    const ghostBlock = board.blocks.find((b) => b.id === guideMove.blockId && b.status === 'ACTIVE');
     if (ghostBlock) {
       const meshPair = getPolyominoMeshPair(ghostBlock.shapeId, skinId);
       const activeColor: ColorId = getActiveColor(ghostBlock.colorStack, ghostBlock.colorCursor);
       const [gr, gg, gb] = rctx.getColorRgb(activeColor, highContrast);
       const rawPhase = (timeSec * 0.72) % 1.0;
-      const moveT =
-        rawPhase < 0.78 ? (1.0 - Math.cos((rawPhase / 0.78) * Math.PI)) * 0.5 : 1.0;
+      const moveT = rawPhase < 0.78 ? (1.0 - Math.cos((rawPhase / 0.78) * Math.PI)) * 0.5 : 1.0;
       const ghostAlpha = Math.sin(rawPhase * Math.PI) * 0.38;
       if (ghostAlpha > 0.03 && moveT > 0.06) {
         const gx = ghostBlock.col + (guideMove.targetCol - ghostBlock.col) * moveT;
@@ -686,8 +622,7 @@ export function renderGhostAndWeldClamps3D(
             const mx = (ax + bx) * 0.5 + 0.5;
             const my = (ay + by) * 0.5 + 0.5;
             const clampRoomVis = rctx.getRoomVisualState(board, getBlockRoomId(board, a));
-            const mz =
-              clampRoomVis.zOffset + Math.max(a.liftAlpha, b.liftAlpha) * BLOCK_LIFT_DELTA_Z;
+            const mz = clampRoomVis.zOffset + Math.max(a.liftAlpha, b.liftAlpha) * BLOCK_LIFT_DELTA_Z;
             rctx.drawMesh(
               gl,
               ENVIRONMENT_MESHES.weldClampMesh,

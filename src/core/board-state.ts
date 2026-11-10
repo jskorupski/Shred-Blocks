@@ -140,11 +140,7 @@ export function createBoardState(spec: LevelSpec): BoardState {
 
   const inferredLayoutId: CourtyardLayoutId =
     spec.layoutId ??
-    (barriers.length > 0
-      ? 'TWIN_SANCTUM'
-      : (spec.cutouts?.length ?? 0) > 0
-        ? 'CROSS_ATRIUM'
-        : 'RECTANGLE');
+    (barriers.length > 0 ? 'TWIN_SANCTUM' : (spec.cutouts?.length ?? 0) > 0 ? 'CROSS_ATRIUM' : 'RECTANGLE');
 
   let maxBlockId = 0;
   const blocks: BlockState[] = spec.blocks.map((b) => {
@@ -210,7 +206,7 @@ export function createBoardState(spec: LevelSpec): BoardState {
       iceCount: g.iceCount ?? 0,
       shutterLockColor: g.shutterLockColor ?? 0,
       togglesOnClear: g.togglesOnClear ?? false,
-      shutterOpen: g.shutterOpen ?? (g.shutterLockColor ? false : true),
+      shutterOpen: g.shutterOpen ?? !g.shutterLockColor,
       slidesOnClear: g.slidesOnClear ?? false,
       slideMin: g.slideMin ?? minSpan,
       slideMax: g.slideMax ?? Math.max(minSpan, maxSpanEnd - g.spanLength),
@@ -245,8 +241,7 @@ export function createBoardState(spec: LevelSpec): BoardState {
       colorStack: [...q.colorStack],
     })),
     queueCursor: 0,
-    state:
-      gen.queue.length === 0 ? 'DEPLETED' : (gen.cooldown ?? 0) <= 0 ? 'READY_TO_SPAWN' : 'COUNTING',
+    state: gen.queue.length === 0 ? 'DEPLETED' : (gen.cooldown ?? 0) <= 0 ? 'READY_TO_SPAWN' : 'COUNTING',
   }));
 
   const elevators: ElevatorState[] = (spec.elevators ?? []).map((e) => ({
@@ -360,7 +355,6 @@ export function isBoardFailed(
   }
   return { failed: false, reason: null };
 }
-
 
 /**
  * Computes star rating (1..3) upon level completion (`FR-29`):

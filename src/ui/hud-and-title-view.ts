@@ -1,32 +1,27 @@
-import { findEligibleGateForBlockAt } from "../core/gate-clearance";
+import { findEligibleGateForBlockAt } from '../core/gate-clearance';
 import {
   canGroupOccupyOffset,
   getBlockRoomId,
   getMovedGroupBlocks,
   isBlockInLockedRoom,
-} from "../core/physics";
-import type { RenderSceneOptions } from "../render/renderer-3d";
-import { getActiveColor } from "../core/polyomino";
-import {
-  COLOR_PALETTE,
-  type BlockState,
-  type BoosterType,
-  type SavePayloadV1,
-} from "../core/types";
-import type { HoverState } from "../input/pointer-controller";
-import { getLevelSpec } from "../levels/catalog";
+} from '../core/physics';
+import { getActiveColor } from '../core/polyomino';
+import { type BlockState, type BoosterType, COLOR_PALETTE, type SavePayloadV1 } from '../core/types';
+import type { HoverState } from '../input/pointer-controller';
+import { getLevelSpec } from '../levels/catalog';
+import type { RenderSceneOptions } from '../render/renderer-3d';
 import {
   BOOSTER_RARITY,
   BOOSTER_UNLOCK_LEVEL,
   isBoosterUnlocked,
   type LevelWinRewardSummary,
-} from "../storage/save-manager";
+} from '../storage/save-manager';
 import {
+  type AppViewContext,
   BOOSTER_DISPLAY_NAMES,
   getChapterMetaForLevel,
   UI_BOOSTER_PRICES,
-  type AppViewContext,
-} from "./catalog-meta";
+} from './catalog-meta';
 
 export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinRewardSummary): void {
   const titleEl = document.getElementById('victory-title');
@@ -73,9 +68,7 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   }
   if (breakdownEl) {
     const parts: string[] = [
-      summary.isFirstClear
-        ? `First Clear: +${summary.baseCoins}`
-        : `Replay Bonus: +${summary.baseCoins}`,
+      summary.isFirstClear ? `First Clear: +${summary.baseCoins}` : `Replay Bonus: +${summary.baseCoins}`,
     ];
     if (summary.starCoins > 0) parts.push(`New Stars: +${summary.starCoins}`);
     if (summary.streakCoins > 0) parts.push(`Streak: +${summary.streakCoins}`);
@@ -142,9 +135,7 @@ export function handleLevelFailureImpl(app: AppViewContext, reason: 'TIME_OUT' |
   }
   if (continueBtn) {
     continueBtn.textContent =
-      reason === 'BOMB_EXPLODED'
-        ? '➕ Defuse Bombs (50 Coins)'
-        : '➕ Add +15 Seconds (50 Coins)';
+      reason === 'BOMB_EXPLODED' ? '➕ Defuse Bombs (50 Coins)' : '➕ Add +15 Seconds (50 Coins)';
   }
 
   app.openModal('failure');
@@ -154,7 +145,7 @@ export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockStat
   if (isBlockInLockedRoom(app.board, block)) {
     const roomId = getBlockRoomId(app.board, block);
     const bar = app.board.barriers.find((b) => !b.open && b.unlocksRoomId === roomId);
-    if (bar && bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0) {
+    if (bar?.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0) {
       app.showGameToast('⛩️ Chamber Sealed! Shred a block with a 🔑 Key to open the Portcullis');
     } else if (bar && bar.shredsRemaining > 0) {
       app.showGameToast(
@@ -210,15 +201,17 @@ export function syncBoosterTargetingBannerImpl(hoverState: HoverState): void {
   } else if (hoverState.inputMode === 'TARGET_ROCKET') {
     textEl.textContent = `🚀 Tap any cell to blast its entire ${hoverState.rocketAxis === 'ROW' ? 'ROW' : 'COLUMN'}`;
     axisBtn.hidden = false;
-    axisBtn.textContent =
-      hoverState.rocketAxis === 'ROW' ? 'Axis: ↔ ROW' : 'Axis: ↕ COL';
+    axisBtn.textContent = hoverState.rocketAxis === 'ROW' ? 'Axis: ↔ ROW' : 'Axis: ↕ COL';
   } else if (hoverState.inputMode === 'TARGET_VACUUM') {
     textEl.textContent = '🧲 Tap any unlocked colored block to vacuum all matching blocks';
     axisBtn.hidden = true;
   }
 }
 
-export function isNewPlayerSaveImpl(app: AppViewContext, save: SavePayloadV1 = app.saveManager.getPayload()): boolean {
+export function isNewPlayerSaveImpl(
+  app: AppViewContext,
+  save: SavePayloadV1 = app.saveManager.getPayload()
+): boolean {
   return (
     save.highestLevelUnlocked <= 1 &&
     save.currentLevelId <= 1 &&
@@ -346,8 +339,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   }
   if (heroNote) {
     heroNote.textContent =
-      targetSpec.unlockNote ??
-      `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`;
+      targetSpec.unlockNote ?? `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`;
   }
   if (playBtn) {
     playBtn.textContent = `▶ PLAY LEVEL ${targetSpec.id}`;
@@ -382,9 +374,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (titleStatCoins) titleStatCoins.textContent = String(save.coins);
   if (titleStatStreak) titleStatStreak.textContent = String(save.winStreak);
   if (titlePlayBtn) {
-    titlePlayBtn.textContent = isNewPlayer
-      ? '▶ BEGIN JOURNEY'
-      : `▶ CONTINUE · LEVEL ${targetSpec.id}`;
+    titlePlayBtn.textContent = isNewPlayer ? '▶ BEGIN JOURNEY' : `▶ CONTINUE · LEVEL ${targetSpec.id}`;
   }
   if (titleSyncLabel) {
     titleSyncLabel.textContent = isNewPlayer ? 'Restore Save' : 'Sync';
@@ -403,9 +393,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   setChecked('toggle-high-contrast', save.settings.highContrast);
   setChecked('toggle-reduced-motion', save.settings.reducedMotion);
 
-  const tierSelect = document.getElementById(
-    'select-quality-tier'
-  ) as HTMLSelectElement | null;
+  const tierSelect = document.getElementById('select-quality-tier') as HTMLSelectElement | null;
   if (tierSelect) {
     tierSelect.value = save.settings.qualityTier;
   }
@@ -528,10 +516,7 @@ export function syncTimerPillOnlyImpl(app: AppViewContext): void {
     timerPill.className = 'tabular-metric timer-pill frozen';
   } else {
     timerPill.textContent = `⏱ ${mins}:${secs}`;
-    timerPill.className =
-      totalSec <= 15
-        ? 'tabular-metric timer-pill urgent'
-        : 'tabular-metric timer-pill';
+    timerPill.className = totalSec <= 15 ? 'tabular-metric timer-pill urgent' : 'tabular-metric timer-pill';
   }
 }
 
@@ -603,7 +588,7 @@ export function buildRenderOptionsImpl(
   if (
     !app.titleOverlayOpen &&
     hover.activeBlockId === null &&
-    hover.inputMode === "DRAG" &&
+    hover.inputMode === 'DRAG' &&
     !app.board.hintMove &&
     !app.levelOutcomeHandled &&
     app.cachedAutoGuideMove
@@ -635,7 +620,7 @@ export function buildRenderOptionsImpl(
     highContrast: save.settings.highContrast,
     reducedMotion: save.settings.reducedMotion,
     qualityTier: save.settings.qualityTier,
-    blueprintMix: app.titleOverlayOpen ? 1.0 : Math.pow(app.blueprintMix, 1.5),
+    blueprintMix: app.titleOverlayOpen ? 1.0 : app.blueprintMix ** 1.5,
     dtSec,
     timeSec,
   };

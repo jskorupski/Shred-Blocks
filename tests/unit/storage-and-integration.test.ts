@@ -11,17 +11,13 @@ import {
   type SkinId,
   type TrayId,
 } from '../../src/core/types';
-import { Renderer3D } from '../../src/render/renderer-3d';
 import {
   BoardInputController,
   MONO_PRIORITY_WEIGHT,
   pickBlockAtBoardPoint,
 } from '../../src/input/pointer-controller';
-import {
-  buildQrMatrix,
-  generateQrSvg,
-  getAlignmentPositions,
-} from '../../src/storage/qr-svg';
+import { Renderer3D } from '../../src/render/renderer-3d';
+import { buildQrMatrix, generateQrSvg, getAlignmentPositions } from '../../src/storage/qr-svg';
 import {
   CODEC_HEADER_LZ77_V1,
   CODEC_HEADER_RAW_UTF8,
@@ -39,8 +35,8 @@ import {
   createDefaultSavePayload,
   extractImportCodeFromHash,
   isBoosterUnlocked,
-  pickRarityWeightedBooster,
   PRE_IMPORT_BACKUP_KEY,
+  pickRarityWeightedBooster,
   SAVE_STORAGE_KEY,
   SaveManager,
 } from '../../src/storage/save-manager';
@@ -154,8 +150,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       const midIndex = Math.floor(validCode.length / 2);
       const origChar = validCode[midIndex];
       const replacementChar = origChar === 'A' ? 'B' : 'A';
-      const tamperedCode =
-        validCode.slice(0, midIndex) + replacementChar + validCode.slice(midIndex + 1);
+      const tamperedCode = validCode.slice(0, midIndex) + replacementChar + validCode.slice(midIndex + 1);
 
       expect(() => decodeSaveCode(tamperedCode)).toThrowError(SaveCodeError);
       try {
@@ -169,9 +164,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(() => decodeSaveCode('XYZ-1234-deadbeef')).toThrowError(/SB1-/i);
 
       // Valid prefix + recomputed CRC over invalid schema JSON
-      const badJsonBytes = compressLz77(
-        new TextEncoder().encode(JSON.stringify({ schemaVersion: 99 }))
-      );
+      const badJsonBytes = compressLz77(new TextEncoder().encode(JSON.stringify({ schemaVersion: 99 })));
       let bin = '';
       for (const b of badJsonBytes) bin += String.fromCharCode(b);
       const b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
@@ -474,7 +467,11 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
 
   describe('SoundEngine Suspended Context & Ambient Music Scheduler Hardening', () => {
     it('clamps nextNoteTime when behind currentTime and does not throw when AudioContext is unavailable', () => {
-      const sound = new SoundEngine({ sfxEnabled: true, musicEnabled: true, hapticsEnabled: false });
+      const sound = new SoundEngine({
+        sfxEnabled: true,
+        musicEnabled: true,
+        hapticsEnabled: false,
+      });
       expect(() => {
         sound.playPickup();
         sound.playSlideTick();
@@ -497,13 +494,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
     it('persists and round-trips all 8 settings and all 15 customization items across SaveManager and SaveCode', () => {
       const manager = new SaveManager();
 
-      const skins: SkinId[] = [
-        'classic_studs',
-        'smooth_bevel',
-        'gummy_jelly',
-        'carved_wood',
-        'neon_cyber',
-      ];
+      const skins: SkinId[] = ['classic_studs', 'smooth_bevel', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
       const trays: TrayId[] = [
         'industrial_slate',
         'warm_birch',

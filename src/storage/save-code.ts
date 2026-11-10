@@ -14,10 +14,7 @@ export class SaveCodeError extends Error {
     | 'DECOMPRESSION_FAILED'
     | 'INVALID_SCHEMA';
 
-  constructor(
-    code: SaveCodeError['code'],
-    message: string
-  ) {
+  constructor(code: SaveCodeError['code'], message: string) {
     super(message);
     this.name = 'SaveCodeError';
     this.code = code;
@@ -140,8 +137,7 @@ export function decompressFramedBytes(framed: Uint8Array): Uint8Array {
     throw new SaveCodeError('DECOMPRESSION_FAILED', 'Truncated LZ77 header.');
   }
 
-  const uncompressedLen =
-    ((framed[1] << 24) | (framed[2] << 16) | (framed[3] << 8) | framed[4]) >>> 0;
+  const uncompressedLen = ((framed[1] << 24) | (framed[2] << 16) | (framed[3] << 8) | framed[4]) >>> 0;
 
   if (uncompressedLen > 2 * 1024 * 1024) {
     throw new SaveCodeError('DECOMPRESSION_FAILED', 'Decompressed payload exceeds safety limit.');
@@ -294,28 +290,19 @@ export function decodeSaveCode(rawInput: string): SavePayloadV1 {
   if (/^(SB1|SB0)[-:]/i.test(cleaned)) {
     body = cleaned.slice(4);
   } else {
-    throw new SaveCodeError(
-      'INVALID_PREFIX',
-      'Save code must start with "SB1-" (or legacy "SB0:").'
-    );
+    throw new SaveCodeError('INVALID_PREFIX', 'Save code must start with "SB1-" (or legacy "SB0:").');
   }
 
   const lastSep = Math.max(body.lastIndexOf('-'), body.lastIndexOf(':'));
   if (lastSep <= 0 || lastSep >= body.length - 1) {
-    throw new SaveCodeError(
-      'INVALID_FORMAT',
-      'Save code is missing its 8-character CRC32 checksum suffix.'
-    );
+    throw new SaveCodeError('INVALID_FORMAT', 'Save code is missing its 8-character CRC32 checksum suffix.');
   }
 
   const b64Payload = body.slice(0, lastSep);
   const providedCrc = body.slice(lastSep + 1).toLowerCase();
 
   if (!/^[0-9a-f]{8}$/.test(providedCrc)) {
-    throw new SaveCodeError(
-      'INVALID_FORMAT',
-      'Save code CRC32 suffix must be 8 hexadecimal characters.'
-    );
+    throw new SaveCodeError('INVALID_FORMAT', 'Save code CRC32 suffix must be 8 hexadecimal characters.');
   }
 
   const expectedCrc = computeCrc32Hex(b64Payload);

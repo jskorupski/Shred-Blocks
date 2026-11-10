@@ -1,11 +1,7 @@
-import { createBoardState } from "../core/board";
-import { getShape } from "../core/polyomino";
-import type {
-  ColorId,
-  EdgeDir,
-  LevelSpec,
-} from "../core/types";
-import { applyProgressiveMechanicsToCandidate } from "./generator-mechanics";
+import { createBoardState } from '../core/board';
+import { getShape } from '../core/polyomino';
+import type { ColorId, EdgeDir, LevelSpec } from '../core/types';
+import { applyProgressiveMechanicsToCandidate } from './generator-mechanics';
 import {
   EARLY_SHAPES,
   getDifficultyForLevel,
@@ -18,10 +14,10 @@ import {
   NIMBLE_SHAPES,
   selectCourtyardTopologyForLevel,
   selectFocusedMechanicsForLevel,
-} from "./generator-rules";
-import { solveBoard } from "./solver";
+} from './generator-rules';
+import { solveBoard } from './solver';
 
-export * from "./generator-rules";
+export * from './generator-rules';
 
 function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: number): LevelSpec {
   const difficulty = getDifficultyForLevel(levelId);
@@ -76,22 +72,14 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   // `RAMP-01`: Focused Primary + Harmonious Secondary Mechanic Selector (never uncapped modulo pile-ups!)
   const activeMechanics = selectFocusedMechanicsForLevel(levelId);
-  const layoutId = selectCourtyardTopologyForLevel(
-    levelId,
-    rows,
-    cols,
-    attempt,
-    activeMechanics
-  );
+  const layoutId = selectCourtyardTopologyForLevel(levelId, rows, cols, attempt, activeMechanics);
   const useCutoutsOrPillars = activeMechanics.has('CUTOUTS_PILLARS');
   const useStone = activeMechanics.has('STONE');
   const useCrates = activeMechanics.has('CRATES');
   const useGlued = activeMechanics.has('GLUED');
   const useColorQueueGates = activeMechanics.has('COLOR_QUEUE_GATES');
   const useElevators = activeMechanics.has('ELEVATORS');
-  const getSculptedEdgeSpanBounds = (
-    edge: EdgeDir
-  ): { minStart: number; maxEnd: number } => {
+  const getSculptedEdgeSpanBounds = (edge: EdgeDir): { minStart: number; maxEnd: number } => {
     const limit = edge === 'TOP' || edge === 'BOTTOM' ? cols : rows;
     if (layoutId === 'RECTANGLE') {
       if (!useCutoutsOrPillars) {
@@ -138,11 +126,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
         ? 3
         : isBreatherWave || layoutId === 'TWIN_SANCTUM'
           ? 4
-          : levelId >= 140 &&
-              difficulty === 'SUPER_HARD' &&
-              cols >= 8 &&
-              canSplitTopEdge &&
-              canSplitRightEdge
+          : levelId >= 140 && difficulty === 'SUPER_HARD' && cols >= 8 && canSplitTopEdge && canSplitRightEdge
             ? 6
             : levelId >= 90 &&
                 (difficulty === 'HARD' || difficulty === 'SUPER_HARD') &&
@@ -416,8 +400,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
             : '2x1'
           : activePool[Math.floor(rng() * activePool.length)];
       const sh = getShape(candidate);
-      const reqSpan =
-        gate.edge === 'TOP' || gate.edge === 'BOTTOM' ? sh.cols : sh.rows;
+      const reqSpan = gate.edge === 'TOP' || gate.edge === 'BOTTOM' ? sh.cols : sh.rows;
       const maxDim = allowLargeShape ? 3 : 2;
       if (reqSpan <= gate.spanLength && sh.rows <= maxDim && sh.cols <= maxDim) {
         chosenShape = candidate;
@@ -478,7 +461,14 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
     // Interleaved Blocker Placement (C1-15):
     // Place block 0 at row 2 aligned with TOP gate, and place block 1 at row 1 directly in block 0's exit corridor!
-    if (!placed && layoutId !== 'TWIN_SANCTUM' && attempt <= 1 && bIdx === 0 && gate.edge === 'TOP' && rows >= 6) {
+    if (
+      !placed &&
+      layoutId !== 'TWIN_SANCTUM' &&
+      attempt <= 1 &&
+      bIdx === 0 &&
+      gate.edge === 'TOP' &&
+      rows >= 6
+    ) {
       const r0 = 2;
       const c0 = Math.max(1, Math.min(cols - shape.cols - 1, gate.spanStart));
       let fits0 = true;
@@ -586,7 +576,6 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   const coloredBlocks = blocks.filter((b) => b.colorStack[0] !== 0);
 
-
   applyProgressiveMechanicsToCandidate({
     rows,
     cols,
@@ -605,8 +594,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
   const adj = LEVEL_ADJECTIVES[(levelId * 7) % LEVEL_ADJECTIVES.length];
   const noun = LEVEL_NOUNS[(levelId * 13) % LEVEL_NOUNS.length];
   const sizeBonusSec = Math.max(0, (rows + cols - 11) * 10);
-  const timeLimitSec =
-    (difficulty === 'SUPER_HARD' ? 95 : difficulty === 'HARD' ? 100 : 105) + sizeBonusSec;
+  const timeLimitSec = (difficulty === 'SUPER_HARD' ? 95 : difficulty === 'HARD' ? 100 : 105) + sizeBonusSec;
 
   return {
     id: levelId,
@@ -636,7 +624,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
  * verifies 100% solvability via `solveBoard`.
  */
 export function generateProceduralLevel(levelId: number, seedOverride?: number): LevelSpec {
-  const baseSeed = (seedOverride ?? (levelId * 2654435761 + 0x9e3779b9)) >>> 0;
+  const baseSeed = (seedOverride ?? levelId * 2654435761 + 0x9e3779b9) >>> 0;
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const rng = mulberry32((baseSeed + attempt * 1013904223) >>> 0);

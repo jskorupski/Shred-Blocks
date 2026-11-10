@@ -1,5 +1,5 @@
-import { ENVIRONMENT_MESHES, type MeshData } from "./mesh-generator";
-import { INSTANCE_STRIDE, type GLMeshHandle } from "./render-types";
+import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
+import { type GLMeshHandle, INSTANCE_STRIDE } from './render-types';
 
 export const MAIN_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -394,11 +394,7 @@ export function createShaderProgram(
   return prog;
 }
 
-export function compileShader(
-  gl: WebGL2RenderingContext,
-  type: number,
-  source: string
-): WebGLShader | null {
+export function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader | null {
   const s = gl.createShader(type);
   if (!s) return null;
   gl.shaderSource(s, source);

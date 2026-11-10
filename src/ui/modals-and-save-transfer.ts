@@ -1,9 +1,25 @@
-import type { BoosterType, ParticleStyleId, PlayMode, QualityTier, SavePayloadV1, SkinId, TrayId } from "../core/types";
-import { generateQrSvg } from "../storage/qr-svg";
-import { decodeSaveCode, validateSavePayloadV1 } from "../storage/save-code";
-import { getLevelSpec } from "../levels/catalog";
-import { extractImportCodeFromHash } from "../storage/save-manager";
-import { BOOSTER_DEBUT_NOTES, type AppViewContext, type ModalId, type ShredBlocksDebugBridge } from "./catalog-meta";
+import { isBoardWon } from '../core/board';
+import { getActiveColor } from '../core/polyomino';
+import type {
+  BoosterType,
+  ParticleStyleId,
+  PlayMode,
+  QualityTier,
+  SavePayloadV1,
+  SkinId,
+  TrayId,
+} from '../core/types';
+import { getLevelSpec } from '../levels/catalog';
+import { solveBoard } from '../levels/solver';
+import { generateQrSvg } from '../storage/qr-svg';
+import { decodeSaveCode, validateSavePayloadV1 } from '../storage/save-code';
+import { extractImportCodeFromHash } from '../storage/save-manager';
+import {
+  type AppViewContext,
+  BOOSTER_DEBUT_NOTES,
+  type ModalId,
+  type ShredBlocksDebugBridge,
+} from './catalog-meta';
 
 export function getModalElement(id: ModalId): HTMLDialogElement | null {
   return document.getElementById(`dialog-${id}`) as HTMLDialogElement | null;
@@ -49,8 +65,7 @@ export function closeAllModalsImpl(): void {
 export function setupDialogLightDismissImpl(): void {
   const dialogs = document.querySelectorAll<HTMLDialogElement>('dialog.game-dialog');
   dialogs.forEach((dialog) => {
-    const isTerminalOutcomeModal =
-      dialog.id === 'dialog-victory' || dialog.id === 'dialog-failure';
+    const isTerminalOutcomeModal = dialog.id === 'dialog-victory' || dialog.id === 'dialog-failure';
 
     dialog.addEventListener('close', () => {
       dialog.returnValue = '';
@@ -79,10 +94,7 @@ export function setupDialogLightDismissImpl(): void {
       const rect = dialog.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
       const clickedOutside =
-        e.clientX < rect.left ||
-        e.clientX > rect.right ||
-        e.clientY < rect.top ||
-        e.clientY > rect.bottom;
+        e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
       if (clickedOutside) {
         dialog.close();
       }
@@ -98,9 +110,7 @@ export function updateTelemetryReadoutImpl(app: AppViewContext): void {
 }
 
 export function refreshSaveTransferModalImpl(app: AppViewContext): void {
-  const codeOutput = document.getElementById(
-    'save-code-output'
-  ) as HTMLTextAreaElement | null;
+  const codeOutput = document.getElementById('save-code-output') as HTMLTextAreaElement | null;
   const qrContainer = document.getElementById('qr-code-container');
   const restoreBtn = document.getElementById('btn-restore-backup');
   const statusEl = document.getElementById('save-transfer-status');
@@ -137,9 +147,7 @@ export function previewSaveImportImpl(app: AppViewContext, rawInput: string): bo
   const diffPanel = document.getElementById('import-diff-panel');
   const curList = document.getElementById('diff-current-list');
   const incList = document.getElementById('diff-incoming-list');
-  const inputArea = document.getElementById(
-    'save-code-input'
-  ) as HTMLTextAreaElement | null;
+  const inputArea = document.getElementById('save-code-input') as HTMLTextAreaElement | null;
 
   app.openModal('save-transfer');
   if (inputArea) {
@@ -231,8 +239,7 @@ export function confirmPendingSaveImportImpl(app: AppViewContext): void {
     app.loadLevel(updated.currentLevelId || updated.highestLevelUnlocked || 1, false);
 
     if (statusEl) {
-      statusEl.textContent =
-        '🎉 Save imported! Your previous save is backed up and can be restored anytime.';
+      statusEl.textContent = '🎉 Save imported! Your previous save is backed up and can be restored anytime.';
     }
     app.sound.playWinFanfare();
   } catch (err) {
@@ -290,15 +297,15 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
     openModal: (id: ModalId) => app.openModal(id),
     closeAllModals: () => app.closeAllModals(),
     openTitleScreen: () => app.openTitleScreen(),
-    dismissTitleScreen: (targetScreen = "game") => app.dismissTitleScreen(targetScreen),
+    dismissTitleScreen: (targetScreen = 'game') => app.dismissTitleScreen(targetScreen),
     isTitleScreenOpen: () => app.titleOverlayOpen,
     previewSaveImport: (code: string) => app.previewSaveImport(code),
     getTelemetry: () => app.renderer.getTelemetry(),
     run120HzBenchmark: (frames = 120) => app.renderer.run120HzBenchmark(frames, app.board),
     simulateContextLoss: () => {
       const canvas = app.renderer.canvas;
-      canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
-      canvas.dispatchEvent(new Event("webglcontextrestored"));
+      canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+      canvas.dispatchEvent(new Event('webglcontextrestored'));
       app.renderNow();
     },
     boardToScreen: (boardX: number, boardY: number) => {
@@ -313,22 +320,22 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
 export function continueFailedLevelImpl(app: AppViewContext): void {
   const save = app.saveManager.getPayload();
   if (save.coins < 50) {
-    app.showGameToast("Need 50 Coins to continue — or Retry / Skip for FREE!");
+    app.showGameToast('Need 50 Coins to continue — or Retry / Skip for FREE!');
     return;
   }
-  if (app.saveManager.buyBoosterWithCoins("FREEZE", 50)) {
-    app.saveManager.spendBooster("FREEZE");
+  if (app.saveManager.buyBoosterWithCoins('FREEZE', 50)) {
+    app.saveManager.spendBooster('FREEZE');
   }
   app.board.timeRemainingSec = Math.max(15, app.board.timeRemainingSec + 15);
   for (const b of app.board.blocks) {
-    if (b.status === "ACTIVE" && b.bombMax > 0 && b.bombCount <= 0) {
+    if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
       b.bombCount = Math.max(6, b.bombMax);
     }
   }
   app.levelOutcomeHandled = false;
   app.board.timerRunning = true;
   app.closeAllModals();
-  app.sound.playBooster("FREEZE");
+  app.sound.playBooster('FREEZE');
   app.syncInGameHud();
   app.renderNow();
 }
@@ -349,30 +356,30 @@ export function openTitleScreenImpl(app: AppViewContext): void {
 
 export function dismissTitleScreenImpl(
   app: AppViewContext,
-  targetScreen: "game" | "home" | "themes" = "game"
+  targetScreen: 'game' | 'home' | 'themes' = 'game'
 ): void {
   app.titleOverlayOpen = false;
   app.switchScreen(targetScreen);
-  if (targetScreen === "game" && app.board.movesCommitted === 0) {
+  if (targetScreen === 'game' && app.board.movesCommitted === 0) {
     const spec = getLevelSpec(app.board.levelId);
     app.showUnlockNoteIfPresent(spec.unlockNote ?? BOOSTER_DEBUT_NOTES[app.board.levelId]);
     app.lastPointerActivityMs = performance.now();
   }
 }
 
-export function switchScreenImpl(app: AppViewContext, screen: "home" | "game" | "themes"): void {
+export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 'themes'): void {
   app.activeScreen = screen;
   app.titleOverlayOpen = false;
   app.syncTitleOverlayDom();
 
-  document.getElementById("tab-btn-home")?.classList.toggle("active", screen === "home");
-  document.getElementById("tab-btn-themes")?.classList.toggle("active", screen === "themes");
+  document.getElementById('tab-btn-home')?.classList.toggle('active', screen === 'home');
+  document.getElementById('tab-btn-themes')?.classList.toggle('active', screen === 'themes');
 
-  if (screen === "home") {
+  if (screen === 'home') {
     app.renderRoadmap();
-  } else if (screen === "themes") {
+  } else if (screen === 'themes') {
     app.renderThemesStudio();
-  } else if (screen === "game") {
+  } else if (screen === 'game') {
     app.renderer.resize();
     app.syncInGameHud();
     app.renderNow();
@@ -380,7 +387,7 @@ export function switchScreenImpl(app: AppViewContext, screen: "home" | "game" | 
 }
 
 export function showGameToastImpl(app: AppViewContext, message: string, durationMs = 2600): void {
-  const toast = document.getElementById("game-toast");
+  const toast = document.getElementById('game-toast');
   if (!toast) return;
   toast.textContent = message;
   toast.hidden = false;
@@ -393,8 +400,8 @@ export function showGameToastImpl(app: AppViewContext, message: string, duration
 }
 
 export function showUnlockNoteIfPresentImpl(app: AppViewContext, note?: string): void {
-  const banner = document.getElementById("unlock-toast");
-  const textEl = document.getElementById("unlock-toast-text");
+  const banner = document.getElementById('unlock-toast');
+  const textEl = document.getElementById('unlock-toast-text');
   if (!banner || !textEl) return;
 
   if (app.unlockToastTimerId !== null) {
@@ -412,4 +419,43 @@ export function showUnlockNoteIfPresentImpl(app: AppViewContext, note?: string):
   app.unlockToastTimerId = setTimeout(() => {
     banner.hidden = true;
   }, 5500);
+}
+
+export function autoSolveCurrentLevelImpl(app: AppViewContext): boolean {
+  app.closeAllModals();
+  app.levelOutcomeHandled = false;
+
+  const solved = solveBoard(app.board, 6000);
+  if (solved.solvable && solved.solutionPath.length > 0) {
+    for (const step of solved.solutionPath) {
+      app.commitMove(step.blockId, step.targetRow, step.targetCol);
+      if (isBoardWon(app.board)) {
+        return true;
+      }
+    }
+  }
+
+  // Deterministic fallback for complex states if node budget was reached
+  if (!isBoardWon(app.board)) {
+    app.pushUndoSnapshot(app.board);
+    for (const b of app.board.blocks) {
+      if (b.status !== 'ACTIVE') continue;
+      const c = getActiveColor(b.colorStack, b.colorCursor);
+      if (c !== 0) {
+        b.status = 'CLEARED';
+        b.shredProgress = 1;
+        app.board.sessionBlocksShredded += Math.max(1, b.colorStack.length - b.colorCursor);
+      }
+    }
+    for (const gen of app.board.generators) {
+      gen.state = 'DEPLETED';
+      gen.queueCursor = gen.queue.length;
+    }
+    if (app.board.movesCommitted === 0) {
+      app.board.movesCommitted = app.board.parMoves;
+    }
+    app.checkWinOrLossAfterAction();
+  }
+
+  return isBoardWon(app.board);
 }

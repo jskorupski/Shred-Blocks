@@ -7,12 +7,11 @@ import {
 } from './room-and-occupancy';
 import type { BlockState, BoardState } from './types';
 
-export * from "./room-and-occupancy";
+export * from './room-and-occupancy';
 
 export const MAX_SWEEP_SUBSTEP = 0.18;
 export const CORNER_BEVEL_THRESHOLD = 0.35;
 const EPS = 1e-4;
-
 
 /**
  * Checks whether a single block (or rigid group) can occupy the integer offset
@@ -269,11 +268,7 @@ export function sweepBlockToTarget(
   let beveledYInStep = false;
   const BEVEL_SWITCH_HYSTERESIS = 0.08;
 
-  const computeSubstepDelta = (
-    curVal: number,
-    remVal: number,
-    perpRemVal: number
-  ): number => {
+  const computeSubstepDelta = (curVal: number, remVal: number, perpRemVal: number): number => {
     if (Math.abs(remVal) <= 1e-7) return 0;
     let d = Math.sign(remVal) * Math.min(Math.abs(remVal), MAX_SWEEP_SUBSTEP);
     // If there is significant perpendicular pull, land cleanly on any crossed integer grid line
@@ -373,8 +368,7 @@ export function sweepBlockToTarget(
 
     if (Math.abs(firstDelta) > 1e-6) {
       const res1 = sweepSingleAxisWithClamp(board, group, curDx, curDy, firstAxis, firstDelta);
-      const progressed1 =
-        Math.abs(res1.dx - curDx) > 1e-5 || Math.abs(res1.dy - curDy) > 1e-5;
+      const progressed1 = Math.abs(res1.dx - curDx) > 1e-5 || Math.abs(res1.dy - curDy) > 1e-5;
       curDx = res1.dx;
       curDy = res1.dy;
 
@@ -392,8 +386,7 @@ export function sweepBlockToTarget(
 
       if (Math.abs(secondDelta) > 1e-6) {
         const res2 = sweepSingleAxisWithClamp(board, group, curDx, curDy, secondAxis, secondDelta);
-        const progressed2 =
-          Math.abs(res2.dx - curDx) > 1e-5 || Math.abs(res2.dy - curDy) > 1e-5;
+        const progressed2 = Math.abs(res2.dx - curDx) > 1e-5 || Math.abs(res2.dy - curDy) > 1e-5;
         curDx = res2.dx;
         curDy = res2.dy;
 

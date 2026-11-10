@@ -1,10 +1,7 @@
-import { getShape } from "../core/polyomino";
-import {
-  type BoardState,
-  type ColorId,
-} from "../core/types";
-import { ENVIRONMENT_MESHES } from "./mesh-generator";
-import type { RenderPassContext, TrayPalette } from "./render-types";
+import { getShape } from '../core/polyomino';
+import type { BoardState, ColorId } from '../core/types';
+import { ENVIRONMENT_MESHES } from './mesh-generator';
+import type { RenderPassContext, TrayPalette } from './render-types';
 
 export function renderPass1Courtyard(
   rctx: RenderPassContext,
@@ -150,18 +147,10 @@ export function renderPass1Courtyard(
       const lum = roomVis.luminanceMul;
 
       const checker = (r + c) % 2 === 0 ? palette.floorTileA : palette.floorTileB;
-      const primaryWave = Math.pow(
-        Math.max(0, Math.sin(timeSec * 1.1 - (c * 0.58 + r * 0.46))),
-        3
-      );
-      const crossWave = Math.pow(
-        Math.max(0, Math.cos(timeSec * 0.8 + (c - r) * 0.52)),
-        4
-      );
+      const primaryWave = Math.max(0, Math.sin(timeSec * 1.1 - (c * 0.58 + r * 0.46))) ** 3;
+      const crossWave = Math.max(0, Math.cos(timeSec * 0.8 + (c - r) * 0.52)) ** 4;
       const sheen =
-        !rctx.lastOptions.reducedMotion && !roomVis.isLocked
-          ? primaryWave * 0.048 + crossWave * 0.022
-          : 0;
+        !rctx.lastOptions.reducedMotion && !roomVis.isLocked ? primaryWave * 0.048 + crossWave * 0.022 : 0;
       const pathColorId = (floorColor[idx] ?? 0) as ColorId;
 
       if (pathColorId > 0) {
@@ -216,20 +205,7 @@ export function renderPass1Courtyard(
         const pr = Math.min(1, palette.wallColor[0] * 1.38 * lum);
         const pg = Math.min(1, palette.wallColor[1] * 1.38 * lum);
         const pb = Math.min(1, palette.wallColor[2] * 1.38 * lum);
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.pillarMesh,
-          c,
-          r,
-          zOff,
-          1.0,
-          1.0,
-          1.0,
-          pr,
-          pg,
-          pb,
-          1.0
-        );
+        rctx.drawMesh(gl, ENVIRONMENT_MESHES.pillarMesh, c, r, zOff, 1.0, 1.0, 1.0, pr, pg, pb, 1.0);
         const pillarBobZ =
           !rctx.lastOptions.reducedMotion && !roomVis.isLocked
             ? Math.sin(timeSec * 2.8 + r * 0.9 + c * 1.1) * 0.024
@@ -514,9 +490,7 @@ export function renderPass1Courtyard(
         }
 
         const previewBobZ =
-          !rctx.lastOptions.reducedMotion && !genVis.isLocked
-            ? Math.sin(timeSec * 3.8 + gen.col) * 0.034
-            : 0;
+          !rctx.lastOptions.reducedMotion && !genVis.isLocked ? Math.sin(timeSec * 3.8 + gen.col) * 0.034 : 0;
         rctx.drawMesh(
           gl,
           ENVIRONMENT_MESHES.unitParticleCube,
@@ -585,5 +559,4 @@ export function renderPass1Courtyard(
       );
     }
   }
-
 }

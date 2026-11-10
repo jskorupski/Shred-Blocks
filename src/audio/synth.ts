@@ -1,4 +1,4 @@
-import type { BoosterType } from "../core/types";
+import type { BoosterType } from '../core/types';
 import {
   playBoosterVoice,
   playButtonTapVoice,
@@ -6,14 +6,13 @@ import {
   playLossBuzzerVoice,
   playWinFanfareVoices,
   scheduleAmbientStepVoice,
-} from "./synth-voices";
+} from './synth-voices';
 
 interface NavigatorWithAudioSession extends Navigator {
   audioSession?: {
     type: 'auto' | 'playback' | 'transient' | 'transient-solo' | 'ambient' | 'play-and-record';
   };
 }
-
 
 export class SoundEngine {
   public sfxEnabled = true;
@@ -37,7 +36,11 @@ export class SoundEngine {
   private readonly boundUnlock: () => void;
   private readonly boundVisibilityChange: () => void;
 
-  constructor(initial?: { sfxEnabled?: boolean; musicEnabled?: boolean; hapticsEnabled?: boolean }) {
+  constructor(initial?: {
+    sfxEnabled?: boolean;
+    musicEnabled?: boolean;
+    hapticsEnabled?: boolean;
+  }) {
     if (initial?.sfxEnabled !== undefined) this.sfxEnabled = initial.sfxEnabled;
     if (initial?.musicEnabled !== undefined) this.musicEnabled = initial.musicEnabled;
     if (initial?.hapticsEnabled !== undefined) this.hapticsEnabled = initial.hapticsEnabled;
@@ -379,7 +382,7 @@ export class SoundEngine {
     }
 
     const now = ctx.currentTime;
-    const pitchScale = Math.pow(2, Math.min(12, Math.max(0, cascadeIndex)) / 12);
+    const pitchScale = 2 ** (Math.min(12, Math.max(0, cascadeIndex)) / 12);
     const grainCount = 8;
 
     for (let i = 0; i < grainCount; i++) {

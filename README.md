@@ -70,7 +70,10 @@ npm run build
 # Automatically provisions local TLS certs in .certs/ on first run
 npm run dev:lan
 
-# Run Vitest unit & 300-level BFS solver verification suite (< 1.5s, 42 tests)
+# Run Biome TypeScript & CSS linter/formatter check (< 150ms)
+npm run lint
+
+# Run Vitest unit & 300-level BFS solver verification suite (< 2.0s, 44 tests)
 npm run test:unit
 
 # Run Playwright E2E interactive browser playtest suite

@@ -86,7 +86,7 @@ Every source, stylesheet, HTML, test, script, and documentation file is kept `<=
 | [`src/audio/synth.ts`](src/audio/synth.ts) & [`src/audio/synth-voices.ts`](src/audio/synth-voices.ts) | Zero-asset procedural Web Audio API synthesizer + ambient pentatonic chime loop + haptic feedback wrapper. |
 | [`src/storage/save-manager.ts`](src/storage/save-manager.ts), [`save-code.ts`](src/storage/save-code.ts), [`qr-svg.ts`](src/storage/qr-svg.ts) | Dual-slot `localStorage` persistence (`shredblocks_save_v1` + backup), `SB1-<base64url>-<crc32hex>` save codes, ISO/IEC 18004 QR SVG generator, and 1-tap rollback. |
 | [`tests/unit/*.test.ts`](tests/unit/) & [`tests/e2e/shredblocks.spec.ts`](tests/e2e/shredblocks.spec.ts) | Split unit suites ([`engine-and-solver.test.ts`](tests/unit/engine-and-solver.test.ts), [`campaign-and-invariants.test.ts`](tests/unit/campaign-and-invariants.test.ts), [`sanctums-and-architecture.test.ts`](tests/unit/sanctums-and-architecture.test.ts), [`storage-and-integration.test.ts`](tests/unit/storage-and-integration.test.ts)) and 10 Playwright E2E browser playtests. |
-| [`public/sw.js`](public/sw.js), [`scripts/generate-icons.ts`](scripts/generate-icons.ts), [`vite.lan.config.ts`](vite.lan.config.ts) | Offline-first PWA Service Worker, cross-platform launcher icon rasterizer, and self-healing LAN HTTPS preview server (`0.0.0.0:8443`). |
+| [`public/sw.js`](public/sw.js), [`scripts/generate-icons.ts`](scripts/generate-icons.ts), [`vite.lan.config.ts`](vite.lan.config.ts), [`biome.json`](biome.json) | Offline-first PWA Service Worker, cross-platform launcher icon rasterizer, self-healing LAN HTTPS preview server (`0.0.0.0:8443`), and Biome TypeScript/CSS linter & formatter configuration. |
 
 ---
 
@@ -94,28 +94,33 @@ Every source, stylesheet, HTML, test, script, and documentation file is kept `<=
 
 Whenever you modify code, levels, icons, or styles, execute this exact sequence before concluding:
 
-1. **Unit & 300-Level Solver Suite**:
+1. **Biome Linter & Formatter Check**:
+   ```bash
+   npm run lint
+   ```
+   Must pass all 64+ files in `< 150ms` with `0` errors and `0` warnings (`npm run lint:fix` / `npm run format` to auto-format and organize imports).
+2. **Unit & 300-Level Solver Suite**:
    ```bash
    npm run test:unit
    ```
-   Must pass all 42+ tests in `< 1.5s`, including 100% solvability and non-overlapping cell verification across all 300 campaign levels.
-2. **TypeScript Typecheck & Production Build**:
+   Must pass all 44+ tests in `< 2.0s`, including 100% solvability, non-overlapping cell verification across all 300 campaign levels, and `ARCH-ERGONOMICS-01` file-size enforcement.
+3. **TypeScript Typecheck & Production Build**:
    ```bash
    npm run build
    ```
    Must exit with `0` errors (`tsc --noEmit && vite build`).
-3. **End-to-End Interactive Browser Playtest Suite**:
+4. **End-to-End Interactive Browser Playtest Suite**:
    ```bash
    npm run test:e2e
    ```
-   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (New & Returning Player flows), real pointer drag-and-drop, keyboard controls, all 5 boosters, all 8 user settings across custom themes, and all 18 obstacle + multi-room sanctum mechanics.
-4. **Multi-Viewport Visual Screenshot & Launcher Icon Harness (when touching UI/CSS/3D rendering/icons)**:
+   Must pass all 10 Playwright tests (5 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (New & Returning Player flows), real pointer drag-and-drop (including curved/diagonal trajectories), keyboard controls, all 5 boosters, all 8 user settings across custom themes, and all 18 obstacle + multi-room sanctum mechanics.
+5. **Multi-Viewport Visual Screenshot & Launcher Icon Harness (when touching UI/CSS/3D rendering/icons)**:
    ```bash
    npm run verify:visual
    ./node_modules/.bin/tsx scripts/generate-icons.ts
    ```
    Captures 34+ screenshots across `360×640`, `390×844`, `768×1024`, and `1440×900` plus the cross-platform launcher icon mask sheet (`29-launcher-icons-preview.png`) and verifies zero orphan server/browser processes afterward.
-5. **Multi-Level Subagent Adversarial Audit & UX Sign-Off (MANDATORY FOR UI / UX / GAMEPLAY UPDATES)**:
+6. **Multi-Level Subagent Adversarial Audit & UX Sign-Off (MANDATORY FOR UI / UX / GAMEPLAY UPDATES)**:
    - Every non-trivial UI, UX, icon, or gameplay change must be independently audited by dedicated subagents (`invoke_subagent` / `send_message`):
      1. **Visual Aesthetics & UX Design Critic**: Inspects the rendered multi-viewport screenshots (`00-title-screen-new-player-mobile.png`, `30-title-screen-returning-player-mobile.png`, `01-home-roadmap-mobile.png`, `02-level-001-gameplay-mobile.png`, `29-launcher-icons-preview.png`, `32..37`, etc.) for Sacred-Geometry Architectural Sanctuary cohesion, typography, hierarchy, navigation clarity, and zero clipping/overlap across mobile, tablet, and desktop.
      2. **Gameplay Mechanics & Playtest Auditor**: Audits interactive flows (New vs. Returning player onboarding, 1-tap Map/Title navigation, progressive power-up unlocking & rarity scarcity, solver-verified level ramping, and E2E playtest coverage).

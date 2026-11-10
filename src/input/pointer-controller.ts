@@ -1,12 +1,9 @@
-import {
-  commitBlockMove,
-  type CommitMoveOutcome,
-} from "../core/board";
+import { type CommitMoveOutcome, commitBlockMove } from '../core/board';
 import {
   checkMidDragGateCapture,
   findEligibleGateForBlockAt,
   getGateOutwardNormal,
-} from "../core/gate-clearance";
+} from '../core/gate-clearance';
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
@@ -15,21 +12,17 @@ import {
   snapGroupToNearestGrid,
   sweepBlockToTarget,
 } from '../core/physics';
-import type {
-  BoardState,
-  InputMode,
-  RocketAxis,
-} from "../core/types";
+import type { BoardState, InputMode, RocketAxis } from '../core/types';
 import {
+  type BoardInputCallbacks,
   executeBoosterTargetTap,
+  type HoverState,
   handleBoardKeyDown,
   pickBlockAtBoardPoint,
   playOutcomeAudioHelper,
-  type BoardInputCallbacks,
-  type HoverState,
-} from "./targeting-and-keyboard";
+} from './targeting-and-keyboard';
 
-export * from "./targeting-and-keyboard";
+export * from './targeting-and-keyboard';
 
 export class BoardInputController {
   private readonly canvas: HTMLElement;
@@ -289,11 +282,7 @@ export class BoardInputController {
         const picked = inBounds ? pickBlockAtBoardPoint(board, pt.x, pt.y) : null;
         const nextBlockId = picked ? picked.id : null;
 
-        if (
-          nextRow !== this.hoverRow ||
-          nextCol !== this.hoverCol ||
-          nextBlockId !== this.hoverBlockId
-        ) {
+        if (nextRow !== this.hoverRow || nextCol !== this.hoverCol || nextBlockId !== this.hoverBlockId) {
           this.hoverRow = nextRow;
           this.hoverCol = nextCol;
           this.hoverBlockId = nextBlockId;
@@ -458,10 +447,8 @@ export class BoardInputController {
     this.activeBlockId = null;
     this.groupStartCoords.clear();
 
-    const effVelX =
-      Math.hypot(this.lastVelX, this.lastVelY) > 1e-4 ? this.lastVelX : this.lastPullX;
-    const effVelY =
-      Math.hypot(this.lastVelX, this.lastVelY) > 1e-4 ? this.lastVelY : this.lastPullY;
+    const effVelX = Math.hypot(this.lastVelX, this.lastVelY) > 1e-4 ? this.lastVelX : this.lastPullX;
+    const effVelY = Math.hypot(this.lastVelX, this.lastVelY) > 1e-4 ? this.lastVelY : this.lastPullY;
 
     // If captured mid-drag across a wide gate span, ensure (snappedRow, snappedCol) is a gate-clearing
     // anchor if rounding landed on an adjacent non-clearing cell (`F-01`).
@@ -559,16 +546,9 @@ export class BoardInputController {
     this.callbacks.onBoardChanged?.();
   }
 
-
   private handleBoosterTargetTap(board: BoardState, boardX: number, boardY: number): void {
-    executeBoosterTargetTap(
-      board,
-      boardX,
-      boardY,
-      this.inputMode,
-      this.rocketAxis,
-      this.callbacks,
-      (mode) => this.setInputMode(mode)
+    executeBoosterTargetTap(board, boardX, boardY, this.inputMode, this.rocketAxis, this.callbacks, (mode) =>
+      this.setInputMode(mode)
     );
   }
 

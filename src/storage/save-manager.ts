@@ -1,11 +1,4 @@
-import type {
-  BoosterType,
-  LevelRecord,
-  ParticleStyleId,
-  SavePayloadV1,
-  SkinId,
-  TrayId,
-} from '../core/types';
+import type { BoosterType, LevelRecord, ParticleStyleId, SavePayloadV1, SkinId, TrayId } from '../core/types';
 import { decodeSaveCode, encodeSaveCode, validateSavePayloadV1 } from './save-code';
 
 export const SAVE_STORAGE_KEY = 'shredblocks.save.v1';
@@ -68,25 +61,25 @@ export function pickRarityWeightedBooster(
     if (lvl === 30) return 'VACUUM';
   }
 
-  const baseWeights: ReadonlyArray<{ type: BoosterType; shredWeight: number; mileWeight: number }> =
-    [
-      { type: 'UNDO', shredWeight: 42, mileWeight: 0 },
-      { type: 'FREEZE', shredWeight: 30, mileWeight: 38 },
-      { type: 'HAMMER', shredWeight: 16, mileWeight: 32 },
-      { type: 'ROCKET', shredWeight: 8, mileWeight: 20 },
-      { type: 'VACUUM', shredWeight: 4, mileWeight: 10 },
-    ];
+  const baseWeights: ReadonlyArray<{ type: BoosterType; shredWeight: number; mileWeight: number }> = [
+    { type: 'UNDO', shredWeight: 42, mileWeight: 0 },
+    { type: 'FREEZE', shredWeight: 30, mileWeight: 38 },
+    { type: 'HAMMER', shredWeight: 16, mileWeight: 32 },
+    { type: 'ROCKET', shredWeight: 8, mileWeight: 20 },
+    { type: 'VACUUM', shredWeight: 4, mileWeight: 10 },
+  ];
 
   const eligible = baseWeights.filter((entry) => isBoosterUnlocked(entry.type, lvl));
-  const pool = eligible.length > 0 ? eligible : [{ type: 'UNDO' as const, shredWeight: 100, mileWeight: 100 }];
+  const pool =
+    eligible.length > 0 ? eligible : [{ type: 'UNDO' as const, shredWeight: 100, mileWeight: 100 }];
 
   const totalWeight = pool.reduce(
     (sum, item) => sum + (isMilestoneChest ? Math.max(1, item.mileWeight) : item.shredWeight),
     0
   );
   // Mulberry-style hash of seed for well-distributed deterministic roll in [0, totalWeight - 1]
-  let h = (Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0);
-  h = (Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0);
+  let h = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
   const roll = (h ^ (h >>> 16)) >>> 0;
   let cursor = roll % totalWeight;
 
@@ -268,9 +261,7 @@ export class SaveManager {
 
   public setCurrentLevel(levelId: number, allowJump = true): SavePayloadV1 {
     const cleanId = Math.max(1, Math.floor(levelId));
-    this.payload.currentLevelId = allowJump
-      ? cleanId
-      : Math.min(cleanId, this.payload.highestLevelUnlocked);
+    this.payload.currentLevelId = allowJump ? cleanId : Math.min(cleanId, this.payload.highestLevelUnlocked);
     return this.save();
   }
 
@@ -313,8 +304,7 @@ export class SaveManager {
       this.payload.bestWinStreak = this.payload.winStreak;
     }
 
-    const tierBase =
-      difficulty === 'SUPER_HARD' ? 120 : difficulty === 'HARD' ? 80 : 50;
+    const tierBase = difficulty === 'SUPER_HARD' ? 120 : difficulty === 'HARD' ? 80 : 50;
     const baseCoins = isFirstClear ? tierBase : Math.round(tierBase * 0.2); // 20% replay rate on already-cleared levels
     const starCoins = starsImproved * 10;
     const streakCoins = isFirstClear ? Math.min(30, (this.payload.winStreak - 1) * 10) : 0;
@@ -357,12 +347,9 @@ export class SaveManager {
 
     this.payload.levelRecords[levelId] = {
       stars: Math.max(prevStars, stars),
-      bestMoves:
-        prevRecord && prevRecord.bestMoves > 0 ? Math.min(prevRecord.bestMoves, moves) : moves,
+      bestMoves: prevRecord && prevRecord.bestMoves > 0 ? Math.min(prevRecord.bestMoves, moves) : moves,
       bestTimeSec:
-        prevRecord && prevRecord.bestTimeSec > 0
-          ? Math.min(prevRecord.bestTimeSec, timeSec)
-          : timeSec,
+        prevRecord && prevRecord.bestTimeSec > 0 ? Math.min(prevRecord.bestTimeSec, timeSec) : timeSec,
       skipped: false,
     };
 

@@ -1,12 +1,12 @@
-import { getAllCampaignLevels, getLevelSpec, TOTAL_CAMPAIGN_LEVELS } from "../levels/catalog";
+import { getAllCampaignLevels, getLevelSpec, TOTAL_CAMPAIGN_LEVELS } from '../levels/catalog';
 import {
+  type AppViewContext,
   getChapterMetaForLevel,
   PARTICLE_CATALOG,
   SKIN_CATALOG,
   THEME_UNLOCK_PRICE,
   TRAY_CATALOG,
-  type AppViewContext,
-} from "./catalog-meta";
+} from './catalog-meta';
 
 export function renderRoadmapImpl(app: AppViewContext): void {
   const container = document.getElementById('roadmap-list');
@@ -139,8 +139,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     const archPrefix =
       spec.barriers && spec.barriers.length > 0
         ? '⛩️ '
-        : (spec.layoutId && spec.layoutId !== 'RECTANGLE') ||
-            (spec.cutouts && spec.cutouts.length > 0)
+        : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
           ? '🏛️ '
           : '';
     nameDiv.textContent = `${archPrefix}${spec.name}`;
@@ -210,11 +209,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const starsSpan = document.createElement('span');
       starsSpan.className = 'node-stars';
       starsSpan.textContent =
-        record && record.stars > 0
-          ? '⭐'.repeat(record.stars)
-          : isUnlocked
-            ? '☆☆☆'
-            : '🔒';
+        record && record.stars > 0 ? '⭐'.repeat(record.stars) : isUnlocked ? '☆☆☆' : '🔒';
 
       topRow.append(numSpan, badgeSpan, starsSpan);
 
@@ -223,8 +218,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const endlessPrefix =
         spec.barriers && spec.barriers.length > 0
           ? '⛩️ '
-          : (spec.layoutId && spec.layoutId !== 'RECTANGLE') ||
-              (spec.cutouts && spec.cutouts.length > 0)
+          : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
             ? '🏛️ '
             : '';
       nameDiv.textContent = `${endlessPrefix}${spec.name}`;
@@ -309,39 +303,27 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
     container.replaceChildren(frag);
   };
 
-  buildCategoryGrid(
-    'themes-skins-grid',
-    SKIN_CATALOG,
-    save.unlockedSkins,
-    save.equippedSkin,
-    (skinId) => {
-      if (app.saveManager.unlockOrEquipSkin(skinId, THEME_UNLOCK_PRICE)) {
-        app.sound.playButtonTap();
-        app.renderThemesStudio();
-        app.renderNow();
-      } else {
-        app.sound.playWallClack();
-        app.showGameToast(`Need ${THEME_UNLOCK_PRICE} Coins to unlock this cosmetic!`);
-      }
+  buildCategoryGrid('themes-skins-grid', SKIN_CATALOG, save.unlockedSkins, save.equippedSkin, (skinId) => {
+    if (app.saveManager.unlockOrEquipSkin(skinId, THEME_UNLOCK_PRICE)) {
+      app.sound.playButtonTap();
+      app.renderThemesStudio();
+      app.renderNow();
+    } else {
+      app.sound.playWallClack();
+      app.showGameToast(`Need ${THEME_UNLOCK_PRICE} Coins to unlock this cosmetic!`);
     }
-  );
+  });
 
-  buildCategoryGrid(
-    'themes-trays-grid',
-    TRAY_CATALOG,
-    save.unlockedTrays,
-    save.equippedTray,
-    (trayId) => {
-      if (app.saveManager.unlockOrEquipTray(trayId, THEME_UNLOCK_PRICE)) {
-        app.sound.playButtonTap();
-        app.renderThemesStudio();
-        app.renderNow();
-      } else {
-        app.sound.playWallClack();
-        app.showGameToast(`Need ${THEME_UNLOCK_PRICE} Coins to unlock this cosmetic!`);
-      }
+  buildCategoryGrid('themes-trays-grid', TRAY_CATALOG, save.unlockedTrays, save.equippedTray, (trayId) => {
+    if (app.saveManager.unlockOrEquipTray(trayId, THEME_UNLOCK_PRICE)) {
+      app.sound.playButtonTap();
+      app.renderThemesStudio();
+      app.renderNow();
+    } else {
+      app.sound.playWallClack();
+      app.showGameToast(`Need ${THEME_UNLOCK_PRICE} Coins to unlock this cosmetic!`);
     }
-  );
+  });
 
   buildCategoryGrid(
     'themes-particles-grid',

@@ -1,4 +1,4 @@
-import type { LevelSpec } from "../core/types";
+import type { LevelSpec } from '../core/types';
 
 export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
   1: {
@@ -278,8 +278,7 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
     name: 'East Wing Alcove',
     difficulty: 'NORMAL',
     layoutId: 'L_WING',
-    unlockNote:
-      '📐 Stepped Exit Gate! Exit Gates can anchor directly along recessed courtyard wings.',
+    unlockNote: '📐 Stepped Exit Gate! Exit Gates can anchor directly along recessed courtyard wings.',
     rows: 6,
     cols: 6,
     cutouts: [
@@ -535,5 +534,4 @@ export const CURATED_EARLY_LEVELS: Record<number, LevelSpec> = {
     parMoves: 4,
     timeLimitSec: 90,
   },
-
 };

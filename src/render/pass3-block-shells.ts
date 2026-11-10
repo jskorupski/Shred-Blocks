@@ -1,23 +1,10 @@
-import {
-  getGateOutwardNormal,
-} from "../core/gate-clearance";
-import {
-  getBlockRoomId,
-  getMovedGroupBlocks,
-  isBlockInLockedRoom,
-} from "../core/physics";
-import { getActiveColor, getLayersRemaining, getShape } from "../core/polyomino";
-import type { BoardState, ColorId, SkinId } from "../core/types";
-import {
-  ENVIRONMENT_MESHES,
-  getPolyominoMeshPair,
-  POLYOMINO_MESH_CATALOG,
-} from "./mesh-generator";
-import {
-  renderBlockSurfaceOverlays3D,
-  renderGhostAndWeldClamps3D,
-} from "./pass3-block-overlays";
-import type { RenderPassContext, RenderSceneOptions } from "./render-types";
+import { getGateOutwardNormal } from '../core/gate-clearance';
+import { getBlockRoomId, getMovedGroupBlocks, isBlockInLockedRoom } from '../core/physics';
+import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
+import type { BoardState, ColorId, SkinId } from '../core/types';
+import { ENVIRONMENT_MESHES, getPolyominoMeshPair, POLYOMINO_MESH_CATALOG } from './mesh-generator';
+import { renderBlockSurfaceOverlays3D, renderGhostAndWeldClamps3D } from './pass3-block-overlays';
+import type { RenderPassContext, RenderSceneOptions } from './render-types';
 
 export function renderPass3BlocksImpl(
   rctx: RenderPassContext,
@@ -141,8 +128,7 @@ export function renderPass3BlocksImpl(
     spotlightPhaseSec < spotlightHopWindowSec
       ? idleMovableBlockIds[spotlightCycleIndex % idleMovableBlockIds.length]
       : -1;
-  const spotlightHopT =
-    spotlightBlockId >= 0 ? spotlightPhaseSec / spotlightHopWindowSec : 0;
+  const spotlightHopT = spotlightBlockId >= 0 ? spotlightPhaseSec / spotlightHopWindowSec : 0;
   const spotlightHopEnv =
     spotlightBlockId >= 0
       ? Math.sin(spotlightHopT * Math.PI) * Math.abs(Math.sin(spotlightHopT * Math.PI * 2.0))
@@ -173,23 +159,18 @@ export function renderPass3BlocksImpl(
     const blockHopEnv = isSpotlightHopping ? spotlightHopEnv : 0;
 
     // Diagonal harmonic wave across the courtyard (`IDLE-01`)
-    const wavePhase =
-      timeSec * 2.1 - (block.col * 0.68 + block.row * 0.54) + block.id * 0.55;
+    const wavePhase = timeSec * 2.1 - (block.col * 0.68 + block.row * 0.54) + block.id * 0.55;
     const wave01 = isIdleMovable ? 0.5 + 0.5 * Math.sin(wavePhase) : 0;
 
     // Bomb blocks also throb with an urgent rhythmic heartbeat (`IDLE-05`)
-    const isBombBlock =
-      !reducedMotion && !blockRoomVis.isLocked && block.bombMax > 0 && block.bombCount > 0;
+    const isBombBlock = !reducedMotion && !blockRoomVis.isLocked && block.bombMax > 0 && block.bombCount > 0;
     const bombHeartbeat = isBombBlock
       ? (0.5 + 0.5 * Math.sin(timeSec * (block.bombCount <= 4 ? 7.6 : 4.2) + block.id)) *
         (block.bombCount <= 4 ? 0.036 : 0.018)
       : 0;
 
-    const idleColorBoost = isIdleMovable
-      ? wave01 * 0.048 + blockHopEnv * 0.075
-      : bombHeartbeat * 1.2;
-    const colorMul =
-      (isGrabbed ? 1.14 : anyDragActive ? 0.88 : 1.0 + idleColorBoost) * roomLum;
+    const idleColorBoost = isIdleMovable ? wave01 * 0.048 + blockHopEnv * 0.075 : bombHeartbeat * 1.2;
+    const colorMul = (isGrabbed ? 1.14 : anyDragActive ? 0.88 : 1.0 + idleColorBoost) * roomLum;
     const r = Math.min(1, rawR * colorMul + (1 - roomLum) * 0.03);
     const g = Math.min(1, rawG * colorMul + (1 - roomLum) * 0.04);
     const b = Math.min(1, rawB * colorMul + (1 - roomLum) * 0.09);
@@ -197,42 +178,28 @@ export function renderPass3BlocksImpl(
     // Gentle 3D vertical buoyancy + Spotlight Double-Bounce Hop (`IDLE-01`, `IDLE-02`)
     // Scaled by `live3DMix` so blocks lie still as an etched scroll diagram on the Title Screen
     const idleBreathZ =
-      (isIdleMovable ? wave01 * 0.038 + blockHopEnv * 0.052 : bombHeartbeat * 0.5) *
-      live3DMix;
+      (isIdleMovable ? wave01 * 0.038 + blockHopEnv * 0.052 : bombHeartbeat * 0.5) * live3DMix;
     const grabHoverZ =
-      !reducedMotion && isGrabbed
-        ? Math.sin(timeSec * 7.2) * 0.022 * Math.min(1, block.liftAlpha)
-        : 0;
+      !reducedMotion && isGrabbed ? Math.sin(timeSec * 7.2) * 0.022 * Math.min(1, block.liftAlpha) : 0;
     const zLift =
-      blockRoomVis.zOffset +
-      Math.max(0, Math.min(1, block.liftAlpha)) * 0.46 +
-      grabHoverZ +
-      idleBreathZ;
+      blockRoomVis.zOffset + Math.max(0, Math.min(1, block.liftAlpha)) * 0.46 + grabHoverZ + idleBreathZ;
 
     // Knock-on scale bounce + grabbed scale pop + idle breathing scale (`IDLE-01`, `IDLE-02`)
     const bounceRem = rctx.blockBounceMap.get(block.id) ?? 0;
     const bouncePop =
-      bounceRem > 0 && !reducedMotion
-        ? Math.sin((1.0 - bounceRem / 0.34) * Math.PI) * 0.14
-        : 0;
+      bounceRem > 0 && !reducedMotion ? Math.sin((1.0 - bounceRem / 0.34) * Math.PI) * 0.14 : 0;
     const idleScaleXY =
-      (isIdleMovable ? Math.sin(wavePhase) * 0.01 + blockHopEnv * 0.018 : bombHeartbeat) *
-      live3DMix;
+      (isIdleMovable ? Math.sin(wavePhase) * 0.01 + blockHopEnv * 0.018 : bombHeartbeat) * live3DMix;
     const idleScaleZ =
-      (isIdleMovable ? Math.sin(wavePhase) * 0.015 + blockHopEnv * 0.025 : bombHeartbeat) *
-      live3DMix;
-    const scaleXY =
-      1.0 + 0.05 * Math.min(1, block.liftAlpha) + bouncePop + idleScaleXY;
-    const scaleZ =
-      1.0 + 0.06 * Math.min(1, block.liftAlpha) + bouncePop * 0.8 + idleScaleZ;
+      (isIdleMovable ? Math.sin(wavePhase) * 0.015 + blockHopEnv * 0.025 : bombHeartbeat) * live3DMix;
+    const scaleXY = 1.0 + 0.05 * Math.min(1, block.liftAlpha) + bouncePop + idleScaleXY;
+    const scaleZ = 1.0 + 0.06 * Math.min(1, block.liftAlpha) + bouncePop * 0.8 + idleScaleZ;
 
     // Subtle axis-advertising micro-drift along free movement lanes (`IDLE-01`)
     let idleDriftX = 0;
     let idleDriftY = 0;
     if (isIdleMovable && live3DMix > 0.1) {
-      const hopWiggle = isSpotlightHopping
-        ? Math.sin(spotlightHopT * Math.PI * 4.0) * 0.014
-        : 0;
+      const hopWiggle = isSpotlightHopping ? Math.sin(spotlightHopT * Math.PI * 4.0) * 0.014 : 0;
       if (block.axisLock === 'H') {
         idleDriftX = (Math.sin(timeSec * 2.0 + block.id * 1.3) * 0.008 + hopWiggle) * live3DMix;
       } else if (block.axisLock === 'V') {
@@ -346,7 +313,7 @@ export function renderPass3BlocksImpl(
     rctx.drawMesh(
       gl,
       outerMesh,
-       useClip ? drawX : meshTx,
+      useClip ? drawX : meshTx,
       useClip ? drawY : meshTy,
       zLift,
       scaleXY,
@@ -508,7 +475,6 @@ export function renderPass3BlocksImpl(
       );
       gl.depthMask(true);
     }
-
 
     renderBlockSurfaceOverlays3D(
       rctx,

@@ -1,5 +1,5 @@
-import { getShape } from "./polyomino";
-import type { AxisLock, BlockState, BoardState, EdgeDir, GateState } from "./types";
+import { getShape } from './polyomino';
+import type { AxisLock, BlockState, BoardState, EdgeDir, GateState } from './types';
 
 /**
  * Computes the contiguous playable `[minSpan .. maxSpanEnd]` interval along `edgeLine` containing
@@ -21,7 +21,7 @@ export function getPlayableEdgeSpanBounds(
     if (pos < 0 || pos >= limit) return false;
     const r = isHoriz ? edgeLine : pos;
     const c = isHoriz ? pos : edgeLine;
-    if (r < 0 || r >= rows && c < 0) return false;
+    if (r < 0 || (r >= rows && c < 0)) return false;
     if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
     return occupancy[r * cols + c] !== -1;
   };

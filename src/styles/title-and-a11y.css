@@ -41,14 +41,13 @@
   justify-content: space-between;
   padding: calc(0.65rem + var(--safe-top)) calc(0.85rem + var(--safe-right))
     calc(0.75rem + var(--safe-bottom)) calc(0.85rem + var(--safe-left));
-  background:
-    linear-gradient(
-      180deg,
-      rgba(15, 11, 28, 0.68) 0%,
-      rgba(15, 11, 28, 0.04) 24%,
-      rgba(15, 11, 28, 0.04) 68%,
-      rgba(12, 9, 24, 0.72) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    rgba(15, 11, 28, 0.68) 0%,
+    rgba(15, 11, 28, 0.04) 24%,
+    rgba(15, 11, 28, 0.04) 68%,
+    rgba(12, 9, 24, 0.72) 100%
+  );
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
@@ -69,11 +68,7 @@
   padding: 0.46rem 1.05rem;
   background:
     radial-gradient(circle at 25% 50%, rgba(246, 189, 96, 0.2) 0%, transparent 68%),
-    linear-gradient(
-      180deg var(--in-oklab),
-      rgba(38, 28, 66, 0.84) 0%,
-      rgba(22, 16, 40, 0.78) 100%
-    );
+    linear-gradient(180deg var(--in-oklab), rgba(38, 28, 66, 0.84) 0%, rgba(22, 16, 40, 0.78) 100%);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1.5px solid rgba(246, 213, 168, 0.38);
@@ -90,11 +85,7 @@
   width: min(100%, 404px);
   background:
     radial-gradient(circle at 50% 0%, rgba(246, 189, 96, 0.16) 0%, transparent 58%),
-    linear-gradient(
-      180deg var(--in-oklab),
-      rgba(44, 33, 74, 0.9) 0%,
-      rgba(24, 18, 44, 0.95) 100%
-    );
+    linear-gradient(180deg var(--in-oklab), rgba(44, 33, 74, 0.9) 0%, rgba(24, 18, 44, 0.95) 100%);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1.5px solid rgba(246, 213, 168, 0.44);
@@ -517,5 +508,3 @@ body.high-contrast .title-utility-pill {
     outline: 2px solid Highlight;
   }
 }
-
-

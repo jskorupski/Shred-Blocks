@@ -5,8 +5,8 @@ import {
   isGateInLockedRoom,
   isRoomUnlocked,
   rebuildOccupancyGrid,
-} from "./physics";
-import { getActiveColor, getShape } from "./polyomino";
+} from './physics';
+import { getActiveColor, getShape } from './polyomino';
 import {
   autoAdvanceColorQueues,
   detachBlockFromGluedGroup,
@@ -17,10 +17,10 @@ import {
   stepPortcullisBarriersOnShred,
   triggerCarrierItems,
   trySpawnReadyGenerators,
-} from "./shred-side-effects";
-import type { BlockState, BoardState, EdgeDir, GateState } from "./types";
+} from './shred-side-effects';
+import type { BlockState, BoardState, EdgeDir, GateState } from './types';
 
-export * from "./shred-side-effects";
+export * from './shred-side-effects';
 
 /**
  * Evaluates the 4-part Gate Clearance Law for `block` placed at integer `(candidateRow, candidateCol)`:
@@ -226,10 +226,7 @@ export function findEligibleGateForBlockAt(
       bestResourceRank = resRank;
       bestEdgeOrder = edgeOrder;
     } else if (Math.abs(dot - bestDot) <= 1e-6) {
-      if (
-        resRank < bestResourceRank ||
-        (resRank === bestResourceRank && edgeOrder < bestEdgeOrder)
-      ) {
+      if (resRank < bestResourceRank || (resRank === bestResourceRank && edgeOrder < bestEdgeOrder)) {
         bestGateIndex = i;
         bestDot = dot;
         bestResourceRank = resRank;
@@ -347,7 +344,6 @@ export function checkMidDragGateCapture(
   return null;
 }
 
-
 export interface ClearCascadeResult {
   clearedBlockIds: number[];
   peeledBlockIds: number[];
@@ -420,12 +416,7 @@ export function resolveClearCascade(
 
     // Step 1C: Global Ice thaw (blocks & gates in unlocked rooms)
     for (const b of board.blocks) {
-      if (
-        b.status === 'ACTIVE' &&
-        b.id !== block.id &&
-        b.iceCount > 0 &&
-        !isBlockInLockedRoom(board, b)
-      ) {
+      if (b.status === 'ACTIVE' && b.id !== block.id && b.iceCount > 0 && !isBlockInLockedRoom(board, b)) {
         b.iceCount = Math.max(0, b.iceCount - 1);
       }
     }

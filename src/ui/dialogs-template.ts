@@ -417,7 +417,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
 `;
 
 export function ensureDialogsMounted(): void {
-  if (typeof document === "undefined" || !document.body) return;
-  if (document.getElementById("dialog-victory")) return;
-  document.body.insertAdjacentHTML("beforeend", DIALOGS_AND_TOAST_TEMPLATE);
+  if (typeof document === 'undefined' || !document.body) return;
+  if (document.getElementById('dialog-victory')) return;
+  document.body.insertAdjacentHTML('beforeend', DIALOGS_AND_TOAST_TEMPLATE);
 }

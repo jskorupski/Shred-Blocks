@@ -1,33 +1,25 @@
+import { getGateActiveColor, getGateOutwardNormal } from '../core/gate-clearance';
+import { getBlockRoomId, isBlockInLockedRoom, isGateInLockedRoom, isRoomUnlocked } from '../core/physics';
+import { getActiveColor, getShape } from '../core/polyomino';
 import {
-  getGateActiveColor,
-  getGateOutwardNormal,
-} from "../core/gate-clearance";
-import {
-  getBlockRoomId,
-  isBlockInLockedRoom,
-  isGateInLockedRoom,
-  isRoomUnlocked,
-} from "../core/physics";
-import { getActiveColor, getShape } from "../core/polyomino";
-import {
-  COLOR_PALETTE,
   type BlockState,
   type BoardState,
+  COLOR_PALETTE,
   type ColorId,
   type GateState,
   type ParticleStyleId,
-} from "../core/types";
+} from '../core/types';
 import {
   INSTANCE_STRIDE,
   MAX_PARTICLES,
   PARTICLE_STRIDE,
   type RenderPassContext,
   type RenderSceneOptions,
-} from "./render-types";
+} from './render-types';
 
-  /**
-   * Spawns a burst of 3D shredder particles into the pre-allocated 2,048-particle ring buffer.
-   */
+/**
+ * Spawns a burst of 3D shredder particles into the pre-allocated 2,048-particle ring buffer.
+ */
 export function spawnParticlesAtImpl(
   rctx: RenderPassContext,
   worldX: number,
@@ -65,26 +57,20 @@ export function spawnParticlesAtImpl(
     const idx = rctx.particleWriteCursor * PARTICLE_STRIDE;
     rctx.particleWriteCursor = (rctx.particleWriteCursor + 1) % MAX_PARTICLES;
 
-    const angle = (i / burstCount) * Math.PI * 2 + (i * 1.6180339);
+    const angle = (i / burstCount) * Math.PI * 2 + i * 1.6180339;
     const radialSpeed = (0.45 + ((i * 7) % 13) * 0.14) * styleSpeedMul;
     const lateralOffset = (((i * 11) % 19) / 9.0 - 1.0) * 0.58;
     const jitterRadius = 0.04 + ((i * 5) % 9) * 0.025;
 
-    const px =
-      worldX + (hasDir ? tanX * lateralOffset + dirX * 0.12 : 0) + Math.cos(angle) * jitterRadius;
-    const py =
-      worldY + (hasDir ? tanY * lateralOffset + dirY * 0.12 : 0) + Math.sin(angle) * jitterRadius;
+    const px = worldX + (hasDir ? tanX * lateralOffset + dirX * 0.12 : 0) + Math.cos(angle) * jitterRadius;
+    const py = worldY + (hasDir ? tanY * lateralOffset + dirY * 0.12 : 0) + Math.sin(angle) * jitterRadius;
     const pz = worldZ + (((i * 3) % 7) - 3) * 0.04;
 
     const forwardBoost = (1.35 + ((i * 13) % 11) * 0.22) * styleSpeedMul;
     const vx =
-      dirX * forwardBoost +
-      (hasDir ? tanX * lateralOffset * 1.4 : 0) +
-      Math.cos(angle) * radialSpeed;
+      dirX * forwardBoost + (hasDir ? tanX * lateralOffset * 1.4 : 0) + Math.cos(angle) * radialSpeed;
     const vy =
-      dirY * forwardBoost +
-      (hasDir ? tanY * lateralOffset * 1.4 : 0) +
-      Math.sin(angle) * radialSpeed;
+      dirY * forwardBoost + (hasDir ? tanY * lateralOffset * 1.4 : 0) + Math.sin(angle) * radialSpeed;
     const vz = (1.6 + ((i * 5) % 11) * 0.22) * styleSpeedMul;
 
     const shade = 0.85 + ((i * 11) % 7) * 0.04;
@@ -133,23 +119,40 @@ export function spawnShockwaveImpl(
     minRadius,
     maxRadius,
   });
-  }
+}
 
-  /**
-   * Triggers a multi-wave celebratory 3D confetti & golden shockwave fountain across the sanctuary
-   * courtyard when a level is won.
-   */
-export function spawnVictoryCelebrationBurstImpl(
-  rctx: RenderPassContext,
-  board: BoardState
-): void {
+/**
+ * Triggers a multi-wave celebratory 3D confetti & golden shockwave fountain across the sanctuary
+ * courtyard when a level is won.
+ */
+export function spawnVictoryCelebrationBurstImpl(rctx: RenderPassContext, board: BoardState): void {
   const style = rctx.lastOptions.equippedParticle ?? 'star_confetti';
   const centerCx = board.cols * 0.5;
   const centerCy = board.rows * 0.5;
 
   // 3 concentric golden & turquoise shockwave rings
-  rctx.spawnShockwave(centerCx, centerCy, 0.35, 1.0, 0.85, 0.28, 0.3, Math.max(board.cols, board.rows) * 0.72, 0.65);
-  rctx.spawnShockwave(centerCx, centerCy, 0.42, 0.18, 0.88, 0.78, 0.15, Math.max(board.cols, board.rows) * 0.55, 0.52);
+  rctx.spawnShockwave(
+    centerCx,
+    centerCy,
+    0.35,
+    1.0,
+    0.85,
+    0.28,
+    0.3,
+    Math.max(board.cols, board.rows) * 0.72,
+    0.65
+  );
+  rctx.spawnShockwave(
+    centerCx,
+    centerCy,
+    0.42,
+    0.18,
+    0.88,
+    0.78,
+    0.15,
+    Math.max(board.cols, board.rows) * 0.55,
+    0.52
+  );
 
   // Center courtyard multi-color fountain
   const celebrationColors: ColorId[] = [4, 1, 2, 3, 7, 8];
@@ -310,7 +313,7 @@ export function getRoomVisualStateImpl(
   const elapsed = rctx.roomAwakenMap.get(roomId);
   if (elapsed !== undefined && elapsed < 0.55 && !rctx.lastOptions.reducedMotion) {
     const t = Math.min(1, Math.max(0, elapsed / 0.55));
-    const eased = 1 - Math.pow(1 - t, 3);
+    const eased = 1 - (1 - t) ** 3;
     return {
       zOffset: -0.14 * (1 - eased),
       luminanceMul: 0.58 + 0.42 * eased,
@@ -318,12 +321,12 @@ export function getRoomVisualStateImpl(
     };
   }
   return { zOffset: 0, luminanceMul: 1.0, isLocked: false };
-  }
+}
 
-  /**
-   * Spawns continuous GPU-instanced ambient sanctuary motes and ready-gate roller sparks (`IDLE-04`)
-   * when `reducedMotion === false` so the idle 3D courtyard feels alive and tactile.
-   */
+/**
+ * Spawns continuous GPU-instanced ambient sanctuary motes and ready-gate roller sparks (`IDLE-04`)
+ * when `reducedMotion === false` so the idle 3D courtyard feels alive and tactile.
+ */
 export function spawnAmbientCourtyardMotesImpl(
   rctx: RenderPassContext,
   board: BoardState,
@@ -348,11 +351,7 @@ export function spawnAmbientCourtyardMotesImpl(
     if (rctx.activeParticleCount >= maxAmbientCap) break;
 
     const readyGates = board.gates.filter(
-      (g) =>
-        g.shutterOpen &&
-        g.shutterLockColor === 0 &&
-        g.iceCount <= 0 &&
-        !isGateInLockedRoom(board, g)
+      (g) => g.shutterOpen && g.shutterLockColor === 0 && g.iceCount <= 0 && !isGateInLockedRoom(board, g)
     );
 
     // Alternate between Gate Roller Intake Sparks and Floating Block/Courtyard Shimmer Motes
@@ -363,16 +362,8 @@ export function spawnAmbientCourtyardMotesImpl(
       const isHoriz = gate.edge === 'TOP' || gate.edge === 'BOTTOM';
       const spanFrac = 0.15 + ((stepIndex * 0.381966) % 0.7);
       const along = gate.spanStart + gate.spanLength * spanFrac;
-      const gx = isHoriz
-        ? along
-        : gate.edge === 'LEFT'
-          ? gate.edgeLine - 0.14
-          : gate.edgeLine + 1 + 0.14;
-      const gy = !isHoriz
-        ? along
-        : gate.edge === 'TOP'
-          ? gate.edgeLine - 0.14
-          : gate.edgeLine + 1 + 0.14;
+      const gx = isHoriz ? along : gate.edge === 'LEFT' ? gate.edgeLine - 0.14 : gate.edgeLine + 1 + 0.14;
+      const gy = !isHoriz ? along : gate.edge === 'TOP' ? gate.edgeLine - 0.14 : gate.edgeLine + 1 + 0.14;
       const [nx, ny] = getGateOutwardNormal(gate.edge);
 
       const idx = rctx.particleWriteCursor * PARTICLE_STRIDE;
@@ -612,11 +603,7 @@ export function detectAutomaticShredEventsImpl(
           rctx.blockBounceMap.set(b.id, 0.34);
         }
         // Knock-on 1D: Elevator shifted block
-        if (
-          anyElevatorMoved &&
-          prev.status === 'ACTIVE' &&
-          (b.row !== prev.row || b.col !== prev.col)
-        ) {
+        if (anyElevatorMoved && prev.status === 'ACTIVE' && (b.row !== prev.row || b.col !== prev.col)) {
           rctx.spawnShockwave(cx, cy, 0.35, 0.38, 0.78, 1.0, 0.25, 1.35, 0.36);
           rctx.blockBounceMap.set(b.id, 0.3);
         }
@@ -683,17 +670,7 @@ export function detectAutomaticShredEventsImpl(
     const bcy = minR + spanH * 0.5;
     if (!prevB.open && bar.open) {
       rctx.roomAwakenMap.set(bar.unlocksRoomId, 0.001);
-      rctx.spawnShockwave(
-        bcx,
-        bcy,
-        0.55,
-        1.0,
-        0.86,
-        0.32,
-        0.35,
-        Math.max(2.2, barLen * 0.95),
-        0.52
-      );
+      rctx.spawnShockwave(bcx, bcy, 0.55, 1.0, 0.86, 0.32, 0.35, Math.max(2.2, barLen * 0.95), 0.52);
       rctx.spawnParticlesAt(bcx, bcy, 0.52, 4, 34, 0, 0, pStyle);
       for (const blk of board.blocks) {
         if (blk.status === 'ACTIVE' && getBlockRoomId(board, blk) === bar.unlocksRoomId) {

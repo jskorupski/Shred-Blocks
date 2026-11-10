@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyBoosterHammer,
-  commitBlockMove,
-  createBoardState,
-  isBoardWon,
-} from '../../src/core/board';
+import { applyBoosterHammer, commitBlockMove, createBoardState, isBoardWon } from '../../src/core/board';
 import {
   checkBlockGateClearance,
   checkMidDragGateCapture,
@@ -30,7 +25,6 @@ import {
   MAX_MODIFIERS_PER_BLOCK,
 } from '../../src/levels/generator';
 import { computeAdmissibleHeuristic, computeStateHash, solveBoard } from '../../src/levels/solver';
-
 
 describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () => {
   it('verifies all 300 campaign levels + Endless level 301 are valid, respect UX-03 & RAMP-01..05, and are solvable by solveBoard with 0 fallback levels', () => {
@@ -84,7 +78,9 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
       }
       for (const bar of spec.barriers ?? []) {
         for (const [br, bc] of bar.cells) {
-          expect(occupiedCells.has(`${br},${bc}`), `Level ${spec.id} barrier overlaps at (${br},${bc})`).toBe(false);
+          expect(occupiedCells.has(`${br},${bc}`), `Level ${spec.id} barrier overlaps at (${br},${bc})`).toBe(
+            false
+          );
           occupiedCells.add(`${br},${bc}`);
         }
       }
@@ -98,7 +94,10 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
         for (const [dr, dc] of sh.cells) {
           const r = blk.row + dr;
           const c = blk.col + dc;
-          expect(r >= 0 && r < spec.rows && c >= 0 && c < spec.cols, `Level ${spec.id} block ${blk.id} out of bounds`).toBe(true);
+          expect(
+            r >= 0 && r < spec.rows && c >= 0 && c < spec.cols,
+            `Level ${spec.id} block ${blk.id} out of bounds`
+          ).toBe(true);
           const key = `${r},${c}`;
           expect(occupiedCells.has(key), `Level ${spec.id} block ${blk.id} overlaps at (${key})`).toBe(false);
           occupiedCells.add(key);
@@ -141,8 +140,7 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
           const g2 = board.gates[gj];
           if (g.edge === g2.edge && g.edgeLine === g2.edgeLine) {
             const overlaps =
-              g.spanStart < g2.spanStart + g2.spanLength &&
-              g2.spanStart < g.spanStart + g.spanLength;
+              g.spanStart < g2.spanStart + g2.spanLength && g2.spanStart < g.spanStart + g.spanLength;
             expect(
               overlaps,
               `Level ${spec.id} gates ${gi} and ${gj} overlap on ${g.edge} (line ${g.edgeLine})`
@@ -226,11 +224,8 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
           const g2 = eBoard.gates[gj];
           if (g.edge === g2.edge && g.edgeLine === g2.edgeLine) {
             const overlaps =
-              g.spanStart < g2.spanStart + g2.spanLength &&
-              g2.spanStart < g.spanStart + g.spanLength;
-            expect(overlaps, `Endless Level ${eid} gates ${gi} and ${gj} overlap on ${g.edge}`).toBe(
-              false
-            );
+              g.spanStart < g2.spanStart + g2.spanLength && g2.spanStart < g.spanStart + g.spanLength;
+            expect(overlaps, `Endless Level ${eid} gates ${gi} and ${gj} overlap on ${g.edge}`).toBe(false);
           }
         }
       }
@@ -325,9 +320,7 @@ describe('Physics, Gate Cascade & Solver Edge-Case Invariants', () => {
       difficulty: 'NORMAL',
       rows: 6,
       cols: 6,
-      elevators: [
-        { id: 1, row: 3, col: 1, width: 1, height: 1, deltaRow: 0, deltaCol: 1 },
-      ],
+      elevators: [{ id: 1, row: 3, col: 1, width: 1, height: 1, deltaRow: 0, deltaCol: 1 }],
       blocks: [
         // Block 1 (multi-layer bomb) and Block 2 glued vertically at col 2: Block 2 is at row 0 (between Block 1 and TOP gate!)
         { id: 1, shapeId: '1x1', row: 1, col: 2, colorStack: [1, 2], groupId: 1, bombCount: 5 },
@@ -378,10 +371,14 @@ describe('Physics, Gate Cascade & Solver Edge-Case Invariants', () => {
       difficulty: 'NORMAL',
       rows: 5,
       cols: 5,
-      pillars: [[1, 0], [1, 1], [1, 2], [1, 3], [1, 4]], // Complete wall across row 1
-      blocks: [
-        { id: 1, shapeId: '1x1', row: 0, col: 0, colorStack: [1] },
-      ],
+      pillars: [
+        [1, 0],
+        [1, 1],
+        [1, 2],
+        [1, 3],
+        [1, 4],
+      ], // Complete wall across row 1
+      blocks: [{ id: 1, shapeId: '1x1', row: 0, col: 0, colorStack: [1] }],
       gates: [
         // Queued gate [1, 2] on LEFT
         { edge: 'LEFT', spanStart: 0, spanLength: 2, colorQueue: [1, 2] },

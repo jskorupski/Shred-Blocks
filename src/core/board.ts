@@ -118,8 +118,7 @@ export function commitBlockMove(
     }
   }
 
-  const didMoveOrClear =
-    dRow !== 0 || dCol !== 0 || clearedBlockIds.length > 0 || peeledBlockIds.length > 0;
+  const didMoveOrClear = dRow !== 0 || dCol !== 0 || clearedBlockIds.length > 0 || peeledBlockIds.length > 0;
 
   if (didMoveOrClear) {
     board.movesCommitted++;
@@ -129,12 +128,7 @@ export function commitBlockMove(
     // In ZEN mode, Bomb counters decrement by 1 per committed move (only in unlocked rooms)
     if (playMode === 'ZEN' && board.freezeRemainingSec <= 0) {
       for (const b of board.blocks) {
-        if (
-          b.status === 'ACTIVE' &&
-          b.bombMax > 0 &&
-          b.bombCount > 0 &&
-          !isBlockInLockedRoom(board, b)
-        ) {
+        if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0 && !isBlockInLockedRoom(board, b)) {
           b.bombCount = Math.max(0, b.bombCount - 1);
         }
       }
@@ -196,12 +190,7 @@ function destroyOrPeelBlockByBooster(board: BoardState, block: BlockState): void
 
   // Global Ice thaw (blocks & gates in unlocked rooms)
   for (const b of board.blocks) {
-    if (
-      b.status === 'ACTIVE' &&
-      b.id !== block.id &&
-      b.iceCount > 0 &&
-      !isBlockInLockedRoom(board, b)
-    ) {
+    if (b.status === 'ACTIVE' && b.id !== block.id && b.iceCount > 0 && !isBlockInLockedRoom(board, b)) {
       b.iceCount = Math.max(0, b.iceCount - 1);
     }
   }
@@ -392,12 +381,7 @@ export function applyBoosterHammer(
  * Portcullis Barrier, and peels/destroys all unlocked-room blocks (including Neutral Stone
  * Sliders) intersecting that Row or Column.
  */
-export function applyBoosterRocket(
-  board: BoardState,
-  row: number,
-  col: number,
-  axis: RocketAxis
-): boolean {
+export function applyBoosterRocket(board: BoardState, row: number, col: number, axis: RocketAxis): boolean {
   if (row < 0 || row >= board.rows || col < 0 || col >= board.cols) return false;
 
   let affected = false;
@@ -486,4 +470,3 @@ export function applyBoosterVacuum(board: BoardState, targetColor: ColorId): boo
   autoAdvanceColorQueues(board);
   return true;
 }
-

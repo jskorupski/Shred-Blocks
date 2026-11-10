@@ -1,20 +1,66 @@
-import { COLOR_PALETTE, type Benchmark120HzResult, type BlockState, type BoardState, type ColorId, type GateState, type ParticleStyleId, type PerfTelemetry, type QualityTier, type SkinId, type TrayId } from "../core/types";
-import { createAtlasTextureData, type AtlasTextureData, type AtlasUVRegion } from "./atlas-3d";
-import { Camera3D } from "./camera-3d";
-import { renderCanvas2DFallbackImpl } from "./canvas2d-fallback";
-import { ENVIRONMENT_MESHES, POLYOMINO_MESH_CATALOG, type MeshData } from "./mesh-generator";
-import { detectAutomaticShredEventsImpl, getRoomVisualStateImpl, spawnAmbientCourtyardMotesImpl, spawnBlockShredBurstImpl, spawnParticlesAtImpl, spawnShockwaveImpl, spawnVictoryCelebrationBurstImpl, stepParticlesImpl } from "./particle-fx";
-import { renderPass1Courtyard } from "./pass1-courtyard";
-import { renderPass1WallsAndGates } from "./pass1-gates-barriers";
+import {
+  type Benchmark120HzResult,
+  type BlockState,
+  type BoardState,
+  COLOR_PALETTE,
+  type ColorId,
+  type GateState,
+  type ParticleStyleId,
+  type PerfTelemetry,
+  type QualityTier,
+  type SkinId,
+  type TrayId,
+} from '../core/types';
+import { type AtlasTextureData, type AtlasUVRegion, createAtlasTextureData } from './atlas-3d';
+import { Camera3D } from './camera-3d';
+import { renderCanvas2DFallbackImpl } from './canvas2d-fallback';
+import { ENVIRONMENT_MESHES, type MeshData, POLYOMINO_MESH_CATALOG } from './mesh-generator';
+import {
+  detectAutomaticShredEventsImpl,
+  getRoomVisualStateImpl,
+  spawnAmbientCourtyardMotesImpl,
+  spawnBlockShredBurstImpl,
+  spawnParticlesAtImpl,
+  spawnShockwaveImpl,
+  spawnVictoryCelebrationBurstImpl,
+  stepParticlesImpl,
+} from './particle-fx';
+import { renderPass1Courtyard } from './pass1-courtyard';
+import { renderPass1WallsAndGates } from './pass1-gates-barriers';
 import {
   renderPass1PortcullisBarriers,
   renderPass2ReticleAndPromptsImpl,
-} from "./pass2-barriers-and-reticles";
-import { renderPass3BlocksImpl } from "./pass3-block-shells";
-import { HIGH_CONTRAST_TRAY_PALETTES, INSTANCE_STRIDE, MAX_PARTICLES, PARTICLE_STRIDE, QualityGovernor, TRAY_PALETTES, type GLMeshHandle, type RenderPassContext, type RenderSceneOptions, type TrayPalette, type VisualShockwave, type VisualShredAnim } from "./render-types";
-import { createMeshHandle, createParticleInstancedVao, createShaderProgram, MAIN_FRAGMENT_SHADER, MAIN_VERTEX_SHADER, PARTICLE_FRAGMENT_SHADER, PARTICLE_VERTEX_SHADER } from "./shaders-3d";
+} from './pass2-barriers-and-reticles';
+import { renderPass3BlocksImpl } from './pass3-block-shells';
+import {
+  drawAtlasBadgeImpl,
+  drawBadgeMedallion3DImpl,
+  drawNumberBadgesImpl,
+  executeBenchmarkFramesImpl,
+  type GLMeshHandle,
+  HIGH_CONTRAST_TRAY_PALETTES,
+  INSTANCE_STRIDE,
+  MAX_PARTICLES,
+  PARTICLE_STRIDE,
+  QualityGovernor,
+  type RenderPassContext,
+  type RenderSceneOptions,
+  TRAY_PALETTES,
+  type TrayPalette,
+  type VisualShockwave,
+  type VisualShredAnim,
+} from './render-types';
+import {
+  createMeshHandle,
+  createParticleInstancedVao,
+  createShaderProgram,
+  MAIN_FRAGMENT_SHADER,
+  MAIN_VERTEX_SHADER,
+  PARTICLE_FRAGMENT_SHADER,
+  PARTICLE_VERTEX_SHADER,
+} from './shaders-3d';
 
-export * from "./render-types";
+export * from './render-types';
 
 export class Renderer3D implements RenderPassContext {
   public readonly canvas: HTMLCanvasElement;
@@ -70,11 +116,11 @@ export class Renderer3D implements RenderPassContext {
   public lastBoardLevelId = -1;
   public lastSessionShredded = 0;
   public lastMovesCommitted = 0;
-  public readonly blockLayerSnapshots: RenderPassContext["blockLayerSnapshots"] = new Map();
-  public readonly crateSnapshots: RenderPassContext["crateSnapshots"] = new Map();
-  public readonly gateSnapshots: RenderPassContext["gateSnapshots"] = new Map();
-  public readonly elevatorSnapshots: RenderPassContext["elevatorSnapshots"] = new Map();
-  public readonly barrierSnapshots: RenderPassContext["barrierSnapshots"] = new Map();
+  public readonly blockLayerSnapshots: RenderPassContext['blockLayerSnapshots'] = new Map();
+  public readonly crateSnapshots: RenderPassContext['crateSnapshots'] = new Map();
+  public readonly gateSnapshots: RenderPassContext['gateSnapshots'] = new Map();
+  public readonly elevatorSnapshots: RenderPassContext['elevatorSnapshots'] = new Map();
+  public readonly barrierSnapshots: RenderPassContext['barrierSnapshots'] = new Map();
   public readonly roomAwakenMap = new Map<number, number>();
   public readonly activeVisualShreds: VisualShredAnim[] = [];
   public readonly activeShockwaves: VisualShockwave[] = [];
@@ -154,55 +200,7 @@ export class Renderer3D implements RenderPassContext {
   }
 
   private async executeBenchmarkFrames(frames: number): Promise<Benchmark120HzResult> {
-    const count = Math.max(10, frames);
-    const samples = new Float32Array(count);
-
-    // Ensure active particles are present during benchmark stress test
-    if (this.activeParticleCount < 60 && this.lastBoard) {
-      this.spawnParticlesAt(
-        this.lastBoard.cols * 0.5,
-        this.lastBoard.rows * 0.5,
-        0.45,
-        1,
-        60,
-        0,
-        -1
-      );
-    }
-
-    for (let i = 0; i < count; i++) {
-      const t0 = performance.now();
-      if (this.lastBoard) {
-        this.render(this.lastBoard, {
-          ...this.lastOptions,
-          dtSec: 1 / 120,
-        });
-      }
-      this.gl?.finish();
-      const workMs = Math.max(0.01, performance.now() - t0);
-      samples[i] = workMs;
-    }
-
-    let sum = 0;
-    let maxWorkMs = 0;
-    for (let i = 0; i < count; i++) {
-      sum += samples[i];
-      if (samples[i] > maxWorkMs) maxWorkMs = samples[i];
-    }
-    samples.sort();
-    const p95WorkMs = Number(samples[Math.min(count - 1, Math.floor(count * 0.95))].toFixed(3));
-    const p99WorkMs = Number(samples[Math.min(count - 1, Math.floor(count * 0.99))].toFixed(3));
-    const avgWorkMs = Number((sum / count).toFixed(3));
-
-    return {
-      framesExecuted: count,
-      avgWorkMs,
-      p95WorkMs,
-      p99WorkMs,
-      maxWorkMs: Number(maxWorkMs.toFixed(3)),
-      passes120HzBudget: p95WorkMs <= 8.33,
-      passes60HzBudget: p95WorkMs <= 16.67,
-    };
+    return executeBenchmarkFramesImpl(this, this.lastBoard, frames);
   }
 
   private initContext(): void {
@@ -258,11 +256,15 @@ export class Renderer3D implements RenderPassContext {
       const rawPixelW =
         dpc && dpc.length > 0
           ? dpc[0].inlineSize
-          : Math.round(entry.contentRect.width * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1));
+          : Math.round(
+              entry.contentRect.width * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)
+            );
       const rawPixelH =
         dpc && dpc.length > 0
           ? dpc[0].blockSize
-          : Math.round(entry.contentRect.height * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1));
+          : Math.round(
+              entry.contentRect.height * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)
+            );
 
       const scaleCap = rawDpr > maxDpr ? maxDpr / rawDpr : 1;
       const targetW = Math.max(64, Math.round(rawPixelW * scaleCap));
@@ -391,14 +393,7 @@ export class Renderer3D implements RenderPassContext {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        this.atlasData.canvas
-      );
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlasData.canvas);
     }
 
     // Pre-upload all 66 static polyomino meshes + environment meshes
@@ -435,22 +430,51 @@ export class Renderer3D implements RenderPassContext {
     return handle;
   }
 
-  public screenToBoard(clientX: number, clientY: number, rows: number, cols: number): { boardX: number; boardY: number } {
+  public screenToBoard(
+    clientX: number,
+    clientY: number,
+    rows: number,
+    cols: number
+  ): { boardX: number; boardY: number } {
     const rect = this.canvas.getBoundingClientRect();
     return this.camera.screenToBoardRayPlane(clientX, clientY, rect, rows, cols);
   }
 
-  public boardToScreen(boardX: number, boardY: number, worldZ: number, rows: number, cols: number): { x: number; y: number } {
+  public boardToScreen(
+    boardX: number,
+    boardY: number,
+    worldZ: number,
+    rows: number,
+    cols: number
+  ): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     return this.camera.boardToScreen(boardX, boardY, worldZ, rect, rows, cols);
   }
 
-
-  public spawnParticlesAt(worldX: number, worldY: number, worldZ: number, colorId: ColorId, count?: number, dirX = 0, dirY = 0, particleStyle: ParticleStyleId = "micro_cubes"): void {
+  public spawnParticlesAt(
+    worldX: number,
+    worldY: number,
+    worldZ: number,
+    colorId: ColorId,
+    count?: number,
+    dirX = 0,
+    dirY = 0,
+    particleStyle: ParticleStyleId = 'micro_cubes'
+  ): void {
     spawnParticlesAtImpl(this, worldX, worldY, worldZ, colorId, count, dirX, dirY, particleStyle);
   }
 
-  public spawnShockwave(cx: number, cy: number, z: number, r: number, g: number, b: number, minRadius = 0.28, maxRadius = 1.65, maxAge = 0.42): void {
+  public spawnShockwave(
+    cx: number,
+    cy: number,
+    z: number,
+    r: number,
+    g: number,
+    b: number,
+    minRadius = 0.28,
+    maxRadius = 1.65,
+    maxAge = 0.42
+  ): void {
     spawnShockwaveImpl(this, cx, cy, z, r, g, b, minRadius, maxRadius, maxAge);
   }
 
@@ -458,7 +482,12 @@ export class Renderer3D implements RenderPassContext {
     spawnVictoryCelebrationBurstImpl(this, board);
   }
 
-  public spawnBlockShredBurst(board: BoardState, block: BlockState, gate?: GateState, colorOverride?: ColorId): void {
+  public spawnBlockShredBurst(
+    board: BoardState,
+    block: BlockState,
+    gate?: GateState,
+    colorOverride?: ColorId
+  ): void {
     spawnBlockShredBurstImpl(this, board, block, gate, colorOverride);
   }
 
@@ -466,7 +495,10 @@ export class Renderer3D implements RenderPassContext {
     stepParticlesImpl(this, dtSec);
   }
 
-  public getRoomVisualState(board: BoardState, roomId: number): { zOffset: number; luminanceMul: number; isLocked: boolean } {
+  public getRoomVisualState(
+    board: BoardState,
+    roomId: number
+  ): { zOffset: number; luminanceMul: number; isLocked: boolean } {
     return getRoomVisualStateImpl(this, board, roomId);
   }
 
@@ -502,9 +534,7 @@ export class Renderer3D implements RenderPassContext {
     this.stepParticles(dtSec);
 
     const aspect =
-      this.canvas.width > 0 && this.canvas.height > 0
-        ? this.canvas.width / this.canvas.height
-        : 1;
+      this.canvas.width > 0 && this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
     this.camera.setBoardAndViewport(board.rows, board.cols, aspect);
 
     if (this.gl && !this.contextLost && this.mainProgram && this.particleProgram) {
@@ -530,7 +560,24 @@ export class Renderer3D implements RenderPassContext {
     return 0;
   }
 
-  public drawMesh(gl: WebGL2RenderingContext, mesh: MeshData, tx: number, ty: number, tz: number, sx: number, sy: number, sz: number, r: number, g: number, b: number, a = 1.0, rotX = 0, rotZ = 0, materialStyle = 0, uvRegion: AtlasUVRegion | null = null): void {
+  public drawMesh(
+    gl: WebGL2RenderingContext,
+    mesh: MeshData,
+    tx: number,
+    ty: number,
+    tz: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    r: number,
+    g: number,
+    b: number,
+    a = 1.0,
+    rotX = 0,
+    rotZ = 0,
+    materialStyle = 0,
+    uvRegion: AtlasUVRegion | null = null
+  ): void {
     const handle = this.getOrCreateMeshHandle(gl, mesh);
     gl.bindVertexArray(handle.vao);
     const shakeAmp =
@@ -560,35 +607,64 @@ export class Renderer3D implements RenderPassContext {
     gl.drawElements(gl.TRIANGLES, handle.indexCount, gl.UNSIGNED_SHORT, 0);
   }
 
-  public drawAtlasBadge(gl: WebGL2RenderingContext, regionKey: string, cx: number, cy: number, z: number, size: number, r = 1, g = 1, b = 1, a = 1): void {
-    const region = this.atlasData.regions[regionKey];
-    if (!region) return;
-    this.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, cx - size * 0.5, cy - size * 0.5, z, size, size, 1, r, g, b, a, 0, 0, 4, region);
+  public drawAtlasBadge(
+    gl: WebGL2RenderingContext,
+    regionKey: string,
+    cx: number,
+    cy: number,
+    z: number,
+    size: number,
+    r = 1,
+    g = 1,
+    b = 1,
+    a = 1
+  ): void {
+    drawAtlasBadgeImpl(this, this.atlasData, gl, regionKey, cx, cy, z, size, r, g, b, a);
   }
 
-  public drawNumberBadges(gl: WebGL2RenderingContext, value: number, cx: number, cy: number, z: number, digitSize: number, r = 1, g = 1, b = 1): void {
-    const str = String(Math.max(0, Math.floor(value)));
-    const step = digitSize * 0.54;
-    const totalW = str.length * step;
-    const startX = cx - totalW * 0.5 + step * 0.5;
-    for (let i = 0; i < str.length; i++) {
-      const ch = str[i];
-      this.drawAtlasBadge(gl, `DIGIT_${ch}`, startX + i * step, cy, z, digitSize, r, g, b, 1.0);
-    }
+  public drawNumberBadges(
+    gl: WebGL2RenderingContext,
+    value: number,
+    cx: number,
+    cy: number,
+    z: number,
+    digitSize: number,
+    r = 1,
+    g = 1,
+    b = 1
+  ): void {
+    drawNumberBadgesImpl(this, gl, value, cx, cy, z, digitSize, r, g, b);
   }
 
-  /**
-   * Renders a two-tiered 3D beveled architectural medallion plinth (`UX-10`, `R3D-07`)
-   * using `unitParticleCube` (`materialStyle = 0` full 3D lighting) so block modifiers and axis
-   * emblems look carved and inlaid into the 3D piece rather than flat black 2D stickers.
-   * Returns the exact top `Z` coordinate (`zBase + 0.086`) for placing the vector glyph on top.
-   */
-  public drawBadgeMedallion3D(gl: WebGL2RenderingContext, cx: number, cy: number, zBase: number, width: number, height: number, faceR: number, faceG: number, faceB: number, rimR = 0.92, rimG = 0.8, rimB = 0.52): number {
-    // 1. Outer 3D beveled brass/metallic bezel (`unitParticleCube` is centered at 0,0,0)
-    this.drawMesh(gl, ENVIRONMENT_MESHES.unitParticleCube, cx, cy, zBase + 0.036, width + 0.055, height + 0.055, 0.072, rimR, rimG, rimB, 1.0, 0, 0, 0);
-    // 2. Inner 3D beveled tone-on-tone jewel plinth
-    this.drawMesh(gl, ENVIRONMENT_MESHES.unitParticleCube, cx, cy, zBase + 0.041, width, height, 0.082, faceR, faceG, faceB, 1.0, 0, 0, 0);
-    return zBase + 0.086;
+  public drawBadgeMedallion3D(
+    gl: WebGL2RenderingContext,
+    cx: number,
+    cy: number,
+    zBase: number,
+    width: number,
+    height: number,
+    faceR: number,
+    faceG: number,
+    faceB: number,
+    rimR = 0.92,
+    rimG = 0.8,
+    rimB = 0.52
+  ): number {
+    return drawBadgeMedallion3DImpl(
+      this,
+      gl,
+      cx,
+      cy,
+      zBase,
+      width,
+      height,
+      faceR,
+      faceG,
+      faceB,
+      rimR,
+      rimG,
+      rimB
+    );
   }
 
   private renderWebGL2(board: BoardState, options: RenderSceneOptions, dtSec = 1 / 60): void {
@@ -608,12 +684,7 @@ export class Renderer3D implements RenderPassContext {
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     gl.enable(gl.BLEND);
-    gl.blendFuncSeparate(
-      gl.SRC_ALPHA,
-      gl.ONE_MINUS_SRC_ALPHA,
-      gl.ONE,
-      gl.ONE_MINUS_SRC_ALPHA
-    );
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     const blueprintMix = Math.max(0, Math.min(1, options.blueprintMix ?? 0));

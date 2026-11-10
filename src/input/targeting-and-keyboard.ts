@@ -1,22 +1,19 @@
-import type { SoundEngine } from "../audio/synth";
+import type { SoundEngine } from '../audio/synth';
 import {
   applyBoosterHammer,
   applyBoosterRocket,
   applyBoosterVacuum,
-  commitBlockMove,
   type CommitMoveOutcome,
-} from "../core/board";
-import {
-  findEligibleGateForBlockAt,
-  getGateOutwardNormal,
-} from "../core/gate-clearance";
+  commitBlockMove,
+} from '../core/board';
+import { findEligibleGateForBlockAt, getGateOutwardNormal } from '../core/gate-clearance';
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
   isBlockInLockedRoom,
   isBlockMovable,
-} from "../core/physics";
-import { getActiveColor, getShape } from "../core/polyomino";
+} from '../core/physics';
+import { getActiveColor, getShape } from '../core/polyomino';
 import type {
   BlockState,
   BoardState,
@@ -25,7 +22,7 @@ import type {
   InputMode,
   PlayMode,
   RocketAxis,
-} from "../core/types";
+} from '../core/types';
 
 export const HIT_SLOP_HALO = 0.32;
 export const MONO_PRIORITY_WEIGHT = 1.3;
@@ -78,56 +75,52 @@ export interface BoardInputCallbacks {
  * gives `1x1` monominoes a `1.30x` priority weight so a `1x1` block tucked inside
  * a non-convex `U` or `L` pocket is always easy to grab.
  */
-export function pickBlockAtBoardPoint(
-  board: BoardState,
-  boardX: number,
-  boardY: number
-): BlockState | null {
+export function pickBlockAtBoardPoint(board: BoardState, boardX: number, boardY: number): BlockState | null {
   interface Candidate {
-  block: BlockState;
-  isMono: boolean;
-  movable: boolean;
-  minBoxDist: number;
-  minCenterDist: number;
-  weightedBoxDist: number;
-  weightedCenterDist: number;
+    block: BlockState;
+    isMono: boolean;
+    movable: boolean;
+    minBoxDist: number;
+    minCenterDist: number;
+    weightedBoxDist: number;
+    weightedCenterDist: number;
   }
 
   const candidates: Candidate[] = [];
 
   for (const block of board.blocks) {
-  if (block.status !== 'ACTIVE') continue;
-  const shape = getShape(block.shapeId);
-  const isMono = block.shapeId === '1x1';
-  const weight = isMono ? MONO_PRIORITY_WEIGHT : 1.0;
+    if (block.status !== 'ACTIVE') continue;
+    const shape = getShape(block.shapeId);
+    const isMono = block.shapeId === '1x1';
+    const weight = isMono ? MONO_PRIORITY_WEIGHT : 1.0;
 
-  let minBoxDist = Infinity;
-  let minCenterDist = Infinity;
+    let minBoxDist = Infinity;
+    let minCenterDist = Infinity;
 
-  for (const [dr, dc] of shape.cells) {
-    const cellX = block.x + dc;
-    const cellY = block.y + dr;
+    for (const [dr, dc] of shape.cells) {
+      const cellX = block.x + dc;
+      const cellY = block.y + dr;
 
-    const dx = Math.max(cellX - boardX, 0, boardX - (cellX + 1));
-    const dy = Math.max(cellY - boardY, 0, boardY - (cellY + 1));
-    const boxDist = Math.hypot(dx, dy);
-    const centerDist = Math.hypot(boardX - (cellX + 0.5), boardY - (cellY + 0.5));
+      const dx = Math.max(cellX - boardX, 0, boardX - (cellX + 1));
+      const dy = Math.max(cellY - boardY, 0, boardY - (cellY + 1));
+      const boxDist = Math.hypot(dx, dy);
+      const centerDist = Math.hypot(boardX - (cellX + 0.5), boardY - (cellY + 0.5));
 
-    if (boxDist < minBoxDist) minBoxDist = boxDist;
-    if (centerDist < minCenterDist) minCenterDist = centerDist;
-  }
+      if (boxDist < minBoxDist) minBoxDist = boxDist;
+      if (centerDist < minCenterDist) minCenterDist = centerDist;
+    }
 
-  if (minBoxDist <= HIT_SLOP_HALO) {
-    candidates.push({
-      block,
-      isMono,
-      movable: isBlockMovable(board, block.id),
-      minBoxDist,
-      minCenterDist,
-      weightedBoxDist: minBoxDist / weight,
-      weightedCenterDist: minCenterDist / weight,
-    });
-  }
+    if (minBoxDist <= HIT_SLOP_HALO) {
+      candidates.push({
+        block,
+        isMono,
+        movable: isBlockMovable(board, block.id),
+        minBoxDist,
+        minCenterDist,
+        weightedBoxDist: minBoxDist / weight,
+        weightedCenterDist: minCenterDist / weight,
+      });
+    }
   }
 
   if (candidates.length === 0) return null;
@@ -135,46 +128,47 @@ export function pickBlockAtBoardPoint(
 
   // Check if a movable 1x1 monomino is within the 0.32 halo and beats other candidates by Voronoi weighted center distance
   const monoCandidate = candidates
-  .filter((c) => c.isMono && c.movable)
-  .sort((a, b) => a.weightedCenterDist - b.weightedCenterDist)[0];
+    .filter((c) => c.isMono && c.movable)
+    .sort((a, b) => a.weightedCenterDist - b.weightedCenterDist)[0];
 
   if (monoCandidate) {
-  const bestOther = candidates
-    .filter((c) => c.block.id !== monoCandidate.block.id)
-    .sort((a, b) => a.weightedCenterDist - b.weightedCenterDist)[0];
-  if (!bestOther || monoCandidate.weightedCenterDist <= bestOther.weightedCenterDist) {
-    return monoCandidate.block;
-  }
+    const bestOther = candidates
+      .filter((c) => c.block.id !== monoCandidate.block.id)
+      .sort((a, b) => a.weightedCenterDist - b.weightedCenterDist)[0];
+    if (!bestOther || monoCandidate.weightedCenterDist <= bestOther.weightedCenterDist) {
+      return monoCandidate.block;
+    }
   }
 
   // Exact cell containment check (minBoxDist === 0)
   const exactHits = candidates.filter((c) => c.minBoxDist <= 1e-5);
   if (exactHits.length > 0) {
-  exactHits.sort((a, b) => a.weightedCenterDist - b.weightedCenterDist);
-  return exactHits[0].block;
+    exactHits.sort((a, b) => a.weightedCenterDist - b.weightedCenterDist);
+    return exactHits[0].block;
   }
 
   // Halo fallback: prefer movable blocks first, then smallest weighted box distance, then weighted center distance
   candidates.sort((a, b) => {
-  if (a.movable !== b.movable) return a.movable ? -1 : 1;
-  if (Math.abs(a.weightedBoxDist - b.weightedBoxDist) > 1e-4) {
-    return a.weightedBoxDist - b.weightedBoxDist;
-  }
-  return a.weightedCenterDist - b.weightedCenterDist;
+    if (a.movable !== b.movable) return a.movable ? -1 : 1;
+    if (Math.abs(a.weightedBoxDist - b.weightedBoxDist) > 1e-4) {
+      return a.weightedBoxDist - b.weightedBoxDist;
+    }
+    return a.weightedCenterDist - b.weightedCenterDist;
   });
 
   return candidates[0].block;
 }
 
-
 export function playOutcomeAudioHelper(sound: SoundEngine | undefined, outcome: CommitMoveOutcome): void {
   if (!sound) return;
   if (outcome.clearedBlockIds.length > 0) {
-  outcome.clearedBlockIds.forEach((_, idx) => sound.playShred(idx));
+    outcome.clearedBlockIds.forEach((_, idx) => {
+      sound.playShred(idx);
+    });
   } else if (outcome.peeledBlockIds.length > 0) {
-  sound.playLayerPeel();
+    sound.playLayerPeel();
   } else if (outcome.moved) {
-  sound.playSnap();
+    sound.playSnap();
   }
 }
 
@@ -203,8 +197,7 @@ export function executeBoosterTargetTap(
   const inBounds = row >= 0 && row < board.rows && col >= 0 && col < board.cols;
   const cellOcc = inBounds ? board.occupancy[row * board.cols + col] : -1;
   const isDirectNonBlockHammerCell =
-    inputMode === 'TARGET_HAMMER' &&
-    (!inBounds || cellOcc === -1 || cellOcc === -3 || cellOcc <= -100);
+    inputMode === 'TARGET_HAMMER' && (!inBounds || cellOcc === -1 || cellOcc === -3 || cellOcc <= -100);
 
   const rawPicked = isDirectNonBlockHammerCell ? null : pickBlockAtBoardPoint(board, boardX, boardY);
   const picked = rawPicked && !isBlockInLockedRoom(board, rawPicked) ? rawPicked : null;
@@ -249,9 +242,12 @@ export function executeBoosterTargetTap(
     const firstCell = picked ? getShape(picked.shapeId).cells[0] : null;
     const targetR = picked && firstCell ? picked.row + firstCell[0] : row;
     const targetC = picked && firstCell ? picked.col + firstCell[1] : col;
-    success = (
-      applyBoosterHammer as (b: BoardState, r: number, c: number, id?: number | null) => boolean
-    )(board, targetR, targetC, picked ? picked.id : null);
+    success = (applyBoosterHammer as (b: BoardState, r: number, c: number, id?: number | null) => boolean)(
+      board,
+      targetR,
+      targetC,
+      picked ? picked.id : null
+    );
   } else if (boosterType === 'ROCKET') {
     success = applyBoosterRocket(board, row, col, rocketAxis);
   } else if (boosterType === 'VACUUM' && pickedColor && pickedColor > 0) {
@@ -277,7 +273,16 @@ export interface KeyboardStepContext {
 }
 
 export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): void {
-  const { canvas, callbacks, getInputMode, setInputMode, toggleRocketAxis, getSelectedBlockId, setSelectedBlockId, emitHoverState } = ctx;
+  const {
+    canvas,
+    callbacks,
+    getInputMode,
+    setInputMode,
+    toggleRocketAxis,
+    getSelectedBlockId,
+    setSelectedBlockId,
+    emitHoverState,
+  } = ctx;
   const inputMode = getInputMode();
   if (callbacks.isBoardInteractive && !callbacks.isBoardInteractive()) {
     return;
@@ -313,17 +318,14 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
 
   // Tab / Shift+Tab: Cycle movable blocks
   if (key === 'Tab') {
-    const movable = board.blocks.filter(
-      (b) => b.status === 'ACTIVE' && isBlockMovable(board, b.id)
-    );
+    const movable = board.blocks.filter((b) => b.status === 'ACTIVE' && isBlockMovable(board, b.id));
     if (movable.length === 0) return;
     e.preventDefault();
 
     movable.sort((a, b) => (a.row !== b.row ? a.row - b.row : a.col - b.col));
     const curIdx = movable.findIndex((b) => b.id === getSelectedBlockId());
     const dir = e.shiftKey ? -1 : 1;
-    const nextIdx =
-      curIdx === -1 ? 0 : (curIdx + dir + movable.length) % movable.length;
+    const nextIdx = curIdx === -1 ? 0 : (curIdx + dir + movable.length) % movable.length;
     setSelectedBlockId(movable[nextIdx].id);
     callbacks.sound?.playPickup();
     emitHoverState();

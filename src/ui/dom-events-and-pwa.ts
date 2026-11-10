@@ -1,10 +1,10 @@
-import type { PlayMode, QualityTier, SavePayloadV1 } from "../core/types";
+import type { PlayMode, QualityTier, SavePayloadV1 } from '../core/types';
 import {
-  PWA_INSTALLED_STORAGE_KEY,
   type AppViewContext,
   type BeforeInstallPromptEvent,
-} from "./catalog-meta";
-import { refreshSaveTransferModalImpl } from "./modals-and-save-transfer";
+  PWA_INSTALLED_STORAGE_KEY,
+} from './catalog-meta';
+import { refreshSaveTransferModalImpl } from './modals-and-save-transfer';
 
 export function bindDomEventsImpl(app: AppViewContext): void {
   // Sacred-Geometry Title Crest Overlay Actions
@@ -82,9 +82,9 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   document.querySelectorAll<HTMLButtonElement>('.chip-filter[data-range]').forEach((chip) => {
     chip.addEventListener('click', () => {
       app.sound.playButtonTap();
-      document
-        .querySelectorAll('.chip-filter[data-range]')
-        .forEach((c) => c.classList.remove('active'));
+      document.querySelectorAll('.chip-filter[data-range]').forEach((c) => {
+        c.classList.remove('active');
+      });
       chip.classList.add('active');
       app.activeRoadmapRange = chip.dataset.range ?? 'all';
       app.renderRoadmap();
@@ -286,9 +286,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   bindToggle('toggle-high-contrast', 'highContrast');
   bindToggle('toggle-reduced-motion', 'reducedMotion');
 
-  const qualitySelect = document.getElementById(
-    'select-quality-tier'
-  ) as HTMLSelectElement | null;
+  const qualitySelect = document.getElementById('select-quality-tier') as HTMLSelectElement | null;
   qualitySelect?.addEventListener('change', () => {
     const tier = qualitySelect.value as QualityTier;
     app.saveManager.updateSettings({ qualityTier: tier });
@@ -335,9 +333,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
 
   document.getElementById('btn-preview-import')?.addEventListener('click', () => {
     app.sound.playButtonTap();
-    const inputEl = document.getElementById(
-      'save-code-input'
-    ) as HTMLTextAreaElement | null;
+    const inputEl = document.getElementById('save-code-input') as HTMLTextAreaElement | null;
     app.previewSaveImport(inputEl ? inputEl.value : '');
   });
 
@@ -410,11 +406,8 @@ export function isPwaInstalledImpl(app: AppViewContext): boolean {
     window.matchMedia?.(
       '(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)'
     ).matches ?? false;
-  const iosStandalone = Boolean(
-    (window.navigator as Navigator & { standalone?: boolean }).standalone
-  );
-  const twaReferrer =
-    typeof document !== 'undefined' && document.referrer.startsWith('android-app://');
+  const iosStandalone = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+  const twaReferrer = typeof document !== 'undefined' && document.referrer.startsWith('android-app://');
 
   if (standaloneMedia || iosStandalone || twaReferrer) {
     app.pwaInstalledDetected = true;
@@ -499,9 +492,7 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
   }
 
   const navWithRelated = navigator as Navigator & {
-    getInstalledRelatedApps?: () => Promise<
-      Array<{ id?: string; platform?: string; url?: string }>
-    >;
+    getInstalledRelatedApps?: () => Promise<Array<{ id?: string; platform?: string; url?: string }>>;
   };
   if (typeof navWithRelated.getInstalledRelatedApps === 'function') {
     void navWithRelated
@@ -530,10 +521,7 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
             const newWorker = reg.installing;
             if (!newWorker) return;
             newWorker.addEventListener('statechange', () => {
-              if (
-                newWorker.state === 'installed' &&
-                navigator.serviceWorker.controller
-              ) {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 app.waitingServiceWorker = newWorker;
                 showPwaUpdateToastImpl();
               }

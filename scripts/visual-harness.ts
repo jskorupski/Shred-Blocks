@@ -1,11 +1,10 @@
-import { chromium, type Browser } from '@playwright/test';
-
 // @ts-expect-error Node built-in module resolved at runtime by tsx
 import { spawn } from 'node:child_process';
 // @ts-expect-error Node built-in module resolved at runtime by tsx
 import { mkdirSync } from 'node:fs';
 // @ts-expect-error Node built-in module resolved at runtime by tsx
 import { join } from 'node:path';
+import { type Browser, chromium } from '@playwright/test';
 
 declare const process: {
   exit: (code: number) => void;
@@ -25,11 +24,7 @@ interface SpawnedProcess {
   on: (event: string, cb: (code: number | null) => void) => void;
 }
 
-async function waitForServer(
-  url: string,
-  proc: SpawnedProcess,
-  timeoutMs = 10_000
-): Promise<void> {
+async function waitForServer(url: string, proc: SpawnedProcess, timeoutMs = 10_000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (proc.exitCode !== null) {
@@ -226,8 +221,7 @@ async function runVisualHarness(): Promise<void> {
     await mobilePage.evaluate(() => {
       const code = document.querySelector<HTMLTextAreaElement>('#save-code-output')?.value || '';
       window.__SHREDBLOCKS_DEBUG__.openModal('save-transfer');
-      const currentCode =
-        document.querySelector<HTMLTextAreaElement>('#save-code-output')?.value || code;
+      const currentCode = document.querySelector<HTMLTextAreaElement>('#save-code-output')?.value || code;
       if (currentCode) {
         window.__SHREDBLOCKS_DEBUG__.previewSaveImport(currentCode);
       }
@@ -502,10 +496,7 @@ async function runVisualHarness(): Promise<void> {
     });
     await mobileL11Page.waitForTimeout(180);
     await mobileL11Page.screenshot({
-      path: join(
-        ARTIFACT_SCRATCH_DIR,
-        '36-level-031-custom-theme-high-contrast-colorblind-mobile.png'
-      ),
+      path: join(ARTIFACT_SCRATCH_DIR, '36-level-031-custom-theme-high-contrast-colorblind-mobile.png'),
     });
 
     // 37. Level 25: Twin Sanctum + Custom Frosted Quartz Tray & Gummy Jelly Skin + High Contrast + Colorblind Symbols
@@ -517,10 +508,7 @@ async function runVisualHarness(): Promise<void> {
     });
     await mobileL11Page.waitForTimeout(180);
     await mobileL11Page.screenshot({
-      path: join(
-        ARTIFACT_SCRATCH_DIR,
-        '37-level-025-frosted-quartz-high-contrast-colorblind-mobile.png'
-      ),
+      path: join(ARTIFACT_SCRATCH_DIR, '37-level-025-frosted-quartz-high-contrast-colorblind-mobile.png'),
     });
 
     // 34. Level 25: Title Screen Wall-Scroll Diagram over Twin Sanctum Multi-Room Courtyard
@@ -542,9 +530,7 @@ async function runVisualHarness(): Promise<void> {
       throw new Error(`Visual harness encountered runtime errors:\n${errors.join('\n')}`);
     }
 
-    console.log(
-      '✅ Captured all 34 multi-viewport visual verification screenshots cleanly with 0 errors.'
-    );
+    console.log('✅ Captured all 34 multi-viewport visual verification screenshots cleanly with 0 errors.');
   } finally {
     if (browser) {
       await browser.close().catch(() => {});

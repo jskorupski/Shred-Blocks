@@ -289,7 +289,16 @@ describe('All 18 Obstacles & Core Mechanics', () => {
       crates: [{ id: 1, row: 1, col: 2, hp: 1 }],
       blocks: [
         { id: 1, shapeId: '1x1', row: 0, col: 2, colorStack: [1], hasKey: 1 },
-        { id: 2, shapeId: '1x1', row: 4, col: 2, colorStack: [2], chained: true, lockId: 1, bombCount: 2 },
+        {
+          id: 2,
+          shapeId: '1x1',
+          row: 4,
+          col: 2,
+          colorStack: [2],
+          chained: true,
+          lockId: 1,
+          bombCount: 2,
+        },
         { id: 3, shapeId: '1x1', row: 3, col: 3, colorStack: [0] }, // Stone
       ],
       gates: [
@@ -454,13 +463,37 @@ describe('All 5 Boosters & Zero-Softlock Law', () => {
       crates: [{ id: 1, row: 2, col: 2, hp: 2 }],
       blocks: [
         { id: 1, shapeId: '1x1', row: 1, col: 1, colorStack: [1], hasKey: 1 },
-        { id: 2, shapeId: '1x1', row: 1, col: 4, colorStack: [2], chained: true, lockId: 1, scissorColor: 3 },
-        { id: 3, shapeId: '1x1', row: 4, col: 1, colorStack: [3], ropeColor: 3, shutterGemColor: 4 },
+        {
+          id: 2,
+          shapeId: '1x1',
+          row: 1,
+          col: 4,
+          colorStack: [2],
+          chained: true,
+          lockId: 1,
+          scissorColor: 3,
+        },
+        {
+          id: 3,
+          shapeId: '1x1',
+          row: 4,
+          col: 1,
+          colorStack: [3],
+          ropeColor: 3,
+          shutterGemColor: 4,
+        },
         { id: 4, shapeId: '1x1', row: 4, col: 4, colorStack: [4] },
       ],
       gates: [
         { edge: 'TOP', spanStart: 0, spanLength: 4, colorQueue: [1, 4] },
-        { edge: 'BOTTOM', spanStart: 0, spanLength: 6, colorQueue: [4], shutterLockColor: 4, shutterOpen: false },
+        {
+          edge: 'BOTTOM',
+          spanStart: 0,
+          spanLength: 6,
+          colorQueue: [4],
+          shutterLockColor: 4,
+          shutterOpen: false,
+        },
       ],
     };
     const board = createBoardState(spec);

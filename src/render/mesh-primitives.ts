@@ -91,7 +91,6 @@ export class MeshBuilder {
   }
 }
 
-
 export function addCylinderCapToBuilder(
   builder: MeshBuilder,
   cx: number,
@@ -183,26 +182,8 @@ export function addCylinderCapToBuilder(
     );
 
     // Top fan triangle with subtle outward rim normal for crisp circular stud highlight
-    const v0 = builder.addVertex(
-      tx1,
-      ty1,
-      z1,
-      cos1 * 0.22,
-      sin1 * 0.22,
-      0.975,
-      tx1 * invCols,
-      ty1 * invRows
-    );
-    const v1 = builder.addVertex(
-      tx0,
-      ty0,
-      z1,
-      cos0 * 0.22,
-      sin0 * 0.22,
-      0.975,
-      tx0 * invCols,
-      ty0 * invRows
-    );
+    const v0 = builder.addVertex(tx1, ty1, z1, cos1 * 0.22, sin1 * 0.22, 0.975, tx1 * invCols, ty1 * invRows);
+    const v1 = builder.addVertex(tx0, ty0, z1, cos0 * 0.22, sin0 * 0.22, 0.975, tx0 * invCols, ty0 * invRows);
     builder.indices.push(centerTopIdx, v0, v1);
   }
 }
@@ -318,11 +299,7 @@ export function createOverlayQuadMesh(): MeshData {
  * Generates a centered flat 3D annulus/ring (`[-0.5, 0.5]^2` at `Z = 0`) for expanding knock-on
  * and shredding shockwaves (`R3D-08`).
  */
-export function createShockwaveRingMesh(
-  segments = 24,
-  innerRadius = 0.37,
-  outerRadius = 0.5
-): MeshData {
+export function createShockwaveRingMesh(segments = 24, innerRadius = 0.37, outerRadius = 0.5): MeshData {
   const builder = new MeshBuilder();
   for (let i = 0; i < segments; i++) {
     const a0 = (i / segments) * Math.PI * 2;

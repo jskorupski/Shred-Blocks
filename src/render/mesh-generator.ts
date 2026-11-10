@@ -1,5 +1,5 @@
-import { POLYOMINO_SHAPES, type PolyominoShape } from "../core/polyomino";
-import type { SkinId } from "../core/types";
+import { POLYOMINO_SHAPES, type PolyominoShape } from '../core/polyomino';
+import type { SkinId } from '../core/types';
 import {
   addCylinderCapToBuilder,
   BLOCK_HEIGHT,
@@ -8,9 +8,9 @@ import {
   type MeshData,
   type PolyominoMeshEntry,
   STD_INSET,
-} from "./mesh-primitives";
+} from './mesh-primitives';
 
-export * from "./mesh-primitives";
+export * from './mesh-primitives';
 
 function gridLineX(gx: number, p: number): number {
   const c = Math.floor(gx / 3);
@@ -131,73 +131,217 @@ export function buildMorphologicalPolyominoMesh(
       if (!isSubActive(gr - 1, gc)) {
         // Side skirt (zBottom -> zShoulder)
         builder.addQuad(
-          x0Outer, y0Outer, zShoulder, x0Outer * invCols, 0,
-          x1Outer, y0Outer, zShoulder, x1Outer * invCols, 0,
-          x1Outer, y0Outer, zBottom, x1Outer * invCols, 1,
-          x0Outer, y0Outer, zBottom, x0Outer * invCols, 1,
-          0, -1, 0
+          x0Outer,
+          y0Outer,
+          zShoulder,
+          x0Outer * invCols,
+          0,
+          x1Outer,
+          y0Outer,
+          zShoulder,
+          x1Outer * invCols,
+          0,
+          x1Outer,
+          y0Outer,
+          zBottom,
+          x1Outer * invCols,
+          1,
+          x0Outer,
+          y0Outer,
+          zBottom,
+          x0Outer * invCols,
+          1,
+          0,
+          -1,
+          0
         );
         // Chamfer bevel (zShoulder -> zTop)
         builder.addQuad(
-          x0Bev, y0Bev, zTop, x0Bev * invCols, y0Bev * invRows,
-          x1Bev, y0Bev, zTop, x1Bev * invCols, y0Bev * invRows,
-          x1Outer, y0Outer, zShoulder, x1Outer * invCols, y0Outer * invRows,
-          x0Outer, y0Outer, zShoulder, x0Outer * invCols, y0Outer * invRows,
-          0, -invSqrt2, invSqrt2
+          x0Bev,
+          y0Bev,
+          zTop,
+          x0Bev * invCols,
+          y0Bev * invRows,
+          x1Bev,
+          y0Bev,
+          zTop,
+          x1Bev * invCols,
+          y0Bev * invRows,
+          x1Outer,
+          y0Outer,
+          zShoulder,
+          x1Outer * invCols,
+          y0Outer * invRows,
+          x0Outer,
+          y0Outer,
+          zShoulder,
+          x0Outer * invCols,
+          y0Outer * invRows,
+          0,
+          -invSqrt2,
+          invSqrt2
         );
       }
 
       // BOTTOM exterior boundary (normal = [0, +1, 0])
       if (!isSubActive(gr + 1, gc)) {
         builder.addQuad(
-          x0Outer, y1Outer, zBottom, x0Outer * invCols, 1,
-          x1Outer, y1Outer, zBottom, x1Outer * invCols, 1,
-          x1Outer, y1Outer, zShoulder, x1Outer * invCols, 0,
-          x0Outer, y1Outer, zShoulder, x0Outer * invCols, 0,
-          0, 1, 0
+          x0Outer,
+          y1Outer,
+          zBottom,
+          x0Outer * invCols,
+          1,
+          x1Outer,
+          y1Outer,
+          zBottom,
+          x1Outer * invCols,
+          1,
+          x1Outer,
+          y1Outer,
+          zShoulder,
+          x1Outer * invCols,
+          0,
+          x0Outer,
+          y1Outer,
+          zShoulder,
+          x0Outer * invCols,
+          0,
+          0,
+          1,
+          0
         );
         builder.addQuad(
-          x0Outer, y1Outer, zShoulder, x0Outer * invCols, y1Outer * invRows,
-          x1Outer, y1Outer, zShoulder, x1Outer * invCols, y1Outer * invRows,
-          x1Bev, y1Bev, zTop, x1Bev * invCols, y1Bev * invRows,
-          x0Bev, y1Bev, zTop, x0Bev * invCols, y1Bev * invRows,
-          0, invSqrt2, invSqrt2
+          x0Outer,
+          y1Outer,
+          zShoulder,
+          x0Outer * invCols,
+          y1Outer * invRows,
+          x1Outer,
+          y1Outer,
+          zShoulder,
+          x1Outer * invCols,
+          y1Outer * invRows,
+          x1Bev,
+          y1Bev,
+          zTop,
+          x1Bev * invCols,
+          y1Bev * invRows,
+          x0Bev,
+          y1Bev,
+          zTop,
+          x0Bev * invCols,
+          y1Bev * invRows,
+          0,
+          invSqrt2,
+          invSqrt2
         );
       }
 
       // LEFT exterior boundary (normal = [-1, 0, 0])
       if (!isSubActive(gr, gc - 1)) {
         builder.addQuad(
-          x0Outer, y0Outer, zBottom, y0Outer * invRows, 1,
-          x0Outer, y1Outer, zBottom, y1Outer * invRows, 1,
-          x0Outer, y1Outer, zShoulder, y1Outer * invRows, 0,
-          x0Outer, y0Outer, zShoulder, y0Outer * invRows, 0,
-          -1, 0, 0
+          x0Outer,
+          y0Outer,
+          zBottom,
+          y0Outer * invRows,
+          1,
+          x0Outer,
+          y1Outer,
+          zBottom,
+          y1Outer * invRows,
+          1,
+          x0Outer,
+          y1Outer,
+          zShoulder,
+          y1Outer * invRows,
+          0,
+          x0Outer,
+          y0Outer,
+          zShoulder,
+          y0Outer * invRows,
+          0,
+          -1,
+          0,
+          0
         );
         builder.addQuad(
-          x0Outer, y0Outer, zShoulder, x0Outer * invCols, y0Outer * invRows,
-          x0Outer, y1Outer, zShoulder, x0Outer * invCols, y1Outer * invRows,
-          x0Bev, y1Bev, zTop, x0Bev * invCols, y1Bev * invRows,
-          x0Bev, y0Bev, zTop, x0Bev * invCols, y0Bev * invRows,
-          -invSqrt2, 0, invSqrt2
+          x0Outer,
+          y0Outer,
+          zShoulder,
+          x0Outer * invCols,
+          y0Outer * invRows,
+          x0Outer,
+          y1Outer,
+          zShoulder,
+          x0Outer * invCols,
+          y1Outer * invRows,
+          x0Bev,
+          y1Bev,
+          zTop,
+          x0Bev * invCols,
+          y1Bev * invRows,
+          x0Bev,
+          y0Bev,
+          zTop,
+          x0Bev * invCols,
+          y0Bev * invRows,
+          -invSqrt2,
+          0,
+          invSqrt2
         );
       }
 
       // RIGHT exterior boundary (normal = [+1, 0, 0])
       if (!isSubActive(gr, gc + 1)) {
         builder.addQuad(
-          x1Outer, y0Outer, zShoulder, y0Outer * invRows, 0,
-          x1Outer, y1Outer, zShoulder, y1Outer * invRows, 0,
-          x1Outer, y1Outer, zBottom, y1Outer * invRows, 1,
-          x1Outer, y0Outer, zBottom, y0Outer * invRows, 1,
-          1, 0, 0
+          x1Outer,
+          y0Outer,
+          zShoulder,
+          y0Outer * invRows,
+          0,
+          x1Outer,
+          y1Outer,
+          zShoulder,
+          y1Outer * invRows,
+          0,
+          x1Outer,
+          y1Outer,
+          zBottom,
+          y1Outer * invRows,
+          1,
+          x1Outer,
+          y0Outer,
+          zBottom,
+          y0Outer * invRows,
+          1,
+          1,
+          0,
+          0
         );
         builder.addQuad(
-          x1Bev, y0Bev, zTop, x1Bev * invCols, y0Bev * invRows,
-          x1Bev, y1Bev, zTop, x1Bev * invCols, y1Bev * invRows,
-          x1Outer, y1Outer, zShoulder, x1Outer * invCols, y1Outer * invRows,
-          x1Outer, y0Outer, zShoulder, x1Outer * invCols, y0Outer * invRows,
-          invSqrt2, 0, invSqrt2
+          x1Bev,
+          y0Bev,
+          zTop,
+          x1Bev * invCols,
+          y0Bev * invRows,
+          x1Bev,
+          y1Bev,
+          zTop,
+          x1Bev * invCols,
+          y1Bev * invRows,
+          x1Outer,
+          y1Outer,
+          zShoulder,
+          x1Outer * invCols,
+          y1Outer * invRows,
+          x1Outer,
+          y0Outer,
+          zShoulder,
+          x1Outer * invCols,
+          y0Outer * invRows,
+          invSqrt2,
+          0,
+          invSqrt2
         );
       }
     }
@@ -230,77 +374,239 @@ export function buildMorphologicalPolyominoMesh(
 
         // Recessed inner floor at zCavity
         builder.addQuad(
-          x0C, y0C, zCavity, x0C * invCols, y0C * invRows,
-          x0C, y1C, zCavity, x0C * invCols, y1C * invRows,
-          x1C, y1C, zCavity, x1C * invCols, y1C * invRows,
-          x1C, y0C, zCavity, x1C * invCols, y0C * invRows,
-          0, 0, 1
+          x0C,
+          y0C,
+          zCavity,
+          x0C * invCols,
+          y0C * invRows,
+          x0C,
+          y1C,
+          zCavity,
+          x0C * invCols,
+          y1C * invRows,
+          x1C,
+          y1C,
+          zCavity,
+          x1C * invCols,
+          y1C * invRows,
+          x1C,
+          y0C,
+          zCavity,
+          x1C * invCols,
+          y0C * invRows,
+          0,
+          0,
+          1
         );
 
         // Raised outer collar rim along exterior edges
         if (!isSubActive(gr - 1, gc)) {
           builder.addQuad(
-          x0A, y0A, zTop, x0A * invCols, y0A * invRows,
-          x0B, y0B, zTop, x0B * invCols, y0B * invRows,
-          x1B, y0B, zTop, x1B * invCols, y0B * invRows,
-          x1A, y0A, zTop, x1A * invCols, y0A * invRows,
-          0, 0, 1
-        );
+            x0A,
+            y0A,
+            zTop,
+            x0A * invCols,
+            y0A * invRows,
+            x0B,
+            y0B,
+            zTop,
+            x0B * invCols,
+            y0B * invRows,
+            x1B,
+            y0B,
+            zTop,
+            x1B * invCols,
+            y0B * invRows,
+            x1A,
+            y0A,
+            zTop,
+            x1A * invCols,
+            y0A * invRows,
+            0,
+            0,
+            1
+          );
           builder.addQuad(
-          x0B, y0B, zTop, x0B * invCols, y0B * invRows,
-          x0C, y0C, zCavity, x0C * invCols, y0C * invRows,
-          x1C, y0C, zCavity, x1C * invCols, y0C * invRows,
-          x1B, y0B, zTop, x1B * invCols, y0B * invRows,
-          0, invSqrt2, invSqrt2
-        );
+            x0B,
+            y0B,
+            zTop,
+            x0B * invCols,
+            y0B * invRows,
+            x0C,
+            y0C,
+            zCavity,
+            x0C * invCols,
+            y0C * invRows,
+            x1C,
+            y0C,
+            zCavity,
+            x1C * invCols,
+            y0C * invRows,
+            x1B,
+            y0B,
+            zTop,
+            x1B * invCols,
+            y0B * invRows,
+            0,
+            invSqrt2,
+            invSqrt2
+          );
         }
         if (!isSubActive(gr + 1, gc)) {
           builder.addQuad(
-          x0B, y1B, zTop, x0B * invCols, y1B * invRows,
-          x0A, y1A, zTop, x0A * invCols, y1A * invRows,
-          x1A, y1A, zTop, x1A * invCols, y1A * invRows,
-          x1B, y1B, zTop, x1B * invCols, y1B * invRows,
-          0, 0, 1
-        );
+            x0B,
+            y1B,
+            zTop,
+            x0B * invCols,
+            y1B * invRows,
+            x0A,
+            y1A,
+            zTop,
+            x0A * invCols,
+            y1A * invRows,
+            x1A,
+            y1A,
+            zTop,
+            x1A * invCols,
+            y1A * invRows,
+            x1B,
+            y1B,
+            zTop,
+            x1B * invCols,
+            y1B * invRows,
+            0,
+            0,
+            1
+          );
           builder.addQuad(
-          x0C, y1C, zCavity, x0C * invCols, y1C * invRows,
-          x0B, y1B, zTop, x0B * invCols, y1B * invRows,
-          x1B, y1B, zTop, x1B * invCols, y1B * invRows,
-          x1C, y1C, zCavity, x1C * invCols, y1C * invRows,
-          0, -invSqrt2, invSqrt2
-        );
+            x0C,
+            y1C,
+            zCavity,
+            x0C * invCols,
+            y1C * invRows,
+            x0B,
+            y1B,
+            zTop,
+            x0B * invCols,
+            y1B * invRows,
+            x1B,
+            y1B,
+            zTop,
+            x1B * invCols,
+            y1B * invRows,
+            x1C,
+            y1C,
+            zCavity,
+            x1C * invCols,
+            y1C * invRows,
+            0,
+            -invSqrt2,
+            invSqrt2
+          );
         }
         if (!isSubActive(gr, gc - 1)) {
           builder.addQuad(
-          x0A, y0A, zTop, x0A * invCols, y0A * invRows,
-          x0A, y1A, zTop, x0A * invCols, y1A * invRows,
-          x0B, y1B, zTop, x0B * invCols, y1B * invRows,
-          x0B, y0B, zTop, x0B * invCols, y0B * invRows,
-          0, 0, 1
-        );
+            x0A,
+            y0A,
+            zTop,
+            x0A * invCols,
+            y0A * invRows,
+            x0A,
+            y1A,
+            zTop,
+            x0A * invCols,
+            y1A * invRows,
+            x0B,
+            y1B,
+            zTop,
+            x0B * invCols,
+            y1B * invRows,
+            x0B,
+            y0B,
+            zTop,
+            x0B * invCols,
+            y0B * invRows,
+            0,
+            0,
+            1
+          );
           builder.addQuad(
-          x0B, y0B, zTop, x0B * invCols, y0B * invRows,
-          x0B, y1B, zTop, x0B * invCols, y1B * invRows,
-          x0C, y1C, zCavity, x0C * invCols, y1C * invRows,
-          x0C, y0C, zCavity, x0C * invCols, y0C * invRows,
-          invSqrt2, 0, invSqrt2
-        );
+            x0B,
+            y0B,
+            zTop,
+            x0B * invCols,
+            y0B * invRows,
+            x0B,
+            y1B,
+            zTop,
+            x0B * invCols,
+            y1B * invRows,
+            x0C,
+            y1C,
+            zCavity,
+            x0C * invCols,
+            y1C * invRows,
+            x0C,
+            y0C,
+            zCavity,
+            x0C * invCols,
+            y0C * invRows,
+            invSqrt2,
+            0,
+            invSqrt2
+          );
         }
         if (!isSubActive(gr, gc + 1)) {
           builder.addQuad(
-          x1B, y0B, zTop, x1B * invCols, y0B * invRows,
-          x1B, y1B, zTop, x1B * invCols, y1B * invRows,
-          x1A, y1A, zTop, x1A * invCols, y1A * invRows,
-          x1A, y0A, zTop, x1A * invCols, y0A * invRows,
-          0, 0, 1
-        );
+            x1B,
+            y0B,
+            zTop,
+            x1B * invCols,
+            y0B * invRows,
+            x1B,
+            y1B,
+            zTop,
+            x1B * invCols,
+            y1B * invRows,
+            x1A,
+            y1A,
+            zTop,
+            x1A * invCols,
+            y1A * invRows,
+            x1A,
+            y0A,
+            zTop,
+            x1A * invCols,
+            y0A * invRows,
+            0,
+            0,
+            1
+          );
           builder.addQuad(
-          x1C, y0C, zCavity, x1C * invCols, y0C * invRows,
-          x1C, y1C, zCavity, x1C * invCols, y1C * invRows,
-          x1B, y1B, zTop, x1B * invCols, y1B * invRows,
-          x1B, y0B, zTop, x1B * invCols, y0B * invRows,
-          -invSqrt2, 0, invSqrt2
-        );
+            x1C,
+            y0C,
+            zCavity,
+            x1C * invCols,
+            y0C * invRows,
+            x1C,
+            y1C,
+            zCavity,
+            x1C * invCols,
+            y1C * invRows,
+            x1B,
+            y1B,
+            zTop,
+            x1B * invCols,
+            y1B * invRows,
+            x1B,
+            y0B,
+            zTop,
+            x1B * invCols,
+            y0B * invRows,
+            -invSqrt2,
+            0,
+            invSqrt2
+          );
         }
       }
     }
@@ -314,11 +620,29 @@ export function buildMorphologicalPolyominoMesh(
         const y1 = gridLineY(gr + 1, pBevel);
 
         builder.addQuad(
-          x0, y0, zTop, x0 * invCols, y0 * invRows,
-          x0, y1, zTop, x0 * invCols, y1 * invRows,
-          x1, y1, zTop, x1 * invCols, y1 * invRows,
-          x1, y0, zTop, x1 * invCols, y0 * invRows,
-          0, 0, 1
+          x0,
+          y0,
+          zTop,
+          x0 * invCols,
+          y0 * invRows,
+          x0,
+          y1,
+          zTop,
+          x0 * invCols,
+          y1 * invRows,
+          x1,
+          y1,
+          zTop,
+          x1 * invCols,
+          y1 * invRows,
+          x1,
+          y0,
+          zTop,
+          x1 * invCols,
+          y0 * invRows,
+          0,
+          0,
+          1
         );
       }
     }
@@ -332,23 +656,12 @@ export function buildMorphologicalPolyominoMesh(
     for (const [r, c] of cells) {
       const cx = c + 0.5;
       const cy = r + 0.5;
-      addCylinderCapToBuilder(
-        builder,
-        cx,
-        cy,
-        studBaseZ,
-        studTopZ,
-        studRadius,
-        segments,
-        invCols,
-        invRows
-      );
+      addCylinderCapToBuilder(builder, cx, cy, studBaseZ, studTopZ, studRadius, segments, invCols, invRows);
     }
   }
 
   return builder.toMeshData();
 }
-
 
 /**
  * Pre-generates all `33 × 2 = 66` static morphological 3D polyomino meshes (plus studded variants)
@@ -422,4 +735,3 @@ export function getPolyominoMeshPair(
     meshInnerCore: entry.meshInnerCore,
   };
 }
-

@@ -1,18 +1,18 @@
-import {
-  type Benchmark120HzResult,
-  type BoardState,
-  type ColorId,
-  type InputMode,
-  type ParticleStyleId,
-  type PerfTelemetry,
-  type QualityTier,
-  type RocketAxis,
-  type SkinId,
-  type TrayId,
-} from "../core/types";
-import type { AtlasUVRegion } from "./atlas-3d";
-import type { Camera3D } from "./camera-3d";
-import type { MeshData } from "./mesh-generator";
+import type {
+  Benchmark120HzResult,
+  BoardState,
+  ColorId,
+  InputMode,
+  ParticleStyleId,
+  PerfTelemetry,
+  QualityTier,
+  RocketAxis,
+  SkinId,
+  TrayId,
+} from '../core/types';
+import type { AtlasTextureData, AtlasUVRegion } from './atlas-3d';
+import type { Camera3D } from './camera-3d';
+import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 
 export const MAX_PARTICLES = 2048;
 export const PARTICLE_STRIDE = 14; // x, y, z, vx, vy, vz, r, g, b, scale, age, maxAge, rotAngle, rotSpeed
@@ -339,27 +339,33 @@ export interface RenderPassContext {
   lastBoardLevelId: number;
   lastSessionShredded: number;
   lastMovesCommitted: number;
-  readonly blockLayerSnapshots: Map<number, {
-    cursor: number;
-    status: string;
-    x: number;
-    y: number;
-    row: number;
-    col: number;
-    color: ColorId;
-    iceCount: number;
-    chained: boolean;
-    ropeColor: ColorId;
-  }>;
+  readonly blockLayerSnapshots: Map<
+    number,
+    {
+      cursor: number;
+      status: string;
+      x: number;
+      y: number;
+      row: number;
+      col: number;
+      color: ColorId;
+      iceCount: number;
+      chained: boolean;
+      ropeColor: ColorId;
+    }
+  >;
   readonly crateSnapshots: Map<number, { hp: number; destroyed: boolean }>;
-  readonly gateSnapshots: Map<number, {
-    colorCursor: number;
-    iceCount: number;
-    shutterOpen: boolean;
-    shutterLockColor: ColorId;
-    spanStart: number;
-    spanLength: number;
-  }>;
+  readonly gateSnapshots: Map<
+    number,
+    {
+      colorCursor: number;
+      iceCount: number;
+      shutterOpen: boolean;
+      shutterLockColor: ColorId;
+      spanStart: number;
+      spanLength: number;
+    }
+  >;
   readonly elevatorSnapshots: Map<number, { atAlternatePos: boolean }>;
   readonly barrierSnapshots: Map<number, { open: boolean; shredsRemaining: number }>;
   readonly roomAwakenMap: Map<number, number>;
@@ -376,11 +382,241 @@ export interface RenderPassContext {
   getColorRgb(colorId: ColorId, highContrast?: boolean): [number, number, number];
   getMaterialStyleCode(skin?: SkinId): number;
   getParticleStyleCode(style?: ParticleStyleId): number;
-  getRoomVisualState(board: BoardState, roomId: number): { zOffset: number; luminanceMul: number; isLocked: boolean };
-  spawnParticlesAt(worldX: number, worldY: number, worldZ: number, colorId: ColorId, count?: number, dirX?: number, dirY?: number, particleStyle?: ParticleStyleId): void;
-  spawnShockwave(cx: number, cy: number, z: number, r: number, g: number, b: number, minRadius?: number, maxRadius?: number, maxAge?: number): void;
-  drawMesh(gl: WebGL2RenderingContext, mesh: MeshData, tx: number, ty: number, tz: number, sx: number, sy: number, sz: number, r: number, g: number, b: number, a?: number, rotX?: number, rotZ?: number, materialStyle?: number, uvRegion?: AtlasUVRegion | null): void;
-  drawAtlasBadge(gl: WebGL2RenderingContext, regionKey: string, cx: number, cy: number, z: number, size: number, r?: number, g?: number, b?: number, a?: number): void;
-  drawNumberBadges(gl: WebGL2RenderingContext, value: number, cx: number, cy: number, z: number, digitSize: number, r?: number, g?: number, b?: number): void;
-  drawBadgeMedallion3D(gl: WebGL2RenderingContext, cx: number, cy: number, zBase: number, width: number, height: number, faceR: number, faceG: number, faceB: number, rimR?: number, rimG?: number, rimB?: number): number;
+  getRoomVisualState(
+    board: BoardState,
+    roomId: number
+  ): { zOffset: number; luminanceMul: number; isLocked: boolean };
+  spawnParticlesAt(
+    worldX: number,
+    worldY: number,
+    worldZ: number,
+    colorId: ColorId,
+    count?: number,
+    dirX?: number,
+    dirY?: number,
+    particleStyle?: ParticleStyleId
+  ): void;
+  spawnShockwave(
+    cx: number,
+    cy: number,
+    z: number,
+    r: number,
+    g: number,
+    b: number,
+    minRadius?: number,
+    maxRadius?: number,
+    maxAge?: number
+  ): void;
+  drawMesh(
+    gl: WebGL2RenderingContext,
+    mesh: MeshData,
+    tx: number,
+    ty: number,
+    tz: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    r: number,
+    g: number,
+    b: number,
+    a?: number,
+    rotX?: number,
+    rotZ?: number,
+    materialStyle?: number,
+    uvRegion?: AtlasUVRegion | null
+  ): void;
+  drawAtlasBadge(
+    gl: WebGL2RenderingContext,
+    regionKey: string,
+    cx: number,
+    cy: number,
+    z: number,
+    size: number,
+    r?: number,
+    g?: number,
+    b?: number,
+    a?: number
+  ): void;
+  drawNumberBadges(
+    gl: WebGL2RenderingContext,
+    value: number,
+    cx: number,
+    cy: number,
+    z: number,
+    digitSize: number,
+    r?: number,
+    g?: number,
+    b?: number
+  ): void;
+  drawBadgeMedallion3D(
+    gl: WebGL2RenderingContext,
+    cx: number,
+    cy: number,
+    zBase: number,
+    width: number,
+    height: number,
+    faceR: number,
+    faceG: number,
+    faceB: number,
+    rimR?: number,
+    rimG?: number,
+    rimB?: number
+  ): number;
+}
+
+export function drawAtlasBadgeImpl(
+  rctx: RenderPassContext,
+  atlasData: AtlasTextureData,
+  gl: WebGL2RenderingContext,
+  regionKey: string,
+  cx: number,
+  cy: number,
+  z: number,
+  size: number,
+  r = 1,
+  g = 1,
+  b = 1,
+  a = 1
+): void {
+  const region = atlasData.regions[regionKey];
+  if (!region) return;
+  rctx.drawMesh(
+    gl,
+    ENVIRONMENT_MESHES.overlayQuad,
+    cx - size * 0.5,
+    cy - size * 0.5,
+    z,
+    size,
+    size,
+    1,
+    r,
+    g,
+    b,
+    a,
+    0,
+    0,
+    4,
+    region
+  );
+}
+
+export function drawNumberBadgesImpl(
+  rctx: RenderPassContext,
+  gl: WebGL2RenderingContext,
+  value: number,
+  cx: number,
+  cy: number,
+  z: number,
+  digitSize: number,
+  r = 1,
+  g = 1,
+  b = 1
+): void {
+  const str = String(Math.max(0, Math.floor(value)));
+  const step = digitSize * 0.54;
+  const totalW = str.length * step;
+  const startX = cx - totalW * 0.5 + step * 0.5;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    rctx.drawAtlasBadge(gl, `DIGIT_${ch}`, startX + i * step, cy, z, digitSize, r, g, b, 1.0);
+  }
+}
+
+export function drawBadgeMedallion3DImpl(
+  rctx: RenderPassContext,
+  gl: WebGL2RenderingContext,
+  cx: number,
+  cy: number,
+  zBase: number,
+  width: number,
+  height: number,
+  faceR: number,
+  faceG: number,
+  faceB: number,
+  rimR = 0.92,
+  rimG = 0.8,
+  rimB = 0.52
+): number {
+  rctx.drawMesh(
+    gl,
+    ENVIRONMENT_MESHES.unitParticleCube,
+    cx,
+    cy,
+    zBase + 0.036,
+    width + 0.055,
+    height + 0.055,
+    0.072,
+    rimR,
+    rimG,
+    rimB,
+    1.0,
+    0,
+    0,
+    0
+  );
+  rctx.drawMesh(
+    gl,
+    ENVIRONMENT_MESHES.unitParticleCube,
+    cx,
+    cy,
+    zBase + 0.041,
+    width,
+    height,
+    0.082,
+    faceR,
+    faceG,
+    faceB,
+    1.0,
+    0,
+    0,
+    0
+  );
+  return zBase + 0.086;
+}
+
+export async function executeBenchmarkFramesImpl(
+  rctx: RenderPassContext & { render(board: BoardState, options?: RenderSceneOptions): void },
+  lastBoard: BoardState | null,
+  frames: number
+): Promise<Benchmark120HzResult> {
+  const count = Math.max(10, frames);
+  const samples = new Float32Array(count);
+
+  if (rctx.activeParticleCount < 60 && lastBoard) {
+    rctx.spawnParticlesAt(lastBoard.cols * 0.5, lastBoard.rows * 0.5, 0.45, 1, 60, 0, -1);
+  }
+
+  for (let i = 0; i < count; i++) {
+    const t0 = performance.now();
+    if (lastBoard) {
+      rctx.render(lastBoard, {
+        ...rctx.lastOptions,
+        dtSec: 1 / 120,
+      });
+    }
+    rctx.gl?.finish();
+    const workMs = Math.max(0.01, performance.now() - t0);
+    samples[i] = workMs;
+  }
+
+  let sum = 0;
+  let maxWorkMs = 0;
+  for (let i = 0; i < count; i++) {
+    sum += samples[i];
+    if (samples[i] > maxWorkMs) maxWorkMs = samples[i];
+  }
+  samples.sort();
+  const p95WorkMs = Number(samples[Math.min(count - 1, Math.floor(count * 0.95))].toFixed(3));
+  const p99WorkMs = Number(samples[Math.min(count - 1, Math.floor(count * 0.99))].toFixed(3));
+  const avgWorkMs = Number((sum / count).toFixed(3));
+
+  return {
+    framesExecuted: count,
+    avgWorkMs,
+    p95WorkMs,
+    p99WorkMs,
+    maxWorkMs: Number(maxWorkMs.toFixed(3)),
+    passes120HzBudget: p95WorkMs <= 8.33,
+    passes60HzBudget: p95WorkMs <= 16.67,
+  };
 }

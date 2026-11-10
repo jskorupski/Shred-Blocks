@@ -1,22 +1,76 @@
-import "./styles/main.css";
-import { SoundEngine } from "./audio/synth";
-import { applyBoosterHammer, applyBoosterRocket, applyBoosterVacuum, cloneBoardState, commitBlockMove, computeEarnedStars, createBoardState, isBoardFailed, isBoardWon, type CommitMoveOutcome } from "./core/board";
-import { isBlockInLockedRoom } from "./core/physics";
-import { getActiveColor, getShape } from "./core/polyomino";
-import type { BlockState, BoardState, BoosterType, InputMode, SavePayloadV1 } from "./core/types";
-import { BoardInputController, type BoosterTargetPayload, type HoverState } from "./input/pointer-controller";
-import { getLevelSpec } from "./levels/catalog";
-import { findNextHintMove, solveBoard } from "./levels/solver";
-import { Renderer3D } from "./render/renderer-3d";
-import { BOOSTER_RARITY, BOOSTER_UNLOCK_LEVEL, isBoosterUnlocked, SaveManager } from "./storage/save-manager";
-import { BOOSTER_DEBUT_NOTES, BOOSTER_DISPLAY_NAMES, UI_BOOSTER_PRICES, type AppViewContext, type BeforeInstallPromptEvent, type ModalId, type ShredBlocksDebugBridge } from "./ui/catalog-meta";
-import { ensureDialogsMounted } from "./ui/dialogs-template";
-import { bindDomEventsImpl, handleInstallActionImpl, isPwaInstalledImpl, markPwaInstalledImpl, setupPwaAndServiceWorkerImpl, syncInstallUiVisibilityImpl } from "./ui/dom-events-and-pwa";
-import { buildRenderOptionsImpl, handleImmobileBlockTapImpl, handleLevelFailureImpl, isNewPlayerSaveImpl, populateVictoryModalImpl, syncAllUiFromSaveImpl, syncBoosterTargetingBannerImpl, syncInGameHudImpl, syncTimerPillOnlyImpl, syncTitleOverlayDomImpl } from "./ui/hud-and-title-view";
-import { checkUrlHashForSaveImportImpl, closeAllModalsImpl, confirmPendingSaveImportImpl, continueFailedLevelImpl, createDebugBridgeImpl, dismissTitleScreenImpl, isAnyModalOpenImpl, openModalImpl, openTitleScreenImpl, previewSaveImportImpl, setupDialogLightDismissImpl, showGameToastImpl, showUnlockNoteIfPresentImpl, switchScreenImpl, updateTelemetryReadoutImpl } from "./ui/modals-and-save-transfer";
-import { renderRoadmapImpl, renderThemesStudioImpl } from "./ui/roadmap-and-themes-view";
+import './styles/main.css';
+import { SoundEngine } from './audio/synth';
+import {
+  applyBoosterHammer,
+  applyBoosterRocket,
+  applyBoosterVacuum,
+  type CommitMoveOutcome,
+  cloneBoardState,
+  commitBlockMove,
+  computeEarnedStars,
+  createBoardState,
+  isBoardFailed,
+  isBoardWon,
+} from './core/board';
+import { isBlockInLockedRoom } from './core/physics';
+import { getShape } from './core/polyomino';
+import type { BlockState, BoardState, BoosterType, InputMode, SavePayloadV1 } from './core/types';
+import { BoardInputController, type BoosterTargetPayload, type HoverState } from './input/pointer-controller';
+import { getLevelSpec } from './levels/catalog';
+import { findNextHintMove } from './levels/solver';
+import { Renderer3D } from './render/renderer-3d';
+import { BOOSTER_RARITY, BOOSTER_UNLOCK_LEVEL, isBoosterUnlocked, SaveManager } from './storage/save-manager';
+import {
+  type AppViewContext,
+  type BeforeInstallPromptEvent,
+  BOOSTER_DEBUT_NOTES,
+  BOOSTER_DISPLAY_NAMES,
+  type ModalId,
+  type ShredBlocksDebugBridge,
+  UI_BOOSTER_PRICES,
+} from './ui/catalog-meta';
+import { ensureDialogsMounted } from './ui/dialogs-template';
+import {
+  bindDomEventsImpl,
+  handleInstallActionImpl,
+  isPwaInstalledImpl,
+  markPwaInstalledImpl,
+  setupPwaAndServiceWorkerImpl,
+  syncInstallUiVisibilityImpl,
+} from './ui/dom-events-and-pwa';
+import {
+  buildRenderOptionsImpl,
+  handleImmobileBlockTapImpl,
+  handleLevelFailureImpl,
+  isNewPlayerSaveImpl,
+  populateVictoryModalImpl,
+  syncAllUiFromSaveImpl,
+  syncBoosterTargetingBannerImpl,
+  syncInGameHudImpl,
+  syncTimerPillOnlyImpl,
+  syncTitleOverlayDomImpl,
+} from './ui/hud-and-title-view';
+import {
+  autoSolveCurrentLevelImpl,
+  checkUrlHashForSaveImportImpl,
+  closeAllModalsImpl,
+  confirmPendingSaveImportImpl,
+  continueFailedLevelImpl,
+  createDebugBridgeImpl,
+  dismissTitleScreenImpl,
+  isAnyModalOpenImpl,
+  openModalImpl,
+  openTitleScreenImpl,
+  previewSaveImportImpl,
+  setupDialogLightDismissImpl,
+  showGameToastImpl,
+  showUnlockNoteIfPresentImpl,
+  switchScreenImpl,
+  updateTelemetryReadoutImpl,
+} from './ui/modals-and-save-transfer';
+import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
 
-export * from "./ui/catalog-meta";
+export * from './ui/catalog-meta';
 
 declare global {
   interface Window {
@@ -45,8 +99,7 @@ export class ShredBlocksApp implements AppViewContext {
   private lastRafMs = performance.now();
   public toastTimerId: ReturnType<typeof setTimeout> | null = null;
   public unlockToastTimerId: ReturnType<typeof setTimeout> | null = null;
-  public cachedAutoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null =
-    null;
+  public cachedAutoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null = null;
   public lastPointerActivityMs = performance.now();
   public currentLevelHasUnlockNote = false;
   public pendingImportPayload: SavePayloadV1 | null = null;
@@ -78,12 +131,7 @@ export class ShredBlocksApp implements AppViewContext {
       getPlayMode: () => this.saveManager.getPayload().settings.playMode,
       sound: this.sound,
       screenToBoard: (clientX, clientY) => {
-        const pt = this.renderer.screenToBoard(
-          clientX,
-          clientY,
-          this.board.rows,
-          this.board.cols
-        );
+        const pt = this.renderer.screenToBoard(clientX, clientY, this.board.rows, this.board.cols);
         return { x: pt.boardX, y: pt.boardY };
       },
       onBeforeMoveCommit: (boardSnapshot) => {
@@ -99,11 +147,7 @@ export class ShredBlocksApp implements AppViewContext {
         return this.executeTargetedBooster(type, target);
       },
       isBoardInteractive: () => {
-        return (
-          this.activeScreen === 'game' &&
-          !this.titleOverlayOpen &&
-          !this.isAnyModalOpen()
-        );
+        return this.activeScreen === 'game' && !this.titleOverlayOpen && !this.isAnyModalOpen();
       },
       onShortcutAction: (action) => {
         if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
@@ -244,7 +288,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.showGameToast(`⏭️ Skipped Level ${currentId} — Level ${currentId + 1} Ready!`);
   }
 
-  private pushUndoSnapshot(boardState: BoardState): void {
+  public pushUndoSnapshot(boardState: BoardState): void {
     this.undoStack.push(cloneBoardState(boardState));
     if (this.undoStack.length > 50) {
       this.undoStack.shift();
@@ -283,11 +327,7 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   private handleMoveCommitted(outcome: CommitMoveOutcome): void {
-    if (
-      !outcome.moved &&
-      outcome.clearedBlockIds.length === 0 &&
-      outcome.peeledBlockIds.length === 0
-    ) {
+    if (!outcome.moved && outcome.clearedBlockIds.length === 0 && outcome.peeledBlockIds.length === 0) {
       this.undoStack.pop();
       return;
     }
@@ -306,7 +346,7 @@ export class ShredBlocksApp implements AppViewContext {
     }
   }
 
-  private checkWinOrLossAfterAction(): void {
+  public checkWinOrLossAfterAction(): void {
     if (this.levelOutcomeHandled) return;
 
     if (isBoardWon(this.board)) {
@@ -330,10 +370,7 @@ export class ShredBlocksApp implements AppViewContext {
     const earnedStars = computeEarnedStars(this.board, playMode);
     this.sound.playWinFanfare(earnedStars);
     this.renderer.spawnVictoryCelebrationBurst(this.board);
-    const elapsedSec = Math.max(
-      1,
-      Math.round(this.board.timeLimitSec - this.board.timeRemainingSec)
-    );
+    const elapsedSec = Math.max(1, Math.round(this.board.timeLimitSec - this.board.timeRemainingSec));
     const summary = this.saveManager.recordLevelWin(
       this.board.levelId,
       this.board.movesCommitted,
@@ -349,49 +386,20 @@ export class ShredBlocksApp implements AppViewContext {
     this.renderRoadmap();
   }
 
-  private handleLevelFailure(reason: "TIME_OUT" | "BOMB_EXPLODED"): void { handleLevelFailureImpl(this, reason); }
+  private handleLevelFailure(reason: 'TIME_OUT' | 'BOMB_EXPLODED'): void {
+    handleLevelFailureImpl(this, reason);
+  }
 
-  public continueFailedLevel(): void { continueFailedLevelImpl(this); }
+  public continueFailedLevel(): void {
+    continueFailedLevelImpl(this);
+  }
 
-  private handleImmobileBlockTap(block: BlockState): void { handleImmobileBlockTapImpl(this, block); }
+  private handleImmobileBlockTap(block: BlockState): void {
+    handleImmobileBlockTapImpl(this, block);
+  }
 
   public autoSolveCurrentLevel(): boolean {
-    this.closeAllModals();
-    this.levelOutcomeHandled = false;
-
-    const solved = solveBoard(this.board, 6000);
-    if (solved.solvable && solved.solutionPath.length > 0) {
-      for (const step of solved.solutionPath) {
-        this.commitMove(step.blockId, step.targetRow, step.targetCol);
-        if (isBoardWon(this.board)) {
-          return true;
-        }
-      }
-    }
-
-    // Deterministic fallback for complex states if node budget was reached
-    if (!isBoardWon(this.board)) {
-      this.pushUndoSnapshot(this.board);
-      for (const b of this.board.blocks) {
-        if (b.status !== 'ACTIVE') continue;
-        const c = getActiveColor(b.colorStack, b.colorCursor);
-        if (c !== 0) {
-          b.status = 'CLEARED';
-          b.shredProgress = 1;
-          this.board.sessionBlocksShredded += Math.max(1, b.colorStack.length - b.colorCursor);
-        }
-      }
-      for (const gen of this.board.generators) {
-        gen.state = 'DEPLETED';
-        gen.queueCursor = gen.queue.length;
-      }
-      if (this.board.movesCommitted === 0) {
-        this.board.movesCommitted = this.board.parMoves;
-      }
-      this.checkWinOrLossAfterAction();
-    }
-
-    return isBoardWon(this.board);
+    return autoSolveCurrentLevelImpl(this);
   }
 
   // ===========================================================================
@@ -547,9 +555,7 @@ export class ShredBlocksApp implements AppViewContext {
   private executeTargetedBooster(type: BoosterType, target: BoosterTargetPayload): boolean {
     if (!this.canAffordBooster(type)) return false;
 
-    const closedBefore = new Set(
-      this.board.barriers.filter((b) => !b.open).map((b) => b.id)
-    );
+    const closedBefore = new Set(this.board.barriers.filter((b) => !b.open).map((b) => b.id));
     let applied = false;
 
     if (type === 'HAMMER') {
@@ -560,9 +566,12 @@ export class ShredBlocksApp implements AppViewContext {
       const firstCell = pickedBlock ? getShape(pickedBlock.shapeId).cells[0] : null;
       const r = pickedBlock && firstCell ? pickedBlock.row + firstCell[0] : target.row;
       const c = pickedBlock && firstCell ? pickedBlock.col + firstCell[1] : target.col;
-      applied = (
-        applyBoosterHammer as (b: BoardState, r: number, c: number, id?: number | null) => boolean
-      )(this.board, r, c, pickedBlock ? pickedBlock.id : null);
+      applied = (applyBoosterHammer as (b: BoardState, r: number, c: number, id?: number | null) => boolean)(
+        this.board,
+        r,
+        c,
+        pickedBlock ? pickedBlock.id : null
+      );
     } else if (type === 'ROCKET') {
       applied = applyBoosterRocket(this.board, target.row, target.col, target.axis);
     } else if (type === 'VACUUM') {
@@ -592,7 +601,9 @@ export class ShredBlocksApp implements AppViewContext {
     return true;
   }
 
-  public syncBoosterTargetingBanner(hoverState: HoverState): void { syncBoosterTargetingBannerImpl(hoverState); }
+  public syncBoosterTargetingBanner(hoverState: HoverState): void {
+    syncBoosterTargetingBannerImpl(hoverState);
+  }
 
   // ===========================================================================
   // RENDER LOOP & 60Hz/120Hz TELEMETRY
@@ -683,41 +694,93 @@ export class ShredBlocksApp implements AppViewContext {
     this.renderer.render(this.board, buildRenderOptionsImpl(this, dtSec, timeSec));
   }
 
-  public isNewPlayerSave(save: SavePayloadV1 = this.saveManager.getPayload()): boolean { return isNewPlayerSaveImpl(this, save); }
-  public syncTitleOverlayDom(): void { syncTitleOverlayDomImpl(this); }
+  public isNewPlayerSave(save: SavePayloadV1 = this.saveManager.getPayload()): boolean {
+    return isNewPlayerSaveImpl(this, save);
+  }
+  public syncTitleOverlayDom(): void {
+    syncTitleOverlayDomImpl(this);
+  }
 
-  public openTitleScreen(): void { openTitleScreenImpl(this); }
-  public dismissTitleScreen(targetScreen: "game" | "home" | "themes" = "game"): void { dismissTitleScreenImpl(this, targetScreen); }
-  public switchScreen(screen: "home" | "game" | "themes"): void { switchScreenImpl(this, screen); }
+  public openTitleScreen(): void {
+    openTitleScreenImpl(this);
+  }
+  public dismissTitleScreen(targetScreen: 'game' | 'home' | 'themes' = 'game'): void {
+    dismissTitleScreenImpl(this, targetScreen);
+  }
+  public switchScreen(screen: 'home' | 'game' | 'themes'): void {
+    switchScreenImpl(this, screen);
+  }
 
-  public syncAllUiFromSave(): void { syncAllUiFromSaveImpl(this); }
-  public syncInGameHud(): void { syncInGameHudImpl(this); }
-  public syncTimerPillOnly(): void { syncTimerPillOnlyImpl(this); }
-  public renderRoadmap(): void { renderRoadmapImpl(this); }
-  public renderThemesStudio(): void { renderThemesStudioImpl(this); }
-  public isAnyModalOpen(): boolean { return isAnyModalOpenImpl(); }
-  public openModal(id: ModalId): void { openModalImpl(this, id); }
-  public closeAllModals(): void { closeAllModalsImpl(); }
-  private setupDialogLightDismiss(): void { setupDialogLightDismissImpl(); }
-  public previewSaveImport(rawInput: string): boolean { return previewSaveImportImpl(this, rawInput); }
-  public confirmPendingSaveImport(): void { confirmPendingSaveImportImpl(this); }
-  public checkUrlHashForSaveImport(): void { checkUrlHashForSaveImportImpl(this); }
+  public syncAllUiFromSave(): void {
+    syncAllUiFromSaveImpl(this);
+  }
+  public syncInGameHud(): void {
+    syncInGameHudImpl(this);
+  }
+  public syncTimerPillOnly(): void {
+    syncTimerPillOnlyImpl(this);
+  }
+  public renderRoadmap(): void {
+    renderRoadmapImpl(this);
+  }
+  public renderThemesStudio(): void {
+    renderThemesStudioImpl(this);
+  }
+  public isAnyModalOpen(): boolean {
+    return isAnyModalOpenImpl();
+  }
+  public openModal(id: ModalId): void {
+    openModalImpl(this, id);
+  }
+  public closeAllModals(): void {
+    closeAllModalsImpl();
+  }
+  private setupDialogLightDismiss(): void {
+    setupDialogLightDismissImpl();
+  }
+  public previewSaveImport(rawInput: string): boolean {
+    return previewSaveImportImpl(this, rawInput);
+  }
+  public confirmPendingSaveImport(): void {
+    confirmPendingSaveImportImpl(this);
+  }
+  public checkUrlHashForSaveImport(): void {
+    checkUrlHashForSaveImportImpl(this);
+  }
 
-  public showGameToast(message: string, durationMs = 2600): void { showGameToastImpl(this, message, durationMs); }
-  public showUnlockNoteIfPresent(note?: string): void { showUnlockNoteIfPresentImpl(this, note); }
+  public showGameToast(message: string, durationMs = 2600): void {
+    showGameToastImpl(this, message, durationMs);
+  }
+  public showUnlockNoteIfPresent(note?: string): void {
+    showUnlockNoteIfPresentImpl(this, note);
+  }
 
-  private bindDomEvents(): void { bindDomEventsImpl(this); }
-  public isPwaInstalled(): boolean { return isPwaInstalledImpl(this); }
-  public markPwaInstalled(): void { markPwaInstalledImpl(this); }
-  public syncInstallUiVisibility(): void { syncInstallUiVisibilityImpl(this); }
-  public handleInstallAction(): Promise<void> { return handleInstallActionImpl(this); }
-  private setupPwaAndServiceWorker(): void { setupPwaAndServiceWorkerImpl(this); }
+  private bindDomEvents(): void {
+    bindDomEventsImpl(this);
+  }
+  public isPwaInstalled(): boolean {
+    return isPwaInstalledImpl(this);
+  }
+  public markPwaInstalled(): void {
+    markPwaInstalledImpl(this);
+  }
+  public syncInstallUiVisibility(): void {
+    syncInstallUiVisibilityImpl(this);
+  }
+  public handleInstallAction(): Promise<void> {
+    return handleInstallActionImpl(this);
+  }
+  private setupPwaAndServiceWorker(): void {
+    setupPwaAndServiceWorkerImpl(this);
+  }
 
   // ===========================================================================
   // AUTOMATION & E2E VERIFICATION BRIDGE (window.__SHREDBLOCKS_DEBUG__)
   // ===========================================================================
 
-  public createDebugBridge(): ShredBlocksDebugBridge { return createDebugBridgeImpl(this); }
+  public createDebugBridge(): ShredBlocksDebugBridge {
+    return createDebugBridgeImpl(this);
+  }
 }
 
 function bootstrap(): void {

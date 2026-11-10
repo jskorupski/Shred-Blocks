@@ -1,12 +1,6 @@
-import { getShape } from "../core/polyomino";
-import type {
-  AxisLock,
-  ColorId,
-  CourtyardLayoutId,
-  EdgeDir,
-  LevelSpec,
-} from "../core/types";
-import { canAddBlockModifier, type MechanicId } from "./generator-rules";
+import { getShape } from '../core/polyomino';
+import type { AxisLock, ColorId, CourtyardLayoutId, EdgeDir, LevelSpec } from '../core/types';
+import { canAddBlockModifier, type MechanicId } from './generator-rules';
 
 export interface CandidateMechanicsContext {
   rows: number;
@@ -15,11 +9,11 @@ export interface CandidateMechanicsContext {
   grid: Int16Array;
   activeColors: ColorId[];
   activeMechanics: Set<MechanicId>;
-  coloredBlocks: LevelSpec["blocks"];
-  gates: LevelSpec["gates"];
-  generators: NonNullable<LevelSpec["generators"]>;
-  floorPaths: NonNullable<LevelSpec["floorPaths"]>;
-  elevators: NonNullable<LevelSpec["elevators"]>;
+  coloredBlocks: LevelSpec['blocks'];
+  gates: LevelSpec['gates'];
+  generators: NonNullable<LevelSpec['generators']>;
+  floorPaths: NonNullable<LevelSpec['floorPaths']>;
+  elevators: NonNullable<LevelSpec['elevators']>;
   getSculptedEdgeSpanBounds: (edge: EdgeDir) => { minStart: number; maxEnd: number };
 }
 
@@ -38,22 +32,22 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     elevators,
     getSculptedEdgeSpanBounds,
   } = ctx;
-  const useAxisLock = activeMechanics.has("AXIS_LOCK");
-  const useMultiLayer = activeMechanics.has("MULTI_LAYER");
-  const useIceBlocks = activeMechanics.has("ICE_BLOCKS");
-  const useStar = activeMechanics.has("STAR");
-  const useKeyLock = activeMechanics.has("KEY_LOCK");
-  const useBombs = activeMechanics.has("BOMBS");
-  const useRopes = activeMechanics.has("ROPES");
-  const useColorQueueGates = activeMechanics.has("COLOR_QUEUE_GATES");
-  const useFrozenGates = activeMechanics.has("FROZEN_GATES");
-  const useShutterLock = activeMechanics.has("SHUTTER_LOCK");
-  const useTogglingGate = activeMechanics.has("TOGGLING_GATE");
-  const useSlidingGate = activeMechanics.has("SLIDING_GATE");
-  const useSizeChangingGate = activeMechanics.has("SIZE_CHANGING_GATE");
-  const useGenerators = activeMechanics.has("GENERATORS");
-  const useFloorPaths = activeMechanics.has("FLOOR_PATHS");
-  const useElevators = activeMechanics.has("ELEVATORS");
+  const useAxisLock = activeMechanics.has('AXIS_LOCK');
+  const useMultiLayer = activeMechanics.has('MULTI_LAYER');
+  const useIceBlocks = activeMechanics.has('ICE_BLOCKS');
+  const useStar = activeMechanics.has('STAR');
+  const useKeyLock = activeMechanics.has('KEY_LOCK');
+  const useBombs = activeMechanics.has('BOMBS');
+  const useRopes = activeMechanics.has('ROPES');
+  const useColorQueueGates = activeMechanics.has('COLOR_QUEUE_GATES');
+  const useFrozenGates = activeMechanics.has('FROZEN_GATES');
+  const useShutterLock = activeMechanics.has('SHUTTER_LOCK');
+  const useTogglingGate = activeMechanics.has('TOGGLING_GATE');
+  const useSlidingGate = activeMechanics.has('SLIDING_GATE');
+  const useSizeChangingGate = activeMechanics.has('SIZE_CHANGING_GATE');
+  const useGenerators = activeMechanics.has('GENERATORS');
+  const useFloorPaths = activeMechanics.has('FLOOR_PATHS');
+  const useElevators = activeMechanics.has('ELEVATORS');
   // 4. Apply Progressive Modifiers (strictly respecting UX-03 mutual exclusivity & MAX_MODIFIERS_PER_BLOCK)
   // Axis Lock (L11+): only lock a block whose lane to its matching gate is completely clear
   if (useAxisLock && coloredBlocks.length > 0) {
@@ -107,9 +101,7 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
 
   // Ice Blocks (L41+)
   if (useIceBlocks && coloredBlocks.length >= 3) {
-    const target = [...coloredBlocks]
-      .reverse()
-      .find((b) => canAddBlockModifier(b, 'IMMOBILIZER'));
+    const target = [...coloredBlocks].reverse().find((b) => canAddBlockModifier(b, 'IMMOBILIZER'));
     if (target) {
       target.iceCount = 1;
     }
@@ -148,12 +140,7 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
       );
     const lockedTarget = [...coloredBlocks]
       .reverse()
-      .find(
-        (b) =>
-          b.id !== keyCarrier?.id &&
-          !b.hasKey &&
-          canAddBlockModifier(b, 'IMMOBILIZER')
-      );
+      .find((b) => b.id !== keyCarrier?.id && !b.hasKey && canAddBlockModifier(b, 'IMMOBILIZER'));
     if (keyCarrier && lockedTarget) {
       keyCarrier.hasKey = 1;
       lockedTarget.chained = true;
@@ -198,10 +185,7 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
       .reverse()
       .find(
         (b) =>
-          b.id !== scissorHolder?.id &&
-          !b.hasKey &&
-          !b.scissorColor &&
-          canAddBlockModifier(b, 'IMMOBILIZER')
+          b.id !== scissorHolder?.id && !b.hasKey && !b.scissorColor && canAddBlockModifier(b, 'IMMOBILIZER')
       );
     if (scissorHolder && ropedTarget) {
       const ropeCol = activeColors[0];
@@ -262,8 +246,7 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
   }
 
   const singleEdgeGates = gates.filter(
-    (g) =>
-      gates.filter((o) => o.edge === g.edge && (o.edgeLine ?? 0) === (g.edgeLine ?? 0)).length === 1
+    (g) => gates.filter((o) => o.edge === g.edge && (o.edgeLine ?? 0) === (g.edgeLine ?? 0)).length === 1
   );
 
   // Sliding Gates (L151+)
@@ -372,12 +355,7 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     for (const er of candidateRows) {
       if (er < 1 || er >= rows - 1) continue;
       if (layoutId === 'TWIN_SANCTUM' && er <= 2) continue;
-      if (
-        cols >= 5 &&
-        grid[er * cols + 1] >= 0 &&
-        grid[er * cols + 2] >= 0 &&
-        grid[er * cols + 3] >= 0
-      ) {
+      if (cols >= 5 && grid[er * cols + 1] >= 0 && grid[er * cols + 2] >= 0 && grid[er * cols + 3] >= 0) {
         elevators.push({
           id: 1,
           row: er,

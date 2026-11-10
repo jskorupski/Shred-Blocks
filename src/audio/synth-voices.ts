@@ -1,13 +1,12 @@
-import type { BoosterType } from "../core/types";
+import type { BoosterType } from '../core/types';
 
 // Cozy pentatonic / major-9th chord progressions in C major / F lydian / A minor7 / G13
 const CHILL_CHORDS: ReadonlyArray<ReadonlyArray<number>> = [
   [261.63, 329.63, 392.0, 493.88, 587.33], // Cmaj9 (C4, E4, G4, B4, D5)
-  [220.0, 261.63, 329.63, 392.0, 493.88],  // Am9   (A3, C4, E4, G4, B4)
-  [174.61, 220.0, 261.63, 329.63, 392.0],  // Fmaj9 (F3, A3, C4, E4, G4)
-  [196.0, 246.94, 293.66, 349.23, 440.0],  // G13   (G3, B3, D4, F4, A4)
+  [220.0, 261.63, 329.63, 392.0, 493.88], // Am9   (A3, C4, E4, G4, B4)
+  [174.61, 220.0, 261.63, 329.63, 392.0], // Fmaj9 (F3, A3, C4, E4, G4)
+  [196.0, 246.94, 293.66, 349.23, 440.0], // G13   (G3, B3, D4, F4, A4)
 ];
-
 
 export function playFilteredNoiseBurstVoice(
   ctx: AudioContext,
@@ -129,11 +128,7 @@ export function playBoosterVoice(
   }
 }
 
-export function playWinFanfareVoices(
-  ctx: AudioContext,
-  outGain: GainNode,
-  earnedStars: number
-): void {
+export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earnedStars: number): void {
   const now = ctx.currentTime;
   // Voice 1: Upbeat syncopated lead melody
   const melody: Array<{ t: number; f: number; dur: number; amp: number }> = [
@@ -146,7 +141,7 @@ export function playWinFanfareVoices(
     { t: 0.63, f: 1046.5, dur: 0.24, amp: 0.25 }, // C6
     { t: 0.74, f: 1174.66, dur: 0.26, amp: 0.26 }, // D6
     { t: 0.86, f: 1318.51, dur: 0.48, amp: 0.28 }, // E6
-    { t: 1.02, f: 1567.98, dur: 0.65, amp: 0.30 }, // G6
+    { t: 1.02, f: 1567.98, dur: 0.65, amp: 0.3 }, // G6
   ];
 
   for (const note of melody) {

@@ -159,7 +159,14 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     ],
     gates: [
       { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1] },
-      { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [2], shutterLockColor: 1, shutterOpen: false },
+      {
+        edge: 'BOTTOM',
+        spanStart: 1,
+        spanLength: 4,
+        colorQueue: [2],
+        shutterLockColor: 1,
+        shutterOpen: false,
+      },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
     ],
@@ -181,7 +188,14 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4] },
     ],
     gates: [
-      { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1], togglesOnClear: true, shutterOpen: true },
+      {
+        edge: 'TOP',
+        spanStart: 1,
+        spanLength: 4,
+        colorQueue: [1],
+        togglesOnClear: true,
+        shutterOpen: true,
+      },
       { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
       { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
       { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4] },
@@ -478,9 +492,7 @@ function cloneLevelSpec(spec: LevelSpec): LevelSpec {
       ? spec.barriers.map((bar) => ({
           ...bar,
           cells: bar.cells.map(([r, c]) => [r, c] as [number, number]),
-          roomCells: bar.roomCells
-            ? bar.roomCells.map(([r, c]) => [r, c] as [number, number])
-            : undefined,
+          roomCells: bar.roomCells ? bar.roomCells.map(([r, c]) => [r, c] as [number, number]) : undefined,
         }))
       : undefined,
   };

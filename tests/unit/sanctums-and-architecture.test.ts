@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 declare const process: { cwd: () => string };
+
 import {
   applyBoosterHammer,
   applyBoosterRocket,
@@ -13,12 +14,7 @@ import {
   createBoardState,
   isBoardWon,
 } from '../../src/core/board';
-import {
-  getBlockRoomId,
-  isBlockInLockedRoom,
-  isBlockMovable,
-  isRoomUnlocked,
-} from '../../src/core/physics';
+import { getBlockRoomId, isBlockInLockedRoom, isBlockMovable, isRoomUnlocked } from '../../src/core/physics';
 import type { LevelSpec } from '../../src/core/types';
 import { computeStateHash, solveBoard } from '../../src/levels/solver';
 
@@ -326,4 +322,3 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(violations).toEqual([]);
   });
 });
-

@@ -1,30 +1,15 @@
-import {
-  getGateActiveColor,
-  getGateOutwardNormal,
-} from "../core/gate-clearance";
-import {
-  canGroupOccupyOffset,
-  getBlockRoomId,
-  getMovedGroupBlocks,
-} from "../core/physics";
-import { getActiveColor, getLayersRemaining, getShape } from "../core/polyomino";
-import {
-  COLOR_PALETTE,
-  type BoardState,
-  type ColorId,
-} from "../core/types";
-import { BLOCK_LIFT_DELTA_Z, BLOCK_TOP_Z } from "./camera-3d";
-import {
-  INSTANCE_STRIDE,
-  type RenderPassContext,
-  type RenderSceneOptions,
-} from "./render-types";
+import { getGateActiveColor, getGateOutwardNormal } from '../core/gate-clearance';
+import { canGroupOccupyOffset, getBlockRoomId, getMovedGroupBlocks } from '../core/physics';
+import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
+import { type BoardState, COLOR_PALETTE, type ColorId } from '../core/types';
+import { BLOCK_LIFT_DELTA_Z, BLOCK_TOP_Z } from './camera-3d';
+import { INSTANCE_STRIDE, type RenderPassContext, type RenderSceneOptions } from './render-types';
 
-  /**
-   * Complete `Canvas2D` fallback renderer (`R3D-05`) using `Camera3D.boardToScreen` so all 18 obstacles,
-   * reticles, visual shred animations, multi-modifier badges, and 3D particles remain 100% visible
-   * even in environments without WebGL2.
-   */
+/**
+ * Complete `Canvas2D` fallback renderer (`R3D-05`) using `Camera3D.boardToScreen` so all 18 obstacles,
+ * reticles, visual shred animations, multi-modifier badges, and 3D particles remain 100% visible
+ * even in environments without WebGL2.
+ */
 export function renderCanvas2DFallbackImpl(
   rctx: RenderPassContext,
   board: BoardState,
@@ -138,7 +123,16 @@ export function renderCanvas2DFallbackImpl(
         drawCenteredText(COLOR_PALETTE[fc].symbol, c + 0.5, r + 0.5, zOff + 0.02, '#FFFFFF');
       }
       if (occ === -2) {
-        fillProjectedQuad(c + 0.08, r + 0.08, c + 0.92, r + 0.92, zOff + 0.62, COLOR_PALETTE[0].primaryHex, COLOR_PALETTE[0].lipHex, 2);
+        fillProjectedQuad(
+          c + 0.08,
+          r + 0.08,
+          c + 0.92,
+          r + 0.92,
+          zOff + 0.62,
+          COLOR_PALETTE[0].primaryHex,
+          COLOR_PALETTE[0].lipHex,
+          2
+        );
         drawCenteredText('▨', c + 0.5, r + 0.5, zOff + 0.65, '#E2E8F0', 'bold 14px sans-serif');
       }
     }
@@ -163,22 +157,63 @@ export function renderCanvas2DFallbackImpl(
       'rgba(56, 189, 248, 0.55)',
       1
     );
-    fillProjectedQuad(elev.col + 0.04, elev.row + 0.04, elev.col + elev.width - 0.04, elev.row + elev.height - 0.04, 0.05, '#38BDF8', '#0284C7', 2);
+    fillProjectedQuad(
+      elev.col + 0.04,
+      elev.row + 0.04,
+      elev.col + elev.width - 0.04,
+      elev.row + elev.height - 0.04,
+      0.05,
+      '#38BDF8',
+      '#0284C7',
+      2
+    );
     const arrow = Math.abs(elev.deltaCol) >= Math.abs(elev.deltaRow) ? '↔' : '↕';
-    drawCenteredText(arrow, elev.col + elev.width * 0.5, elev.row + elev.height * 0.5, 0.08, '#FFFFFF', 'bold 14px sans-serif');
+    drawCenteredText(
+      arrow,
+      elev.col + elev.width * 0.5,
+      elev.row + elev.height * 0.5,
+      0.08,
+      '#FFFFFF',
+      'bold 14px sans-serif'
+    );
   }
 
   // 3. Draw Wooden Crates (`board.crates`)
   for (const crate of board.crates) {
     if (crate.destroyed || crate.hp <= 0) continue;
-    fillProjectedQuad(crate.col + 0.06, crate.row + 0.06, crate.col + 0.94, crate.row + 0.94, 0.58, '#B45309', '#78350F', 2);
-    drawCenteredText(String(crate.hp), crate.col + 0.5, crate.row + 0.5, 0.62, '#FEF3C7', 'bold 14px sans-serif');
+    fillProjectedQuad(
+      crate.col + 0.06,
+      crate.row + 0.06,
+      crate.col + 0.94,
+      crate.row + 0.94,
+      0.58,
+      '#B45309',
+      '#78350F',
+      2
+    );
+    drawCenteredText(
+      String(crate.hp),
+      crate.col + 0.5,
+      crate.row + 0.5,
+      0.62,
+      '#FEF3C7',
+      'bold 14px sans-serif'
+    );
   }
 
   // 4. Draw Block Generators & Spawn Pads (`board.generators`)
   for (const gen of board.generators) {
     const depleted = gen.state === 'DEPLETED' || gen.queueCursor >= gen.queue.length;
-    fillProjectedQuad(gen.col + 0.05, gen.row + 0.05, gen.col + 0.95, gen.row + 0.95, 0.68, depleted ? '#334155' : '#475569', '#1E293B', 2);
+    fillProjectedQuad(
+      gen.col + 0.05,
+      gen.row + 0.05,
+      gen.col + 0.95,
+      gen.row + 0.95,
+      0.68,
+      depleted ? '#334155' : '#475569',
+      '#1E293B',
+      2
+    );
     if (!depleted) {
       const nextSpec = gen.queue[gen.queueCursor];
       if (nextSpec && nextSpec.colorStack.length > 0) {
@@ -201,12 +236,26 @@ export function renderCanvas2DFallbackImpl(
             );
           }
         }
-        fillProjectedQuad(gen.col + 0.2, gen.row + 0.16, gen.col + 0.8, gen.row + 0.52, 0.7, highContrast ? nextEntry.highContrastPrimaryHex : nextEntry.primaryHex);
+        fillProjectedQuad(
+          gen.col + 0.2,
+          gen.row + 0.16,
+          gen.col + 0.8,
+          gen.row + 0.52,
+          0.7,
+          highContrast ? nextEntry.highContrastPrimaryHex : nextEntry.primaryHex
+        );
         if (colorblind) {
           drawCenteredText(nextEntry.symbol, gen.col + 0.5, gen.row + 0.34, 0.72, '#FFFFFF');
         }
       }
-      drawCenteredText(`⚡${gen.cooldown}`, gen.col + 0.5, gen.row + 0.72, 0.72, '#FDE047', 'bold 12px sans-serif');
+      drawCenteredText(
+        `⚡${gen.cooldown}`,
+        gen.col + 0.5,
+        gen.row + 0.72,
+        0.72,
+        '#FDE047',
+        'bold 12px sans-serif'
+      );
     }
   }
 
@@ -253,9 +302,7 @@ export function renderCanvas2DFallbackImpl(
   }
   const fallbackGuideMove = board.hintMove ?? options.autoGuideMove ?? null;
   if (fallbackGuideMove) {
-    const hintBlock = board.blocks.find(
-      (b) => b.id === fallbackGuideMove.blockId && b.status === 'ACTIVE'
-    );
+    const hintBlock = board.blocks.find((b) => b.id === fallbackGuideMove.blockId && b.status === 'ACTIVE');
     if (hintBlock) {
       const shape = getShape(hintBlock.shapeId);
       for (const [dr, dc] of shape.cells) {
@@ -300,7 +347,16 @@ export function renderCanvas2DFallbackImpl(
       gy1 = gate.spanStart + gate.spanLength;
     }
 
-    fillProjectedQuad(gx0, gy0, gx1, gy1, 0.35, highContrast ? entry.highContrastPrimaryHex : entry.primaryHex, entry.lipHex, 2);
+    fillProjectedQuad(
+      gx0,
+      gy0,
+      gx1,
+      gy1,
+      0.35,
+      highContrast ? entry.highContrastPrimaryHex : entry.primaryHex,
+      entry.lipHex,
+      2
+    );
 
     const gcx = (gx0 + gx1) * 0.5;
     const gcy = (gy0 + gy1) * 0.5;
@@ -308,10 +364,7 @@ export function renderCanvas2DFallbackImpl(
     const spanAxisY = isHorizEdge ? 0 : 1;
 
     if (!gate.shutterOpen || gate.shutterLockColor > 0) {
-      const lockHex =
-        gate.shutterLockColor > 0
-          ? COLOR_PALETTE[gate.shutterLockColor].primaryHex
-          : '#64748B';
+      const lockHex = gate.shutterLockColor > 0 ? COLOR_PALETTE[gate.shutterLockColor].primaryHex : '#64748B';
       fillProjectedQuad(gx0 + 0.05, gy0 + 0.05, gx1 - 0.05, gy1 - 0.05, 0.48, lockHex, '#0F172A');
       if (gate.shutterLockColor > 0) {
         drawCenteredText('💎', gcx, gcy, 0.56, '#FFFFFF');
@@ -321,16 +374,7 @@ export function renderCanvas2DFallbackImpl(
     }
 
     if (gate.iceCount > 0) {
-      fillProjectedQuad(
-        gx0,
-        gy0,
-        gx1,
-        gy1,
-        0.52,
-        'rgba(125, 211, 252, 0.55)',
-        '#BAE6FD',
-        1.5
-      );
+      fillProjectedQuad(gx0, gy0, gx1, gy1, 0.52, 'rgba(125, 211, 252, 0.55)', '#BAE6FD', 1.5);
       drawCenteredText(`❄${gate.iceCount}`, gcx, gcy, 0.6, '#FFFFFF');
     }
 
@@ -350,7 +394,16 @@ export function renderCanvas2DFallbackImpl(
       const pipOffset = (q - (Math.min(3, remainingQueue) - 1) * 0.5) * 0.26;
       const px = isHorizEdge ? gcx + pipOffset : gcx + (gate.edge === 'LEFT' ? -0.18 : 0.18);
       const py = !isHorizEdge ? gcy + pipOffset : gcy + (gate.edge === 'TOP' ? -0.18 : 0.18);
-      fillProjectedQuad(px - 0.08, py - 0.08, px + 0.08, py + 0.08, 0.64, highContrast ? qEntry.highContrastPrimaryHex : qEntry.primaryHex, '#0F172A', 1);
+      fillProjectedQuad(
+        px - 0.08,
+        py - 0.08,
+        px + 0.08,
+        py + 0.08,
+        0.64,
+        highContrast ? qEntry.highContrastPrimaryHex : qEntry.primaryHex,
+        '#0F172A',
+        1
+      );
       if (colorblind) {
         drawCenteredText(qEntry.symbol, px, py, 0.68, '#FFFFFF', 'bold 9px sans-serif');
       }
@@ -383,12 +436,26 @@ export function renderCanvas2DFallbackImpl(
         1
       );
     } else {
-      fillProjectedQuad(minC + 0.08, minR + 0.08, minC + spanW - 0.08, minR + spanH - 0.08, 0.56, '#B45309', '#FDE047', 2);
+      fillProjectedQuad(
+        minC + 0.08,
+        minR + 0.08,
+        minC + spanW - 0.08,
+        minR + spanH - 0.08,
+        0.56,
+        '#B45309',
+        '#FDE047',
+        2
+      );
       const label =
-        bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0
-          ? '🔑'
-          : `⛩${bar.shredsRemaining}`;
-      drawCenteredText(label, minC + spanW * 0.5, minR + spanH * 0.5, 0.64, '#FEF08A', 'bold 13px sans-serif');
+        bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0 ? '🔑' : `⛩${bar.shredsRemaining}`;
+      drawCenteredText(
+        label,
+        minC + spanW * 0.5,
+        minR + spanH * 0.5,
+        0.64,
+        '#FEF08A',
+        'bold 13px sans-serif'
+      );
     }
   }
 
@@ -415,7 +482,16 @@ export function renderCanvas2DFallbackImpl(
       if (gate.edge === 'LEFT' && cx < gate.edgeLine - 0.25) continue;
       if (gate.edge === 'RIGHT' && cx > gate.edgeLine + 0.25) continue;
       if (cx < -0.25 || cx > board.cols - 0.75 || cy < -0.25 || cy > board.rows - 0.75) continue;
-      fillProjectedQuad(cx + 0.05, cy + 0.05, cx + 0.95, cy + 0.95, BLOCK_TOP_Z, highContrast ? entry.highContrastPrimaryHex : entry.primaryHex, entry.lipHex, 1.5);
+      fillProjectedQuad(
+        cx + 0.05,
+        cy + 0.05,
+        cx + 0.95,
+        cy + 0.95,
+        BLOCK_TOP_Z,
+        highContrast ? entry.highContrastPrimaryHex : entry.primaryHex,
+        entry.lipHex,
+        1.5
+      );
     }
   }
 
@@ -438,17 +514,9 @@ export function renderCanvas2DFallbackImpl(
       !block.chained &&
       block.ropeColor === 0;
     const wave01 = isIdleMovable
-      ? 0.5 +
-        0.5 *
-          Math.sin(
-            fallbackTimeSec * 2.1 - (block.col * 0.68 + block.row * 0.54) + block.id * 0.55
-          )
+      ? 0.5 + 0.5 * Math.sin(fallbackTimeSec * 2.1 - (block.col * 0.68 + block.row * 0.54) + block.id * 0.55)
       : 0;
-    const z =
-      BLOCK_TOP_Z +
-      blockRoomVis.zOffset +
-      block.liftAlpha * BLOCK_LIFT_DELTA_Z +
-      wave01 * 0.038;
+    const z = BLOCK_TOP_Z + blockRoomVis.zOffset + block.liftAlpha * BLOCK_LIFT_DELTA_Z + wave01 * 0.038;
 
     let drawX =
       block.x +
@@ -474,12 +542,30 @@ export function renderCanvas2DFallbackImpl(
     }
 
     for (const [dr, dc] of shape.cells) {
-      fillProjectedQuad(drawX + dc + 0.04, drawY + dr + 0.04, drawX + dc + 0.96, drawY + dr + 0.96, z, highContrast ? entry.highContrastPrimaryHex : entry.primaryHex, entry.lipHex, 2);
+      fillProjectedQuad(
+        drawX + dc + 0.04,
+        drawY + dr + 0.04,
+        drawX + dc + 0.96,
+        drawY + dr + 0.96,
+        z,
+        highContrast ? entry.highContrastPrimaryHex : entry.primaryHex,
+        entry.lipHex,
+        2
+      );
 
       if (layersLeft > 1) {
         const innerId = block.colorStack[block.colorCursor + 1] ?? cId;
         const innerEntry = COLOR_PALETTE[innerId] ?? entry;
-        fillProjectedQuad(drawX + dc + 0.18, drawY + dr + 0.18, drawX + dc + 0.82, drawY + dr + 0.82, z + 0.02, highContrast ? innerEntry.highContrastPrimaryHex : innerEntry.primaryHex, innerEntry.lipHex, 1.5);
+        fillProjectedQuad(
+          drawX + dc + 0.18,
+          drawY + dr + 0.18,
+          drawX + dc + 0.82,
+          drawY + dr + 0.82,
+          z + 0.02,
+          highContrast ? innerEntry.highContrastPrimaryHex : innerEntry.primaryHex,
+          innerEntry.lipHex,
+          1.5
+        );
       }
 
       if (block.iceCount > 0) {
@@ -501,7 +587,14 @@ export function renderCanvas2DFallbackImpl(
       drawCenteredText(entry.symbol, drawX + first[1] + 0.22, drawY + first[0] + 0.22, z + 0.03, '#FFFFFF');
       if (colorblind && layersLeft > 1) {
         const innerId = block.colorStack[block.colorCursor + 1] ?? cId;
-        drawCenteredText(COLOR_PALETTE[innerId].symbol, drawX + first[1] + 0.78, drawY + first[0] + 0.78, z + 0.03, '#FFFFFF', 'bold 10px sans-serif');
+        drawCenteredText(
+          COLOR_PALETTE[innerId].symbol,
+          drawX + first[1] + 0.78,
+          drawY + first[0] + 0.78,
+          z + 0.03,
+          '#FFFFFF',
+          'bold 10px sans-serif'
+        );
       }
     }
 
@@ -511,19 +604,69 @@ export function renderCanvas2DFallbackImpl(
 
     if (block.ropeColor > 0) {
       const ropeEntry = COLOR_PALETTE[block.ropeColor];
-      fillProjectedQuad(drawX + anchor[1] + 0.06, drawY + anchor[0] + 0.36, drawX + anchor[1] + 0.94, drawY + anchor[0] + 0.64, z + 0.028, ropeEntry.primaryHex, ropeEntry.lipHex, 1.5);
+      fillProjectedQuad(
+        drawX + anchor[1] + 0.06,
+        drawY + anchor[0] + 0.36,
+        drawX + anchor[1] + 0.94,
+        drawY + anchor[0] + 0.64,
+        z + 0.028,
+        ropeEntry.primaryHex,
+        ropeEntry.lipHex,
+        1.5
+      );
     }
 
     if (block.chained) {
-      fillProjectedQuad(drawX + anchor[1] + 0.08, drawY + anchor[0] + 0.4, drawX + anchor[1] + 0.92, drawY + anchor[0] + 0.6, z + 0.028, '#475569', '#0F172A', 1.5);
+      fillProjectedQuad(
+        drawX + anchor[1] + 0.08,
+        drawY + anchor[0] + 0.4,
+        drawX + anchor[1] + 0.92,
+        drawY + anchor[0] + 0.6,
+        z + 0.028,
+        '#475569',
+        '#0F172A',
+        1.5
+      );
     }
 
     if (block.axisLock === 'H') {
-      fillProjectedQuad(drawX + 0.22, drawY + shape.rows * 0.5 - 0.16, drawX + shape.cols - 0.22, drawY + shape.rows * 0.5 + 0.16, z + 0.025, entry.lipHex, entry.highlightHex, 1.5);
-      drawCenteredText('↔', drawX + shape.cols * 0.5, drawY + shape.rows * 0.5, z + 0.032, '#FFFDF9', 'bold 15px sans-serif');
+      fillProjectedQuad(
+        drawX + 0.22,
+        drawY + shape.rows * 0.5 - 0.16,
+        drawX + shape.cols - 0.22,
+        drawY + shape.rows * 0.5 + 0.16,
+        z + 0.025,
+        entry.lipHex,
+        entry.highlightHex,
+        1.5
+      );
+      drawCenteredText(
+        '↔',
+        drawX + shape.cols * 0.5,
+        drawY + shape.rows * 0.5,
+        z + 0.032,
+        '#FFFDF9',
+        'bold 15px sans-serif'
+      );
     } else if (block.axisLock === 'V') {
-      fillProjectedQuad(drawX + shape.cols * 0.5 - 0.16, drawY + 0.22, drawX + shape.cols * 0.5 + 0.16, drawY + shape.rows - 0.22, z + 0.025, entry.lipHex, entry.highlightHex, 1.5);
-      drawCenteredText('↕', drawX + shape.cols * 0.5, drawY + shape.rows * 0.5, z + 0.032, '#FFFDF9', 'bold 15px sans-serif');
+      fillProjectedQuad(
+        drawX + shape.cols * 0.5 - 0.16,
+        drawY + 0.22,
+        drawX + shape.cols * 0.5 + 0.16,
+        drawY + shape.rows - 0.22,
+        z + 0.025,
+        entry.lipHex,
+        entry.highlightHex,
+        1.5
+      );
+      drawCenteredText(
+        '↕',
+        drawX + shape.cols * 0.5,
+        drawY + shape.rows * 0.5,
+        z + 0.032,
+        '#FFFDF9',
+        'bold 15px sans-serif'
+      );
     }
 
     const hasImmobilizer = block.iceCount > 0 || block.chained;
@@ -590,7 +733,16 @@ export function renderCanvas2DFallbackImpl(
           if (Math.abs(ax - bx) + Math.abs(ay - by) < 1.05) {
             const mx = (ax + bx) * 0.5 + 0.5;
             const my = (ay + by) * 0.5 + 0.5;
-            fillProjectedQuad(mx - 0.16, my - 0.16, mx + 0.16, my + 0.16, BLOCK_TOP_Z + 0.03, '#CBD5E1', '#475569', 1.5);
+            fillProjectedQuad(
+              mx - 0.16,
+              my - 0.16,
+              mx + 0.16,
+              my + 0.16,
+              BLOCK_TOP_Z + 0.03,
+              '#CBD5E1',
+              '#475569',
+              1.5
+            );
             clamped = true;
             break;
           }
