@@ -2,6 +2,7 @@ import { POLYOMINO_SHAPES, type PolyominoShape } from '../core/polyomino';
 import type { SkinId } from '../core/types';
 import {
   addCylinderCapToBuilder,
+  applyPolyominoWearUvs,
   BLOCK_HEIGHT,
   CORE_INSET,
   MeshBuilder,
@@ -47,6 +48,7 @@ export function buildMorphologicalPolyominoMesh(
     recessedInnerCavity?: boolean;
     withStuds?: boolean;
     studRadius?: number;
+    encodeEdgeWearUv?: boolean;
   } = {}
 ): MeshData {
   const zBottom = options.zBottom ?? 0.0;
@@ -56,6 +58,7 @@ export function buildMorphologicalPolyominoMesh(
   const recessedInnerCavity = options.recessedInnerCavity ?? false;
   const withStuds = options.withStuds ?? false;
   const studRadius = options.studRadius ?? 0.18;
+  const encodeEdgeWearUv = options.encodeEdgeWearUv ?? false;
 
   const { rows, cols, cells } = shape;
   const occSet = new Set<string>();
@@ -619,31 +622,35 @@ export function buildMorphologicalPolyominoMesh(
         const y0 = gridLineY(gr, pBevel);
         const y1 = gridLineY(gr + 1, pBevel);
 
-        builder.addQuad(
-          x0,
-          y0,
-          zTop,
-          x0 * invCols,
-          y0 * invRows,
-          x0,
-          y1,
-          zTop,
-          x0 * invCols,
-          y1 * invRows,
-          x1,
-          y1,
-          zTop,
-          x1 * invCols,
-          y1 * invRows,
-          x1,
-          y0,
-          zTop,
-          x1 * invCols,
-          y0 * invRows,
-          0,
-          0,
-          1
-        );
+        if (encodeEdgeWearUv) {
+          builder.addFanQuad(x0, y0, x1, y1, zTop, 0, 0, 1);
+        } else {
+          builder.addQuad(
+            x0,
+            y0,
+            zTop,
+            x0 * invCols,
+            y0 * invRows,
+            x0,
+            y1,
+            zTop,
+            x0 * invCols,
+            y1 * invRows,
+            x1,
+            y1,
+            zTop,
+            x1 * invCols,
+            y1 * invRows,
+            x1,
+            y0,
+            zTop,
+            x1 * invCols,
+            y0 * invRows,
+            0,
+            0,
+            1
+          );
+        }
       }
     }
   }
@@ -658,6 +665,10 @@ export function buildMorphologicalPolyominoMesh(
       const cy = r + 0.5;
       addCylinderCapToBuilder(builder, cx, cy, studBaseZ, studTopZ, studRadius, segments, invCols, invRows);
     }
+  }
+
+  if (encodeEdgeWearUv) {
+    applyPolyominoWearUvs(builder, cells, inset);
   }
 
   return builder.toMeshData();
@@ -708,23 +719,25 @@ export const POLYOMINO_MESH_CATALOG: Record<string, PolyominoMeshEntry> = (() =>
       studRadius: 0.15,
     });
 
-    // Relic Stone (`BLOCK-STONE-01`): deep worn chamfers (smoothed into rounded edges by the shader)
+    // Relic Stone (`BLOCK-STONE-01`): solid cut-stone slab with wide worn chamfers & per-vertex edge/corner wear UVs
     const meshOuterWorn = buildMorphologicalPolyominoMesh(shape, STD_INSET, {
       zBottom: 0.0,
       zTop: BLOCK_HEIGHT,
-      bevelXY: 0.085,
-      bevelZ: 0.11,
-      recessedInnerCavity: true,
+      bevelXY: 0.095,
+      bevelZ: 0.115,
+      recessedInnerCavity: false,
       withStuds: false,
+      encodeEdgeWearUv: true,
     });
 
     const meshInnerCoreWorn = buildMorphologicalPolyominoMesh(shape, CORE_INSET, {
       zBottom: 0.52,
-      zTop: BLOCK_HEIGHT + 0.022,
+      zTop: BLOCK_HEIGHT + 0.026,
       bevelXY: 0.06,
       bevelZ: 0.07,
       recessedInnerCavity: false,
       withStuds: false,
+      encodeEdgeWearUv: true,
     });
 
     catalog[shapeId] = {
@@ -742,7 +755,7 @@ export const POLYOMINO_MESH_CATALOG: Record<string, PolyominoMeshEntry> = (() =>
 
 export function getPolyominoMeshPair(
   shapeId: string,
-  skin: SkinId = 'relic_stone'
+  skin: SkinId = 'classic_studs'
 ): { meshOuter: MeshData; meshInnerCore: MeshData } {
   const entry = POLYOMINO_MESH_CATALOG[shapeId] ?? POLYOMINO_MESH_CATALOG['1x1'];
   if (skin === 'classic_studs') {

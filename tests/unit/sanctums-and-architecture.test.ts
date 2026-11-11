@@ -441,12 +441,13 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(shadersTs).toContain('u_trayMaterial');
     expect(shadersTs).toContain('neonCol');
     expect(shadersTs).toContain('knotDist');
-    expect(shadersTs).toContain('float zRelief = mix(1.0, 0.22, u_blueprintMix)');
+    expect(shadersTs).toContain('float zRelief = mix(1.0, 0.76, u_blueprintMix)');
     expect(shadersTs).toContain('rotateRelicVec');
     expect(shadersTs).toContain('u_stoneTint');
-    expect(shadersTs).toContain('quarryStone');
+    expect(shadersTs).toContain('astrolabeAlloy');
     expect(shadersTs).toContain('stoneCrack');
-    expect(shadersTs).toContain('ancientEarthDirt');
+    expect(shadersTs).toContain('champagneRim');
+    expect(shadersTs).toContain('satinSheen');
     expect(shadersTs).toContain('arcanePurple');
     expect(shadersTs).toContain('godRaySweep');
     expect(shadersTs).toContain('totalMysticGlow');
@@ -458,17 +459,17 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     // MYSTIC-RELIC-01 living crack pulses + STONE-FLOOR-01 gameplay stone surfaces
     expect(shadersTs).toContain('crackPulse');
     expect(shadersTs).toContain('voronoiRockCrack');
-    expect(shadersTs).toContain('creviceGrime');
+    expect(shadersTs).toContain('astrolabeTicks');
     expect(shadersTs).toContain('u_materialStyle == 5');
-    // BLOCK-STONE-01 default Relic Stone skin (worn meshes + carved sigils) & WOOD-GRAIN-01 realistic wood
+    // Classic Studs default + BLOCK-STONE-01 Relic Stone Tier-1 upgrade (worn meshes + carved sigils) & WOOD-GRAIN-01 realistic wood
     expect(shadersTs).toContain('u_materialStyle == 6');
     expect(shadersTs).toContain('ringCoord');
     const meshGenTs = fs.readFileSync(path.join(repoRoot, 'src/render/mesh-generator.ts'), 'utf8');
     expect(meshGenTs).toContain('meshOuterWorn');
     const catalogTs = fs.readFileSync(path.join(repoRoot, 'src/ui/catalog-meta.ts'), 'utf8');
-    expect(catalogTs.indexOf("id: 'relic_stone'")).toBeLessThan(catalogTs.indexOf("id: 'classic_studs'"));
+    expect(catalogTs.indexOf("id: 'classic_studs'")).toBeLessThan(catalogTs.indexOf("id: 'relic_stone'"));
     const saveManagerTs = fs.readFileSync(path.join(repoRoot, 'src/storage/save-manager.ts'), 'utf8');
-    expect(saveManagerTs).toContain("equippedSkin: 'relic_stone'");
+    expect(saveManagerTs).toContain("equippedSkin: 'classic_studs'");
     expect(shadersTs).toContain("from './shaders-particles'");
     expect(fs.readFileSync(path.join(repoRoot, 'src/render/pass1-courtyard.ts'), 'utf8')).toContain(
       'STONE_SURFACE_STYLE'

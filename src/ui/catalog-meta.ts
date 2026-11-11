@@ -206,12 +206,12 @@ export function getThemeItemPrice(catalogIndex: number): number {
 }
 
 export const SKIN_CATALOG: ReadonlyArray<{ id: SkinId; name: string; desc: string }> = [
+  { id: 'classic_studs', name: 'Classic Studs', desc: 'Tactile toy-box blocks with raised top studs' },
   {
     id: 'relic_stone',
     name: 'Relic Stone',
-    desc: 'Worn chiseled stone blocks with beveled edges & carved runes',
+    desc: 'Aged worn stone slabs with weathered edges & subtle runes',
   },
-  { id: 'classic_studs', name: 'Classic Studs', desc: 'Tactile toy-box blocks with raised top studs' },
   {
     id: 'gummy_jelly',
     name: 'Gummy Jelly',

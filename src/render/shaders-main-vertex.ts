@@ -59,10 +59,10 @@ void main() {
   v_localPos = p;
   v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
 
-  // In Mystic Stone Relic Title Mode (u_blueprintMix = 1.0), compress Z relief into a carved
-  // stone bas-relief (0.22) and levitate the entire relic with a subtle floating & twisting motion
+  // In Satin Astrolabe Slate Title Mode (u_blueprintMix = 1.0), preserve tactile 3D block & stud depth
+  // (zRelief = 0.76) while levitating the dormant precision-sealed board with a gentle floating twist
   // that settles seamlessly into grounded 3D gameplay as u_blueprintMix fades to 0.0.
-  float zRelief = mix(1.0, 0.22, u_blueprintMix);
+  float zRelief = mix(1.0, 0.76, u_blueprintMix);
   vec3 stagePos = vec3(rawWorldPos.x, rawWorldPos.y, rawWorldPos.z * zRelief);
   vec3 worldNorm = normalize(n);
 

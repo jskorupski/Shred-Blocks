@@ -137,10 +137,10 @@ export function createDefaultSavePayload(): SavePayloadV1 {
       ROCKET: 1,
       VACUUM: 1,
     },
-    unlockedSkins: ['relic_stone'],
+    unlockedSkins: ['classic_studs'],
     unlockedTrays: ['industrial_slate'],
     unlockedParticles: ['micro_cubes'],
-    equippedSkin: 'relic_stone',
+    equippedSkin: 'classic_studs',
     equippedTray: 'industrial_slate',
     equippedParticle: 'micro_cubes',
     settings: {

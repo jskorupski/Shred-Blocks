@@ -85,6 +85,55 @@ export class MeshBuilder {
     this.indices.push(i0, i1, i2, i0, i2, i3);
   }
 
+  public addFanQuad(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    z: number,
+    nx: number,
+    ny: number,
+    nz: number
+  ): void {
+    const xm = (x0 + x1) * 0.5;
+    const ym = (y0 + y1) * 0.5;
+    const ic = this.addVertex(xm, ym, z, nx, ny, nz, 0, 0);
+    const i0 = this.addVertex(x0, y0, z, nx, ny, nz, 0, 0);
+    const i01 = this.addVertex(x0, ym, z, nx, ny, nz, 0, 0);
+    const i1 = this.addVertex(x0, y1, z, nx, ny, nz, 0, 0);
+    const i12 = this.addVertex(xm, y1, z, nx, ny, nz, 0, 0);
+    const i2 = this.addVertex(x1, y1, z, nx, ny, nz, 0, 0);
+    const i23 = this.addVertex(x1, ym, z, nx, ny, nz, 0, 0);
+    const i3 = this.addVertex(x1, y0, z, nx, ny, nz, 0, 0);
+    const i30 = this.addVertex(xm, y0, z, nx, ny, nz, 0, 0);
+    this.indices.push(
+      ic,
+      i0,
+      i01,
+      ic,
+      i01,
+      i1,
+      ic,
+      i1,
+      i12,
+      ic,
+      i12,
+      i2,
+      ic,
+      i2,
+      i23,
+      ic,
+      i23,
+      i3,
+      ic,
+      i3,
+      i30,
+      ic,
+      i30,
+      i0
+    );
+  }
+
   public toMeshData(): MeshData {
     return {
       positions: new Float32Array(this.positions),
@@ -92,6 +141,66 @@ export class MeshBuilder {
       uvs: new Float32Array(this.uvs),
       indices: new Uint16Array(this.indices),
     };
+  }
+}
+
+/**
+ * Encodes per-vertex `(edgeProximity, cornerProximity)` into `builder.uvs` for `relic_stone` worn
+ * polyomino shells (`BLOCK-STONE-01`) so outer stone bevels, shoulders, and convex corners abrade
+ * organically in the fragment shader at zero runtime ALU cost and without internal multi-cell seams.
+ */
+export function applyPolyominoWearUvs(
+  builder: MeshBuilder,
+  cells: ReadonlyArray<readonly [number, number]>,
+  inset: number
+): void {
+  const occ = new Set<string>();
+  for (const [r, c] of cells) occ.add(`${r},${c}`);
+  const has = (r: number, c: number) => occ.has(`${r},${c}`);
+
+  const segs: Array<[number, number, number, number]> = [];
+  const corners: Array<[number, number]> = [];
+  for (const [r, c] of cells) {
+    const noT = !has(r - 1, c);
+    const noB = !has(r + 1, c);
+    const noL = !has(r, c - 1);
+    const noR = !has(r, c + 1);
+    if (noT) segs.push([c, r, c + 1, r]);
+    if (noB) segs.push([c, r + 1, c + 1, r + 1]);
+    if (noL) segs.push([c, r, c, r + 1]);
+    if (noR) segs.push([c + 1, r, c + 1, r + 1]);
+    if (noT && noL) corners.push([c, r]);
+    if (noT && noR) corners.push([c + 1, r]);
+    if (noB && noL) corners.push([c, r + 1]);
+    if (noB && noR) corners.push([c + 1, r + 1]);
+  }
+
+  const vertCount = builder.positions.length / 3;
+  const cornerInset = Math.SQRT2 * inset;
+  for (let vi = 0; vi < vertCount; vi++) {
+    const vx = builder.positions[vi * 3];
+    const vy = builder.positions[vi * 3 + 1];
+
+    let minEdge = 99;
+    for (let si = 0; si < segs.length; si++) {
+      const [ax, ay, bx, by] = segs[si];
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lenSq = dx * dx + dy * dy;
+      const t = lenSq > 0 ? Math.max(0, Math.min(1, ((vx - ax) * dx + (vy - ay) * dy) / lenSq)) : 0;
+      const d = Math.hypot(vx - (ax + dx * t), vy - (ay + dy * t));
+      if (d < minEdge) minEdge = d;
+    }
+
+    let minCorner = 99;
+    for (let ci = 0; ci < corners.length; ci++) {
+      const [cx, cy] = corners[ci];
+      const d = Math.hypot(vx - cx, vy - cy);
+      if (d < minCorner) minCorner = d;
+    }
+
+    builder.uvs[vi * 2] = Math.max(0, Math.min(1, 1 - (minEdge - inset) / 0.28));
+    builder.uvs[vi * 2 + 1] = Math.max(0, Math.min(1, 1 - (minCorner - cornerInset) / 0.34));
   }
 }
 

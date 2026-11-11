@@ -411,10 +411,10 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.locator('#tab-btn-themes').click();
     await expect(page.locator('#screen-themes')).toBeVisible();
 
-    // Unlock & equip Classic Studs skin (250 coins -> leaves 100 coins)
-    await page.locator('button[data-theme-id="classic_studs"]').click();
+    // Unlock & equip Relic Stone skin (250 coins -> leaves 100 coins)
+    await page.locator('button[data-theme-id="relic_stone"]').click();
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave().equippedSkin)).toBe(
-      'classic_studs'
+      'relic_stone'
     );
     await expect(page.locator('#themes-coins-display')).toHaveText('100');
 
@@ -500,7 +500,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
       dbg.setHighContrast(false);
       dbg.setColorblindMode(false);
       dbg.setReducedMotion(false);
-      dbg.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
+      dbg.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
     });
     await page.locator('#btn-pause').click();
     await page.locator('#btn-pause-home').click();

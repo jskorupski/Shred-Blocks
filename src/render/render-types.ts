@@ -31,7 +31,7 @@ export const SMOKE_SCALE_OFFSET = 10;
 export const STONE_SURFACE_STYLE = 5;
 export const TRAY_WALL_STYLE = 7;
 
-export function getMaterialStyleCodeForSkin(skin: SkinId = 'relic_stone'): number {
+export function getMaterialStyleCodeForSkin(skin: SkinId = 'classic_studs'): number {
   if (skin === 'relic_stone') return 6;
   if (skin === 'gummy_jelly') return 1;
   if (skin === 'carved_wood') return 2;
@@ -169,10 +169,10 @@ const SKIN_STONE_NUANCES: Record<SkinId, readonly [number, number, number]> = {
  */
 export function getStoneThemeMineralTint(
   trayId: TrayId = 'industrial_slate',
-  skinId: SkinId = 'relic_stone'
+  skinId: SkinId = 'classic_studs'
 ): [number, number, number] {
   const t = TRAY_STONE_TINTS[trayId] ?? TRAY_STONE_TINTS.industrial_slate;
-  const s = SKIN_STONE_NUANCES[skinId] ?? SKIN_STONE_NUANCES.relic_stone;
+  const s = SKIN_STONE_NUANCES[skinId] ?? SKIN_STONE_NUANCES.classic_studs;
   return [t[0] * 0.82 + s[0] * 0.18, t[1] * 0.82 + s[1] * 0.18, t[2] * 0.82 + s[2] * 0.18];
 }
 

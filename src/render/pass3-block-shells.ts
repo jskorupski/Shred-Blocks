@@ -74,9 +74,11 @@ export function renderPass3BlocksImpl(
     gl.uniform3f(rctx.uCapColor, r * 0.72, g * 0.72, b * 0.72);
 
     const shredOuterMesh =
-      anim.isOuterPeelOnly && skinId === 'classic_studs'
-        ? (POLYOMINO_MESH_CATALOG[anim.shapeId]?.meshOuter ?? meshPair.meshOuter)
-        : meshPair.meshOuter;
+      anim.colorId === 0
+        ? (POLYOMINO_MESH_CATALOG[anim.shapeId]?.meshOuterWorn ?? meshPair.meshOuter)
+        : anim.isOuterPeelOnly && skinId === 'classic_studs'
+          ? (POLYOMINO_MESH_CATALOG[anim.shapeId]?.meshOuter ?? meshPair.meshOuter)
+          : meshPair.meshOuter;
     const isHorizShredGate = gate.edge === 'TOP' || gate.edge === 'BOTTOM';
     const shredAdjR = isHorizShredGate ? gate.edgeLine : gate.spanStart;
     const shredAdjC = isHorizShredGate ? gate.spanStart : gate.edgeLine;
@@ -314,9 +316,11 @@ export function renderPass3BlocksImpl(
 
     // 3A. Outer Morphological Shell (`meshOuter`; un-studded collar when `layersLeft > 1` in gameplay, pure solid block in Stone Ruin mode)
     const outerMesh =
-      !isStoneRuin && layersLeft > 1 && skinId === 'classic_studs'
-        ? (POLYOMINO_MESH_CATALOG[block.shapeId]?.meshOuter ?? meshPair.meshOuter)
-        : meshPair.meshOuter;
+      activeColor === 0
+        ? (POLYOMINO_MESH_CATALOG[block.shapeId]?.meshOuterWorn ?? meshPair.meshOuter)
+        : !isStoneRuin && layersLeft > 1 && skinId === 'classic_studs'
+          ? (POLYOMINO_MESH_CATALOG[block.shapeId]?.meshOuter ?? meshPair.meshOuter)
+          : meshPair.meshOuter;
 
     gl.uniform1f(rctx.uBlockSeed, block.id % 97);
     rctx.drawMesh(

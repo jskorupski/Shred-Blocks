@@ -19,12 +19,12 @@ import {
  * Never spawns when `reducedMotion === true`.
  */
 
-const STONE_MINERAL_TONES: ReadonlyArray<[number, number, number]> = [
-  [0.54, 0.53, 0.52],
-  [0.45, 0.44, 0.43],
-  [0.62, 0.61, 0.6],
-  [0.38, 0.37, 0.36],
-  [0.5, 0.49, 0.48],
+const ASTROLABE_SHARD_TONES: ReadonlyArray<[number, number, number]> = [
+  [0.34, 0.32, 0.46],
+  [0.25, 0.24, 0.36],
+  [0.48, 0.46, 0.58],
+  [0.88, 0.73, 0.46],
+  [0.3, 0.28, 0.42],
 ];
 
 function writeParticle(
@@ -129,7 +129,7 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
     const ang = (rand() - 0.5) * 0.9;
     const vx = (dx * Math.cos(ang) - dy * Math.sin(ang)) * speed;
     const vy = (dx * Math.sin(ang) + dy * Math.cos(ang)) * speed;
-    const baseTone = STONE_MINERAL_TONES[i % STONE_MINERAL_TONES.length];
+    const baseTone = ASTROLABE_SHARD_TONES[i % ASTROLABE_SHARD_TONES.length];
     const shardRgb: [number, number, number] = [
       Math.min(1, baseTone[0] * stoneTint[0]),
       Math.min(1, baseTone[1] * stoneTint[1]),
@@ -151,18 +151,18 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
     );
   }
 
-  // 4. Billowing ancient smoke & warm amethyst-amber glowing dust puffs
+  // 4. Billowing twilight-slate vapor & warm amethyst-champagne glowing mist puffs
   const smokeCount = Math.round(48 * density);
   for (let i = 0; i < smokeCount; i++) {
     const [sx, sy] = cells[(i * 7) % cells.length];
     const glowTint = i % 5 === 0 ? [0.84, 0.52, 0.98] : i % 4 === 0 ? [0.98, 0.8, 0.54] : null;
-    const dust = 0.62 + rand() * 0.14;
+    const mist = 0.46 + rand() * 0.14;
     const rgb: [number, number, number] = glowTint
       ? [glowTint[0], glowTint[1], glowTint[2]]
       : [
-          Math.min(1, dust * stoneTint[0]),
-          Math.min(1, dust * 0.96 * stoneTint[1]),
-          Math.min(1, dust * 0.94 * stoneTint[2]),
+          Math.min(1, mist * 0.94 * stoneTint[0]),
+          Math.min(1, mist * 0.9 * stoneTint[1]),
+          Math.min(1, mist * 1.18 * stoneTint[2]),
         ];
     const ang = rand() * 6.283;
     const drift = 0.4 + rand() * 1.1;

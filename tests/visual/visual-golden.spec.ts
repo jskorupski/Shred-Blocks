@@ -111,23 +111,27 @@ test.beforeEach(async ({ page }, testInfo) => {
   );
 });
 
-test('title-new-player — fresh FTUE title over the Level 1 stone relic', async ({ page }) => {
+test('title-new-player — fresh FTUE title over the Level 1 astrolabe board', async ({ page }) => {
   await boot(page, null);
   await freezeAndCapture(page, 'title-new-player');
 });
 
-test('title-returning-slate-l25 — returning player, Industrial Slate stone tint', async ({ page }) => {
-  await boot(page, buildSave(25, 'industrial_slate', 'relic_stone'));
+test('title-returning-slate-l25 — returning player, Industrial Slate astrolabe tint', async ({ page }) => {
+  await boot(page, buildSave(25, 'industrial_slate', 'classic_studs'));
   await freezeAndCapture(page, 'title-returning-slate-l25');
 });
 
-test('title-returning-birch-l74 — warm sandstone relic on a tall quad-vault board', async ({ page }) => {
+test('title-returning-birch-l74 — warm bronze-amber astrolabe tint on a tall quad-vault board', async ({
+  page,
+}) => {
   await boot(page, buildSave(74, 'warm_birch', 'carved_wood'));
   await freezeAndCapture(page, 'title-returning-birch-l74', 3.3);
 });
 
-test('relic-awakening-burst — seeded mid-burst frame of the stone-break transition', async ({ page }) => {
-  await boot(page, buildSave(25, 'industrial_slate', 'relic_stone'));
+test('relic-awakening-burst — seeded mid-burst frame of the astrolabe-shatter transition', async ({
+  page,
+}) => {
+  await boot(page, buildSave(25, 'industrial_slate', 'classic_studs'));
   await page.evaluate(() => {
     const dbg = window.__SHREDBLOCKS_DEBUG__;
     dbg.freezeTime(2.0);
@@ -140,22 +144,22 @@ test('relic-awakening-burst — seeded mid-burst frame of the stone-break transi
 });
 
 test('home-map — Grouped Linked Sanctuary Map', async ({ page }) => {
-  await boot(page, buildSave(25, 'industrial_slate', 'relic_stone'));
+  await boot(page, buildSave(25, 'industrial_slate', 'classic_studs'));
   await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home', false));
   await expect(page.locator('#screen-home')).toBeVisible();
   await freezeAndCapture(page, 'home-map');
 });
 
-test('game-l1-slate — FTUE board: default Relic Stone blocks on the stone courtyard', async ({ page }) => {
-  await boot(page, buildSave(1, 'industrial_slate', 'relic_stone'));
+test('game-l1-slate — FTUE board: default Classic Studs blocks on Industrial Slate', async ({ page }) => {
+  await boot(page, buildSave(1, 'industrial_slate', 'classic_studs'));
   await enterLevel(page, 1);
   await freezeAndCapture(page, 'game-l1-slate', 1.0);
 });
 
-test('game-l25-classic-studs — Classic Studs add-on skin on Industrial Slate', async ({ page }) => {
-  await boot(page, buildSave(25, 'industrial_slate', 'classic_studs'));
+test('game-l25-relic-stone — Relic Stone worn aged rune skin on Industrial Slate', async ({ page }) => {
+  await boot(page, buildSave(25, 'industrial_slate', 'relic_stone'));
   await enterLevel(page, 25);
-  await freezeAndCapture(page, 'game-l25-classic-studs', 1.0);
+  await freezeAndCapture(page, 'game-l25-relic-stone', 1.0);
 });
 
 test('game-l25-birch — multi-room sanctum on sandstone with carved wood blocks', async ({ page }) => {
@@ -191,7 +195,7 @@ test('game-l74-hc-colorblind — High Contrast + Colorblind Symbols accessibilit
 });
 
 test('pause-settings — Sanctuary & Settings modal', async ({ page }) => {
-  await boot(page, buildSave(25, 'industrial_slate', 'relic_stone'));
+  await boot(page, buildSave(25, 'industrial_slate', 'classic_studs'));
   await enterLevel(page, 25);
   await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openModal('pause'));
   await expect(page.locator('#dialog-pause')).toBeVisible();
@@ -199,7 +203,7 @@ test('pause-settings — Sanctuary & Settings modal', async ({ page }) => {
 });
 
 test('victory-modal — Level 1 Gold-Star clear rewards', async ({ page }) => {
-  await boot(page, buildSave(1, 'industrial_slate', 'relic_stone', { levelRecords: {} }));
+  await boot(page, buildSave(1, 'industrial_slate', 'classic_studs', { levelRecords: {} }));
   await enterLevel(page, 1);
   await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.autoSolveCurrentLevel());
   await expect(page.locator('#dialog-victory')).toBeVisible();
@@ -207,7 +211,7 @@ test('victory-modal — Level 1 Gold-Star clear rewards', async ({ page }) => {
 });
 
 test('failure-modal — Out of Moves after the free final touch', async ({ page }) => {
-  await boot(page, buildSave(1, 'industrial_slate', 'relic_stone'));
+  await boot(page, buildSave(1, 'industrial_slate', 'classic_studs'));
   await enterLevel(page, 1);
   await page.evaluate(() => {
     const dbg = window.__SHREDBLOCKS_DEBUG__;

@@ -65,17 +65,17 @@ float sdSeg(vec2 p, vec2 a, vec2 b) {
   return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
 }
 
-// Branchless 3-segment Elder-Futhark rune table (8 glyphs x 3 segments = 24 vec4s, zero SIMD divergence):
-// 0 fehu, 1 algiz, 2 tiwaz, 3 gebo, 4 raidho/kenaz, 5 sowilo, 6 thurisaz, 7 laguz/ansuz
+// Branchless 3-segment archaic mason / Elder-Futhark stone-mark table (8 glyphs x 3 segments = 24 vec4s, zero arrows):
+// 0 fehu, 1 algiz, 2 hagalaz, 3 gebo, 4 raidho, 5 sowilo, 6 thurisaz, 7 ansuz
 const vec4 RUNE_SEGS[24] = vec4[24](
-  vec4(0.0, -0.25, 0.0, 0.25), vec4(0.0, 0.04, 0.17, 0.21), vec4(0.0, -0.08, 0.16, 0.08),
-  vec4(0.0, -0.25, 0.0, 0.25), vec4(0.0, 0.03, -0.17, 0.21), vec4(0.0, 0.03, 0.17, 0.21),
-  vec4(0.0, -0.25, 0.0, 0.25), vec4(0.0, 0.25, -0.15, 0.09), vec4(0.0, 0.25, 0.15, 0.09),
-  vec4(-0.17, 0.21, 0.17, -0.21), vec4(0.17, 0.21, -0.17, -0.21), vec4(-0.17, 0.21, 0.17, -0.21),
-  vec4(-0.08, -0.24, -0.08, 0.24), vec4(-0.08, 0.22, 0.14, 0.05), vec4(0.14, 0.05, -0.08, -0.1),
-  vec4(0.12, 0.23, -0.1, 0.05), vec4(-0.1, 0.05, 0.1, -0.05), vec4(0.1, -0.05, -0.12, -0.23),
-  vec4(0.0, -0.25, 0.0, 0.25), vec4(0.0, 0.14, 0.16, 0.0), vec4(0.16, 0.0, 0.0, -0.14),
-  vec4(-0.04, -0.25, -0.04, 0.25), vec4(-0.04, 0.22, 0.16, 0.07), vec4(-0.04, 0.05, 0.14, -0.09)
+  vec4(0.0, -0.24, 0.0, 0.24), vec4(0.0, 0.04, 0.16, 0.20), vec4(0.0, -0.08, 0.15, 0.08),
+  vec4(0.0, -0.24, 0.0, 0.24), vec4(0.0, 0.03, -0.16, 0.20), vec4(0.0, 0.03, 0.16, 0.20),
+  vec4(-0.11, -0.22, -0.11, 0.22), vec4(0.11, -0.22, 0.11, 0.22), vec4(-0.11, 0.08, 0.11, -0.08),
+  vec4(-0.16, 0.20, 0.16, -0.20), vec4(0.16, 0.20, -0.16, -0.20), vec4(-0.16, 0.20, 0.16, -0.20),
+  vec4(-0.08, -0.23, -0.08, 0.23), vec4(-0.08, 0.21, 0.13, 0.05), vec4(0.13, 0.05, -0.08, -0.09),
+  vec4(0.11, 0.22, -0.09, 0.05), vec4(-0.09, 0.05, 0.09, -0.05), vec4(0.09, -0.05, -0.11, -0.22),
+  vec4(0.0, -0.24, 0.0, 0.24), vec4(0.0, 0.13, 0.15, 0.0), vec4(0.15, 0.0, 0.0, -0.13),
+  vec4(-0.04, -0.24, -0.04, 0.24), vec4(-0.04, 0.21, 0.15, 0.07), vec4(-0.04, 0.05, 0.13, -0.09)
 );
 
 float runeDist(vec2 p, int id) {
@@ -86,40 +86,58 @@ float runeDist(vec2 p, int id) {
   return min(sdSeg(p, s0.xy, s0.zw), min(sdSeg(p, s1.xy, s1.zw), sdSeg(p, s2.xy, s2.zw)));
 }
 
-// Fast 120Hz Relic Stone relief (BLOCK-STONE-01): returns vec2(recess, rakingLight) in a single pass.
-// Chips occur strictly on bevels & outer cell rims (never Swiss-cheese craters in the flat center), and
-// rune SDF runs only inside the central [0.32 x 0.32] glyph box on top faces.
-vec2 stoneRelief(vec2 bp, float z, float isTop, float wornBand, vec2 lightDir) {
-  vec2 cellF = fract(bp);
-  float rimMask = smoothstep(0.04, 0.55, wornBand) * (1.0 - isTop);
-  float recess = 0.0;
+// Fast 120Hz Relic Stone worn relief (BLOCK-STONE-01): returns vec3(edgeNick, runeGroove, rakingLight)
+// using smooth analytic offset along lightDir (zero dFdx/dFdy 2x2 pixel-quad blockiness).
+vec3 stoneRelief(
+  vec2 bp,
+  float z,
+  float isTop,
+  float edgeProx,
+  float cornerProx,
+  vec2 lightDir,
+  float grainLow,
+  float grainMed
+) {
+  float nick = 0.0;
   float raking = 0.0;
-  if (rimMask > 0.02) {
-    vec2 sp = bp + z * vec2(0.73, 1.31);
-    float c0 = smoothstep(0.56, 0.66, relicNoise(sp * 3.8 + 37.0)) * rimMask;
-    float cL = smoothstep(0.56, 0.66, relicNoise((sp + lightDir * 0.024) * 3.8 + 37.0)) * rimMask;
-    recess += c0 * 0.9;
-    raking += (c0 - cL) * 7.0;
+  // Sparse, smooth-worn edge & corner nicks (wrapping slightly onto the outer top shoulder & corners)
+  if (edgeProx > 0.34) {
+    vec2 sp = bp + z * vec2(0.82, 1.28);
+    float c0 = relicNoise(sp * 5.2 + grainMed * 0.22 + 37.0);
+    float cL = relicNoise((sp + lightDir * 0.026) * 5.2 + grainMed * 0.22 + 37.0);
+    float m = smoothstep(0.42, 0.84, edgeProx + cornerProx * 0.18) * mix(1.0, 0.55, isTop);
+    float thresh = 0.67 - cornerProx * 0.11;
+    float k0 = smoothstep(thresh, thresh + 0.13, c0) * m;
+    float kL = smoothstep(thresh, thresh + 0.13, cL) * m;
+    nick = k0;
+    raking += (k0 - kL) * 2.5;
   }
+  float groove = 0.0;
   if (isTop > 0.2) {
     vec2 cellHash = hashRelic22(floor(bp) + 3.0);
-    vec2 cuv = cellF - 0.5 - (cellHash - 0.5) * 0.05;
-    if (max(abs(cuv.x), abs(cuv.y)) < 0.32) {
+    vec2 cuv = fract(bp) - 0.5 - (cellHash - 0.5) * 0.06;
+    if (max(abs(cuv.x), abs(cuv.y)) < 0.27) {
       float flipX = fract(cellHash.y * 7.0) < 0.5 ? -1.0 : 1.0;
-      bool rot90 = fract(cellHash.y * 13.0) < 0.35;
-      vec2 p0 = vec2(cuv.x * flipX, cuv.y);
-      vec2 pL = vec2((cuv.x + lightDir.x * 0.02) * flipX, cuv.y + lightDir.y * 0.02);
+      bool rot90 = fract(cellHash.y * 13.0) < 0.42;
+      vec2 warp = vec2(grainMed, grainLow) * 0.012;
+      vec2 p0 = vec2((cuv.x + warp.x) * flipX, cuv.y + warp.y);
+      vec2 pL = vec2((cuv.x + warp.x + lightDir.x * 0.022) * flipX, cuv.y + warp.y + lightDir.y * 0.022);
       if (rot90) {
         p0 = vec2(-p0.y, p0.x);
         pL = vec2(-pL.y, pL.x);
       }
       int glyphId = int(floor(cellHash.x * 8.0));
-      float s0 = 1.0 - smoothstep(0.024, 0.054, runeDist(p0 * 1.12, glyphId));
-      float sL = 1.0 - smoothstep(0.024, 0.054, runeDist(pL * 1.12, glyphId));
-      recess += s0 * isTop * 0.92;
-      raking += (s0 - sL) * isTop * 7.0;
+      float aa = clamp(fwidth(bp.x) * 1.2, 0.006, 0.020);
+      // Soft, wide-shouldered profile + uneven wear so markings read as faint, centuries-rubbed stone carvings
+      float strokeWear = mix(0.22, 0.92, smoothstep(-0.26, 0.32, grainLow * 0.72 + grainMed * 0.50));
+      float cellAge = mix(0.32, 0.84, fract(cellHash.x * 19.3 + cellHash.y * 7.1));
+      float fade = strokeWear * cellAge * (1.0 - smoothstep(0.36, 0.64, edgeProx)) * isTop;
+      float g0 = (1.0 - smoothstep(0.008, 0.042 + aa, runeDist(p0 * 1.48, glyphId))) * fade;
+      float gL = (1.0 - smoothstep(0.008, 0.042 + aa, runeDist(pL * 1.48, glyphId))) * fade;
+      groove = g0;
+      raking += (g0 - gL) * 1.42;
     }
   }
-  return vec2(clamp(recess, 0.0, 1.0), clamp(raking, -0.5, 0.5));
+  return vec3(clamp(nick, 0.0, 1.0), clamp(groove, 0.0, 1.0), clamp(raking, -0.22, 0.22));
 }
 `;

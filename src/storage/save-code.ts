@@ -336,7 +336,7 @@ function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
   const b = (obj.boosters ?? {}) as Partial<Record<string, unknown>>;
   const s = (obj.settings ?? {}) as Partial<Record<string, unknown>>;
   const highest = clampNum(obj.highestLevelUnlocked, 1, MAX_SAVE_LEVEL, 1);
-  const unlockedSkins = pickEnumList(obj.unlockedSkins, SKIN_IDS, 'relic_stone');
+  const unlockedSkins = pickEnumList(obj.unlockedSkins, SKIN_IDS, 'classic_studs');
   const unlockedTrays = pickEnumList(obj.unlockedTrays, TRAY_IDS, 'industrial_slate');
   const unlockedParticles = pickEnumList(obj.unlockedParticles, PARTICLE_IDS, 'micro_cubes');
 
@@ -574,7 +574,7 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
   const skinCount = readByte();
   const unlockedSkins: SkinId[] = [];
   for (let i = 0; i < skinCount; i++) {
-    unlockedSkins.push(SKIN_IDS[readByte()] ?? 'relic_stone');
+    unlockedSkins.push(SKIN_IDS[readByte()] ?? 'classic_studs');
   }
   const trayCount = readByte();
   const unlockedTrays: TrayId[] = [];
@@ -587,7 +587,7 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
     unlockedParticles.push(PARTICLE_IDS[readByte()] ?? 'micro_cubes');
   }
 
-  const equippedSkin = SKIN_IDS[readByte()] ?? 'relic_stone';
+  const equippedSkin = SKIN_IDS[readByte()] ?? 'classic_studs';
   const equippedTray = TRAY_IDS[readByte()] ?? 'industrial_slate';
   const equippedParticle = PARTICLE_IDS[readByte()] ?? 'micro_cubes';
 
