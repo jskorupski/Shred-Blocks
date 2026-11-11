@@ -21,21 +21,87 @@
   touch-action: none;
 }
 
+/* Luminous radial halo backlight behind the 3D board emanating from the rotating astrolabe wheel */
+.astrolabe-backlight-halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(122dvw, 78dvh, 720px);
+  height: min(122dvw, 78dvh, 720px);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: screen;
+  opacity: 0;
+  background: radial-gradient(
+    closest-side at 50% 50% var(--in-oklab),
+    rgba(255, 232, 168, 0.68) 0%,
+    rgba(250, 204, 118, 0.58) 54%,
+    rgba(242, 164, 156, 0.42) 68%,
+    rgba(198, 104, 246, 0.28) 80%,
+    rgba(136, 70, 208, 0.11) 90%,
+    rgba(24, 18, 46, 0) 100%
+  );
+  transition: opacity 0.78s cubic-bezier(0.22, 1, 0.36, 1);
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+@supports (width: 100cqw) {
+  .astrolabe-backlight-halo {
+    width: min(124cqw, 96cqh, 680px);
+    height: min(124cqw, 96cqh, 680px);
+  }
+}
+
+@keyframes astrolabeBacklightPulse {
+  0%,
+  100% {
+    filter: blur(8px) brightness(0.95);
+  }
+  50% {
+    filter: blur(10px) brightness(1.08);
+  }
+}
+
+.sacred-geometry-ornament {
+  transition:
+    color 0.78s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.78s cubic-bezier(0.22, 1, 0.36, 1);
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+#screen-game.title-backdrop-mode .astrolabe-backlight-halo {
+  opacity: 1;
+  filter: blur(8px);
+  animation: astrolabeBacklightPulse 4.2s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
 #screen-game.title-backdrop-mode .sacred-geometry-ornament {
-  color: rgba(228, 172, 236, 0.34);
+  color: rgba(252, 218, 150, 0.68);
+  filter: drop-shadow(0 0 9px rgba(250, 202, 114, 0.56)) drop-shadow(0 0 22px rgba(206, 108, 248, 0.34));
+}
+
+body.high-contrast #screen-game .astrolabe-backlight-halo {
+  display: none;
 }
 
 @keyframes mysticRelicAura {
   0%,
   100% {
-    filter: brightness(1.02) drop-shadow(0 20px 34px rgba(5, 3, 14, 0.76))
-      drop-shadow(0 0 18px rgba(206, 98, 255, 0.36)) drop-shadow(0 0 40px rgba(154, 62, 236, 0.22))
-      drop-shadow(0 0 60px rgba(246, 178, 92, 0.12));
+    filter: brightness(1.02) drop-shadow(0 12px 20px rgba(5, 3, 14, 0.56))
+      drop-shadow(0 0 18px rgba(250, 202, 118, 0.32)) drop-shadow(0 0 38px rgba(198, 102, 248, 0.28));
   }
   50% {
-    filter: brightness(1.06) drop-shadow(0 26px 42px rgba(5, 3, 14, 0.84))
-      drop-shadow(0 0 28px rgba(224, 118, 255, 0.54)) drop-shadow(0 0 54px rgba(172, 74, 248, 0.34))
-      drop-shadow(0 0 76px rgba(252, 190, 102, 0.2));
+    filter: brightness(1.06) drop-shadow(0 14px 24px rgba(5, 3, 14, 0.62))
+      drop-shadow(0 0 26px rgba(254, 210, 128, 0.44)) drop-shadow(0 0 52px rgba(214, 114, 252, 0.36));
   }
 }
 
@@ -43,9 +109,8 @@
   border-color: transparent;
   box-shadow: none;
   background: transparent;
-  filter: brightness(1.04) drop-shadow(0 22px 38px rgba(6, 3, 15, 0.78))
-    drop-shadow(0 0 22px rgba(214, 106, 255, 0.44)) drop-shadow(0 0 46px rgba(162, 68, 242, 0.28))
-    drop-shadow(0 0 66px rgba(248, 182, 96, 0.16));
+  filter: brightness(1.04) drop-shadow(0 12px 22px rgba(6, 3, 15, 0.58))
+    drop-shadow(0 0 22px rgba(252, 204, 120, 0.36)) drop-shadow(0 0 44px rgba(204, 106, 250, 0.3));
   animation: mysticRelicAura 3.4s ease-in-out infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -605,6 +670,8 @@
 
 /* User-configurable Accessibility & Motion Overrides (`AX-02`, `UX-10`, `IDLE-01`) */
 body.reduced-motion #screen-game.title-backdrop-mode #game-canvas,
+body.reduced-motion #screen-game .astrolabe-backlight-halo,
+body.reduced-motion #screen-game .sacred-geometry-ornament,
 body.reduced-motion .ornament-outer-wheel,
 body.reduced-motion .ornament-inner-star,
 body.reduced-motion .astrolabe-ring-outer,
