@@ -14,7 +14,7 @@ import type {
 } from '../core/types';
 import type { BoardInputController, HoverState } from '../input/pointer-controller';
 import type { Renderer3D } from '../render/renderer-3d';
-import { BOOSTER_COIN_COSTS, type SaveManager } from '../storage/save-manager';
+import { BOOSTER_COIN_COSTS, type SaveManager, THEME_TIER_PRICES } from '../storage/save-manager';
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -34,6 +34,7 @@ export interface AppHistoryState {
 export interface ShredBlocksDebugBridge {
   getBoard: () => BoardState;
   getSave: () => SavePayloadV1;
+  patchSave: (patch: Partial<SavePayloadV1>) => void;
   loadLevel: (levelId: number) => void;
   commitMove: (blockId: number, targetRow: number, targetCol: number) => CommitMoveOutcome;
   autoSolveCurrentLevel: () => boolean;
@@ -68,45 +69,45 @@ export const UI_BOOSTER_PRICES: Record<BoosterType, number> = BOOSTER_COIN_COSTS
 
 export const BOOSTER_DISPLAY_NAMES: Record<BoosterType, string> = {
   UNDO: 'Undo',
-  FREEZE: 'Hint / Freeze',
+  FREEZE: 'Stasis / Hint',
   HAMMER: 'Hammer',
   ROCKET: 'Rocket',
   VACUUM: 'Color Vacuum',
 };
 
 export const BOOSTER_DEBUT_NOTES: Partial<Record<number, string>> = {
-  2: 'UNCOMMON Power-Up Unlocked: Hint / Freeze! Reveals the optimal next move in Zen Mode or freezes timers for +10s.',
+  2: 'UNCOMMON Power-Up Unlocked: Stasis / Hint! Grants +2 Stasis Moves in Challenge Mode (or freezes Rush clocks for 10s) and highlights the optimal move.',
   8: 'RARE Power-Up Unlocked: Hammer! Tap any block, crate, or locked gate to shatter it.',
   18: 'EPIC Power-Up Unlocked: Rocket! Blasts an entire row or column of blocks.',
   30: 'LEGENDARY Power-Up Unlocked: Color Vacuum! Sweeps all unlocked blocks of a chosen color off the board.',
 };
 
 export const SANCTUARY_AWAKENING_MILESTONES: ReadonlyArray<{ levelId: number; label: string }> = [
-  { levelId: 2, label: 'Hint / Freeze Power-Up' },
+  { levelId: 2, label: 'Stasis / Hint Power-Up' },
   { levelId: 8, label: 'Hammer Power-Up' },
   { levelId: 11, label: 'Axis-Lock Guide Rails' },
-  { levelId: 14, label: 'Sculpted Sanctuary Courtyard' },
-  { levelId: 16, label: 'Chapter II · Frost & Multi-Layer Blocks' },
+  { levelId: 14, label: 'Sculpted Sanctuary Courtyards' },
   { levelId: 18, label: 'Rocket Power-Up & Stepped Gates' },
-  { levelId: 21, label: 'Frost-Encased Blocks' },
+  { levelId: 21, label: 'Interior Stone Pillars' },
   { levelId: 25, label: 'Twin Sanctum Portcullis Chamber' },
   { levelId: 28, label: 'Sealed Mystery Vaults' },
   { levelId: 30, label: 'Color Vacuum Power-Up' },
-  { levelId: 31, label: 'Padlock & Key Chains' },
-  { levelId: 41, label: 'Chapter III · Terrace of Tethers' },
-  { levelId: 51, label: 'Wooden Crates & Stone Pillars' },
-  { levelId: 61, label: 'Countdown Bombs' },
-  { levelId: 71, label: 'Dynamic Gate Shutters' },
-  { levelId: 81, label: 'Chapter IV · Clockwork Spires' },
-  { levelId: 91, label: 'Turn-Based Rotator Pivots' },
-  { levelId: 101, label: 'One-Way Directional Tiles' },
-  { levelId: 111, label: 'Conveyor Belt Streams' },
-  { levelId: 121, label: 'Color-Changing Gates' },
-  { levelId: 131, label: 'Block Spawner Generators' },
-  { levelId: 141, label: 'Chapter V · Astral Observatory' },
-  { levelId: 151, label: 'Linked Teleport Portals' },
-  { levelId: 171, label: 'Magnetic Attraction Blocks' },
-  { levelId: 191, label: 'Synchronized Linked Groups' },
+  { levelId: 31, label: 'Multi-Layer Block Shells' },
+  { levelId: 41, label: 'Chapter III · Frozen Ice Blocks' },
+  { levelId: 51, label: 'Star Blocks & Star Gates' },
+  { levelId: 61, label: 'Padlock & Key Chains' },
+  { levelId: 71, label: 'Movable Stone Monoliths' },
+  { levelId: 81, label: 'Chapter IV · Wooden Crates' },
+  { levelId: 91, label: 'Countdown Bombs' },
+  { levelId: 101, label: 'Glued Linked Assemblies' },
+  { levelId: 111, label: 'Colored Ropes & Scissors' },
+  { levelId: 121, label: 'Color-Changing Queue Gates' },
+  { levelId: 131, label: 'Frozen Exit Gates' },
+  { levelId: 141, label: 'Chapter V · Jewel & Toggling Shutters' },
+  { levelId: 151, label: 'Sliding & Breathing Gates' },
+  { levelId: 161, label: 'Block Spawner Generators' },
+  { levelId: 171, label: 'Chromatic Floor Carpets' },
+  { levelId: 181, label: 'Moving Courtyard Elevators' },
   { levelId: 221, label: 'Chapter VI · Grand Citadel' },
   { levelId: 301, label: 'Endless Citadel Mastery' },
 ];
@@ -135,42 +136,42 @@ export const CAMPAIGN_CHAPTERS: ReadonlyArray<ChapterMeta> = [
   {
     chapterNum: 'CHAPTER I',
     title: 'Sanctuary Courtyard',
-    subtitle: '5×5 Foundations · Pure Sliding & Axis Rails',
+    subtitle: '5×5–6×6 Foundations · Corridor Staging & Axis Rails',
     startLevel: 1,
     endLevel: 15,
   },
   {
     chapterNum: 'CHAPTER II',
-    title: 'Frost & Forged Iron',
-    subtitle: '6×6 Courtyards · Ice, Multi-Layer & Padlocks',
+    title: 'Vaults & Sanctums',
+    subtitle: '6×6–8×6 Sanctums · Portcullises, Mystery Vaults & Multi-Layer',
     startLevel: 16,
     endLevel: 40,
   },
   {
     chapterNum: 'CHAPTER III',
-    title: 'Terrace of Tethers',
-    subtitle: '6×7 Terraces · Ropes, Crates & Countdown Bombs',
+    title: 'Frost & Starlight',
+    subtitle: '6×7–9×7 Terraces · Ice, Star Gates, Padlocks & Stone Monoliths',
     startLevel: 41,
     endLevel: 80,
   },
   {
     chapterNum: 'CHAPTER IV',
-    title: 'Clockwork Spires',
-    subtitle: '7×7 Spires · Shutters, Rotators & Conveyor Flows',
+    title: 'Clockwork Crucible',
+    subtitle: '7×7–9×7 Spires · Crates, Bombs, Glued Links, Ropes & Queues',
     startLevel: 81,
     endLevel: 140,
   },
   {
     chapterNum: 'CHAPTER V',
     title: 'Astral Observatory',
-    subtitle: '7×8–8×8 Astral Halls · Portals, Magnets & Linked Groups',
+    subtitle: '7×8–9×8 Halls · Shutters, Sliding Gates, Generators & Elevators',
     startLevel: 141,
     endLevel: 220,
   },
   {
     chapterNum: 'CHAPTER VI',
     title: 'Grand Citadel',
-    subtitle: '8×8–9×9 Citadel · Masterwork Architectural Synthesis',
+    subtitle: '8×8–10×8 Citadel · Masterwork Multi-Mechanic Synthesis',
     startLevel: 221,
     endLevel: 300,
   },
@@ -191,7 +192,12 @@ export function getChapterMetaForLevel(levelId: number): ChapterMeta {
   };
 }
 
-export const THEME_UNLOCK_PRICE = 150;
+export const THEME_UNLOCK_PRICE = 250;
+
+export function getThemeItemPrice(catalogIndex: number): number {
+  if (catalogIndex <= 0) return 0;
+  return THEME_TIER_PRICES[Math.min(catalogIndex, THEME_TIER_PRICES.length - 1)] ?? 250;
+}
 
 export const SKIN_CATALOG: ReadonlyArray<{ id: SkinId; name: string; desc: string }> = [
   {
@@ -250,6 +256,7 @@ export interface AppViewContext {
   blueprintMix: number;
   activeRoadmapRange: string;
   freeUndosRemaining: number;
+  runTouchedZen: boolean;
   levelOutcomeHandled: boolean;
   bombSecondAccumulator: number;
   lastPointerActivityMs: number;
@@ -275,6 +282,7 @@ export interface AppViewContext {
   isApplyingPopstate: boolean;
   historyInitialized: boolean;
   loadLevel(levelId: number, switchToGameScreen?: boolean, persistLevel?: boolean): void;
+  switchPlayMode(nextMode: PlayMode, silent?: boolean): void;
   restartCurrentLevel(): void;
   skipCurrentLevel(): void;
   continueFailedLevel(): void;

@@ -66,13 +66,13 @@
           <div class="economy-pills" role="status" aria-label="Player Progress">
             <div class="econ-pill econ-coins" title="Coins">
               <span class="coin-emblem" aria-hidden="true"></span>
-              <span id="stat-coins">250</span>
+              <span id="stat-coins">120</span>
             </div>
-            <div class="econ-pill econ-stars" title="Total Stars">
+            <div class="econ-pill econ-stars" title="Total Gold Stars">
               <span class="star-emblem" aria-hidden="true">★</span>
               <span id="stat-stars">0</span>
             </div>
-            <div class="econ-pill econ-streak" title="Win Streak">
+            <div class="econ-pill econ-streak" title="Flow Streak">
               <svg class="econ-svg-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2L15.5 9.5L22 12L15.5 14.5L12 22L8.5 14.5L2 12L8.5 9.5L12 2Z" />
               </svg>
@@ -123,7 +123,7 @@
           </div>
 
           <div class="chests-row">
-            <div class="chest-card" title="+100 Coins &amp; Free Booster per 100 blocks shredded">
+            <div class="chest-card" title="+50 Coins &amp; Free Booster per 100 blocks shredded">
               <div class="chest-header">
                 <span class="chest-title">
                   <svg class="chest-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
@@ -137,10 +137,10 @@
               <div class="progress-track" aria-hidden="true">
                 <div id="shredder-chest-fill" class="progress-fill fill-cyan" style="width: 0%"></div>
               </div>
-              <span class="chest-caption">+100 Coins &amp; Booster / 100 blocks</span>
+              <span class="chest-caption">+50 Coins &amp; Booster / 100 blocks</span>
             </div>
 
-            <div class="chest-card" title="+150 Coins &amp; Free Booster every 10 levels">
+            <div class="chest-card" title="+75 Coins &amp; Free Booster every 10 levels (plus +90 Coins &amp; Booster every 25 Gold Stars)">
               <div class="chest-header">
                 <span class="chest-title">
                   <svg class="chest-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
@@ -153,7 +153,7 @@
               <div class="progress-track" aria-hidden="true">
                 <div id="milestone-chest-fill" class="progress-fill fill-gold" style="width: 10%"></div>
               </div>
-              <span class="chest-caption">+150 Coins &amp; Booster / 10 levels</span>
+              <span class="chest-caption">+75 Coins &amp; Booster / 10 levels</span>
             </div>
           </div>
 
@@ -232,14 +232,14 @@
           <!-- Tier 2: Recessed Sundial Mode Plaque & Courtyard Economy Ribbon -->
           <div class="hud-arch-subbar">
             <div class="hud-center">
-              <button type="button" id="btn-mode-toggle" class="btn-tactile btn-mode-pill" title="Tap to switch between Zen Mode and Timed Rush">
+              <button type="button" id="btn-mode-toggle" class="btn-tactile btn-mode-pill" title="Tap to switch Play Mode: Challenge · Zen · Speed Rush">
                 <svg class="mode-sundial-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
                   <polygon points="12,2 22,12 12,22 2,12" />
                   <circle cx="12" cy="12" r="3" fill="currentColor" />
                 </svg>
-                <span id="hud-mode-label" class="mode-badge">Zen Mode</span>
+                <span id="hud-mode-label" class="mode-badge">⚔️ Challenge</span>
                 <span class="hud-plaque-divider" aria-hidden="true">·</span>
-                <span id="hud-moves-pill" class="tabular-metric">Moves: 0 / Par 2</span>
+                <span id="hud-moves-pill" class="tabular-metric">Moves Left: 8</span>
                 <span id="hud-timer-pill" class="tabular-metric timer-pill" hidden>⏱ 01:30</span>
               </button>
             </div>
@@ -247,7 +247,7 @@
             <div class="hud-sub-stats">
               <span class="hud-stat-plaque">
                 <span class="coin-emblem" aria-hidden="true"></span>
-                <span id="hud-coins-inline" class="hud-coin-tag">250</span>
+                <span id="hud-coins-inline" class="hud-coin-tag">120</span>
                 <span class="hud-stat-sep" aria-hidden="true">·</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <polygon points="12,2 21,12 12,22 3,12" />
@@ -326,13 +326,13 @@
             <span id="badge-booster-undo" class="booster-badge badge-free">FREE (3)</span>
           </button>
 
-          <button type="button" id="btn-booster-freeze" class="booster-btn" data-booster="FREEZE" title="Show Optimal Hint in Zen Mode or +10s Freeze in Timed Mode (2)">
+          <button type="button" id="btn-booster-freeze" class="booster-btn" data-booster="FREEZE" title="+2 Stasis Moves &amp; Optimal Hint in Challenge, Hint in Zen, or +10s Freeze in Speed Rush (2)">
             <span id="icon-booster-freeze" class="booster-icon" aria-hidden="true">
-              <svg id="svg-booster-hint" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+              <svg id="svg-booster-hint" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" hidden>
                 <polygon points="12,2 14.8,9.2 22,12 14.8,14.8 12,22 9.2,14.8 2,12 9.2,9.2" fill="currentColor" fill-opacity="0.22" />
                 <circle cx="12" cy="12" r="2.4" fill="currentColor" />
               </svg>
-              <svg id="svg-booster-freeze" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" hidden>
+              <svg id="svg-booster-freeze" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="2" x2="12" y2="22" />
                 <line x1="2" y1="12" x2="22" y2="12" />
                 <line x1="4.9" y1="4.9" x2="19.1" y2="19.1" />
@@ -340,8 +340,8 @@
                 <polygon points="12,8 16,12 12,16 8,12" fill="currentColor" fill-opacity="0.25" />
               </svg>
             </span>
-            <span id="label-booster-freeze" class="booster-name">Hint</span>
-            <span id="badge-booster-freeze" class="booster-badge">3</span>
+            <span id="label-booster-freeze" class="booster-name">Stasis</span>
+            <span id="badge-booster-freeze" class="booster-badge">2</span>
           </button>
 
           <button type="button" id="btn-booster-hammer" class="booster-btn" data-booster="HAMMER" title="Hammer: Smash 1 block layer or wooden crate (3)">
@@ -396,13 +396,13 @@
             </button>
             <div>
               <h2 class="brand-title">Themes Studio</h2>
-              <span class="brand-subtitle">100% Free-to-Play Cosmetics (150 Coins each)</span>
+              <span class="brand-subtitle">100% Free-to-Play Sanctuary Cosmetics (250–1,200 Coins)</span>
             </div>
           </div>
           <div class="economy-pills">
             <div class="econ-pill econ-coins">
               <span class="coin-emblem" aria-hidden="true"></span>
-              <span id="themes-coins-display">250</span>
+              <span id="themes-coins-display">120</span>
             </div>
           </div>
         </header>

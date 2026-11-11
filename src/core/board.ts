@@ -2,6 +2,8 @@ import {
   autoAdvanceColorQueues,
   detachBlockFromGluedGroup,
   findEligibleGateForBlockAt,
+  ONBOARDING_RESCUE_MAX_LEVEL,
+  rescueDynamicGatesOnBoard,
   resolveClearCascade,
   stepDynamicGatesOnShred,
   stepMovingElevators,
@@ -23,9 +25,11 @@ import { getActiveColor, getShape } from './polyomino';
 import type { BlockState, BoardState, ColorId, PlayMode, RocketAxis } from './types';
 
 export * from './board-state';
+export { ONBOARDING_RESCUE_MAX_LEVEL };
 
 export interface CommitMoveOutcome {
   moved: boolean;
+  coalesced?: boolean;
   clearedGateIndex: number;
   clearedBlockIds: number[];
   peeledBlockIds: number[];
@@ -35,8 +39,12 @@ export interface CommitMoveOutcome {
 
 /**
  * Commits a discrete move of `blockId` (and its glued group) to `(targetRow, targetCol)`.
- * Evaluates gate clearance for all moved blocks, runs `resolveClearCascade`, increments
- * `movesCommitted`, and ticks Bomb countdowns in `ZEN` mode.
+ * - Evaluates gate clearance for all moved blocks and runs `resolveClearCascade`.
+ * - Enforces **Touch-Move Coalescing** (`allowCoalesce = true`): consecutive non-shredding
+ *   repositions of the same `lead.id` (or finishing that block's drag into its gate) coalesce
+ *   into 1 move tick so players aren't penalized for micro-adjustments.
+ * - Honors `stasisMovesRemaining` (`FREEZE` booster in `CHALLENGE` / `ZEN` modes) before
+ *   decrementing `movesRemaining` (`CHALLENGE`) or Bomb counters (`CHALLENGE` / `ZEN`).
  */
 export function commitBlockMove(
   board: BoardState,
@@ -45,12 +53,15 @@ export function commitBlockMove(
   targetCol: number,
   playMode: PlayMode,
   velX = 0,
-  velY = 0
+  velY = 0,
+  allowCoalesce = true,
+  trustedReachable = false
 ): CommitMoveOutcome {
   const group = getMovedGroupBlocks(board, blockId);
   if (group.length === 0 || !isBlockMovable(board, blockId)) {
     return {
       moved: false,
+      coalesced: false,
       clearedGateIndex: -1,
       clearedBlockIds: [],
       peeledBlockIds: [],
@@ -66,6 +77,7 @@ export function commitBlockMove(
   if (!canGroupOccupyOffset(board, group, dRow, dCol)) {
     return {
       moved: false,
+      coalesced: false,
       clearedGateIndex: -1,
       clearedBlockIds: [],
       peeledBlockIds: [],
@@ -74,11 +86,12 @@ export function commitBlockMove(
     };
   }
 
-  if (dRow !== 0 || dCol !== 0) {
+  if (!trustedReachable && (dRow !== 0 || dCol !== 0)) {
     const reachable = getReachableAnchors(board, lead.id);
     if (!reachable.some((a) => a.row === targetRow && a.col === targetCol)) {
       return {
         moved: false,
+        coalesced: false,
         clearedGateIndex: -1,
         clearedBlockIds: [],
         peeledBlockIds: [],
@@ -118,21 +131,34 @@ export function commitBlockMove(
     }
   }
 
-  const didMoveOrClear = dRow !== 0 || dCol !== 0 || clearedBlockIds.length > 0 || peeledBlockIds.length > 0;
+  const didShredOrPeel = clearedBlockIds.length > 0 || peeledBlockIds.length > 0;
+  const didMoveOrClear = dRow !== 0 || dCol !== 0 || didShredOrPeel;
+  let wasCoalesced = false;
 
   if (didMoveOrClear) {
-    board.movesCommitted++;
+    wasCoalesced = allowCoalesce && board.lastMovedBlockId > 0 && board.lastMovedBlockId === lead.id;
     board.timerRunning = true;
     board.hintMove = null;
 
-    // In ZEN mode, Bomb counters decrement by 1 per committed move (only in unlocked rooms)
-    if (playMode === 'ZEN' && board.freezeRemainingSec <= 0) {
-      for (const b of board.blocks) {
-        if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0 && !isBlockInLockedRoom(board, b)) {
-          b.bombCount = Math.max(0, b.bombCount - 1);
+    if (!wasCoalesced) {
+      board.movesCommitted++;
+      if (board.stasisMovesRemaining > 0) {
+        board.stasisMovesRemaining--;
+      } else {
+        if (playMode === 'CHALLENGE') {
+          board.movesRemaining = Math.max(0, board.movesRemaining - 1);
+        }
+        if ((playMode === 'CHALLENGE' || playMode === 'ZEN') && board.freezeRemainingSec <= 0) {
+          for (const b of board.blocks) {
+            if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0 && !isBlockInLockedRoom(board, b)) {
+              b.bombCount = Math.max(0, b.bombCount - 1);
+            }
+          }
         }
       }
     }
+
+    board.lastMovedBlockId = allowCoalesce && !didShredOrPeel ? lead.id : 0;
   } else {
     // Restore exact coordinates for all group members if nothing changed
     for (const b of group) {
@@ -146,12 +172,36 @@ export function commitBlockMove(
 
   return {
     moved: didMoveOrClear,
+    coalesced: wasCoalesced,
     clearedGateIndex,
     clearedBlockIds,
     peeledBlockIds,
     spawnedBlockIds,
     unlockedBarrierIds,
   };
+}
+
+/**
+ * Booster 2: Freeze / Stasis (`❄️`) —
+ * - In `TIMED` (`RUSH`) mode: freezes the clock & bombs for `10s` + highlights `hintMove`.
+ * - In `CHALLENGE` & `ZEN` modes: grants `+2` **Stasis Moves** (next 2 committed moves do not
+ *   decrement `movesRemaining` or Bomb counters) + highlights `hintMove`.
+ */
+export function applyBoosterFreeze(
+  board: BoardState,
+  playMode: PlayMode,
+  hintMove?: BoardState['hintMove']
+): boolean {
+  if (playMode === 'TIMED') {
+    board.freezeRemainingSec = Math.max(board.freezeRemainingSec, 10);
+  } else {
+    board.stasisMovesRemaining += 2;
+  }
+  board.lastMovedBlockId = 0;
+  if (hintMove !== undefined) {
+    board.hintMove = hintMove;
+  }
+  return true;
 }
 
 /**
@@ -218,7 +268,8 @@ function destroyOrPeelBlockByBooster(board: BoardState, block: BlockState): void
     }
   }
 
-  stepDynamicGatesOnShred(board, undefined);
+  board.lastMovedBlockId = 0;
+  stepDynamicGatesOnShred(board, undefined, true);
   stepPortcullisBarriersOnShred(board);
   rebuildOccupancyGrid(board);
   stepMovingElevators(board);
@@ -238,7 +289,7 @@ function destroyOrPeelBlockByBooster(board: BoardState, block: BlockState): void
   }
 
   const spawned = trySpawnReadyGenerators(board);
-  autoAdvanceColorQueues(board);
+  autoAdvanceColorQueues(board, true);
   for (const sb of spawned) {
     if (sb.status !== 'ACTIVE') continue;
     const gIdx = findEligibleGateForBlockAt(board, sb, sb.row, sb.col);
@@ -277,12 +328,14 @@ export function applyBoosterHammer(
         (bar) => !bar.open && bar.cells.some(([br, bc]) => br === row && bc === col)
       );
       if (hitBarrier) {
+        board.lastMovedBlockId = 0;
         hitBarrier.shredsRemaining = 0;
         hitBarrier.lockId = 0;
         hitBarrier.open = true;
         rebuildOccupancyGrid(board);
+        rescueDynamicGatesOnBoard(board);
         const spawned = trySpawnReadyGenerators(board);
-        autoAdvanceColorQueues(board);
+        autoAdvanceColorQueues(board, true);
         for (const sb of spawned) {
           const gIdx = findEligibleGateForBlockAt(board, sb, sb.row, sb.col);
           if (gIdx >= 0) {
@@ -302,11 +355,13 @@ export function applyBoosterHammer(
         isRoomUnlocked(board, board.roomMap[c.row * board.cols + c.col] ?? 0)
     );
     if (crate) {
+      board.lastMovedBlockId = 0;
       crate.hp = 0;
       crate.destroyed = true;
       rebuildOccupancyGrid(board);
+      rescueDynamicGatesOnBoard(board);
       const spawned = trySpawnReadyGenerators(board);
-      autoAdvanceColorQueues(board);
+      autoAdvanceColorQueues(board, true);
       for (const sb of spawned) {
         const gIdx = findEligibleGateForBlockAt(board, sb, sb.row, sb.col);
         if (gIdx >= 0) {
@@ -364,11 +419,12 @@ export function applyBoosterHammer(
       row < gate.spanStart + gate.spanLength;
 
     if (hitsTop || hitsBottom || hitsLeft || hitsRight) {
+      board.lastMovedBlockId = 0;
       gate.iceCount = 0;
       gate.shutterLockColor = 0;
       gate.shutterOpen = true;
       gate.togglesOnClear = false;
-      autoAdvanceColorQueues(board);
+      autoAdvanceColorQueues(board, true);
       return true;
     }
   }
@@ -431,9 +487,12 @@ export function applyBoosterRocket(board: BoardState, row: number, col: number, 
     affected = true;
   }
 
+  if (affected) {
+    board.lastMovedBlockId = 0;
+  }
   rebuildOccupancyGrid(board);
   const spawned = trySpawnReadyGenerators(board);
-  autoAdvanceColorQueues(board);
+  autoAdvanceColorQueues(board, true);
   for (const sb of spawned) {
     const gIdx = findEligibleGateForBlockAt(board, sb, sb.row, sb.col);
     if (gIdx >= 0) {
@@ -454,19 +513,20 @@ export function applyBoosterVacuum(board: BoardState, targetColor: ColorId): boo
     (b) =>
       b.status === 'ACTIVE' &&
       !b.chained &&
+      !isBlockInLockedRoom(board, b) &&
       b.ropeColor === 0 &&
       b.iceCount === 0 &&
-      !isBlockInLockedRoom(board, b) &&
       getActiveColor(b.colorStack, b.colorCursor) === targetColor
   );
   if (matchingBlocks.length === 0) return false;
 
+  board.lastMovedBlockId = 0;
   for (const b of matchingBlocks) {
     destroyOrPeelBlockByBooster(board, b);
   }
 
   rebuildOccupancyGrid(board);
   trySpawnReadyGenerators(board);
-  autoAdvanceColorQueues(board);
+  autoAdvanceColorQueues(board, true);
   return true;
 }

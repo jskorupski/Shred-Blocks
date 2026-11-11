@@ -126,6 +126,21 @@ dialog::backdrop {
   color: rgba(255, 248, 238, 0.25);
 }
 
+.zen-victory-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.78rem;
+  border-radius: var(--radius-sm);
+  background: rgba(20, 58, 46, 0.78);
+  border: 1px solid rgba(114, 212, 164, 0.38);
+  color: #a7f3d0;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .star-slot {
   display: inline-block;
   translate: 0px;

@@ -149,13 +149,22 @@ export function triggerCarrierItems(board: BoardState, block: BlockState): void 
 }
 
 /**
- * Universal Supply-vs-Queue Color-Changing Gate Auto-Advance (F-08):
- * Computes the remaining supply S(c) of each ColorId across all active blocks and generator queues.
- * If any Color-Changing Gate's current front color has S(c) === 0 (or if more multi-queue gates
- * currently demand c than remaining supply S(c)), advances `gate.colorCursor` so no gate ever
- * deadlocks waiting for an exhausted color.
+ * Levels `1..25` retain gentle onboarding queue/parity auto-rescues (`ONBOARDING_RESCUE_MAX_LEVEL`).
+ * From Level `26+`, wrong gate-queue ordering or dynamic gate parity mistakes are authentic puzzle
+ * states (recoverable via Free Undo, Restart, or Boosters, which always pass `forceRescue = true`).
  */
-export function autoAdvanceColorQueues(board: BoardState): boolean {
+export const ONBOARDING_RESCUE_MAX_LEVEL = 25;
+
+/**
+ * Supply-vs-Queue Color-Changing Gate Auto-Advance (`F-08`):
+ * Active during initial board normalization (`createBoardState`), Booster strikes (`forceRescue = true`),
+ * and early onboarding (`L1..25`). Disabled on `L26+` normal moves so feeding a needed color into a
+ * decoy gate or ignoring sealed-room dependencies creates genuine tactical puzzle stakes.
+ */
+export function autoAdvanceColorQueues(board: BoardState, forceRescue = false): boolean {
+  if (!forceRescue && board.levelId > ONBOARDING_RESCUE_MAX_LEVEL) {
+    return false;
+  }
   let advancedAny = false;
 
   for (let pass = 0; pass < 8; pass++) {
@@ -495,7 +504,11 @@ export function stepPortcullisBarriersOnShred(board: BoardState): number[] {
  * - Steps all sliding gates (`g.slidesOnClear`)
  * - Steps all size-changing gates (`g.sizeChangesOnClear`)
  */
-export function stepDynamicGatesOnShred(board: BoardState, exitedGate?: GateState): void {
+export function stepDynamicGatesOnShred(
+  board: BoardState,
+  exitedGate?: GateState,
+  forceRescue = false
+): void {
   if (exitedGate && exitedGate.colorCursor + 1 < exitedGate.colorQueue.length) {
     exitedGate.colorCursor++;
   }
@@ -546,10 +559,19 @@ export function stepDynamicGatesOnShred(board: BoardState, exitedGate?: GateStat
     }
   }
 
-  // Anti-Softlock Parity & Span Guards (`DRAG-06`):
-  // If any active movable non-stone blocks remain and zero currently open/sized gates can accept any
-  // movable block solely because all matching toggling shutters are closed or resizing gates are too narrow,
-  // auto-recover the dynamic gate state so the final blocks can never be parity-deadlocked.
+  // Onboarding Parity & Span Rescue (`L1..25` & Booster strikes):
+  // Disabled on `L26+` normal moves so toggling shutter parity and resizing gate order require real planning.
+  if (!forceRescue && board.levelId > ONBOARDING_RESCUE_MAX_LEVEL) {
+    return;
+  }
+  rescueDynamicGatesOnBoard(board);
+}
+
+/**
+ * Ensures at least one unlocked gate matches an active movable block (`C1-03` Booster Law & `L1..25` onboarding)
+ * without toggling already-open shutters closed.
+ */
+export function rescueDynamicGatesOnBoard(board: BoardState): void {
   const activeMovableNonStone = board.blocks.filter(
     (b) =>
       b.status === 'ACTIVE' &&

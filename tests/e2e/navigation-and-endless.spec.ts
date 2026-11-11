@@ -576,4 +576,77 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     expect(errors).toEqual([]);
   });
+
+  test('CHALLENGE-MODE-01: defaults to Tactical Challenge mode, coalesces multi-drag adjustments, rescues OUT_OF_MOVES into Zen Mode, records 🌿 Zen badge, and resets stage on Zen -> Challenge switch', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await page.goto('/');
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#screen-game')).toBeVisible();
+
+    // 1. Fresh boot defaults to CHALLENGE mode (`⚔️ Challenge` + `Moves Left: 8` on Level 1)
+    await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+
+    // 2. Touch-Move Coalescing: two consecutive non-clearing adjustments of Block 1 on Level 3 (`Moves Left: 9 -> 8`) count as 1 Move
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(3));
+    const dragCell = async (c1: number, r1: number, c2: number, r2: number) => {
+      const pts = await page.evaluate(
+        ({ a, b, c, d }) => ({
+          s: window.__SHREDBLOCKS_DEBUG__.boardToScreen(a + 0.5, b + 0.5),
+          e: window.__SHREDBLOCKS_DEBUG__.boardToScreen(c + 0.5, d + 0.5),
+        }),
+        { a: c1, b: r1, c: c2, d: r2 }
+      );
+      await page.mouse.move(pts.s.x, pts.s.y);
+      await page.mouse.down();
+      await page.mouse.move(pts.e.x, pts.e.y, { steps: 8 });
+      await page.mouse.up();
+    };
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
+    await dragCell(1, 1, 1, 0);
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await dragCell(1, 0, 2, 0);
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+
+    // 3. Exhaust remaining moves on Level 1 to trigger OUT_OF_MOVES, then click "🌿 Finish in Zen Mode (Free)"
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.loadLevel(1);
+      window.__SHREDBLOCKS_DEBUG__.getBoard().movesRemaining = 1;
+    });
+    // Non-shredding move on Block 2 (col 3, row 2 -> col 3, row 1) spends the final move without winning -> Failure modal!
+    await dragCell(3, 2, 3, 1);
+    await expect(page.locator('#dialog-failure')).toBeVisible();
+    await expect(page.locator('#failure-title')).toContainText('Out of Moves');
+    await page.locator('#btn-failure-zen').click();
+    await expect(page.locator('#dialog-failure')).toBeHidden();
+    await expect(page.locator('#hud-mode-label')).toContainText('Zen');
+
+    // Finish Level 1 in Zen Mode (board state preserved!) -> awards `🌿 Zen Clear` (0 Gold Stars)
+    await dragCell(1, 1, 1, 0);
+    await dragCell(3, 1, 4, 1);
+    await expect(page.locator('#dialog-victory')).toBeVisible();
+    await expect(page.locator('#victory-stars')).toContainText('🌿 Zen Clear');
+    await page.locator('#btn-victory-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    await expect(page.locator('.level-node-card[data-level-id="1"]')).toHaveClass(/zen-cleared-level/);
+    await expect(page.locator('.level-node-card[data-level-id="1"]')).toContainText('🌿 Zen');
+
+    // 4. Anti-Cheese: on Level 2 in Zen Mode, make a move (`Moves: 1 / Par 3`), then switch Zen -> Timed/Challenge -> resets to Move 0
+    await page.locator('.level-node-card[data-level-id="2"]').click();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 2');
+    await dragCell(1, 1, 0, 1);
+    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 1 / Par');
+    await page.locator('#btn-mode-toggle').click(); // ZEN -> TIMED -> restarts at Move 0
+    await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
+    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 0 / Par');
+    await page.locator('#btn-mode-toggle').click(); // TIMED -> CHALLENGE
+    await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
+
+    expect(errors).toEqual([]);
+  });
 });

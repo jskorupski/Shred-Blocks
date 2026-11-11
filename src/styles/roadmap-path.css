@@ -220,6 +220,32 @@
     0 1px 2px rgba(4, 16, 16, 0.7);
 }
 
+/* 1b. ZEN CLEARED LEVEL: Tranquil Sage-Jade Sanctuary Stone (Replayable for Gold Stars) */
+.level-node-card.zen-cleared-level {
+  background: linear-gradient(90deg var(--in-oklab), rgba(28, 62, 54, 0.74) 0%, rgba(28, 44, 62, 0.8) 100%);
+  border-color: rgba(114, 212, 164, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(186, 248, 214, 0.16),
+    0 2px 0 rgba(7, 20, 20, 0.58);
+}
+
+@media (hover: hover) {
+  .level-node-card.zen-cleared-level:hover {
+    background: linear-gradient(
+      90deg var(--in-oklab),
+      rgba(36, 78, 68, 0.86) 0%,
+      rgba(36, 56, 78, 0.88) 100%
+    );
+  }
+}
+
+.level-node-card.zen-cleared-level .node-step-marker {
+  background: rgba(24, 62, 52, 0.95);
+  border-color: rgba(134, 232, 182, 0.62);
+  color: #a7f3d0;
+  font-size: 0.7rem;
+}
+
 /* 2. SKIPPED LEVEL: Neutral Weathered Stone & Slightly Faded Out */
 .level-node-card.skipped-level {
   background: rgba(38, 39, 52, 0.56);
@@ -361,6 +387,12 @@
   background: rgba(8, 46, 42, 0.72);
   color: #84f7e6;
   border: 1px solid rgba(72, 232, 206, 0.28);
+}
+
+.node-flag-badge.flag-zen {
+  background: rgba(16, 48, 38, 0.74);
+  color: #a7f3d0;
+  border: 1px solid rgba(114, 212, 164, 0.32);
 }
 
 .node-stars {

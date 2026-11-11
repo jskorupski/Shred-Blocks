@@ -91,18 +91,21 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
     <dialog id="dialog-failure" class="game-dialog" closedby="none" aria-labelledby="failure-title">
       <div class="dialog-card">
         <div class="dialog-header">
-          <h2 id="failure-title" class="dialog-title">Time Expired</h2>
+          <h2 id="failure-title" class="dialog-title">Out of Moves</h2>
           <p id="failure-reason" class="dialog-subtitle">
-            Keep going with a time boost, retry for free, or skip ahead!
+            Retry for free, finish this board in Zen Mode, add +5 moves, or skip ahead!
           </p>
         </div>
 
         <div class="dialog-actions dialog-actions-vertical">
-          <button type="button" id="btn-continue-level" class="btn-tactile btn-warning">
-            +15s / Defuse Bomb (50 Coins)
-          </button>
           <button type="button" id="btn-retry-level" class="btn-tactile btn-primary" autofocus>
             ↻ Try Again (Free)
+          </button>
+          <button type="button" id="btn-failure-zen" class="btn-tactile btn-secondary">
+            🌿 Finish in Zen Mode (Free)
+          </button>
+          <button type="button" id="btn-continue-level" class="btn-tactile btn-warning">
+            ➕ +5 Moves (150 Coins)
           </button>
           <button type="button" id="btn-skip-level" class="btn-tactile btn-secondary">
             Skip Level (Free) ▸▸
@@ -172,6 +175,14 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           <label class="setting-row">
             <span>Low Motion</span>
             <input type="checkbox" id="toggle-reduced-motion" />
+          </label>
+          <label class="setting-row setting-row-wide">
+            <span>Play Mode</span>
+            <select id="select-play-mode" class="select-tactile">
+              <option value="CHALLENGE">⚔️ Challenge (Move Budget)</option>
+              <option value="ZEN">🌿 Zen (Relaxed · No Limit)</option>
+              <option value="TIMED">⏱ Speed Rush (Timed)</option>
+            </select>
           </label>
           <label class="setting-row setting-row-wide">
             <span>Frame Rate</span>

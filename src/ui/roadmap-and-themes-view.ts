@@ -1,11 +1,16 @@
-import { getAllCampaignLevels, getLevelSpec, TOTAL_CAMPAIGN_LEVELS } from '../levels/catalog';
+import {
+  getCampaignRoadmapMeta,
+  getLevelRoadmapMeta,
+  type LevelRoadmapMeta,
+  TOTAL_CAMPAIGN_LEVELS,
+} from '../levels/catalog';
 import {
   type AppViewContext,
   BOOSTER_DEBUT_NOTES,
   getChapterMetaForLevel,
+  getThemeItemPrice,
   PARTICLE_CATALOG,
   SKIN_CATALOG,
-  THEME_UNLOCK_PRICE,
   TRAY_CATALOG,
 } from './catalog-meta';
 
@@ -14,7 +19,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   if (!container) return;
 
   const save = app.saveManager.getPayload();
-  const allCampaign = getAllCampaignLevels();
+  const allCampaign = getCampaignRoadmapMeta();
   const unlockedMax = Math.max(1, save.highestLevelUnlocked, save.currentLevelId);
 
   let levelsToShow = allCampaign;
@@ -74,26 +79,22 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     btn: HTMLButtonElement;
     isCurrent: boolean;
     isCompleted: boolean;
+    isZenCleared: boolean;
     isSkipped: boolean;
     isUnlocked: boolean;
     earnedStars: number;
   }
 
-  const buildLevelNode = (
-    spec: ReturnType<typeof getLevelSpec>,
-    isEndlessNode: boolean
-  ): StageNodeBuildInfo => {
+  const buildLevelNode = (spec: LevelRoadmapMeta, isEndlessNode: boolean): StageNodeBuildInfo => {
     const record = save.levelRecords[spec.id];
     const earnedStars = Math.max(0, record?.stars ?? 0);
     const hasClearedStars = earnedStars > 0;
-    const isSkipped = Boolean(record?.skipped && !hasClearedStars);
+    const isZenCleared = Boolean(record?.zenCleared && !hasClearedStars);
+    const isSkipped = Boolean(record?.skipped && !hasClearedStars && !isZenCleared);
     const isCurrent = spec.id === save.currentLevelId;
-    const isUnlocked =
-      spec.id <= unlockedMax ||
-      hasClearedStars ||
-      isSkipped ||
-      (isEndlessNode && app.activeRoadmapRange === 'endless');
+    const isUnlocked = spec.id <= unlockedMax || hasClearedStars || isZenCleared || isSkipped;
     const isCompleted = hasClearedStars && !isCurrent;
+    const isZenNode = isZenCleared && !isCurrent;
     const milestoneNote = !isEndlessNode ? (spec.unlockNote ?? BOOSTER_DEBUT_NOTES[spec.id]) : undefined;
     const isMilestone = Boolean(milestoneNote);
 
@@ -108,8 +109,9 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       `tier-${spec.difficulty.toLowerCase()}`,
       isCurrent ? 'current-level' : '',
       isCompleted ? 'completed-level' : '',
+      isZenNode ? 'zen-cleared-level' : '',
       isSkipped && !isCurrent ? 'skipped-level' : '',
-      isUnlocked && !isCurrent && !isCompleted && !isSkipped ? 'unlocked-level' : '',
+      isUnlocked && !isCurrent && !isCompleted && !isZenNode && !isSkipped ? 'unlocked-level' : '',
       isMilestone ? 'milestone-node' : '',
       !isUnlocked ? 'locked-level' : '',
     ]
@@ -120,7 +122,17 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     const markerSpan = document.createElement('span');
     markerSpan.className = 'node-step-marker';
     markerSpan.setAttribute('aria-hidden', 'true');
-    markerSpan.textContent = isCurrent ? '▶' : isCompleted ? '✓' : isSkipped ? '»' : isUnlocked ? '•' : '🔒';
+    markerSpan.textContent = isCurrent
+      ? '▶'
+      : isCompleted
+        ? '✓'
+        : isZenNode
+          ? '🌿'
+          : isSkipped
+            ? '»'
+            : isUnlocked
+              ? '•'
+              : '🔒';
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'node-content';
@@ -137,12 +149,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
     const nameDiv = document.createElement('div');
     nameDiv.className = 'node-name';
-    const archPrefix =
-      spec.barriers && spec.barriers.length > 0
-        ? '⛩️ '
-        : (spec.layoutId && spec.layoutId !== 'RECTANGLE') || (spec.cutouts && spec.cutouts.length > 0)
-          ? '🏛️ '
-          : '';
+    const archPrefix = spec.hasBarriers ? '⛩️ ' : spec.isSculpted ? '🏛️ ' : '';
     nameDiv.textContent = `${archPrefix}${spec.name}`;
 
     leftCluster.append(numSpan);
@@ -163,11 +170,18 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       doneFlag.className = 'node-flag-badge flag-completed';
       doneFlag.textContent = '✓ Cleared';
       rightCluster.append(doneFlag);
+    } else if (isZenNode) {
+      const zenFlag = document.createElement('span');
+      zenFlag.className = 'node-flag-badge flag-zen';
+      zenFlag.textContent = '🌿 Zen';
+      rightCluster.append(zenFlag);
     }
 
     let starDisplay = isUnlocked ? '☆☆☆' : '🔒';
     if (hasClearedStars) {
       starDisplay = '★'.repeat(earnedStars) + '☆'.repeat(3 - earnedStars);
+    } else if (isZenCleared) {
+      starDisplay = '☆☆☆';
     } else if (isSkipped) {
       starDisplay = isCurrent ? '☆☆☆' : 'Skipped';
     }
@@ -214,18 +228,19 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       btn,
       isCurrent,
       isCompleted: hasClearedStars,
+      isZenCleared,
       isSkipped,
       isUnlocked,
       earnedStars,
     };
   };
 
-  const appendStageGroups = (specs: Array<ReturnType<typeof getLevelSpec>>, isEndlessGroup: boolean) => {
+  const appendStageGroups = (specs: LevelRoadmapMeta[], isEndlessGroup: boolean) => {
     let idx = 0;
     while (idx < specs.length) {
       const firstId = specs[idx].id;
       const bucketKey = Math.floor((firstId - 1) / 5);
-      const groupSpecs: Array<ReturnType<typeof getLevelSpec>> = [];
+      const groupSpecs: LevelRoadmapMeta[] = [];
       while (idx < specs.length && Math.floor((specs[idx].id - 1) / 5) === bucketKey) {
         groupSpecs.push(specs[idx]);
         idx++;
@@ -236,6 +251,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const builtNodes = groupSpecs.map((s) => buildLevelNode(s, isEndlessGroup));
 
       const clearedCount = builtNodes.filter((n) => n.isCompleted).length;
+      const zenCount = builtNodes.filter((n) => n.isZenCleared && !n.isCompleted).length;
       const skippedCount = builtNodes.filter((n) => n.isSkipped && !n.isCompleted).length;
       const unlockedCount = builtNodes.filter((n) => n.isUnlocked).length;
       const hasCurrent = builtNodes.some((n) => n.isCurrent);
@@ -279,6 +295,9 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       } else {
         summarySpan.className = 'stage-group-summary summary-progress';
         const parts = [`${clearedCount}/${builtNodes.length} Cleared`];
+        if (zenCount > 0) {
+          parts.push(`🌿 ${zenCount} Zen`);
+        }
         if (skippedCount > 0) {
           parts.push(`${skippedCount} Skipped`);
         }
@@ -302,7 +321,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     }
   };
 
-  let chapterBatch: Array<ReturnType<typeof getLevelSpec>> = [];
+  let chapterBatch: LevelRoadmapMeta[] = [];
   let lastChapterNum = '';
 
   const flushChapterBatch = () => {
@@ -385,9 +404,9 @@ export function renderRoadmapImpl(app: AppViewContext): void {
           )
         );
       }
-      const endlessSpecs: Array<ReturnType<typeof getLevelSpec>> = [];
+      const endlessSpecs: LevelRoadmapMeta[] = [];
       for (let eid = wStart; eid <= wEnd; eid++) {
-        endlessSpecs.push(getLevelSpec(eid));
+        endlessSpecs.push(getLevelRoadmapMeta(eid));
       }
       appendStageGroups(endlessSpecs, true);
       prevEnd = wEnd;
@@ -431,13 +450,14 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
     items: ReadonlyArray<{ id: T; name: string; desc: string }>,
     unlockedList: T[],
     equippedId: T,
-    onAction: (id: T) => void
+    onAction: (id: T, price: number) => void
   ) => {
     const container = document.getElementById(containerId);
     if (!container) return;
 
     const frag = document.createDocumentFragment();
-    for (const item of items) {
+    items.forEach((item, idx) => {
+      const itemPrice = getThemeItemPrice(idx);
       const isUnlocked = unlockedList.includes(item.id);
       const isEquipped = equippedId === item.id;
 
@@ -469,54 +489,62 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
       btn.className = `btn-tactile btn-compact ${
         isEquipped ? 'btn-primary' : isUnlocked ? 'btn-secondary' : 'btn-warning'
       }`;
-      btn.textContent = isEquipped
-        ? '✦ Equipped'
-        : isUnlocked
-          ? 'Equip'
-          : `Unlock · ${THEME_UNLOCK_PRICE} Coins`;
+      btn.textContent = isEquipped ? '✦ Equipped' : isUnlocked ? 'Equip' : `Unlock · ${itemPrice} Coins`;
 
-      btn.addEventListener('click', () => onAction(item.id));
+      btn.addEventListener('click', () => onAction(item.id, itemPrice));
       card.append(topDiv, btn);
       frag.appendChild(card);
-    }
+    });
     container.replaceChildren(frag);
   };
 
-  buildCategoryGrid('themes-skins-grid', SKIN_CATALOG, save.unlockedSkins, save.equippedSkin, (skinId) => {
-    if (app.saveManager.unlockOrEquipSkin(skinId, THEME_UNLOCK_PRICE)) {
-      app.sound.playButtonTap();
-      app.renderThemesStudio();
-      app.renderNow();
-    } else {
-      app.sound.playWallClack();
-      app.showGameToast(`Need ${THEME_UNLOCK_PRICE} Coins to unlock this cosmetic!`);
+  buildCategoryGrid(
+    'themes-skins-grid',
+    SKIN_CATALOG,
+    save.unlockedSkins,
+    save.equippedSkin,
+    (skinId, price) => {
+      if (app.saveManager.unlockOrEquipSkin(skinId, price)) {
+        app.sound.playButtonTap();
+        app.renderThemesStudio();
+        app.renderNow();
+      } else {
+        app.sound.playWallClack();
+        app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
+      }
     }
-  });
+  );
 
-  buildCategoryGrid('themes-trays-grid', TRAY_CATALOG, save.unlockedTrays, save.equippedTray, (trayId) => {
-    if (app.saveManager.unlockOrEquipTray(trayId, THEME_UNLOCK_PRICE)) {
-      app.sound.playButtonTap();
-      app.renderThemesStudio();
-      app.renderNow();
-    } else {
-      app.sound.playWallClack();
-      app.showGameToast(`Need ${THEME_UNLOCK_PRICE} Coins to unlock this cosmetic!`);
+  buildCategoryGrid(
+    'themes-trays-grid',
+    TRAY_CATALOG,
+    save.unlockedTrays,
+    save.equippedTray,
+    (trayId, price) => {
+      if (app.saveManager.unlockOrEquipTray(trayId, price)) {
+        app.sound.playButtonTap();
+        app.renderThemesStudio();
+        app.renderNow();
+      } else {
+        app.sound.playWallClack();
+        app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
+      }
     }
-  });
+  );
 
   buildCategoryGrid(
     'themes-particles-grid',
     PARTICLE_CATALOG,
     save.unlockedParticles,
     save.equippedParticle,
-    (particleId) => {
-      if (app.saveManager.unlockOrEquipParticle(particleId, THEME_UNLOCK_PRICE)) {
+    (particleId, price) => {
+      if (app.saveManager.unlockOrEquipParticle(particleId, price)) {
         app.sound.playButtonTap();
         app.renderThemesStudio();
         app.renderNow();
       } else {
         app.sound.playWallClack();
-        app.showGameToast(`Need ${THEME_UNLOCK_PRICE} Coins to unlock this cosmetic!`);
+        app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
       }
     }
   );

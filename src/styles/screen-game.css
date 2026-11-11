@@ -180,6 +180,30 @@
   white-space: nowrap;
 }
 
+.moves-pill.moves-low {
+  padding: 0.06rem 0.34rem;
+  border-radius: var(--radius-xs);
+  background: rgba(229, 178, 93, 0.22);
+  color: #ffe08c;
+  font-weight: 600;
+}
+
+.moves-pill.moves-critical {
+  padding: 0.06rem 0.34rem;
+  border-radius: var(--radius-xs);
+  background: rgba(217, 88, 82, 0.28);
+  color: #ff9c95;
+  font-weight: 700;
+}
+
+.moves-pill.moves-stasis {
+  padding: 0.06rem 0.34rem;
+  border-radius: var(--radius-xs);
+  background: rgba(40, 181, 167, 0.24);
+  color: #8af5ea;
+  font-weight: 600;
+}
+
 .timer-pill {
   padding: 0.08rem 0.36rem;
   border-radius: var(--radius-xs);

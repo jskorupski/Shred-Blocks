@@ -109,15 +109,21 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     });
   });
 
-  // Direct Level Jump (Campaign 1..300 + Infinite Endless 301+)
+  // Direct Level Jump (Locked to 1..highestLevelUnlocked)
   const jumpInput = document.getElementById('level-jump-input') as HTMLInputElement | null;
   const triggerLevelJump = () => {
     if (!jumpInput) return;
     const val = Number(jumpInput.value);
-    if (Number.isFinite(val) && val >= 1) {
-      app.sound.playButtonTap();
-      app.loadLevel(Math.min(MAX_ENDLESS_LEVEL, Math.floor(val)), true);
+    if (!Number.isFinite(val) || val < 1) return;
+    const target = Math.min(MAX_ENDLESS_LEVEL, Math.floor(val));
+    const maxUnlocked = Math.max(1, app.saveManager.getPayload().highestLevelUnlocked || 1);
+    if (target > maxUnlocked) {
+      app.sound.playWallClack();
+      app.showGameToast(`🔒 Stage #${target} is locked — reach Stage #${maxUnlocked} first!`);
+      return;
     }
+    app.sound.playButtonTap();
+    app.loadLevel(target, true);
   };
   document.getElementById('btn-level-jump')?.addEventListener('click', triggerLevelJump);
   jumpInput?.addEventListener('keydown', (e) => {
@@ -148,20 +154,8 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   document.getElementById('btn-mode-toggle')?.addEventListener('click', () => {
     app.sound.playButtonTap();
     const cur = app.saveManager.getPayload().settings.playMode;
-    const next: PlayMode = cur === 'ZEN' ? 'TIMED' : 'ZEN';
-    const hadMoves = app.board.movesCommitted > 0;
-    app.saveManager.updateSettings({ playMode: next });
-    if (hadMoves) {
-      app.loadLevel(app.board.levelId, true);
-    } else {
-      app.syncInGameHud();
-      app.renderNow();
-    }
-    app.showGameToast(
-      next === 'ZEN'
-        ? `🧘 Switched to Zen Mode${hadMoves ? ' — Level Restarted' : ''}`
-        : `⏱ Switched to Timed Rush${hadMoves ? ' — Level Restarted' : ''}`
-    );
+    const next: PlayMode = cur === 'CHALLENGE' ? 'ZEN' : cur === 'ZEN' ? 'TIMED' : 'CHALLENGE';
+    app.switchPlayMode(next);
   });
 
   document.getElementById('btn-hud-sfx')?.addEventListener('click', () => {
@@ -237,6 +231,10 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   document.getElementById('btn-continue-level')?.addEventListener('click', () => {
     app.continueFailedLevel();
   });
+  document.getElementById('btn-failure-zen')?.addEventListener('click', () => {
+    app.sound.playButtonTap();
+    app.switchPlayMode('ZEN');
+  });
   document.getElementById('btn-retry-level')?.addEventListener('click', () => {
     app.sound.playButtonTap();
     app.loadLevel(app.board.levelId, true);
@@ -294,6 +292,12 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   bindToggle('toggle-colorblind', 'colorblindSymbols');
   bindToggle('toggle-high-contrast', 'highContrast');
   bindToggle('toggle-reduced-motion', 'reducedMotion');
+
+  const modeSelect = document.getElementById('select-play-mode') as HTMLSelectElement | null;
+  modeSelect?.addEventListener('change', () => {
+    app.sound.playButtonTap();
+    app.switchPlayMode(modeSelect.value as PlayMode);
+  });
 
   const qualitySelect = document.getElementById('select-quality-tier') as HTMLSelectElement | null;
   qualitySelect?.addEventListener('change', () => {

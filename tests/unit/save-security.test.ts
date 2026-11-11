@@ -47,12 +47,14 @@ function expectSanitized(p: SavePayloadV1): void {
   expect(p.unlockedSkins).toContain(p.equippedSkin);
   expect(p.unlockedTrays).toContain(p.equippedTray);
   expect(p.unlockedParticles).toContain(p.equippedParticle);
-  expect(['ZEN', 'TIMED']).toContain(p.settings.playMode);
+  expect(['CHALLENGE', 'ZEN', 'TIMED']).toContain(p.settings.playMode);
   expect(['AUTO', 'ULTRA_120', 'BALANCED_60']).toContain(p.settings.qualityTier);
   for (const [k, r] of Object.entries(p.levelRecords)) {
     expect(Number.isInteger(Number(k))).toBe(true);
     expect(
-      Object.keys(r).every((key) => ['stars', 'bestMoves', 'bestTimeSec', 'skipped'].includes(key))
+      Object.keys(r).every((key) =>
+        ['stars', 'bestMoves', 'bestTimeSec', 'skipped', 'zenCleared'].includes(key)
+      )
     ).toBe(true);
   }
 }
@@ -127,7 +129,7 @@ describe('SAVE-SEC-01: untrusted save URL / code / JSON import hardening', () =>
     expect(p.unlockedTrays).toEqual(['industrial_slate']);
     expect(p.boosters.UNDO).toBe(0);
     expect(p.boosters.HAMMER).toBe(0);
-    expect(p.settings.playMode).toBe('ZEN');
+    expect(p.settings.playMode).toBe('CHALLENGE');
     expect(p.settings.sfxEnabled).toBe(true);
     expect(p.settings.qualityTier).toBe('ULTRA_120');
     expect(p.levelRecords).toEqual({ 1: { stars: 3, bestMoves: 4, bestTimeSec: 0 } });

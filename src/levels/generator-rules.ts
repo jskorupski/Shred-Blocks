@@ -131,18 +131,37 @@ export const NIMBLE_SHAPES = ['1x1', '1x2', '2x1', 'L3_BL', 'L3_TL', 'L3_TR', 'L
 export const EARLY_SHAPES = ['1x1', '1x2', '2x1', '1x3', '3x1', 'L3_BL', 'L3_TL', 'L3_TR', 'L3_BR', '2x2'];
 export const MID_SHAPES = [
   ...EARLY_SHAPES,
+  '1x4',
+  '4x1',
   'L4_0',
   'L4_90',
   'L4_180',
   'L4_270',
   'J4_0',
   'J4_90',
+  'J4_180',
+  'J4_270',
   'T4_D',
   'T4_U',
   'T4_R',
   'T4_L',
+  'S4_H',
+  'S4_V',
+  'Z4_H',
+  'Z4_V',
 ];
-export const LATE_SHAPES = [...MID_SHAPES, 'S4_H', 'Z4_H', 'U5_U', 'U5_D'];
+export const LATE_SHAPES = [
+  ...MID_SHAPES,
+  'PLUS_5',
+  'BIGL_BL',
+  'BIGL_TL',
+  'BIGL_TR',
+  'BIGL_BR',
+  'U5_U',
+  'U5_D',
+  'U5_L',
+  'U5_R',
+];
 
 export type MechanicId =
   | 'NONE'
@@ -172,8 +191,13 @@ const HARMONIOUS_SECONDARY_POOL: MechanicId[] = [
   'MULTI_LAYER',
   'ICE_BLOCKS',
   'STAR',
-  'CUTOUTS_PILLARS',
+  'KEY_LOCK',
+  'STONE',
+  'CRATES',
+  'ROPES',
   'COLOR_QUEUE_GATES',
+  'FROZEN_GATES',
+  'CUTOUTS_PILLARS',
 ];
 
 const MASTERY_PRIMARY_POOL: MechanicId[] = [
@@ -238,30 +262,36 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
 
   if (primary !== 'NONE') active.add(primary);
 
-  // `RAMP-01`: During onboarding/breather waves (`mod 1, 2, 3, 4, 6`), focus 100% on the primary mechanic!
-  // On late-decade / peak waves (`mod 5, 7, 8, 9, 0`) from L35+, pair with at most 1 harmonious secondary mechanic.
-  const highFrictionPrimaries = new Set<MechanicId>([
-    'BOMBS',
-    'GENERATORS',
-    'TOGGLING_GATE',
-    'SLIDING_GATE',
-    'SIZE_CHANGING_GATE',
-  ]);
-  if (levelId >= 35 && !isBreatherOrOnboardingWave && (!highFrictionPrimaries.has(primary) || decPos === 0)) {
+  // `RAMP-01` & `RAMP-03`: Onboarding debut waves (`mod 1` <= L185) and breather waves (`mod 6`) focus on 1 primary mechanic.
+  // From L35+, non-breather waves pair with 1 unlocked synergistic secondary; from L141+ on HARD/SUPER_HARD (or L185+), add a 3rd.
+  const difficulty = getDifficultyForLevel(levelId);
+  if (levelId >= 35 && !isBreatherOrOnboardingWave) {
     const unlockedSecondaries = HARMONIOUS_SECONDARY_POOL.filter((m) => {
       if (m === primary) return false;
       if (m === 'AXIS_LOCK') return levelId > 20;
       if (m === 'CUTOUTS_PILLARS') return levelId > 30 && primary !== 'ELEVATORS' && primary !== 'GENERATORS';
       if (m === 'MULTI_LAYER') return levelId > 40;
-      if (m === 'ICE_BLOCKS') return levelId > 50 && primary !== 'BOMBS';
+      if (m === 'ICE_BLOCKS') return levelId > 50;
       if (m === 'STAR') return levelId > 60 && primary !== 'TOGGLING_GATE';
+      if (m === 'KEY_LOCK') return levelId > 70;
+      if (m === 'STONE') return levelId > 80 && primary !== 'ELEVATORS';
+      if (m === 'CRATES') return levelId > 90 && primary !== 'ELEVATORS';
+      if (m === 'ROPES') return levelId > 120 && primary !== 'KEY_LOCK';
       if (m === 'COLOR_QUEUE_GATES')
         return levelId > 130 && primary !== 'SLIDING_GATE' && primary !== 'SIZE_CHANGING_GATE';
+      if (m === 'FROZEN_GATES') return levelId > 140 && primary !== 'TOGGLING_GATE';
       return false;
     });
     if (unlockedSecondaries.length > 0) {
-      const sec = unlockedSecondaries[(levelId * 3) % unlockedSecondaries.length];
-      active.add(sec);
+      const secIdx = (levelId * 3 + decPos) % unlockedSecondaries.length;
+      active.add(unlockedSecondaries[secIdx]);
+      if (
+        unlockedSecondaries.length >= 2 &&
+        ((levelId >= 141 && difficulty !== 'NORMAL') || levelId >= 185)
+      ) {
+        const thirdIdx = (secIdx + 3) % unlockedSecondaries.length;
+        active.add(unlockedSecondaries[thirdIdx]);
+      }
     }
   }
 

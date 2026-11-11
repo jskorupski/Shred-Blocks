@@ -1,6 +1,18 @@
-import { autoAdvanceColorQueues, trySpawnReadyGenerators } from './gate-clearance';
-import { getPlayableEdgeSpanBounds, rebuildOccupancyGrid } from './physics';
-import { getActiveColor } from './polyomino';
+import {
+  autoAdvanceColorQueues,
+  findEligibleGateForBlockAt,
+  getGateActiveColor,
+  trySpawnReadyGenerators,
+} from './gate-clearance';
+import {
+  canBlockStepAnyDirection,
+  getPlayableEdgeSpanBounds,
+  isBlockMovable,
+  isGateInLockedRoom,
+  isRoomUnlocked,
+  rebuildOccupancyGrid,
+} from './physics';
+import { getActiveColor, getShape } from './polyomino';
 import type {
   BarrierState,
   BlockState,
@@ -266,6 +278,7 @@ export function createBoardState(spec: LevelSpec): BoardState {
 
   const timeLimitSec = spec.timeLimitSec ?? 90;
   const parMoves = spec.parMoves ?? Math.max(4, blocks.length * 2);
+  const moveLimit = spec.moveLimit ?? computeDefaultMoveLimit(parMoves, spec.difficulty, spec.id);
 
   const board: BoardState = {
     levelId: spec.id,
@@ -284,6 +297,10 @@ export function createBoardState(spec: LevelSpec): BoardState {
     elevators,
     barriers,
     parMoves,
+    moveLimit,
+    movesRemaining: moveLimit,
+    stasisMovesRemaining: 0,
+    lastMovedBlockId: 0,
     timeLimitSec,
     timeRemainingSec: timeLimitSec,
     freezeRemainingSec: 0,
@@ -296,8 +313,29 @@ export function createBoardState(spec: LevelSpec): BoardState {
 
   rebuildOccupancyGrid(board);
   trySpawnReadyGenerators(board);
-  autoAdvanceColorQueues(board);
+  autoAdvanceColorQueues(board, true);
   return board;
+}
+
+/**
+ * Computes the calibrated Tactical Move Budget (`moveLimit`) for `CHALLENGE` mode:
+ * - `L1..12` (FTUE): `parMoves + 6`
+ * - `L13..25` (Early Ramp): `parMoves + 5` (`+4` on Hard/Super Hard)
+ * - `L26+`: `+5` on breathers, `+4` on `NORMAL`, `+3` on `HARD`, `+2` on `SUPER_HARD`
+ */
+export function computeDefaultMoveLimit(
+  parMoves: number,
+  difficulty: 'NORMAL' | 'HARD' | 'SUPER_HARD',
+  levelId: number
+): number {
+  const par = Math.max(1, Math.floor(parMoves));
+  if (levelId <= 12) return par + 6;
+  if (levelId <= 25) return difficulty === 'NORMAL' ? par + 5 : par + 4;
+  const isBreather = (levelId % 5 === 0 && levelId % 10 !== 0) || levelId % 10 === 6;
+  if (isBreather && difficulty === 'NORMAL') return par + 5;
+  if (difficulty === 'SUPER_HARD') return par + 2;
+  if (difficulty === 'HARD') return par + 3;
+  return par + 4;
 }
 
 export function cloneBoardState(board: BoardState): BoardState {
@@ -347,44 +385,117 @@ export function isBoardWon(board: BoardState): boolean {
 }
 
 /**
- * Checks whether the board is in a loss state due to time expiration (in `TIMED` mode)
- * or an active Bomb block reaching 0.
+ * Fast $O(B \times G)$ unrecoverable gate/mechanic deadlock check (`DEADLOCK-01`):
+ * Returns `true` when the board is not won and either:
+ * 1. Zero movable non-stone blocks match any currently open unlocked gate's `(color, star, span, axis)`
+ *    (and no unlocked generator is waiting in `READY_TO_SPAWN`), meaning no amount of sliding can ever shred; OR
+ * 2. Zero legal moves or immediate gate exits exist anywhere on the board.
+ */
+export function isBoardDeadlocked(board: BoardState): boolean {
+  if (isBoardWon(board)) return false;
+
+  const movableBlocks = board.blocks.filter((b) => b.status === 'ACTIVE' && isBlockMovable(board, b.id));
+  if (movableBlocks.length === 0) return true;
+
+  const hasReadyUnlockedGenerator = board.generators.some((gen) => {
+    if (gen.state !== 'READY_TO_SPAWN' || gen.queueCursor >= gen.queue.length) return false;
+    const genRoom =
+      board.roomMap && gen.row >= 0 && gen.row < board.rows && gen.col >= 0 && gen.col < board.cols
+        ? board.roomMap[gen.row * board.cols + gen.col]
+        : 0;
+    return isRoomUnlocked(board, genRoom);
+  });
+
+  if (!hasReadyUnlockedGenerator) {
+    let anyPotentialShredPair = false;
+    for (const b of movableBlocks) {
+      const c = getActiveColor(b.colorStack, b.colorCursor);
+      if (c === 0) continue;
+      const sh = getShape(b.shapeId);
+      for (const g of board.gates) {
+        if (isGateInLockedRoom(board, g)) continue;
+        if (!g.shutterOpen || g.shutterLockColor > 0 || g.iceCount > 0) continue;
+        if (getGateActiveColor(g) !== c) continue;
+        if (b.isStar && !g.isStar) continue;
+        const isHorizEdge = g.edge === 'TOP' || g.edge === 'BOTTOM';
+        if (isHorizEdge && b.axisLock === 'H') continue;
+        if (!isHorizEdge && b.axisLock === 'V') continue;
+        const reqSpan = isHorizEdge ? sh.cols : sh.rows;
+        if (reqSpan <= g.spanLength) {
+          anyPotentialShredPair = true;
+          break;
+        }
+      }
+      if (anyPotentialShredPair) break;
+    }
+    if (!anyPotentialShredPair) return true;
+  }
+
+  for (const b of movableBlocks) {
+    const c = getActiveColor(b.colorStack, b.colorCursor);
+    if (c !== 0 && findEligibleGateForBlockAt(board, b, b.row, b.col) >= 0) {
+      return false;
+    }
+    if (canBlockStepAnyDirection(board, b.id)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Checks whether the board is in a loss state:
+ * - Winning on the final move (`isBoardWon`) always succeeds first.
+ * - Active Bomb reaching `0` -> `'BOMB_EXPLODED'`.
+ * - `TIMED` mode reaching `00:00` -> `'TIME_OUT'`.
+ * - `CHALLENGE` mode exhausting `movesRemaining <= 0` -> `'OUT_OF_MOVES'`.
  */
 export function isBoardFailed(
   board: BoardState,
   playMode: PlayMode
-): { failed: boolean; reason: 'TIME_OUT' | 'BOMB_EXPLODED' | null } {
-  if (playMode === 'TIMED' && board.timeRemainingSec <= 0) {
-    return { failed: true, reason: 'TIME_OUT' };
+): { failed: boolean; reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES' | null } {
+  if (isBoardWon(board)) {
+    return { failed: false, reason: null };
   }
   for (const b of board.blocks) {
     if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
       return { failed: true, reason: 'BOMB_EXPLODED' };
     }
   }
+  if (playMode === 'TIMED' && board.timeRemainingSec <= 0) {
+    return { failed: true, reason: 'TIME_OUT' };
+  }
+  if (playMode === 'CHALLENGE' && board.movesRemaining <= 0) {
+    return { failed: true, reason: 'OUT_OF_MOVES' };
+  }
   return { failed: false, reason: null };
 }
 
 /**
- * Computes star rating (1..3) upon level completion (`FR-29`):
- * - In `TIMED` mode (Speed Stars):
- *   - 3 Stars: `timeRemainingSec / timeLimitSec >= 0.25`
- *   - 2 Stars: `timeRemainingSec / timeLimitSec >= 0.10`
- *   - 1 Star:  cleared before `00:00`
- * - In `ZEN` mode (Efficiency Stars):
- *   - 3 Stars: `movesCommitted <= Math.ceil(parMoves * 1.25)`
- *   - 2 Stars: `movesCommitted <= Math.ceil(parMoves * 1.75)`
- *   - 1 Star:  cleared in any number of moves
+ * Computes Gold Star rating (`0..3`) upon level completion (`FR-29`):
+ * - `ZEN` mode (or any run that switched into Zen mid-board): `0` Gold Stars (`zenCleared = true` badge).
+ * - `TIMED` (`RUSH`) mode: `3★` (`>= 28%` time left), `2★` (`>= 12%` time left), `1★` (`> 0s`).
+ * - `CHALLENGE` mode:
+ *   - `3★`: `movesCommitted <= Math.max(parMoves + 1, Math.ceil(parMoves * 1.15))`
+ *   - `2★`: `movesCommitted <= Math.max(parMoves + 3, Math.ceil(parMoves * 1.45))`
+ *   - `1★`: cleared within Move Budget (or after Continue)
  */
-export function computeEarnedStars(board: BoardState, playMode: PlayMode = 'ZEN'): 1 | 2 | 3 {
+export function computeEarnedStars(
+  board: BoardState,
+  playMode: PlayMode = 'CHALLENGE',
+  zenTouched = false
+): 0 | 1 | 2 | 3 {
+  if (playMode === 'ZEN' || zenTouched) {
+    return 0;
+  }
   if (playMode === 'TIMED' && board.timeLimitSec > 0) {
     const ratio = board.timeRemainingSec / board.timeLimitSec;
-    if (ratio >= 0.25) return 3;
-    if (ratio >= 0.1) return 2;
+    if (ratio >= 0.28) return 3;
+    if (ratio >= 0.12) return 2;
     return 1;
   }
   const par = Math.max(1, board.parMoves);
-  if (board.movesCommitted <= Math.ceil(par * 1.25)) return 3;
-  if (board.movesCommitted <= Math.ceil(par * 1.75)) return 2;
+  if (board.movesCommitted <= Math.max(par + 1, Math.ceil(par * 1.15))) return 3;
+  if (board.movesCommitted <= Math.max(par + 3, Math.ceil(par * 1.45))) return 2;
   return 1;
 }

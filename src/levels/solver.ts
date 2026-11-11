@@ -1,6 +1,17 @@
-import { cloneBoardState, commitBlockMove, isBoardFailed, isBoardWon } from '../core/board';
+import {
+  cloneBoardState,
+  commitBlockMove,
+  isBoardDeadlocked,
+  isBoardFailed,
+  isBoardWon,
+} from '../core/board';
 import { findEligibleGateForBlockAt, getGateActiveColor } from '../core/gate-clearance';
-import { getMovedGroupBlocks, getReachableAnchors, isBlockMovable } from '../core/physics';
+import {
+  getMovedGroupBlocks,
+  getReachableAnchors,
+  isBlockMovable,
+  isGateInLockedRoom,
+} from '../core/physics';
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import type { BlockState, BoardState, ColorId } from '../core/types';
 
@@ -19,27 +30,17 @@ export interface SolverResult {
   expandedNodes?: number;
 }
 
-const MASK_64 = (1n << 64n) - 1n;
-
-function splitMix64(seed: bigint): bigint {
-  let z = (seed + 0x9e3779b97f4a7c15n) & MASK_64;
-  z = ((z ^ (z >> 30n)) * 0xbf58476d1ce4e5b9n) & MASK_64;
-  z = ((z ^ (z >> 27n)) * 0x94d049bb133111ebn) & MASK_64;
-  return (z ^ (z >> 31n)) & MASK_64;
-}
-
-function hashTuple(tag: bigint, a: number, b = 0, c = 0, d = 0): bigint {
-  const raw =
-    (tag & MASK_64) ^
-    (BigInt(a & 0xffff) << 48n) ^
-    (BigInt(b & 0xffff) << 32n) ^
-    (BigInt(c & 0xffff) << 16n) ^
-    BigInt(d & 0xffff);
-  return splitMix64(raw);
+function mix32(h: number, k: number): number {
+  let x = Math.imul(k ^ (k >>> 16), 0x85ebca6b);
+  x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+  x ^= x >>> 16;
+  let out = h ^ x;
+  out = (out << 13) | (out >>> 19);
+  return (Math.imul(out, 5) + 0xe6546b64) | 0;
 }
 
 /**
- * F-03 Complete 64-Bit Zobrist State Signature:
+ * F-03 Complete 64-Bit Zobrist State Signature (dual-lane 32-bit Murmur3 mixing -> zero intermediate BigInt heap allocations):
  * Hashes every dynamic board attribute so the solver never suffers false transposition hits:
  * - Active blocks: (id, row, col, colorCursor, iceCount, chained, ropeColor, hasKey, scissorColor, shutterGemColor, groupId, bombCount)
  * - Gates: (index, colorCursor, iceCount, shutterLockColor, shutterOpen, spanStart, spanLength, slideDir, sizeDir)
@@ -48,96 +49,124 @@ function hashTuple(tag: bigint, a: number, b = 0, c = 0, d = 0): bigint {
  * - Elevators: (id, row, col, atAlternatePos)
  */
 export function computeStateHash(board: BoardState): bigint {
-  let h = 0x517cc1b727220a95n;
+  let lo = 0x27220a95 | 0;
+  let hi = 0x517cc1b7 | 0;
 
   for (const b of board.blocks) {
     if (b.status !== 'ACTIVE') continue;
-    const h1 = hashTuple(0x1001n, b.id, b.row, b.col, b.colorCursor);
-    const flags =
+    const w1 =
+      ((b.id & 0xff) << 24) | ((b.row & 0xff) << 16) | ((b.col & 0xff) << 8) | (b.colorCursor & 0xff);
+    const w2 =
       (b.chained ? 1 : 0) |
       ((b.ropeColor & 0xf) << 1) |
       ((b.hasKey & 0xf) << 5) |
       ((b.scissorColor & 0xf) << 9) |
-      ((b.shutterGemColor & 0xf) << 13);
-    const h2 = hashTuple(0x1002n, b.id, b.iceCount, flags, b.bombCount);
-    const h3 = hashTuple(0x1003n, b.id, b.groupId, b.scissorColor, b.shutterGemColor);
-    h = (h ^ splitMix64(h1 ^ h2 ^ h3)) & MASK_64;
+      ((b.shutterGemColor & 0xf) << 13) |
+      ((b.iceCount & 0xf) << 17) |
+      ((b.groupId & 0xf) << 21) |
+      ((b.bombCount & 0x7f) << 25);
+    lo = mix32(lo, w1 ^ 0x1001);
+    hi = mix32(hi, w2 ^ Math.imul(b.id, 0x9e3779b1));
+    lo = mix32(lo, w2);
+    hi = mix32(hi, w1);
   }
 
   for (const g of board.gates) {
-    const gFlags =
-      (g.shutterOpen ? 1 : 0) | ((g.shutterLockColor & 0xf) << 1) | ((g.sizeDir > 0 ? 1 : 0) << 5);
-    const hg1 = hashTuple(0x2001n, g.index, g.colorCursor, g.iceCount, gFlags);
-    const hg2 = hashTuple(
-      0x2002n,
-      g.index,
-      g.spanStart,
-      g.spanLength,
-      ((g.slideDir + 2) & 0xff) | (((g.sizeDir + 2) & 0xff) << 8)
-    );
-    h = (h ^ splitMix64(hg1 ^ hg2)) & MASK_64;
+    const gw1 =
+      ((g.index & 0x3f) << 26) |
+      ((g.colorCursor & 0x3f) << 20) |
+      ((g.iceCount & 0xf) << 16) |
+      ((g.shutterLockColor & 0xf) << 12) |
+      (g.shutterOpen ? 0x800 : 0) |
+      ((g.spanStart & 0x1f) << 6) |
+      (g.spanLength & 0x3f);
+    const gw2 = (((g.slideDir + 2) & 0xf) << 8) | ((g.sizeDir + 2) & 0xf) | ((g.index & 0xff) << 16);
+    lo = mix32(lo, gw1 ^ 0x2001);
+    hi = mix32(hi, gw2 ^ gw1);
   }
 
   for (const c of board.crates) {
     if (c.destroyed || c.hp <= 0) continue;
-    const hc = hashTuple(0x3001n, c.id, c.row, c.col, c.hp);
-    h = (h ^ hc) & MASK_64;
+    const cw = ((c.id & 0xff) << 24) | ((c.row & 0xff) << 16) | ((c.col & 0xff) << 8) | (c.hp & 0xff);
+    lo = mix32(lo, cw ^ 0x3001);
+    hi = mix32(hi, cw ^ 0x3002);
   }
 
   for (const gen of board.generators) {
     const stCode = gen.state === 'COUNTING' ? 1 : gen.state === 'READY_TO_SPAWN' ? 2 : 3;
-    const hgen = hashTuple(0x4001n, gen.id, gen.queueCursor, gen.cooldown, stCode);
-    h = (h ^ hgen) & MASK_64;
+    const gnw =
+      ((gen.id & 0xff) << 24) | ((gen.queueCursor & 0xff) << 16) | ((gen.cooldown & 0xff) << 8) | stCode;
+    lo = mix32(lo, gnw ^ 0x4001);
+    hi = mix32(hi, gnw ^ 0x4002);
   }
 
   for (const elev of board.elevators) {
-    const he = hashTuple(0x5001n, elev.id, elev.row, elev.col, elev.atAlternatePos ? 1 : 0);
-    h = (h ^ he) & MASK_64;
+    const ew =
+      ((elev.id & 0xff) << 24) |
+      ((elev.row & 0xff) << 16) |
+      ((elev.col & 0xff) << 8) |
+      (elev.atAlternatePos ? 1 : 0);
+    lo = mix32(lo, ew ^ 0x5001);
+    hi = mix32(hi, ew ^ 0x5002);
   }
 
   if (board.barriers) {
     for (const bar of board.barriers) {
-      const hbar = hashTuple(0x6001n, bar.id, bar.open ? 1 : 0, bar.shredsRemaining, bar.lockId);
-      h = (h ^ hbar) & MASK_64;
+      const bw =
+        ((bar.id & 0xff) << 24) |
+        ((bar.open ? 1 : 0) << 20) |
+        ((bar.shredsRemaining & 0xff) << 8) |
+        (bar.lockId & 0xff);
+      lo = mix32(lo, bw ^ 0x6001);
+      hi = mix32(hi, bw ^ 0x6002);
     }
   }
 
-  return h;
+  return (BigInt(hi >>> 0) << 32n) | BigInt(lo >>> 0);
 }
 
-function getCandidateExitAnchorsForColor(
+function gateAnchorBounds(
+  board: BoardState,
+  g: BoardState['gates'][number],
+  shapeRows: number,
+  shapeCols: number
+): [number, number, number, number] {
+  const minS = g.slidesOnClear ? g.slideMin : g.spanStart;
+  const maxE =
+    (g.slidesOnClear ? g.slideMax : g.spanStart) + (g.sizeChangesOnClear ? g.maxLength : g.spanLength);
+  const line =
+    g.edgeLine ??
+    (g.edge === 'TOP' || g.edge === 'LEFT' ? 0 : g.edge === 'BOTTOM' ? board.rows - 1 : board.cols - 1);
+  if (g.edge === 'TOP' || g.edge === 'BOTTOM') {
+    const r = g.edge === 'TOP' ? line : line - shapeRows + 1;
+    return [r, r, minS, maxE - shapeCols];
+  }
+  const c = g.edge === 'LEFT' ? line : line - shapeCols + 1;
+  return [minS, maxE - shapeRows, c, c];
+}
+
+function colorsShareExitAnchor(
   board: BoardState,
   shapeRows: number,
   shapeCols: number,
-  color: ColorId
-): Set<number> {
-  const anchors = new Set<number>();
-  for (const g of board.gates) {
-    if (!g.colorQueue.includes(color)) continue;
-    const minSpan = g.slidesOnClear ? g.slideMin : g.spanStart;
-    const maxLen = g.sizeChangesOnClear ? g.maxLength : g.spanLength;
-    const maxSpanEnd = (g.slidesOnClear ? g.slideMax : g.spanStart) + maxLen;
-    const edgeLine =
-      g.edgeLine ??
-      (g.edge === 'TOP' || g.edge === 'LEFT' ? 0 : g.edge === 'BOTTOM' ? board.rows - 1 : board.cols - 1);
-
-    if (g.edge === 'TOP' || g.edge === 'BOTTOM') {
-      const r = g.edge === 'TOP' ? edgeLine : edgeLine - shapeRows + 1;
-      for (let c = minSpan; c <= maxSpanEnd - shapeCols; c++) {
-        if (r >= 0 && r + shapeRows <= board.rows && c >= 0 && c + shapeCols <= board.cols) {
-          anchors.add(r * board.cols + c);
-        }
-      }
-    } else {
-      const c = g.edge === 'LEFT' ? edgeLine : edgeLine - shapeCols + 1;
-      for (let r = minSpan; r <= maxSpanEnd - shapeRows; r++) {
-        if (r >= 0 && r + shapeRows <= board.rows && c >= 0 && c + shapeCols <= board.cols) {
-          anchors.add(r * board.cols + c);
-        }
+  cA: ColorId,
+  cB: ColorId
+): boolean {
+  for (let i = 0; i < board.gates.length; i++) {
+    const gA = board.gates[i];
+    if (!gA.colorQueue.includes(cA)) continue;
+    if (gA.colorQueue.includes(cB)) return true;
+    const [r0A, r1A, c0A, c1A] = gateAnchorBounds(board, gA, shapeRows, shapeCols);
+    if (r0A > r1A || c0A > c1A) continue;
+    for (let j = 0; j < board.gates.length; j++) {
+      if (i === j || !board.gates[j].colorQueue.includes(cB)) continue;
+      const [r0B, r1B, c0B, c1B] = gateAnchorBounds(board, board.gates[j], shapeRows, shapeCols);
+      if (Math.max(r0A, r0B) <= Math.min(r1A, r1B) && Math.max(c0A, c0B) <= Math.min(c1A, c1B)) {
+        return true;
       }
     }
   }
-  return anchors;
+  return false;
 }
 
 /**
@@ -163,16 +192,7 @@ export function computeAdmissibleHeuristic(board: BoardState): number {
         const cA = b.colorStack[i];
         const cB = b.colorStack[i + 1];
         if (cA === cB) continue;
-        const anchorsA = getCandidateExitAnchorsForColor(board, shape.rows, shape.cols, cA);
-        const anchorsB = getCandidateExitAnchorsForColor(board, shape.rows, shape.cols, cB);
-        let sharesExitAnchor = false;
-        for (const a of anchorsA) {
-          if (anchorsB.has(a)) {
-            sharesExitAnchor = true;
-            break;
-          }
-        }
-        if (!sharesExitAnchor) {
+        if (!colorsShareExitAnchor(board, shape.rows, shape.cols, cA, cB)) {
           extraLayers++;
         }
       }
@@ -287,15 +307,30 @@ function isPureSafeExit(board: BoardState, block: BlockState, gateIndex: number)
   }
 
   const gate = board.gates[gateIndex];
+  const curColor = getGateActiveColor(gate);
   if (gate.colorCursor + 1 < gate.colorQueue.length) {
-    const curColor = getGateActiveColor(gate);
     const nextColor = gate.colorQueue[gate.colorCursor + 1];
     if (curColor !== nextColor) {
       return false;
     }
   }
 
+  // If another multi-slot queued gate currently demands `curColor`, shredding at this decoy gate
+  // could starve that queued gate on `L26+` (where autoAdvanceColorQueues does not bail out mistakes).
+  for (let gi = 0; gi < board.gates.length; gi++) {
+    if (gi === gateIndex) continue;
+    const other = board.gates[gi];
+    if (other.colorCursor + 1 < other.colorQueue.length && getGateActiveColor(other) === curColor) {
+      return false;
+    }
+  }
+
   return true;
+}
+
+interface PathNode {
+  move: SolverMove;
+  prev: PathNode | null;
 }
 
 interface SearchNode {
@@ -304,7 +339,40 @@ interface SearchNode {
   hAdm: number;
   priority: number;
   firstMove: SolverMove | null;
-  path: SolverMove[];
+  pathTail: PathNode | null;
+}
+
+function reconstructPath(tail: PathNode | null): SolverMove[] {
+  const out: SolverMove[] = [];
+  let cur = tail;
+  while (cur) {
+    out.push(cur.move);
+    cur = cur.prev;
+  }
+  out.reverse();
+  return out;
+}
+
+/**
+ * Fast solver-specialized board cloner: shares read-only typed arrays & spec arrays
+ * (`floorColor`, `roomMap`, `b.colorStack`, `gen.queue`, `bar.cells`) that never mutate
+ * during `commitBlockMove`.
+ */
+function cloneBoardForSolver(board: BoardState): BoardState {
+  const copyQueues = board.levelId <= 25 && board.barriers.length > 0;
+  return {
+    ...board,
+    occupancy: new Int16Array(board.occupancy),
+    blocks: board.blocks.map((b) => ({ ...b })),
+    gates: board.gates.map((g) =>
+      copyQueues && g.colorQueue.length > 1 ? { ...g, colorQueue: [...g.colorQueue] } : { ...g }
+    ),
+    crates: board.crates.length > 0 ? board.crates.map((c) => ({ ...c })) : board.crates,
+    generators: board.generators.length > 0 ? board.generators.map((gen) => ({ ...gen })) : board.generators,
+    elevators: board.elevators.length > 0 ? board.elevators.map((e) => ({ ...e })) : board.elevators,
+    barriers: board.barriers.length > 0 ? board.barriers.map((bar) => ({ ...bar })) : board.barriers,
+    hintMove: null,
+  };
 }
 
 class MinPriorityQueue {
@@ -370,16 +438,57 @@ class MinPriorityQueue {
 }
 
 /**
+ * Builds a lightweight per-cell corridor demand heatmap (`rows * cols`) so `generateMacroMoves`
+ * prioritizes 1–3 cell pocket shifts that pull blockers OFF active exit-gate lanes and generator pads.
+ */
+function buildCorridorDemandMap(board: BoardState): Uint8Array {
+  const { rows, cols, occupancy } = board;
+  const demand = new Uint8Array(rows * cols);
+
+  for (const g of board.gates) {
+    if (isGateInLockedRoom(board, g)) continue;
+    const w = g.shutterOpen && g.shutterLockColor === 0 && g.iceCount === 0 ? 3 : 1;
+    const edgeLine =
+      g.edgeLine ?? (g.edge === 'TOP' || g.edge === 'LEFT' ? 0 : g.edge === 'BOTTOM' ? rows - 1 : cols - 1);
+    const maxDepth = Math.min(4, Math.max(rows, cols));
+
+    for (let s = g.spanStart; s < g.spanStart + g.spanLength; s++) {
+      for (let d = 0; d < maxDepth; d++) {
+        const r = g.edge === 'TOP' ? edgeLine + d : g.edge === 'BOTTOM' ? edgeLine - d : s;
+        const c = g.edge === 'LEFT' ? edgeLine + d : g.edge === 'RIGHT' ? edgeLine - d : s;
+        if (r < 0 || r >= rows || c < 0 || c >= cols) break;
+        const occ = occupancy[r * cols + c];
+        if (occ === -1 || occ === -2 || occ === -3) break;
+        demand[r * cols + c] = Math.min(255, demand[r * cols + c] + Math.max(1, w - (d >= 2 ? 1 : 0)));
+      }
+    }
+  }
+
+  for (const gen of board.generators) {
+    if (gen.state === 'DEPLETED' || gen.queueCursor >= gen.queue.length) continue;
+    const sr = gen.spawnRow;
+    const sc = gen.spawnCol;
+    if (sr >= 0 && sr < rows && sc >= 0 && sc < cols) {
+      demand[sr * cols + sc] = Math.min(255, demand[sr * cols + sc] + 5);
+    }
+  }
+
+  return demand;
+}
+
+/**
  * Generates ordered macro-moves for a board state:
  * - Priority 1: Immediate Gate Exits (with Pure Safe Exit dominance pruning when applicable)
- * - Priority 2: Useful Repositioning Moves
+ * - Priority 2: Corridor-clearing & alcove-parking Repositioning Moves
  */
-function generateMacroMoves(board: BoardState): SolverMove[] {
+export function generateMacroMoves(board: BoardState): SolverMove[] {
   const exitMoves: Array<SolverMove & { urgency: number; pureSafe: boolean }> = [];
   const repositionMoves: Array<SolverMove & { score: number }> = [];
 
   const seenGroups = new Set<number>();
   const hasCrates = board.crates.some((c) => !c.destroyed && c.hp > 0);
+  const laneDemand = buildCorridorDemandMap(board);
+  const { rows, cols, occupancy } = board;
 
   for (const b of board.blocks) {
     if (b.status !== 'ACTIVE') continue;
@@ -393,6 +502,14 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
     const lead = group.find((m) => m.id === b.id) ?? group[0];
     const anchors = getReachableAnchors(board, lead.id);
     if (anchors.length === 0) continue;
+
+    let currentLaneLoad = 0;
+    for (const member of group) {
+      const mShape = getShape(member.shapeId);
+      for (const [dr, dc] of mShape.cells) {
+        currentLaneLoad += laneDemand[(member.row + dr) * cols + (member.col + dc)];
+      }
+    }
 
     const seenGateExitsForGroup = new Set<number>();
     const blockRepos: Array<SolverMove & { score: number }> = [];
@@ -455,29 +572,23 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
           pureSafe,
         });
       } else if (dRow !== 0 || dCol !== 0) {
-        let score = Math.min(anchor.dist, 4) * 2;
-        const activeColor = getActiveColor(lead.colorStack, lead.colorCursor);
-
-        const leadShape = getShape(lead.shapeId);
-        for (const g of board.gates) {
-          if (g.colorQueue.includes(activeColor)) {
-            const edgeLine =
-              g.edgeLine ??
-              (g.edge === 'TOP' || g.edge === 'LEFT'
-                ? 0
-                : g.edge === 'BOTTOM'
-                  ? board.rows - 1
-                  : board.cols - 1);
-            if (
-              (g.edge === 'TOP' && anchor.row === edgeLine) ||
-              (g.edge === 'BOTTOM' && anchor.row + leadShape.rows - 1 === edgeLine) ||
-              (g.edge === 'LEFT' && anchor.col === edgeLine) ||
-              (g.edge === 'RIGHT' && anchor.col + leadShape.cols - 1 === edgeLine)
-            ) {
-              score += 5;
-            }
+        let targetLaneLoad = 0;
+        let alcoveTouches = 0;
+        for (const member of group) {
+          const mShape = getShape(member.shapeId);
+          for (const [dr, dc] of mShape.cells) {
+            const nr = member.row + dRow + dr;
+            const nc = member.col + dCol + dc;
+            targetLaneLoad += laneDemand[nr * cols + nc];
+            if (nr === 0 || occupancy[(nr - 1) * cols + nc] < 0) alcoveTouches++;
+            if (nr === rows - 1 || occupancy[(nr + 1) * cols + nc] < 0) alcoveTouches++;
+            if (nc === 0 || occupancy[nr * cols + (nc - 1)] < 0) alcoveTouches++;
+            if (nc === cols - 1 || occupancy[nr * cols + (nc + 1)] < 0) alcoveTouches++;
           }
         }
+
+        const laneRelief = currentLaneLoad - targetLaneLoad;
+        let score = laneRelief * 4 + Math.min(alcoveTouches, 4) * 2 + Math.min(anchor.dist, 3);
 
         for (const elev of board.elevators) {
           if (
@@ -486,7 +597,7 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
             anchor.col >= elev.col &&
             anchor.col < elev.col + elev.width
           ) {
-            score += 6;
+            score += 7;
           }
         }
 
@@ -500,9 +611,9 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
       }
     }
 
-    // Keep top 4 repositioning anchors per movable block to avoid open-board combinatorial blowup
+    // Keep top 3 corridor-clearing / alcove-parking anchors per movable block
     blockRepos.sort((a, b) => b.score - a.score);
-    for (let i = 0; i < Math.min(blockRepos.length, 4); i++) {
+    for (let i = 0; i < Math.min(blockRepos.length, 3); i++) {
       repositionMoves.push(blockRepos[i]);
     }
   }
@@ -520,7 +631,7 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
     });
   }
 
-  const maxRepos = exitMoves.length > 0 ? 6 : 16;
+  const maxRepos = exitMoves.length > 0 ? 6 : 12;
   for (let i = 0; i < Math.min(repositionMoves.length, maxRepos); i++) {
     const m = repositionMoves[i];
     combined.push({
@@ -536,20 +647,17 @@ function generateMacroMoves(board: BoardState): SolverMove[] {
 
 /**
  * Solves `board` using A* / Best-First Macro-Move Search with 64-bit Zobrist transposition
- * table (`F-03`) and admissible heuristic (`F-02`).
+ * table (`F-03`), corridor-relief move ordering, deadlock pruning, and admissible heuristic (`F-02`).
  */
-export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverResult {
+export function solveBoard(board: BoardState, maxExpandedNodes = 2400): SolverResult {
   if (isBoardWon(board)) {
-    return {
-      solvable: true,
-      minMoves: 0,
-      firstMove: null,
-      solutionPath: [],
-      expandedNodes: 0,
-    };
+    return { solvable: true, minMoves: 0, firstMove: null, solutionPath: [], expandedNodes: 0 };
+  }
+  if (isBoardDeadlocked(board)) {
+    return { solvable: false, minMoves: -1, firstMove: null, solutionPath: [], expandedNodes: 0 };
   }
 
-  const startBoard = cloneBoardState(board);
+  const startBoard = cloneBoardForSolver(board);
   const startHash = computeStateHash(startBoard);
   const startHAdm = computeAdmissibleHeuristic(startBoard);
   const startMetrics = computeRemainingLayersAndObstacles(startBoard);
@@ -564,7 +672,7 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
     hAdm: startHAdm,
     priority: startMetrics.totalLayers * 1.15 + startMetrics.restrictionScore * 0.1 + startHAdm * 0.01,
     firstMove: null,
-    path: [],
+    pathTail: null,
   });
 
   let expandedNodes = 0;
@@ -576,8 +684,18 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
 
     const moves = generateMacroMoves(current.board);
     for (const move of moves) {
-      const nextBoard = cloneBoardState(current.board);
-      const outcome = commitBlockMove(nextBoard, move.blockId, move.targetRow, move.targetCol, 'ZEN');
+      const nextBoard = cloneBoardForSolver(current.board);
+      const outcome = commitBlockMove(
+        nextBoard,
+        move.blockId,
+        move.targetRow,
+        move.targetCol,
+        'ZEN',
+        0,
+        0,
+        false,
+        true
+      );
 
       if (!outcome.moved) continue;
       if (isBoardFailed(nextBoard, 'ZEN').failed) continue;
@@ -590,14 +708,14 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
         exitsGateIndex: outcome.clearedGateIndex,
       };
       const nextFirstMove = current.firstMove ?? recordedMove;
-      const nextPath = [...current.path, recordedMove];
+      const nextTail: PathNode = { move: recordedMove, prev: current.pathTail };
 
       if (isBoardWon(nextBoard)) {
         return {
           solvable: true,
           minMoves: nextG,
           firstMove: nextFirstMove,
-          solutionPath: nextPath,
+          solutionPath: reconstructPath(nextTail),
           expandedNodes,
         };
       }
@@ -608,6 +726,8 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
         continue;
       }
       visitedBestG.set(nextHash, nextG);
+
+      if (isBoardDeadlocked(nextBoard)) continue;
 
       const nextHAdm = computeAdmissibleHeuristic(nextBoard);
       const metrics = computeRemainingLayersAndObstacles(nextBoard);
@@ -620,18 +740,12 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
         hAdm: nextHAdm,
         priority: nextPriority,
         firstMove: nextFirstMove,
-        path: nextPath,
+        pathTail: nextTail,
       });
     }
   }
 
-  return {
-    solvable: false,
-    minMoves: -1,
-    firstMove: null,
-    solutionPath: [],
-    expandedNodes,
-  };
+  return { solvable: false, minMoves: -1, firstMove: null, solutionPath: [], expandedNodes };
 }
 
 /**
@@ -639,7 +753,7 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 1200): SolverRe
  * Guarantees a valid move is returned if any legal move exists on the board,
  * falling back to any immediate gate clear or helpful unblock move if the solver node budget is exceeded.
  */
-export function findNextHintMove(board: BoardState, maxExpandedNodes = 800): SolverMove | null {
+export function findNextHintMove(board: BoardState, maxExpandedNodes = 1400): SolverMove | null {
   if (isBoardWon(board)) return null;
 
   const solved = solveBoard(board, maxExpandedNodes);
@@ -650,8 +764,8 @@ export function findNextHintMove(board: BoardState, maxExpandedNodes = 800): Sol
   const fallbackMoves = generateMacroMoves(board);
   for (const m of fallbackMoves) {
     const testBoard = cloneBoardState(board);
-    const outcome = commitBlockMove(testBoard, m.blockId, m.targetRow, m.targetCol, 'ZEN');
-    if (outcome.moved && !isBoardFailed(testBoard, 'ZEN').failed) {
+    const outcome = commitBlockMove(testBoard, m.blockId, m.targetRow, m.targetCol, 'ZEN', 0, 0, false, true);
+    if (outcome.moved && !isBoardFailed(testBoard, 'ZEN').failed && !isBoardDeadlocked(testBoard)) {
       return {
         blockId: m.blockId,
         targetRow: m.targetRow,

@@ -13,7 +13,7 @@ import { getLevelSpec } from '../levels/catalog';
 import { solveBoard } from '../levels/solver';
 import { generateQrSvg } from '../storage/qr-svg';
 import { decodeSaveCode, validateSavePayloadV1 } from '../storage/save-code';
-import { extractImportCodeFromHash } from '../storage/save-manager';
+import { CONTINUE_COIN_COST, extractImportCodeFromHash } from '../storage/save-manager';
 import {
   type AppHistoryState,
   type AppViewContext,
@@ -263,18 +263,89 @@ export function checkUrlHashForSaveImportImpl(app: AppViewContext): void {
   }
 }
 
+export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, silent = false): void {
+  const prevMode = app.saveManager.getPayload().settings.playMode;
+  if (prevMode === nextMode) {
+    if (nextMode === 'ZEN') {
+      const failDlg = getModalElement('failure');
+      if (failDlg?.open) {
+        failDlg.close();
+      }
+    }
+    return;
+  }
+
+  app.saveManager.updateSettings({ playMode: nextMode });
+
+  if (nextMode === 'ZEN') {
+    app.runTouchedZen = true;
+    app.levelOutcomeHandled = false;
+    for (const b of app.board.blocks) {
+      if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
+        b.bombCount = Math.max(4, b.bombMax);
+      }
+    }
+    const failDlg = getModalElement('failure');
+    if (failDlg?.open) {
+      failDlg.close();
+    }
+    app.syncAllUiFromSave();
+    app.renderNow();
+    if (!silent) {
+      app.showGameToast('🌿 Switched to Zen Mode — finish this board freely!');
+    }
+    return;
+  }
+
+  const mustRestart = app.board.movesCommitted > 0 || app.runTouchedZen;
+  if (mustRestart) {
+    app.closeAllModals();
+    app.loadLevel(app.board.levelId, app.activeScreen === 'game' && !app.titleOverlayOpen, false);
+    if (!silent) {
+      app.showGameToast(
+        nextMode === 'CHALLENGE'
+          ? '⚔️ Challenge Mode — stage restarted for Gold Stars!'
+          : '⏱ Speed Rush — stage restarted for Gold Stars!'
+      );
+    }
+  } else {
+    app.runTouchedZen = false;
+    app.levelOutcomeHandled = false;
+    app.syncAllUiFromSave();
+    app.renderNow();
+    if (!silent) {
+      app.showGameToast(
+        nextMode === 'CHALLENGE'
+          ? '⚔️ Switched to Challenge Mode (Move Budget)'
+          : '⏱ Switched to Speed Rush (Timed)'
+      );
+    }
+  }
+}
+
 export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBridge {
   return {
     getBoard: () => app.board,
     getSave: () => app.saveManager.getPayload(),
-    loadLevel: (levelId: number) => app.loadLevel(levelId, true),
+    patchSave: (patch: Partial<SavePayloadV1>) => {
+      const next = validateSavePayloadV1({ ...app.saveManager.getPayload(), ...patch });
+      if (next) {
+        app.saveManager.importSaveJson(JSON.stringify(next));
+        app.syncAllUiFromSave();
+        app.renderRoadmap();
+        app.renderThemesStudio();
+      }
+    },
+    loadLevel: (levelId: number) => {
+      const cleanId = Math.max(1, Math.floor(levelId));
+      app.saveManager.setCurrentLevel(cleanId, true);
+      app.loadLevel(cleanId, true, false);
+    },
     commitMove: (blockId: number, targetRow: number, targetCol: number) =>
       app.commitMove(blockId, targetRow, targetCol),
     autoSolveCurrentLevel: () => app.autoSolveCurrentLevel(),
     setPlayMode: (mode: PlayMode) => {
-      app.saveManager.updateSettings({ playMode: mode });
-      app.syncInGameHud();
-      app.renderNow();
+      app.switchPlayMode(mode, true);
     },
     setColorblindMode: (enabled: boolean) => {
       app.saveManager.updateSettings({ colorblindSymbols: enabled });
@@ -333,17 +404,23 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
 
 export function continueFailedLevelImpl(app: AppViewContext): void {
   const save = app.saveManager.getPayload();
-  if (save.coins < 50) {
-    app.showGameToast('Need 50 Coins to continue — or Retry / Skip for FREE!');
+  if (save.coins < CONTINUE_COIN_COST) {
+    app.showGameToast(`Need ${CONTINUE_COIN_COST} Coins — or Retry, Zen Mode, or Skip for FREE!`);
     return;
   }
-  if (app.saveManager.buyBoosterWithCoins('FREEZE', 50)) {
+  if (app.saveManager.buyBoosterWithCoins('FREEZE', CONTINUE_COIN_COST)) {
     app.saveManager.spendBooster('FREEZE');
   }
-  app.board.timeRemainingSec = Math.max(15, app.board.timeRemainingSec + 15);
+  const playMode = save.settings.playMode;
+  if (playMode === 'CHALLENGE') {
+    app.board.movesRemaining = Math.max(5, app.board.movesRemaining + 5);
+    app.board.moveLimit += 5;
+  } else if (playMode === 'TIMED') {
+    app.board.timeRemainingSec = Math.max(20, app.board.timeRemainingSec + 20);
+  }
   for (const b of app.board.blocks) {
     if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
-      b.bombCount = Math.max(6, b.bombMax);
+      b.bombCount = Math.max(5, b.bombMax);
     }
   }
   app.levelOutcomeHandled = false;
@@ -384,7 +461,8 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
 
     if (st.view === 'game') {
       const save = app.saveManager.getPayload();
-      const targetId = Math.max(1, Math.floor(st.levelId || save.currentLevelId || 1));
+      const maxAllowed = Math.max(1, save.highestLevelUnlocked || 1);
+      const targetId = Math.min(maxAllowed, Math.max(1, Math.floor(st.levelId || save.currentLevelId || 1)));
       if (app.board.levelId !== targetId) {
         app.loadLevel(targetId, true, true);
       } else {

@@ -138,7 +138,7 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
 
 export type AxisLock = 'NONE' | 'H' | 'V';
 export type EdgeDir = 'TOP' | 'RIGHT' | 'BOTTOM' | 'LEFT';
-export type PlayMode = 'ZEN' | 'TIMED';
+export type PlayMode = 'CHALLENGE' | 'ZEN' | 'TIMED';
 export type BoosterType = 'UNDO' | 'FREEZE' | 'HAMMER' | 'ROCKET' | 'VACUUM';
 export type InputMode = 'DRAG' | 'TARGET_HAMMER' | 'TARGET_ROCKET' | 'TARGET_VACUUM';
 export type RocketAxis = 'ROW' | 'COL';
@@ -217,7 +217,7 @@ export interface BlockState {
   lockId: number;
   /** Carries a Key that unlocks chained blocks with matching lockId */
   hasKey: number;
-  /** Bomb countdown: seconds in TIMED mode, moves in ZEN mode (0 = not a bomb) */
+  /** Bomb countdown: seconds in TIMED mode, moves in CHALLENGE/ZEN mode (0 = not a bomb) */
   bombCount: number;
   bombMax: number;
   /** Combined / Glued group ID (0 = independent; >0 = moves as rigid assembly with siblings sharing groupId) */
@@ -240,7 +240,7 @@ export interface GateState {
   edge: EdgeDir;
   /** Start row (for LEFT/RIGHT) or start col (for TOP/BOTTOM), inclusive */
   spanStart: number;
-  /** Length in grid cells (1..4) */
+  /** Aperture length in grid cells (typically 2..4 on campaign boards) */
   spanLength: number;
   /**
    * Boundary row (for TOP/BOTTOM) or col (for LEFT/RIGHT) along which this gate sits.
@@ -336,6 +336,10 @@ export interface BoardState {
   elevators: ElevatorState[];
   barriers: BarrierState[];
   parMoves: number;
+  moveLimit: number;
+  movesRemaining: number;
+  stasisMovesRemaining: number;
+  lastMovedBlockId: number;
   timeLimitSec: number;
   timeRemainingSec: number;
   freezeRemainingSec: number;
@@ -420,14 +424,16 @@ export interface LevelSpec {
     deltaCol: number;
   }>;
   parMoves?: number;
+  moveLimit?: number;
   timeLimitSec?: number;
 }
 
 export interface LevelRecord {
-  stars: number; // 0 = skipped, 1..3 = earned stars
+  stars: number; // 0 = skipped or Zen-only clear, 1..3 = earned Gold Stars in Challenge/Timed
   bestMoves: number;
   bestTimeSec: number;
   skipped?: boolean;
+  zenCleared?: boolean;
 }
 
 export interface SavePayloadV1 {
@@ -445,6 +451,8 @@ export interface SavePayloadV1 {
   totalMovesCommitted: number;
   shredderChestProgress: number;
   milestoneChestLevel: number;
+  starReliquaryLevel: number;
+  economyVersion: number;
   boosters: Record<BoosterType, number>;
   unlockedSkins: SkinId[];
   unlockedTrays: TrayId[];

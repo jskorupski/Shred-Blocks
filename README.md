@@ -23,11 +23,12 @@
 
 **ShredBlocks: Color Jam** is a tactile 3D polyomino puzzle game built for the web with zero runtime dependencies. Slide colorful 3D blocks across a floating twilight courtyard into matching perimeter shredder gates—and watch rotating teeth slice them into bursts of 3D particles.
 
-- **🧩 300 Campaign Levels + Infinite Endless Mode**: Hand-tuned progression from cozy `5×5` courtyards to sculpted non-rectangular atriums, **Tall Portrait Sanctums (`8×6`, `9×7`, `10×8`)**, **Multi-Room Portcullis Sanctums**, **Sealed Mystery Vaults (`🔒 N`)** that unseal to reveal hidden blocks underneath, and `9×9` Grand Citadels—backed by a deterministic puzzle solver so every board is 100% solvable without boosters.
-- **🧘 Two Play Modes (Switch Anytime)**:
-  - **Zen Mode (Default)**: Untimed, meditative puzzle solving where move efficiency earns **1–3 Stars**.
-  - **Timed Rush**: Optional arcade countdown clock for speedrunners.
-- **💚 100% Fair & Player-Friendly**: Unlimited lives, **3 Free Undos** on every level attempt, and **Free Level Skip (`0 Coins`)** anytime you want to move past a stage.
+- **🧩 300 Campaign Levels + Infinite Endless Mode**: Hand-tuned & constraint-generated progression from cozy `5×5` onboarding courtyards (`L1–12` First-Move Safe) to cross-corridor blocker puzzles (`L13+`), sculpted non-rectangular atriums, **Tall Portrait Sanctums (`8×6`, `9×7`, `10×8`)**, **Multi-Room Portcullis Sanctums**, **Sealed Mystery Vaults (`🔒 N`)**, and `9×9` Grand Citadels—backed by a deterministic A\* puzzle solver so every board is 100% solvable without boosters.
+- **⚔️ Three Play Modes (1-Tap Switch Anytime)**:
+  - **Tactical Challenge (Default)**: Solve within a calibrated **Move Budget (`parMoves + tierBuffer`)** with forgiving **Touch-Move Coalescing** (multi-drag adjustments of the same block count as `1` move) to earn **1–3 Gold Stars**, **Flow Streak bonuses**, and **25-Star Reliquary Chests**.
+  - **Zen Mode**: Untimed, unlimited-move sanctuary play (**1 tap away** in HUD, Pause, or Out-of-Moves modal) that advances the campaign freely with a **`🌿 Zen`** badge (`0` Gold Stars; replay anytime in Challenge/Timed for Gold Stars!).
+  - **Timed Rush**: Calibrated arcade countdown clock (`parMoves × secPerMove + 12s`) for speedrunners, awarding **1–3 Gold Stars**.
+- **💚 100% Fair & Player-Friendly**: Unlimited lives, **3 Free Undos** on every level attempt, **1-tap Zen Mode rescue**, and **Free Level Skip (`0 Coins`)** anytime you want to move past a stage.
 - **📱 Offline-First PWA & Contextual Updates**: Installs directly to your iOS, Android, or Desktop home screen and runs 100% offline after the first visit, with zero-cutoff container-query viewport sizing (`VIEWPORT-01`) across browser & standalone modes and non-overlapping Sanctuary Update Ribbons on the Title & Map screens (`PWA-UPDATE-01`).
 - **🔄 Zero-Account Cross-Device Sync & Infinite Progression**: Local progress is persisted across dual-layer `localStorage` + `IndexedDB` storage and transfers seamlessly between phone, tablet, and desktop—even across thousands of Infinite Endless stages—via a compact `SB1-...` Save Code, shareable Sync Link, offline QR Code, or JSON backup.
 
@@ -74,10 +75,10 @@ npm run dev:lan
 # Run Biome TypeScript & CSS linter/formatter check (< 150ms)
 npm run lint
 
-# Run Vitest unit & 300-level BFS solver verification suite (< 4.0s, 50 tests)
+# Run Vitest unit & 300-level A* solver verification suite (56 tests across 6 suites)
 npm run test:unit
 
-# Run Playwright E2E interactive browser playtest suite (20 tests across Desktop & Mobile)
+# Run Playwright E2E interactive browser playtest suite (22 tests across Desktop & Mobile)
 npm run test:e2e
 
 # Capture 42 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
@@ -110,7 +111,7 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
 | **8** | **Lvl 61** | **Key (`🔑`) & Chained Lock (`🔒`)** | Chained blocks are immobilized until the block carrying the matching Key is shredded. |
 | **9** | **Lvl 71** | **Neutral Stone Sliders** | Heavy charcoal monoliths that never shred through any gate but slide freely to unblock lanes. |
 | **10** | **Lvl 81** | **Wooden Crates (`📦`)** | Destructible `1×1` crates (`1–3 HP`) that crack and shatter whenever an adjacent block shreds at a gate. |
-| **11** | **Lvl 91** | **Time-Bombs (`💣 N`)** | Tick down by `1` per move in Zen Mode (or `1` per second in Timed Rush); shred before `0` to defuse. |
+| **11** | **Lvl 91** | **Time-Bombs (`💣 N`)** | Tick down by `1` per committed move in Challenge/Zen Mode (paused during `❄️` Stasis Moves) or `1` per second in Timed Rush; shred before `0` to defuse. |
 | **12** | **Lvl 101** | **Glued Linked Groups** | Separate blocks bonded by golden solder bars move together as a rigid multi-block assembly. |
 | **13** | **Lvl 111** | **Colored Ropes (`🪢`) & Scissors (`✂️`)** | Blocks tied in colored rope untie automatically when matching-color Scissors are shredded. |
 | **14** | **Lvl 121** | **Color-Changing Gates** | Gates with a multi-color queue advance to their next queued color after each shred. |
@@ -121,15 +122,15 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
 
 </details>
 
-### 2. Power-Ups & Themes Studio
-- **5 Progressive Power-Ups**: Unlock gradually across the first 30 levels with rarity-weighted Shredder Chest drops:
+### 2. Power-Ups, Economy & Themes Studio
+- **5 Progressive Power-Ups**: Unlock gradually across the first 30 levels (`60 / 80 / 140 / 220 / 350 Coins` refills) with rarity-weighted Shredder, Milestone, and **25-Star Reliquary Chest** drops:
   - **Undo (`COMMON`, Lvl 1)**: Reverts the last move (first 3 per level are always free, plus 1-tap recovery after an accidental level restart).
-  - **Hint / Freeze (`UNCOMMON`, Lvl 2)**: Shows the solver's optimal next move in Zen Mode, or freezes timers/bombs for `+10s` in Timed Rush.
+  - **Stasis / Freeze (`UNCOMMON`, Lvl 2)**: Grants **`+2` Stasis Moves** (next 2 committed moves do not consume Move Budget or tick Bombs) **+** highlights the solver's optimal next move in Challenge/Zen Mode, or freezes timers/bombs for `+10s` + shows a Hint in Timed Rush.
   - **Hammer (`RARE`, Lvl 8)**: Smashes or peels one layer from any unlocked block, Neutral Stone Slider, Crate, Portcullis Barrier (`⛩`), Sealed Mystery Vault Lid (`🔒`), or Frozen/Locked Shutter Gate.
   - **Row / Col Rocket (`EPIC`, Lvl 18)**: Blasts one layer across an entire row (`↔`) or column (`↕`) in any unlocked chamber (while leaving Sealed Mystery Vaults intact until unsealed).
   - **Color Vacuum (`LEGENDARY`, Lvl 30)**: Sweeps every unlocked block of a chosen color off the board at once.
-- **Themes Studio (`15 Unlockable Cosmetics`)**: Spend earned Coins (`150 Coins` each) on **5 Block Skins** (*Classic Studs*, *Smooth Bevel*, *Gummy Jelly*, *Carved Wood*, *Neon Cyber*), **5 Board Trays** (*Industrial Slate*, *Warm Birch*, *Midnight Arcade*, *Frosted Quartz*, *Mint Studio*), and **5 Shred Particle Styles** (*Micro-Cubes*, *Star Confetti*, *Pixel Sparks*, *Soap Bubbles*, *Lightning Bolts*)—all 100% compatible with High-Contrast and Colorblind Symbol modes.
-- **Levitating Mystic Stone Relic Title Backdrop & Grouped Linked Sanctuary Map**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a weathered, cracked monochrome ancient stone relic with pulsating mystic fissure glow and gentle floating/twisting levitation (`u_blueprintMix = 1.0`, `MYSTIC-RELIC-01`) devoid of HUD clutter or labels—bursting apart into tumbling stone shards, billowing ancient dust, and a golden-jade glow as it transforms into vibrant, living 3D reality when you click Play (`RELIC-AWAKEN-01`, disabled under Reduced Motion). Opening the Sanctuary Map (`#screen-home`, `MAP-LINKED-PATH-01`) organizes progression into 5-stage flights (`Stages 1–5`, `Stages 6–10`, ...) along a continuous linked path that auto-scrolls to your active stage, clearly distinguishes **Completed (`✓ Cleared`)** emerald stages from neutral faded **Skipped (`Skipped`)** stages, previews your next upcoming Power-Up or Mechanic Awakening, and windows **Infinite Endless Mode (`Level 301+`)** stages with direct `Lvl #` stage jumping up to `999,999`.
+- **Themes Studio (`15 Tiered Unlockable Cosmetics`)**: Spend earned Coins (`250 / 450 / 750 / 1,200 Coins` across 4 prestige tiers beyond default starters) on **5 Block Skins** (*Classic Studs*, *Smooth Bevel*, *Gummy Jelly*, *Carved Wood*, *Neon Cyber*), **5 Board Trays** (*Industrial Slate*, *Warm Birch*, *Midnight Arcade*, *Frosted Quartz*, *Mint Studio*), and **5 Shred Particle Styles** (*Micro-Cubes*, *Star Confetti*, *Pixel Sparks*, *Soap Bubbles*, *Lightning Bolts*)—all 100% compatible with High-Contrast and Colorblind Symbol modes.
+- **Levitating Mystic Stone Relic Title Backdrop & Grouped Linked Sanctuary Map**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a weathered, cracked monochrome ancient stone relic with pulsating mystic fissure glow and gentle floating/twisting levitation (`u_blueprintMix = 1.0`, `MYSTIC-RELIC-01`) devoid of HUD clutter or labels—bursting apart into tumbling stone shards, billowing ancient dust, and a golden-jade glow as it transforms into vibrant, living 3D reality when you click Play (`RELIC-AWAKEN-01`, disabled under Reduced Motion). Opening the Sanctuary Map (`#screen-home`, `MAP-LINKED-PATH-01`) organizes progression into 5-stage flights (`Stages 1–5`, `Stages 6–10`, ...) along a continuous linked path that auto-scrolls to your active stage, clearly distinguishes **Gold-Star Completed (`✓ Cleared`)**, **Zen-Cleared (`🌿 Zen`)**, and neutral faded **Skipped (`Skipped`)** stages, previews your next upcoming Power-Up or Mechanic Awakening, and windows **Infinite Endless Mode (`Level 301+`)** stages with `Lvl #` replay jumping across all unlocked stages (`1 .. highestLevelUnlocked`).
 
 ---
 

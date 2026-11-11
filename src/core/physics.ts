@@ -26,18 +26,16 @@ export function canGroupOccupyOffset(
   dCol: number
 ): boolean {
   const { rows, cols, occupancy, floorColor } = board;
-  const groupIds = new Set<number>();
-  for (const b of group) groupIds.add(b.id);
+  const singleId = group.length === 1 ? group[0].id : -999;
+  let groupIds: Set<number> | null = null;
+  if (singleId === -999) {
+    groupIds = new Set<number>();
+    for (const b of group) groupIds.add(b.id);
+  }
 
   for (const b of group) {
     const shape = getShape(b.shapeId);
     const activeColor = getActiveColor(b.colorStack, b.colorCursor);
-
-    // Build set of b's own current integer footprint for F-04 Floor-Path Exemption
-    const initialCells = new Set<number>();
-    for (const [dr, dc] of shape.cells) {
-      initialCells.add((b.row + dr) * cols + (b.col + dc));
-    }
 
     for (const [dr, dc] of shape.cells) {
       const nr = b.row + dRow + dr;
@@ -47,12 +45,22 @@ export function canGroupOccupyOffset(
       }
       const cellIdx = nr * cols + nc;
       const occ = occupancy[cellIdx];
-      if (occ !== 0 && !groupIds.has(occ)) {
+      if (occ !== 0 && (singleId !== -999 ? occ !== singleId : !groupIds?.has(occ))) {
         return false;
       }
       const fc = floorColor[cellIdx];
-      if (fc !== 0 && fc !== activeColor && !initialCells.has(cellIdx)) {
-        return false;
+      if (fc !== 0 && fc !== activeColor) {
+        // F-04 Floor-Path Exemption: allow stepping within b's own current integer footprint
+        let inInitial = false;
+        for (const [idr, idc] of shape.cells) {
+          if (b.row + idr === nr && b.col + idc === nc) {
+            inInitial = true;
+            break;
+          }
+        }
+        if (!inInitial) {
+          return false;
+        }
       }
     }
   }
@@ -470,6 +478,39 @@ export function snapGroupToNearestGrid(board: BoardState, blockId: number): bool
   return moved;
 }
 
+const CARDINAL_DIRS_H: ReadonlyArray<readonly [number, number]> = [
+  [0, -1],
+  [0, 1],
+];
+const CARDINAL_DIRS_V: ReadonlyArray<readonly [number, number]> = [
+  [-1, 0],
+  [1, 0],
+];
+const CARDINAL_DIRS_ALL: ReadonlyArray<readonly [number, number]> = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+];
+
+const reachStampTable = new Uint32Array(4096);
+let reachStampCounter = 1;
+
+/**
+ * O(1)-neighbor check returning `true` iff `blockId` (and its glued group) can step at least 1 cell.
+ */
+export function canBlockStepAnyDirection(board: BoardState, blockId: number): boolean {
+  const group = getMovedGroupBlocks(board, blockId);
+  if (group.length === 0 || !isBlockMovable(board, blockId)) return false;
+  const lock = getGroupAxisLock(group);
+  if (lock === 'LOCKED_BOTH') return false;
+  const dirs = lock === 'H' ? CARDINAL_DIRS_H : lock === 'V' ? CARDINAL_DIRS_V : CARDINAL_DIRS_ALL;
+  for (const [dr, dc] of dirs) {
+    if (canGroupOccupyOffset(board, group, dr, dc)) return true;
+  }
+  return false;
+}
+
 /**
  * Flood-fills all reachable integer `(row, col)` anchor positions for `blockId` (and its group)
  * in a single continuous drag gesture. Used by the BFS/IDA* solver, hint system, and tests.
@@ -485,27 +526,16 @@ export function getReachableAnchors(
   const lock = getGroupAxisLock(group);
   if (lock === 'LOCKED_BOTH') return [];
 
-  const dirs: Array<[number, number]> =
-    lock === 'H'
-      ? [
-          [0, -1],
-          [0, 1],
-        ]
-      : lock === 'V'
-        ? [
-            [-1, 0],
-            [1, 0],
-          ]
-        : [
-            [-1, 0],
-            [1, 0],
-            [0, -1],
-            [0, 1],
-          ];
+  const dirs = lock === 'H' ? CARDINAL_DIRS_H : lock === 'V' ? CARDINAL_DIRS_V : CARDINAL_DIRS_ALL;
 
-  const visited = new Set<number>();
-  const encode = (dRow: number, dCol: number) => (dRow + 16) * 64 + (dCol + 16);
-  visited.add(encode(0, 0));
+  reachStampCounter = (reachStampCounter + 1) >>> 0;
+  if (reachStampCounter === 0) {
+    reachStampTable.fill(0);
+    reachStampCounter = 1;
+  }
+  const stamp = reachStampCounter;
+  const encode = (dRow: number, dCol: number) => ((dRow + 32) << 6) | ((dCol + 32) & 63);
+  reachStampTable[encode(0, 0)] = stamp;
 
   const queue: Array<{ dRow: number; dCol: number; dist: number }> = [{ dRow: 0, dCol: 0, dist: 0 }];
   const results: Array<{ row: number; col: number; dist: number }> = [
@@ -519,9 +549,9 @@ export function getReachableAnchors(
       const ndRow = cur.dRow + dr;
       const ndCol = cur.dCol + dc;
       const key = encode(ndRow, ndCol);
-      if (visited.has(key)) continue;
+      if (reachStampTable[key] === stamp) continue;
       if (canGroupOccupyOffset(board, group, ndRow, ndCol)) {
-        visited.add(key);
+        reachStampTable[key] = stamp;
         const nextDist = cur.dist + 1;
         queue.push({ dRow: ndRow, dCol: ndCol, dist: nextDist });
         results.push({

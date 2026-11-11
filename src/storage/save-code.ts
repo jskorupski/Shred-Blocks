@@ -352,6 +352,7 @@ function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
       bestTimeSec: clampNum(r.bestTimeSec, 0, MAX_SAVE_COUNTER, 0, false),
     };
     if (typeof r.skipped === 'boolean') clean.skipped = r.skipped;
+    if (typeof r.zenCleared === 'boolean') clean.zenCleared = r.zenCleared;
     levelRecords[id] = clean;
   }
 
@@ -370,6 +371,8 @@ function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
     totalMovesCommitted: clampNum(obj.totalMovesCommitted, 0, MAX_SAVE_COUNTER, 0),
     shredderChestProgress: clampNum(obj.shredderChestProgress, 0, MAX_SAVE_COUNTER, 0),
     milestoneChestLevel: clampNum(obj.milestoneChestLevel, 0, MAX_SAVE_LEVEL, 0),
+    starReliquaryLevel: clampNum(obj.starReliquaryLevel, 0, MAX_SAVE_COUNTER, 0),
+    economyVersion: clampNum(obj.economyVersion, 1, 10, 1),
     boosters: {
       UNDO: clampNum(b.UNDO, 0, MAX_SAVE_COUNTER, 0),
       FREEZE: clampNum(b.FREEZE, 0, MAX_SAVE_COUNTER, 0),
@@ -384,7 +387,7 @@ function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
     equippedTray: pickEnum(obj.equippedTray, unlockedTrays, unlockedTrays[0]),
     equippedParticle: pickEnum(obj.equippedParticle, unlockedParticles, unlockedParticles[0]),
     settings: {
-      playMode: pickEnum(s.playMode, ['ZEN', 'TIMED'] as const, 'ZEN'),
+      playMode: pickEnum(s.playMode, ['CHALLENGE', 'ZEN', 'TIMED'] as const, 'CHALLENGE'),
       sfxEnabled: pickBool(s.sfxEnabled, true),
       musicEnabled: pickBool(s.musicEnabled, true),
       hapticsEnabled: pickBool(s.hapticsEnabled, true),
@@ -453,7 +456,8 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
     (st.hapticsEnabled ? 8 : 0) |
     (st.colorblindSymbols ? 16 : 0) |
     (st.highContrast ? 32 : 0) |
-    (st.reducedMotion ? 64 : 0);
+    (st.reducedMotion ? 64 : 0) |
+    (st.playMode === 'CHALLENGE' ? 128 : 0);
   out.push(sFlags, Math.max(0, QUALITY_TIERS.indexOf(st.qualityTier)));
 
   const allIds = Object.keys(payload.levelRecords)
@@ -500,6 +504,18 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
     const tenths = Math.round(t * 10);
     const encodedTime = tenths % 10 === 0 ? Math.round(t) * 2 : tenths * 2 + 1;
     writeVarint(out, encodedTime);
+  }
+
+  // Economy v2 trailer (`0xa5`): encodes economyVersion, starReliquaryLevel, and zenCleared level IDs
+  const zenIds = ids.filter((id) => payload.levelRecords[id]?.zenCleared === true);
+  out.push(0xa5);
+  writeVarint(out, payload.economyVersion ?? 2);
+  writeVarint(out, payload.starReliquaryLevel ?? 0);
+  writeVarint(out, zenIds.length);
+  let prevZenId = 0;
+  for (const zid of zenIds) {
+    writeVarint(out, zid - prevZenId);
+    prevZenId = zid;
   }
 
   return Uint8Array.from(out);
@@ -618,6 +634,22 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
       : { stars, bestMoves, bestTimeSec, skipped: isSkipped };
   }
 
+  let economyVersion = 1;
+  let starReliquaryLevel = 0;
+  if (pos < rawBytes.length && rawBytes[pos] === 0xa5) {
+    pos++;
+    economyVersion = readVarint();
+    starReliquaryLevel = readVarint();
+    const zenCount = Math.min(recordCount, readVarint());
+    let prevZenId = 0;
+    for (let i = 0; i < zenCount; i++) {
+      prevZenId += readVarint();
+      if (levelRecords[prevZenId]) {
+        levelRecords[prevZenId].zenCleared = true;
+      }
+    }
+  }
+
   return validateSavePayloadV1({
     schemaVersion: 1,
     appId: 'shredblocks-color-jam',
@@ -633,6 +665,8 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
     totalMovesCommitted,
     shredderChestProgress,
     milestoneChestLevel,
+    starReliquaryLevel,
+    economyVersion,
     boosters,
     unlockedSkins,
     unlockedTrays,
@@ -641,7 +675,7 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
     equippedTray,
     equippedParticle,
     settings: {
-      playMode: (sFlags & 1) !== 0 ? 'ZEN' : 'TIMED',
+      playMode: (sFlags & 128) !== 0 ? 'CHALLENGE' : (sFlags & 1) !== 0 ? 'ZEN' : 'TIMED',
       sfxEnabled: (sFlags & 2) !== 0,
       musicEnabled: (sFlags & 4) !== 0,
       hapticsEnabled: (sFlags & 8) !== 0,

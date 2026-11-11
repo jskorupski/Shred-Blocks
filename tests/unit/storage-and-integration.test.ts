@@ -118,7 +118,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       }
 
       const sb1Code = encodeSaveCode(fullSave);
-      expect(sb1Code.length).toBeLessThan(200);
+      expect(sb1Code.length).toBeLessThanOrEqual(210);
       const decodedDirect = decodeSaveCode(sb1Code);
       expect(decodedDirect).toEqual(fullSave);
       expect(Object.keys(decodedDirect.levelRecords).length).toBe(200);
@@ -317,31 +317,31 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       const manager = new SaveManager();
       const initialCoins = manager.getPayload().coins;
 
-      // First clear of Level 1 with 2 stars: +50 base + 20 star coins + 0 streak = +70 coins
+      // First clear of Level 1 (NORMAL) with 2 stars: +15 base + 10 star coins + 0 streak = +25 coins
       const firstWin = manager.recordLevelWin(1, 12, 25, 10, 2, 8);
       expect(firstWin.isFirstClear).toBe(true);
-      expect(firstWin.baseCoins).toBe(50);
-      expect(firstWin.starCoins).toBe(20);
+      expect(firstWin.baseCoins).toBe(15);
+      expect(firstWin.starCoins).toBe(10);
       expect(firstWin.starsImproved).toBe(2);
-      expect(firstWin.totalCoinsEarned).toBe(70);
-      expect(manager.getPayload().coins).toBe(initialCoins + 70);
+      expect(firstWin.totalCoinsEarned).toBe(25);
+      expect(manager.getPayload().coins).toBe(initialCoins + 25);
       expect(manager.getPayload().totalStars).toBe(2);
 
-      // Replay of Level 1 with 2 stars (no star improvement): +10 replay base (20% of 50) + 0 star coins
+      // Replay of Level 1 with 2 stars (no star improvement): +3 replay base (20% of 15) + 0 star coins
       const replaySame = manager.recordLevelWin(1, 12, 24, 10, 2, 8);
       expect(replaySame.isFirstClear).toBe(false);
-      expect(replaySame.baseCoins).toBe(10);
+      expect(replaySame.baseCoins).toBe(3);
       expect(replaySame.starCoins).toBe(0);
       expect(replaySame.streakCoins).toBe(0);
-      expect(replaySame.totalCoinsEarned).toBe(10);
+      expect(replaySame.totalCoinsEarned).toBe(3);
 
-      // Replay of Level 1 improving from 2 stars to 3 stars: +10 replay base + 10 for +1 new star = +20
+      // Replay of Level 1 improving from 2 stars to 3 stars: +3 replay base + 5 for +1 new star = +8
       const replayImprove = manager.recordLevelWin(1, 6, 18, 10, 3, 8);
       expect(replayImprove.isFirstClear).toBe(false);
-      expect(replayImprove.baseCoins).toBe(10);
+      expect(replayImprove.baseCoins).toBe(3);
       expect(replayImprove.starsImproved).toBe(1);
-      expect(replayImprove.starCoins).toBe(10);
-      expect(replayImprove.totalCoinsEarned).toBe(20);
+      expect(replayImprove.starCoins).toBe(5);
+      expect(replayImprove.totalCoinsEarned).toBe(8);
       expect(manager.getPayload().totalStars).toBe(3);
     });
 
@@ -352,7 +352,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       const summary = manager.recordLevelWin(10, 8, 20, 105, 3, 8);
       expect(summary.shredderChestsOpened).toBe(1);
       expect(summary.milestoneChestOpened).toBe(true);
-      expect(summary.chestCoins).toBe(250); // 100 (Shredder) + 150 (Milestone)
+      expect(summary.chestCoins).toBe(125); // 50 (Shredder) + 75 (Milestone)
       expect(summary.rewardedBoosters.length).toBe(2);
       expect(manager.getPayload().shredderChestProgress).toBe(5);
       expect(manager.getPayload().milestoneChestLevel).toBe(10);

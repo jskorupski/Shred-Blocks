@@ -33,6 +33,9 @@ export const BOOSTER_COIN_COSTS: Record<BoosterType, number> = {
   VACUUM: 350,
 };
 
+export const CONTINUE_COIN_COST = 150;
+export const THEME_TIER_PRICES = [0, 250, 450, 750, 1200] as const;
+
 /**
  * Returns true if the given `BoosterType` is unlocked at `effectiveLevel`
  * (`Math.max(currentLevelId, highestLevelUnlocked)`).
@@ -95,7 +98,8 @@ export function pickRarityWeightedBooster(
 
 export interface LevelWinRewardSummary {
   isFirstClear: boolean;
-  starsEarned: 1 | 2 | 3;
+  zenClear: boolean;
+  starsEarned: 0 | 1 | 2 | 3;
   starsImproved: number;
   baseCoins: number;
   starCoins: number;
@@ -104,6 +108,7 @@ export interface LevelWinRewardSummary {
   totalCoinsEarned: number;
   shredderChestsOpened: number;
   milestoneChestOpened: boolean;
+  starReliquaryChestsOpened: number;
   rewardedBoosters: BoosterType[];
 }
 
@@ -115,7 +120,7 @@ export function createDefaultSavePayload(): SavePayloadV1 {
     updatedAt: Date.now(),
     highestLevelUnlocked: 1,
     currentLevelId: 1,
-    coins: 250,
+    coins: 120,
     totalStars: 0,
     winStreak: 0,
     bestWinStreak: 0,
@@ -123,12 +128,14 @@ export function createDefaultSavePayload(): SavePayloadV1 {
     totalMovesCommitted: 0,
     shredderChestProgress: 0,
     milestoneChestLevel: 0,
+    starReliquaryLevel: 0,
+    economyVersion: 2,
     boosters: {
-      UNDO: 5,
-      FREEZE: 3,
-      HAMMER: 3,
-      ROCKET: 2,
-      VACUUM: 2,
+      UNDO: 3,
+      FREEZE: 2,
+      HAMMER: 1,
+      ROCKET: 1,
+      VACUUM: 1,
     },
     unlockedSkins: ['classic_studs'],
     unlockedTrays: ['industrial_slate'],
@@ -137,7 +144,7 @@ export function createDefaultSavePayload(): SavePayloadV1 {
     equippedTray: 'industrial_slate',
     equippedParticle: 'micro_cubes',
     settings: {
-      playMode: 'ZEN',
+      playMode: 'CHALLENGE',
       sfxEnabled: true,
       musicEnabled: true,
       hapticsEnabled: true,
@@ -148,6 +155,26 @@ export function createDefaultSavePayload(): SavePayloadV1 {
     },
     levelRecords: {},
   };
+}
+
+/**
+ * One-time graceful migration from Economy v1 -> v2 (`ECON-V2`):
+ * - Switches legacy default `'ZEN'` -> `'CHALLENGE'` so returning players experience Move Budgets
+ * - Soft-scales bloated v1 coin balances (`> 600`) while preserving every unlocked item & star
+ * - Initializes `starReliquaryLevel` to current 25-star milestone floor
+ */
+export function migrateLegacyEconomy(payload: SavePayloadV1): SavePayloadV1 {
+  if ((payload.economyVersion ?? 1) >= 2) return payload;
+  const migrated = clonePayload(payload);
+  if (migrated.settings.playMode === 'ZEN') {
+    migrated.settings.playMode = 'CHALLENGE';
+  }
+  if (migrated.coins > 600) {
+    migrated.coins = 600 + Math.round((migrated.coins - 600) ** 0.72 * 3.5);
+  }
+  migrated.starReliquaryLevel = Math.floor((migrated.totalStars || 0) / 25) * 25;
+  migrated.economyVersion = 2;
+  return migrated;
 }
 
 /**
@@ -189,7 +216,7 @@ export class SaveManager {
 
   constructor() {
     const local = this.readLocalStorage(SAVE_STORAGE_KEY);
-    this.payload = local ?? createDefaultSavePayload();
+    this.payload = local ? migrateLegacyEconomy(local) : createDefaultSavePayload();
   }
 
   /**
@@ -198,8 +225,10 @@ export class SaveManager {
    * selects whichever valid payload has the higher `writeSeq`, and heals the other store.
    */
   public async init(): Promise<SavePayloadV1> {
-    const local = this.readLocalStorage(SAVE_STORAGE_KEY);
-    const idb = await this.readIndexedDB();
+    const rawLocal = this.readLocalStorage(SAVE_STORAGE_KEY);
+    const rawIdb = await this.readIndexedDB();
+    const local = rawLocal ? migrateLegacyEconomy(rawLocal) : null;
+    const idb = rawIdb ? migrateLegacyEconomy(rawIdb) : null;
 
     if (local && idb) {
       if (idb.writeSeq > local.writeSeq) {
@@ -259,59 +288,73 @@ export class SaveManager {
     return this.save();
   }
 
-  public setCurrentLevel(levelId: number, allowJump = true): SavePayloadV1 {
+  public setCurrentLevel(levelId: number, allowJump = false): SavePayloadV1 {
     const cleanId = Math.max(1, Math.floor(levelId));
     this.payload.currentLevelId = allowJump ? cleanId : Math.min(cleanId, this.payload.highestLevelUnlocked);
     return this.save();
   }
 
   /**
-   * F-10 Replay Economy Balance:
-   * - First clear of `levelId`: awards `+50` base coins + `+10/star` + streak bonus.
-   * - Replay of an already-cleared level: awards `20%` base (`+10` coins) + full star difference (`+10` per newly earned star).
-   * - Updates `shredderChestProgress` (`100` blocks -> Shredder Chest) and `milestoneChestLevel` (every 10 levels).
+   * Economy v2 Level Clear & Reliquary Progression (`F-10`, `ECON-V2`):
+   * - Challenge / Rush Clear (`1..3` Gold Stars): `15 / 25 / 40` base coins (`NORMAL / HARD / SUPER_HARD`; `20%` replay),
+   *   `+5 Coins/★` improvement, Flow Streak bonus (`+5..+25`), Shredder Chest (`100` blocks -> `+50c + 1 Booster`),
+   *   Milestone Chest (every `10` levels -> `+75c + 1 Booster`), and 25-Star Reliquary Chest (`+90c + 1 Booster`).
+   * - Zen Clear (`0` Gold Stars): sets `zenCleared: true`, advances `highestLevelUnlocked`, pauses `winStreak`,
+   *   and awards tranquil `+10` (`+2` replay) coins + Shredder Chest progress.
    */
   public recordLevelWin(
     levelId: number,
     moves: number,
     timeSec: number,
     blocksShredded: number,
-    earnedStars?: 1 | 2 | 3,
+    earnedStars?: 0 | 1 | 2 | 3,
     parMoves?: number,
-    difficulty: 'NORMAL' | 'HARD' | 'SUPER_HARD' = 'NORMAL'
+    difficulty: 'NORMAL' | 'HARD' | 'SUPER_HARD' = 'NORMAL',
+    zenClear = false
   ): LevelWinRewardSummary {
-    const stars: 1 | 2 | 3 =
-      earnedStars ??
-      (parMoves
-        ? moves <= Math.ceil(parMoves * 1.25)
-          ? 3
-          : moves <= Math.ceil(parMoves * 1.75)
-            ? 2
-            : 1
-        : moves <= 10
-          ? 3
-          : moves <= 16
-            ? 2
-            : 1);
+    const isZenRun = zenClear || earnedStars === 0;
+    const stars: 0 | 1 | 2 | 3 = isZenRun
+      ? 0
+      : (earnedStars ??
+        (parMoves
+          ? moves <= Math.ceil(parMoves * 1.12)
+            ? 3
+            : moves <= Math.ceil(parMoves * 1.35)
+              ? 2
+              : 1
+          : moves <= 10
+            ? 3
+            : moves <= 16
+              ? 2
+              : 1));
 
     const prevRecord = this.payload.levelRecords[levelId];
     const prevStars = prevRecord && !prevRecord.skipped ? prevRecord.stars : 0;
-    const isFirstClear = prevStars === 0;
-    const starsImproved = Math.max(0, stars - prevStars);
+    const isFirstClear = isZenRun ? prevStars === 0 && !prevRecord?.zenCleared : prevStars === 0;
+    const starsImproved = isZenRun ? 0 : Math.max(0, stars - prevStars);
 
-    this.payload.winStreak = (this.payload.winStreak || 0) + 1;
-    if (this.payload.winStreak > this.payload.bestWinStreak) {
-      this.payload.bestWinStreak = this.payload.winStreak;
+    if (!isZenRun) {
+      this.payload.winStreak = (this.payload.winStreak || 0) + 1;
+      if (this.payload.winStreak > this.payload.bestWinStreak) {
+        this.payload.bestWinStreak = this.payload.winStreak;
+      }
     }
 
-    const tierBase = difficulty === 'SUPER_HARD' ? 120 : difficulty === 'HARD' ? 80 : 50;
-    const baseCoins = isFirstClear ? tierBase : Math.round(tierBase * 0.2); // 20% replay rate on already-cleared levels
-    const starCoins = starsImproved * 10;
-    const streakCoins = isFirstClear ? Math.min(30, (this.payload.winStreak - 1) * 10) : 0;
+    const tierBase = difficulty === 'SUPER_HARD' ? 40 : difficulty === 'HARD' ? 25 : 15;
+    const baseCoins = isZenRun
+      ? isFirstClear
+        ? 10
+        : 2
+      : isFirstClear
+        ? tierBase
+        : Math.max(3, Math.round(tierBase * 0.2));
+    const starCoins = starsImproved * 5;
+    const streakCoins = !isZenRun && isFirstClear ? Math.min(25, (this.payload.winStreak - 1) * 5) : 0;
 
     let chestCoins = 0;
     let shredderChestsOpened = 0;
     let milestoneChestOpened = false;
+    let starReliquaryChestsOpened = 0;
     const rewardedBoosters: BoosterType[] = [];
     const effectiveMaxLevel = Math.max(levelId, this.payload.highestLevelUnlocked || 1);
 
@@ -322,7 +365,7 @@ export class SaveManager {
     while (this.payload.shredderChestProgress >= 100) {
       this.payload.shredderChestProgress -= 100;
       shredderChestsOpened++;
-      chestCoins += 100;
+      chestCoins += 50;
       const bType = pickRarityWeightedBooster(
         this.payload.totalBlocksShredded + shredderChestsOpened * 37,
         effectiveMaxLevel,
@@ -332,26 +375,40 @@ export class SaveManager {
       rewardedBoosters.push(bType);
     }
 
-    if (isFirstClear && levelId % 10 === 0 && levelId > this.payload.milestoneChestLevel) {
+    if (!isZenRun && isFirstClear && levelId % 10 === 0 && levelId > this.payload.milestoneChestLevel) {
       this.payload.milestoneChestLevel = levelId;
       milestoneChestOpened = true;
-      chestCoins += 150;
+      chestCoins += 75;
       const bType = pickRarityWeightedBooster(levelId * 97, effectiveMaxLevel, true);
+      this.payload.boosters[bType] = (this.payload.boosters[bType] || 0) + 1;
+      rewardedBoosters.push(bType);
+    }
+
+    this.payload.totalStars += starsImproved;
+    while (this.payload.totalStars >= (this.payload.starReliquaryLevel || 0) + 25) {
+      this.payload.starReliquaryLevel = (this.payload.starReliquaryLevel || 0) + 25;
+      starReliquaryChestsOpened++;
+      chestCoins += 90;
+      const bType = pickRarityWeightedBooster(this.payload.starReliquaryLevel * 131, effectiveMaxLevel, true);
       this.payload.boosters[bType] = (this.payload.boosters[bType] || 0) + 1;
       rewardedBoosters.push(bType);
     }
 
     const totalCoinsEarned = baseCoins + starCoins + streakCoins + chestCoins;
     this.payload.coins += totalCoinsEarned;
-    this.payload.totalStars += starsImproved;
 
-    this.payload.levelRecords[levelId] = {
-      stars: Math.max(prevStars, stars),
+    const mergedStars = Math.max(prevStars, stars);
+    const nextRecord: LevelRecord = {
+      stars: mergedStars,
       bestMoves: prevRecord && prevRecord.bestMoves > 0 ? Math.min(prevRecord.bestMoves, moves) : moves,
       bestTimeSec:
         prevRecord && prevRecord.bestTimeSec > 0 ? Math.min(prevRecord.bestTimeSec, timeSec) : timeSec,
       skipped: false,
     };
+    if (isZenRun && mergedStars === 0) {
+      nextRecord.zenCleared = true;
+    }
+    this.payload.levelRecords[levelId] = nextRecord;
 
     if (levelId + 1 > this.payload.highestLevelUnlocked) {
       this.payload.highestLevelUnlocked = levelId + 1;
@@ -362,6 +419,7 @@ export class SaveManager {
 
     return {
       isFirstClear,
+      zenClear: isZenRun,
       starsEarned: stars,
       starsImproved,
       baseCoins,
@@ -371,6 +429,7 @@ export class SaveManager {
       totalCoinsEarned,
       shredderChestsOpened,
       milestoneChestOpened,
+      starReliquaryChestsOpened,
       rewardedBoosters,
     };
   }

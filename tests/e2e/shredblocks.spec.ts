@@ -38,9 +38,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
     page.on('console', (msg) => {
-      if (msg.type() === 'error') {
-        errors.push(`CONSOLE_ERROR: ${msg.text()}`);
-      }
+      if (msg.type() === 'error') errors.push(`CONSOLE_ERROR: ${msg.text()}`);
     });
 
     await page.goto('/');
@@ -79,7 +77,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.locator('#btn-hud-home').click();
     await expect(page.locator('#screen-home')).toBeVisible();
     await expect(page.locator('.brand-title').first()).toHaveText('ShredBlocks');
-    await expect(page.locator('#stat-coins')).toHaveText('250');
+    await expect(page.locator('#stat-coins')).toHaveText('120');
 
     // Verify 300+ roadmap nodes render in All view
     const allNodesCount = await page.locator('#roadmap-list .level-node-card').count();
@@ -107,8 +105,13 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
       .textContent();
     expect(endlessFirstText).toContain('301');
 
-    // Direct Level Jump to Level 11
+    // Direct Level Jump blocks locked stages (> highestLevelUnlocked), then jumps once unlocked
     await page.locator('#level-jump-input').fill('11');
+    await page.locator('#btn-level-jump').click();
+    await expect(page.locator('#game-toast')).toContainText('Stage #11 is locked');
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.patchSave({ highestLevelUnlocked: 11 });
+    });
     await page.locator('#btn-level-jump').click();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 11');
@@ -165,9 +168,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
     page.on('console', (msg) => {
-      if (msg.type() === 'error') {
-        errors.push(`CONSOLE_ERROR: ${msg.text()}`);
-      }
+      if (msg.type() === 'error') errors.push(`CONSOLE_ERROR: ${msg.text()}`);
     });
 
     await page.goto('/');
@@ -230,7 +231,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#victory-stars .star-slot.earned')).toHaveCount(3);
 
     const saveAfterL1 = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave());
-    expect(saveAfterL1.coins).toBe(330); // 250 start + 50 first clear + 30 (3 stars)
+    expect(saveAfterL1.coins).toBe(150); // 120 start + 15 first Normal clear + 15 (3 stars)
     expect(saveAfterL1.highestLevelUnlocked).toBe(2);
 
     // Advance to Level 2 via Next Level button
@@ -272,6 +273,12 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
 
     await page.goto('/');
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.patchSave({
+        highestLevelUnlocked: 45,
+        boosters: { UNDO: 3, FREEZE: 3, HAMMER: 3, ROCKET: 2, VACUUM: 2 },
+      });
+    });
     await page.locator('#btn-title-play').click();
     await page.locator('#btn-hud-home').click();
     // Jump to Level 3 via Direct Level Jump UI
@@ -282,20 +289,20 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
 
     // Make a real non-clearing pointer drag on Level 3: slide Block 1 from (row 1, col 1) up to (row 0, col 1)
     await dragBoardCellToCell(page, 1, 1, 1, 0);
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 1');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
 
-    // Trigger Undo -> consumes 1 Free Undo and restores Moves: 0
+    // Trigger Undo -> consumes 1 Free Undo and restores Moves Left: 9
     await page.locator('#btn-booster-undo').click();
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 0');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
     await expect(page.locator('#badge-booster-undo')).toHaveText('FREE (2)');
 
     // Make another real pointer move, press Restart (#btn-restart), then press Undo to recover pre-restart board!
     await dragBoardCellToCell(page, 1, 1, 1, 0);
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 1');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
     await page.locator('#btn-restart').click();
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 0');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
     await page.locator('#btn-booster-undo').click();
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 1');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
 
     // Jump to Level 41 (Frostbite Thaw) to test immobile Frozen block tap + real Hammer/Rocket/Vacuum execution on canvas
     await page.locator('#btn-pause').click();
@@ -349,13 +356,13 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#booster-target-banner')).toBeHidden();
     await expect(page.locator('#badge-booster-vacuum')).toHaveText('1');
 
-    // 4. Test Hint in Zen Mode and Freeze in Timed Rush Mode
+    // 4. Test Stasis + Hint in Challenge Mode, then cycle CHAL -> ZEN -> TIMED and Freeze clock
     await page.locator('#btn-booster-freeze').click();
-    const hasHint = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().hintMove !== null);
-    expect(hasHint).toBe(true);
-
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().hintMove !== null)).toBe(true);
+    await expect(page.locator('#hud-moves-pill')).toContainText('❄️×2');
     await page.locator('#btn-mode-toggle').click();
-    await expect(page.locator('#hud-mode-label')).toContainText('Timed Rush');
+    await page.locator('#btn-mode-toggle').click();
+    await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
     await expect(page.locator('#hud-timer-pill')).toBeVisible();
     await page.locator('#btn-booster-freeze').click();
     await expect(page.locator('#hud-timer-pill')).toContainText('❄️');
@@ -370,9 +377,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
     page.on('console', (msg) => {
-      if (msg.type() === 'error') {
-        errors.push(`CONSOLE_ERROR: ${msg.text()}`);
-      }
+      if (msg.type() === 'error') errors.push(`CONSOLE_ERROR: ${msg.text()}`);
     });
 
     await page.goto('/');
@@ -384,37 +389,39 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     ];
     for (const lvl of showcaseLevels) {
       await page.evaluate((id) => window.__SHREDBLOCKS_DEBUG__.loadLevel(id), lvl);
-      const boardId = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().levelId);
-      expect(boardId).toBe(lvl);
+      expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().levelId)).toBe(lvl);
     }
 
     // Verify WebGL Context Loss & Instant Restoration
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.simulateContextLoss());
-    const backendAfterRestore = await page.evaluate(
-      () => window.__SHREDBLOCKS_DEBUG__.getTelemetry().rendererBackend
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getTelemetry().rendererBackend)).toBe(
+      'WEBGL2'
     );
-    expect(backendAfterRestore).toBe('WEBGL2');
 
     // Verify 120Hz Benchmark meets workDurationMs <= 6.5ms budget
     const bench = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.run120HzBenchmark(60));
     expect(bench.p95WorkMs).toBeLessThanOrEqual(6.5);
 
-    // Return to Home & open Themes Studio via real UI clicks
+    // Return to Home & open Themes Studio via real UI clicks (seed 350 coins for Tier 1 + Tier 2 check)
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.patchSave({ coins: 350 });
+    });
     await page.locator('#btn-pause').click();
     await page.locator('#btn-pause-home').click();
     await page.locator('#tab-btn-themes').click();
     await expect(page.locator('#screen-themes')).toBeVisible();
 
-    // Unlock & equip Smooth Bevel skin (150 coins -> leaves 100 coins)
+    // Unlock & equip Smooth Bevel skin (250 coins -> leaves 100 coins)
     await page.locator('button[data-theme-id="smooth_bevel"]').click();
-    const equippedSkin = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave().equippedSkin);
-    expect(equippedSkin).toBe('smooth_bevel');
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave().equippedSkin)).toBe(
+      'smooth_bevel'
+    );
     await expect(page.locator('#themes-coins-display')).toHaveText('100');
 
-    // Click another locked 150-coin skin (gummy_jelly) with only 100 coins -> verify #game-toast affordability message
+    // Click Tier-2 450-coin skin (gummy_jelly) with only 100 coins -> verify #game-toast affordability message
     await page.locator('button[data-theme-id="gummy_jelly"]').click();
     await expect(page.locator('#game-toast')).toBeVisible();
-    await expect(page.locator('#game-toast')).toContainText('Need 150 Coins');
+    await expect(page.locator('#game-toast')).toContainText('Need 450 Coins');
 
     // Verify all 8 Settings in #dialog-pause across custom skins & custom trays (`AX-01`, `AX-02`, `UX-10`)
     await page.locator('#tab-btn-settings').click();
@@ -561,8 +568,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     );
     await expect(page.locator('#unlock-toast')).toBeHidden();
 
-    // 2. Level 14 (Cruciform Atrium — CROSS_ATRIUM), Level 18 (East Wing Alcove — L_WING Stepped Gate),
-    //    Level 21 (Cutouts & Interior Stone Pillars), and Level 25 (Twin Sanctum — Multi-Room Portcullis)
+    // 2. Level 14 (CROSS_ATRIUM), Level 18 (L_WING Stepped Gate), Level 21 (Pillars), and Level 25 (TWIN_SANCTUM)
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(14));
     await expect(page.locator('#unlock-toast')).toBeVisible();
     await expect(page.locator('#unlock-toast-text')).toContainText('Sculpted Courtyards');
@@ -574,14 +580,12 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(18));
     await expect(page.locator('#unlock-toast')).toBeVisible();
     await expect(page.locator('#unlock-toast-text')).toContainText('Stepped Exit Gate');
-    // Drag Block 1 (col 4, row 3) up into the Stepped-Edge TOP Gate (edgeLine = 2) at (col 4, row 2)
     await dragBoardCellToCell(page, 4, 3, 4, 2);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].status)).toBe(
       'CLEARED'
     );
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(21));
-    // Drag Block 1 at (col 2, row 1) into TOP gate
     await dragBoardCellToCell(page, 2, 1, 2, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].status)).toBe(
       'CLEARED'
@@ -695,39 +699,35 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     });
     expect(l101State).toEqual({ b1: 'CLEARED', b2Status: 'ACTIVE', b2Row: 0 });
 
-    // 11. Level 111: Colored Ropes & Scissors
+    // 11–18. Obstacles: Ropes, Gate Queue, Frozen Gate, Shutters, Dynamic Gates, Generator, Floor Paths, Elevators
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(111));
-    await dragBoardCellToCell(page, 2, 1, 2, 0); // Shred Scissor Block 1
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[1].ropeColor)).toBe(0);
 
-    // 12. Level 121: Color-Changing Gate Queue
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(121));
-    await dragBoardCellToCell(page, 2, 1, 2, 0); // Shred Red Block 1 -> TOP gate queueCursor advances to 1 (Blue)
-    await dragBoardCellToCell(page, 2, 3, 2, 0); // Shred Blue Block 2 through the same TOP gate!
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
+    await dragBoardCellToCell(page, 2, 3, 2, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[1].status)).toBe(
       'CLEARED'
     );
 
-    // 13. Level 131: Frozen Gate Thaw
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(131));
     await dragBoardCellToCell(page, 2, 1, 2, 0);
     await dragBoardCellToCell(page, 4, 2, 5, 2);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().gates[2].iceCount)).toBe(0);
 
-    // 14. Level 141 & 145: Jewel-Locked & Toggling Shutter Gates
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(141));
-    await dragBoardCellToCell(page, 2, 1, 2, 0); // Shred Gem Block 1 -> opens BOTTOM shutter gate
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().gates[1].shutterOpen)).toBe(
       true
     );
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(145));
-    await dragBoardCellToCell(page, 2, 1, 2, 0); // Shred Block 1 -> toggles TOP shutter gate closed
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().gates[0].shutterOpen)).toBe(
       false
     );
 
-    // 15. Level 151 & 155: Sliding & Size-Changing Gates
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(151));
     await dragBoardCellToCell(page, 1, 1, 1, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().gates[0].spanStart)).toBe(2);
@@ -736,21 +736,18 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await dragBoardCellToCell(page, 1, 1, 1, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().gates[0].spanLength)).toBe(3);
 
-    // 16. Level 161: Block Generators
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(161));
-    await dragBoardCellToCell(page, 2, 1, 2, 0); // Shred Block 1 -> Generator spawns Block 7
+    await dragBoardCellToCell(page, 2, 1, 2, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks.length)).toBe(7);
 
-    // 17. Level 171: Colorful Floor Paths
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(171));
-    await dragBoardCellToCell(page, 2, 2, 2, 0); // Red Block 1 crosses red floor path at (row 1, col 2..3)
+    await dragBoardCellToCell(page, 2, 2, 2, 0);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].status)).toBe(
       'CLEARED'
     );
 
-    // 18. Level 181: Moving Elevators
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(181));
-    await dragBoardCellToCell(page, 4, 1, 5, 1); // Shred Block 2 -> Elevator shifts Block 1 from col 1 to col 2
+    await dragBoardCellToCell(page, 4, 1, 5, 1);
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks[0].col)).toBe(2);
 
     // 19. Level 28: Sealed Mystery Vault (`Gilded Vault`, 8x6 Tall Portrait) + Tap Toast + Synchronized Frozen Gate

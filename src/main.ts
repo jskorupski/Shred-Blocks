@@ -1,6 +1,7 @@
 import './styles/main.css';
 import { SoundEngine } from './audio/synth';
 import {
+  applyBoosterFreeze,
   applyBoosterHammer,
   applyBoosterRocket,
   applyBoosterVacuum,
@@ -9,11 +10,12 @@ import {
   commitBlockMove,
   computeEarnedStars,
   createBoardState,
+  isBoardDeadlocked,
   isBoardFailed,
   isBoardWon,
 } from './core/board';
 import { getShape } from './core/polyomino';
-import type { BlockState, BoardState, BoosterType, InputMode, SavePayloadV1 } from './core/types';
+import type { BlockState, BoardState, BoosterType, InputMode, PlayMode, SavePayloadV1 } from './core/types';
 import { BoardInputController, type BoosterTargetPayload, type HoverState } from './input/pointer-controller';
 import { getLevelSpec } from './levels/catalog';
 import { findNextHintMove } from './levels/solver';
@@ -69,6 +71,7 @@ import {
   setupDialogLightDismissImpl,
   showGameToastImpl,
   showUnlockNoteIfPresentImpl,
+  switchPlayModeImpl,
   switchScreenImpl,
   updateTelemetryReadoutImpl,
 } from './ui/modals-and-save-transfer';
@@ -99,6 +102,7 @@ export class ShredBlocksApp implements AppViewContext {
   private preRestartFreeUndos = 3;
   public freeUndosRemaining = 3;
   public levelOutcomeHandled = false;
+  public runTouchedZen = false;
   public bombSecondAccumulator = 0;
   private lastRafMs = performance.now();
   public toastTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -239,6 +243,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.preRestartFreeUndos = 3;
     this.freeUndosRemaining = 3;
     this.levelOutcomeHandled = false;
+    this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
     this.bombSecondAccumulator = 0;
 
     this.inputController.cancelTargeting();
@@ -294,6 +299,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.undoStack = [];
     this.freeUndosRemaining = 3;
     this.levelOutcomeHandled = false;
+    this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
     this.bombSecondAccumulator = 0;
     this.inputController.cancelTargeting();
     this.refreshAutoGuideMove();
@@ -353,6 +359,9 @@ export class ShredBlocksApp implements AppViewContext {
       this.undoStack.pop();
       return;
     }
+    if (outcome.coalesced && this.undoStack.length >= 2) {
+      this.undoStack.pop();
+    }
     const unlockToast = document.getElementById('unlock-toast');
     if (unlockToast && !unlockToast.hidden) {
       unlockToast.hidden = true;
@@ -371,6 +380,9 @@ export class ShredBlocksApp implements AppViewContext {
     this.syncInGameHud();
     this.checkWinOrLossAfterAction();
     if (!this.levelOutcomeHandled) {
+      if (isBoardDeadlocked(this.board)) {
+        this.showGameToast('⚠️ Gate gridlocked — use Undo, a Power-Up, or Retry!');
+      }
       this.refreshAutoGuideMove();
     }
   }
@@ -396,7 +408,8 @@ export class ShredBlocksApp implements AppViewContext {
 
   private handleLevelVictory(): void {
     const playMode = this.saveManager.getPayload().settings.playMode;
-    const earnedStars = computeEarnedStars(this.board, playMode);
+    const zenClear = playMode === 'ZEN' || this.runTouchedZen;
+    const earnedStars = computeEarnedStars(this.board, playMode, this.runTouchedZen);
     this.sound.playWinFanfare(earnedStars);
     this.renderer.spawnVictoryCelebrationBurst(this.board);
     const elapsedSec = Math.max(1, Math.round(this.board.timeLimitSec - this.board.timeRemainingSec));
@@ -407,7 +420,8 @@ export class ShredBlocksApp implements AppViewContext {
       Math.max(1, this.board.sessionBlocksShredded),
       earnedStars,
       this.board.parMoves,
-      this.board.difficulty
+      this.board.difficulty,
+      zenClear
     );
 
     populateVictoryModalImpl(this, summary);
@@ -415,7 +429,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.renderRoadmap();
   }
 
-  private handleLevelFailure(reason: 'TIME_OUT' | 'BOMB_EXPLODED'): void {
+  private handleLevelFailure(reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES'): void {
     handleLevelFailureImpl(this, reason);
   }
 
@@ -550,34 +564,26 @@ export class ShredBlocksApp implements AppViewContext {
 
   private executeHintOrFreezeBooster(): void {
     const playMode = this.saveManager.getPayload().settings.playMode;
+    if (!this.canAffordBooster('FREEZE')) return;
 
-    if (!this.canAffordBooster('FREEZE')) {
+    const hint = findNextHintMove(this.board);
+    if (playMode === 'ZEN' && !hint) {
+      this.showGameToast('💡 No hint needed right now!');
       return;
     }
-
-    if (playMode === 'ZEN') {
-      const hint = findNextHintMove(this.board);
-      if (!hint) {
-        this.showGameToast('💡 No hint needed right now!');
-        return;
-      }
-      if (!this.ensureBoosterAvailable('FREEZE')) return;
-      this.saveManager.spendBooster('FREEZE');
-      this.board.hintMove = hint;
-      this.sound.playBooster('FREEZE');
-      this.showGameToast('💡 Optimal next move highlighted on the board!');
-    } else {
-      if (!this.ensureBoosterAvailable('FREEZE')) return;
-      this.saveManager.spendBooster('FREEZE');
-      this.board.freezeRemainingSec = Math.max(0, this.board.freezeRemainingSec) + 10;
-      const hint = findNextHintMove(this.board);
-      if (hint) {
-        this.board.hintMove = hint;
-      }
-      this.sound.playBooster('FREEZE');
-      this.showGameToast('❄️ Timer & Bombs Frozen for +10s!');
-    }
-
+    if (!this.ensureBoosterAvailable('FREEZE')) return;
+    this.saveManager.spendBooster('FREEZE');
+    applyBoosterFreeze(this.board, playMode, hint);
+    this.sound.playBooster('FREEZE');
+    this.showGameToast(
+      playMode === 'CHALLENGE'
+        ? hint
+          ? '❄️ +2 Stasis Moves & Optimal Hint!'
+          : '❄️ +2 Stasis Moves Activated!'
+        : playMode === 'TIMED'
+          ? '❄️ Timer & Bombs Frozen for +10s!'
+          : '💡 Optimal next move highlighted on the board!'
+    );
     this.syncInGameHud();
     this.renderNow();
   }
@@ -687,6 +693,9 @@ export class ShredBlocksApp implements AppViewContext {
   }
   public switchScreen(screen: 'home' | 'game' | 'themes'): void {
     switchScreenImpl(this, screen);
+  }
+  public switchPlayMode(nextMode: PlayMode, silent = false): void {
+    switchPlayModeImpl(this, nextMode, silent);
   }
 
   public syncAllUiFromSave(): void {

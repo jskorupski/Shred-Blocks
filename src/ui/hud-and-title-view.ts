@@ -19,6 +19,7 @@ import type { RenderSceneOptions } from '../render/renderer-3d';
 import {
   BOOSTER_RARITY,
   BOOSTER_UNLOCK_LEVEL,
+  CONTINUE_COIN_COST,
   isBoosterUnlocked,
   type LevelWinRewardSummary,
 } from '../storage/save-manager';
@@ -49,23 +50,31 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
     titleEl.textContent = `Level ${app.board.levelId} Cleared!`;
   }
   if (subtitleEl) {
-    subtitleEl.textContent =
-      summary.starsEarned === 3
+    subtitleEl.textContent = summary.zenClear
+      ? '🌿 Tranquil Zen Clear — Replay in Challenge Mode for Gold Stars ★'
+      : summary.starsEarned === 3
         ? 'Flawless 3-Star Shredder Mastery!'
         : summary.starsEarned === 2
           ? 'Great Job! Clear in fewer moves for 3 Stars!'
-          : 'Level Complete!';
+          : 'Stage Complete! Clear closer to Par for 3 Stars!';
   }
   if (starsEl) {
-    const slots: HTMLSpanElement[] = [];
-    for (let i = 0; i < 3; i++) {
-      const span = document.createElement('span');
-      const isEarned = i < summary.starsEarned;
-      span.className = isEarned ? 'star-slot earned' : 'star-slot unearned';
-      span.textContent = isEarned ? '★' : '☆';
-      slots.push(span);
+    if (summary.zenClear) {
+      const pill = document.createElement('span');
+      pill.className = 'zen-victory-pill';
+      pill.textContent = '🌿 Zen Cleared · Stage Unlocked';
+      starsEl.replaceChildren(pill);
+    } else {
+      const slots: HTMLSpanElement[] = [];
+      for (let i = 0; i < 3; i++) {
+        const span = document.createElement('span');
+        const isEarned = i < summary.starsEarned;
+        span.className = isEarned ? 'star-slot earned' : 'star-slot unearned';
+        span.textContent = isEarned ? '★' : '☆';
+        slots.push(span);
+      }
+      starsEl.replaceChildren(...slots);
     }
-    starsEl.replaceChildren(...slots);
   }
   if (movesEl) {
     movesEl.textContent = `${app.board.movesCommitted} / Par ${app.board.parMoves}`;
@@ -75,10 +84,16 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   }
   if (breakdownEl) {
     const parts: string[] = [
-      summary.isFirstClear ? `First Clear: +${summary.baseCoins}` : `Replay Bonus: +${summary.baseCoins}`,
+      summary.zenClear
+        ? summary.isFirstClear
+          ? `Zen Clear: +${summary.baseCoins}`
+          : `Zen Replay: +${summary.baseCoins}`
+        : summary.isFirstClear
+          ? `First Clear: +${summary.baseCoins}`
+          : `Replay Bonus: +${summary.baseCoins}`,
     ];
     if (summary.starCoins > 0) parts.push(`New Stars: +${summary.starCoins}`);
-    if (summary.streakCoins > 0) parts.push(`Streak: +${summary.streakCoins}`);
+    if (summary.streakCoins > 0) parts.push(`Flow Streak: +${summary.streakCoins}`);
     if (summary.chestCoins > 0) parts.push(`Chests: +${summary.chestCoins}`);
     breakdownEl.textContent = parts.join(' • ');
   }
@@ -98,21 +113,29 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   }
   if (chestFanfareEl) {
     const chestNotes: string[] = [];
+    const boosterLabels = summary.rewardedBoosters.map(
+      (b) => `+1 ${BOOSTER_DISPLAY_NAMES[b]} [${BOOSTER_RARITY[b]}]`
+    );
+    let bCursor = 0;
     if (summary.shredderChestsOpened > 0) {
-      const rewardPart =
-        summary.rewardedBoosters.length > 0
-          ? summary.rewardedBoosters
-              .map((b) => `+1 ${BOOSTER_DISPLAY_NAMES[b]} [${BOOSTER_RARITY[b]}]`)
-              .join(', ')
-          : 'Free Booster';
-      chestNotes.push(`◇ Shredder Chest Opened! (+100 Coins & ${rewardPart})`);
+      const slice = boosterLabels.slice(bCursor, bCursor + summary.shredderChestsOpened);
+      bCursor += summary.shredderChestsOpened;
+      const rewardPart = slice.length > 0 ? slice.join(', ') : 'Free Booster';
+      chestNotes.push(
+        `◇ Shredder Chest Opened! (+${summary.shredderChestsOpened * 50} Coins & ${rewardPart})`
+      );
     }
     if (summary.milestoneChestOpened) {
-      const lastBooster = summary.rewardedBoosters[summary.rewardedBoosters.length - 1];
-      const rewardPart = lastBooster
-        ? `+1 ${BOOSTER_DISPLAY_NAMES[lastBooster]} [${BOOSTER_RARITY[lastBooster]}]`
-        : 'Free Booster';
-      chestNotes.push(`★ Milestone Chest Opened! (+150 Coins & ${rewardPart})`);
+      const rewardPart = boosterLabels[bCursor] ?? 'Free Booster';
+      bCursor++;
+      chestNotes.push(`★ Milestone Chest Opened! (+75 Coins & ${rewardPart})`);
+    }
+    if (summary.starReliquaryChestsOpened > 0) {
+      const slice = boosterLabels.slice(bCursor, bCursor + summary.starReliquaryChestsOpened);
+      const rewardPart = slice.length > 0 ? slice.join(', ') : 'Free Booster';
+      chestNotes.push(
+        `✦ Star Reliquary Chest Opened! (+${summary.starReliquaryChestsOpened * 90} Coins & ${rewardPart})`
+      );
     }
     if (chestNotes.length > 0) {
       chestFanfareEl.textContent = chestNotes.join(' | ');
@@ -123,26 +146,46 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   }
 }
 
-export function handleLevelFailureImpl(app: AppViewContext, reason: 'TIME_OUT' | 'BOMB_EXPLODED'): void {
+export function handleLevelFailureImpl(
+  app: AppViewContext,
+  reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES'
+): void {
   app.sound.playLossBuzzer();
   app.saveManager.recordLevelLoss();
 
+  const playMode = app.saveManager.getPayload().settings.playMode;
   const titleEl = document.getElementById('failure-title');
   const reasonEl = document.getElementById('failure-reason');
   const continueBtn = document.getElementById('btn-continue-level');
+  const zenBtn = document.getElementById('btn-failure-zen');
+
+  if (zenBtn) {
+    zenBtn.hidden = playMode === 'ZEN';
+  }
 
   if (titleEl) {
-    titleEl.textContent = reason === 'BOMB_EXPLODED' ? '💣 Bomb Exploded!' : "⏰ Time's Up!";
+    titleEl.textContent =
+      reason === 'OUT_OF_MOVES'
+        ? '🛑 Out of Moves!'
+        : reason === 'BOMB_EXPLODED'
+          ? '💣 Bomb Exploded!'
+          : "⏰ Time's Up!";
   }
   if (reasonEl) {
     reasonEl.textContent =
-      reason === 'BOMB_EXPLODED'
-        ? 'A countdown bomb reached zero! Defuse all bombs (+8 moves/sec) to keep playing, retry for free, or skip ahead.'
-        : 'You ran out of time in Timed Rush! Add +15 seconds, switch to Zen Mode, retry for free, or skip ahead.';
+      reason === 'OUT_OF_MOVES'
+        ? 'You reached the move budget! Retry for free, finish this board in Zen Mode, add +5 moves, or skip ahead.'
+        : reason === 'BOMB_EXPLODED'
+          ? 'A countdown bomb reached zero! Defuse bombs to keep playing, finish in Zen Mode, retry for free, or skip ahead.'
+          : 'You ran out of time in Speed Rush! Add +20 seconds, finish in Zen Mode, retry for free, or skip ahead.';
   }
   if (continueBtn) {
     continueBtn.textContent =
-      reason === 'BOMB_EXPLODED' ? '➕ Defuse Bombs (50 Coins)' : '➕ Add +15 Seconds (50 Coins)';
+      reason === 'OUT_OF_MOVES'
+        ? `➕ +5 Moves (${CONTINUE_COIN_COST} Coins)`
+        : reason === 'BOMB_EXPLODED'
+          ? `➕ Defuse & Continue (${CONTINUE_COIN_COST} Coins)`
+          : `➕ +20 Seconds (${CONTINUE_COIN_COST} Coins)`;
   }
 
   app.openModal('failure');
@@ -405,9 +448,21 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   setChecked('toggle-high-contrast', save.settings.highContrast);
   setChecked('toggle-reduced-motion', save.settings.reducedMotion);
 
+  const modeSelect = document.getElementById('select-play-mode') as HTMLSelectElement | null;
+  if (modeSelect) {
+    modeSelect.value = save.settings.playMode;
+  }
+
   const tierSelect = document.getElementById('select-quality-tier') as HTMLSelectElement | null;
   if (tierSelect) {
     tierSelect.value = save.settings.qualityTier;
+  }
+
+  const jumpInput = document.getElementById('level-jump-input') as HTMLInputElement | null;
+  if (jumpInput) {
+    const maxUnlocked = Math.max(1, save.highestLevelUnlocked || 1);
+    jumpInput.max = String(maxUnlocked);
+    jumpInput.title = `Jump to unlocked stage (1–${maxUnlocked})`;
   }
 
   const hudSfxBtn = document.getElementById('btn-hud-sfx');
@@ -445,10 +500,27 @@ export function syncInGameHudImpl(app: AppViewContext): void {
     shredInline.textContent = `${prog}/100`;
   }
   if (modeLabel) {
-    modeLabel.textContent = playMode === 'ZEN' ? 'Zen Mode' : 'Timed Rush';
+    modeLabel.textContent =
+      playMode === 'CHALLENGE' ? '⚔️ Challenge' : playMode === 'ZEN' ? '🌿 Zen Mode' : '⏱ Speed Rush';
   }
   if (movesPill) {
-    movesPill.textContent = `Moves: ${app.board.movesCommitted} / Par ${app.board.parMoves}`;
+    if (playMode === 'CHALLENGE') {
+      if (app.board.stasisMovesRemaining > 0) {
+        movesPill.textContent = `Moves Left: ${app.board.movesRemaining} · ❄️×${app.board.stasisMovesRemaining}`;
+        movesPill.className = 'tabular-metric moves-pill moves-stasis';
+      } else {
+        movesPill.textContent = `Moves Left: ${app.board.movesRemaining}`;
+        movesPill.className =
+          app.board.movesRemaining <= 1
+            ? 'tabular-metric moves-pill moves-critical'
+            : app.board.movesRemaining <= 3
+              ? 'tabular-metric moves-pill moves-low'
+              : 'tabular-metric moves-pill';
+      }
+    } else {
+      movesPill.textContent = `Moves: ${app.board.movesCommitted} / Par ${app.board.parMoves}`;
+      movesPill.className = 'tabular-metric';
+    }
   }
   if (timerPill) {
     timerPill.hidden = playMode !== 'TIMED';
@@ -460,7 +532,9 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   const freezeLabel = document.getElementById('label-booster-freeze');
   if (svgHint) svgHint.toggleAttribute('hidden', playMode !== 'ZEN');
   if (svgFreeze) svgFreeze.toggleAttribute('hidden', playMode === 'ZEN');
-  if (freezeLabel) freezeLabel.textContent = playMode === 'ZEN' ? 'Hint' : 'Freeze';
+  if (freezeLabel) {
+    freezeLabel.textContent = playMode === 'CHALLENGE' ? 'Stasis' : playMode === 'TIMED' ? 'Freeze' : 'Hint';
+  }
 
   // Boosters Dock Badges, Rarity Accents & Progressive Level Unlocking (ECON-01 / ECON-02)
   const effectiveLevel = Math.max(app.board.levelId, save.highestLevelUnlocked);

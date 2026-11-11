@@ -1,6 +1,16 @@
+import { createBoardState } from '../core/board';
 import type { LevelSpec } from '../core/types';
 import { CURATED_EARLY_LEVELS } from './curated-early';
-import { generateProceduralLevel } from './generator';
+import {
+  generateProceduralLevel,
+  getDifficultyForLevel,
+  getUnlockNoteForLevel,
+  LEVEL_ADJECTIVES,
+  LEVEL_NOUNS,
+  selectCourtyardTopologyForLevel,
+  selectFocusedMechanicsForLevel,
+} from './generator';
+import { solveBoard } from './solver';
 
 export const TOTAL_CAMPAIGN_LEVELS = 300;
 
@@ -422,21 +432,21 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 5, colorStack: [2, 3] },
       { id: 3, shapeId: '1x2', row: 5, col: 2, colorStack: [3], chained: true, lockId: 1 },
       { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4], isStar: true },
-      { id: 5, shapeId: '1x1', row: 3, col: 2, colorStack: [1], iceCount: 1 },
-      { id: 6, shapeId: '1x1', row: 4, col: 4, colorStack: [2], bombCount: 24 },
-      { id: 7, shapeId: '1x2', row: 0, col: 2, colorStack: [1] },
-      { id: 8, shapeId: '2x1', row: 2, col: 6, colorStack: [2] },
-      { id: 9, shapeId: '1x3', row: 6, col: 2, colorStack: [3] },
-      { id: 10, shapeId: '2x1', row: 2, col: 0, colorStack: [4], isStar: true },
+      { id: 5, shapeId: '1x1', row: 3, col: 2, colorStack: [1], iceCount: 2 },
+      { id: 6, shapeId: '1x1', row: 4, col: 4, colorStack: [2], bombCount: 16 },
+      { id: 7, shapeId: '1x2', row: 0, col: 2, colorStack: [2] },
+      { id: 8, shapeId: '2x1', row: 2, col: 6, colorStack: [3] },
+      { id: 9, shapeId: '1x3', row: 6, col: 2, colorStack: [1] },
+      { id: 10, shapeId: '2x1', row: 4, col: 0, colorStack: [4], isStar: true },
     ],
     gates: [
-      { edge: 'TOP', spanStart: 1, spanLength: 4, colorQueue: [1, 1, 1] },
-      { edge: 'RIGHT', spanStart: 1, spanLength: 4, colorQueue: [2] },
-      { edge: 'BOTTOM', spanStart: 1, spanLength: 4, colorQueue: [3] },
-      { edge: 'LEFT', spanStart: 1, spanLength: 4, colorQueue: [4], isStar: true },
+      { edge: 'TOP', spanStart: 2, spanLength: 3, colorQueue: [1, 1, 1] },
+      { edge: 'RIGHT', spanStart: 2, spanLength: 3, colorQueue: [2, 2, 2] },
+      { edge: 'BOTTOM', spanStart: 2, spanLength: 3, colorQueue: [3, 3, 3] },
+      { edge: 'LEFT', spanStart: 2, spanLength: 3, colorQueue: [4, 4], isStar: true },
     ],
-    parMoves: 11,
-    timeLimitSec: 135,
+    parMoves: 14,
+    timeLimitSec: 65,
   },
 
   250: {
@@ -458,23 +468,23 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 3, col: 5, colorStack: [2, 3] },
       { id: 3, shapeId: '1x2', row: 5, col: 3, colorStack: [3], chained: true, lockId: 1 },
       { id: 4, shapeId: '2x2', row: 3, col: 2, colorStack: [4], isStar: true },
-      { id: 5, shapeId: '1x2', row: 6, col: 2, colorStack: [1], iceCount: 1 },
+      { id: 5, shapeId: '1x2', row: 6, col: 2, colorStack: [1], iceCount: 2 },
       { id: 6, shapeId: '2x1', row: 2, col: 1, colorStack: [2] },
-      { id: 7, shapeId: '1x1', row: 5, col: 5, colorStack: [4] },
-      { id: 8, shapeId: '1x3', row: 0, col: 2, colorStack: [1] },
-      { id: 9, shapeId: '2x1', row: 2, col: 7, colorStack: [2] },
+      { id: 7, shapeId: '1x1', row: 5, col: 5, colorStack: [4], isStar: true },
+      { id: 8, shapeId: '1x2', row: 0, col: 2, colorStack: [2] },
+      { id: 9, shapeId: '2x1', row: 2, col: 7, colorStack: [3] },
       { id: 10, shapeId: '2x1', row: 4, col: 7, colorStack: [2] },
-      { id: 11, shapeId: '2x1', row: 2, col: 0, colorStack: [4], isStar: true },
-      { id: 12, shapeId: '1x3', row: 7, col: 2, colorStack: [3] },
+      { id: 11, shapeId: '2x1', row: 4, col: 0, colorStack: [4], isStar: true },
+      { id: 12, shapeId: '1x3', row: 7, col: 2, colorStack: [1] },
     ],
     gates: [
-      { edge: 'TOP', spanStart: 1, spanLength: 6, colorQueue: [1, 1, 1] },
-      { edge: 'RIGHT', spanStart: 1, spanLength: 6, colorQueue: [2, 2, 2, 2] },
-      { edge: 'BOTTOM', spanStart: 1, spanLength: 6, colorQueue: [3, 3, 3] },
-      { edge: 'LEFT', spanStart: 1, spanLength: 6, colorQueue: [4, 4, 4], isStar: true },
+      { edge: 'TOP', spanStart: 2, spanLength: 3, colorQueue: [1, 1, 1] },
+      { edge: 'RIGHT', spanStart: 2, spanLength: 3, colorQueue: [2, 2, 2, 2] },
+      { edge: 'BOTTOM', spanStart: 2, spanLength: 3, colorQueue: [3, 3, 3] },
+      { edge: 'LEFT', spanStart: 2, spanLength: 3, colorQueue: [4, 4, 4], isStar: true },
     ],
-    parMoves: 13,
-    timeLimitSec: 155,
+    parMoves: 16,
+    timeLimitSec: 72,
   },
 
   300: {
@@ -497,25 +507,25 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
       { id: 2, shapeId: '2x1', row: 2, col: 6, colorStack: [2], scissorColor: 3 },
       { id: 3, shapeId: '1x3', row: 6, col: 3, colorStack: [3], chained: true, lockId: 1 },
       { id: 4, shapeId: '2x2', row: 3, col: 1, colorStack: [4], ropeColor: 3, isStar: true },
-      { id: 5, shapeId: '1x2', row: 2, col: 3, colorStack: [1, 2], iceCount: 1 },
+      { id: 5, shapeId: '1x2', row: 2, col: 3, colorStack: [1, 2], iceCount: 2 },
       { id: 6, shapeId: '2x1', row: 5, col: 6, colorStack: [2], shutterGemColor: 3 },
-      { id: 7, shapeId: '1x2', row: 7, col: 3, colorStack: [3], iceCount: 2 },
-      { id: 8, shapeId: '1x1', row: 5, col: 2, colorStack: [4], bombCount: 28 },
-      { id: 9, shapeId: '1x3', row: 0, col: 3, colorStack: [1] },
-      { id: 10, shapeId: '2x1', row: 2, col: 8, colorStack: [2] },
+      { id: 7, shapeId: '1x2', row: 7, col: 3, colorStack: [3], iceCount: 3 },
+      { id: 8, shapeId: '1x1', row: 5, col: 2, colorStack: [4], isStar: true },
+      { id: 9, shapeId: '1x2', row: 0, col: 3, colorStack: [2] },
+      { id: 10, shapeId: '2x1', row: 3, col: 8, colorStack: [3] },
       { id: 11, shapeId: '2x1', row: 5, col: 8, colorStack: [2] },
-      { id: 12, shapeId: '2x1', row: 2, col: 0, colorStack: [4], isStar: true },
-      { id: 13, shapeId: '2x1', row: 5, col: 0, colorStack: [4], isStar: true },
-      { id: 14, shapeId: '1x3', row: 8, col: 3, colorStack: [3] },
+      { id: 12, shapeId: '2x1', row: 1, col: 0, colorStack: [4], isStar: true },
+      { id: 13, shapeId: '2x1', row: 6, col: 0, colorStack: [4], isStar: true },
+      { id: 14, shapeId: '1x3', row: 8, col: 3, colorStack: [1], bombCount: 19 },
     ],
     gates: [
-      { edge: 'TOP', spanStart: 1, spanLength: 7, colorQueue: [1, 1, 1] },
-      { edge: 'RIGHT', spanStart: 1, spanLength: 7, colorQueue: [2, 2, 2, 2, 2] },
-      { edge: 'BOTTOM', spanStart: 1, spanLength: 7, colorQueue: [3, 3, 3], shutterLockColor: 3 },
-      { edge: 'LEFT', spanStart: 1, spanLength: 7, colorQueue: [4, 4, 4, 4], isStar: true },
+      { edge: 'TOP', spanStart: 3, spanLength: 3, colorQueue: [1, 1, 1] },
+      { edge: 'RIGHT', spanStart: 3, spanLength: 3, colorQueue: [2, 2, 2, 2, 2] },
+      { edge: 'BOTTOM', spanStart: 3, spanLength: 3, colorQueue: [3, 3, 3, 3], shutterLockColor: 3 },
+      { edge: 'LEFT', spanStart: 3, spanLength: 3, colorQueue: [4, 4, 4, 4], isStar: true },
     ],
-    parMoves: 15,
-    timeLimitSec: 175,
+    parMoves: 18,
+    timeLimitSec: 80,
   },
 };
 
@@ -564,9 +574,71 @@ export function getLevelSpec(levelId: number): LevelSpec {
   }
 
   const curated = CURATED_LEVELS[normalizedId];
-  const spec = curated ? cloneLevelSpec(curated) : generateProceduralLevel(normalizedId);
+  let spec: LevelSpec;
+  if (curated) {
+    spec = cloneLevelSpec(curated);
+    const solved = solveBoard(createBoardState(spec), 600);
+    if (solved.solvable && solved.minMoves > 0) {
+      spec.parMoves = solved.minMoves;
+    }
+  } else {
+    spec = generateProceduralLevel(normalizedId);
+  }
   levelCache.set(normalizedId, spec);
   return cloneLevelSpec(spec);
+}
+
+/**
+ * Lightweight O(1) stage metadata for Sanctuary Map rendering (`#screen-home`) without
+ * running `solveBoard()` on all 300 stages synchronously on cold boot.
+ */
+export interface LevelRoadmapMeta {
+  id: number;
+  name: string;
+  difficulty: LevelSpec['difficulty'];
+  unlockNote?: string;
+  hasBarriers: boolean;
+  isSculpted: boolean;
+}
+
+export function getLevelRoadmapMeta(levelId: number): LevelRoadmapMeta {
+  const normalizedId = Math.max(1, Math.floor(levelId));
+  const source = levelCache.get(normalizedId) ?? CURATED_LEVELS[normalizedId];
+  if (source) {
+    return {
+      id: source.id,
+      name: source.name,
+      difficulty: source.difficulty,
+      unlockNote: source.unlockNote,
+      hasBarriers: Boolean(source.barriers && source.barriers.length > 0),
+      isSculpted: Boolean(
+        (source.layoutId && source.layoutId !== 'RECTANGLE') || (source.cutouts && source.cutouts.length > 0)
+      ),
+    };
+  }
+
+  const difficulty = getDifficultyForLevel(normalizedId);
+  const rawMechanics = selectFocusedMechanicsForLevel(normalizedId);
+  const approxDim = normalizedId >= 180 ? 8 : normalizedId >= 41 ? 7 : 6;
+  const layoutId = selectCourtyardTopologyForLevel(normalizedId, approxDim, approxDim, 0, rawMechanics);
+  const adj = LEVEL_ADJECTIVES[(normalizedId * 7) % LEVEL_ADJECTIVES.length];
+  const noun = LEVEL_NOUNS[(normalizedId * 13) % LEVEL_NOUNS.length];
+  return {
+    id: normalizedId,
+    name: `${adj} ${noun}`,
+    difficulty,
+    unlockNote: getUnlockNoteForLevel(normalizedId),
+    hasBarriers: layoutId === 'TWIN_SANCTUM' || layoutId === 'MYSTERY_VAULT',
+    isSculpted: layoutId !== 'RECTANGLE' || rawMechanics.has('CUTOUTS_PILLARS'),
+  };
+}
+
+export function getCampaignRoadmapMeta(): LevelRoadmapMeta[] {
+  const list: LevelRoadmapMeta[] = [];
+  for (let id = 1; id <= TOTAL_CAMPAIGN_LEVELS; id++) {
+    list.push(getLevelRoadmapMeta(id));
+  }
+  return list;
 }
 
 /**
