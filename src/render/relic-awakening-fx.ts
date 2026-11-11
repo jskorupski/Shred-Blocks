@@ -68,9 +68,11 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
   const cy = board.rows * 0.5;
   const span = Math.max(board.cols, board.rows);
 
-  // 1. Glow shockwaves: warm orchid-gold flash above the blocks + royal amethyst wave sweeping the floor beneath
-  rctx.spawnShockwave(cx, cy, 0.66, 1.0, 0.86, 0.95, 0.16, span * 0.42, 0.48);
-  rctx.spawnShockwave(cx, cy, 0.04, 0.84, 0.42, 0.98, 0.32, span * 0.66, 0.74);
+  // 1. Glow shockwaves in the relic crack-glow palette: bright orchid flash above the blocks,
+  //    amethyst wave sweeping the floor, and a trailing sanctuary-gold ring
+  rctx.spawnShockwave(cx, cy, 0.66, 0.98, 0.62, 1.0, 0.16, span * 0.42, 0.52);
+  rctx.spawnShockwave(cx, cy, 0.04, 0.8, 0.38, 1.0, 0.34, span * 0.66, 0.78);
+  rctx.spawnShockwave(cx, cy, 0.36, 1.0, 0.78, 0.42, 0.24, span * 0.54, 0.4);
 
   // 2. Tactile board micro-recoil + staggered block awakening bounces
   rctx.boardShakeTimer = 0.16;

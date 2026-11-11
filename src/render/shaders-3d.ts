@@ -1,6 +1,8 @@
 import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 import { type GLMeshHandle, INSTANCE_STRIDE } from './render-types';
 
+export { PARTICLE_FRAGMENT_SHADER, PARTICLE_VERTEX_SHADER } from './shaders-particles';
+
 export const MAIN_VERTEX_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
@@ -102,7 +104,7 @@ uniform vec3 u_capColor;
 uniform vec4 u_clipPlane;
 uniform int u_useClipPlane;
 uniform int u_useTexture;
-uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay
+uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=stone_surface
 uniform sampler2D u_atlas;
 uniform float u_blueprintMix;
 uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
@@ -115,6 +117,18 @@ vec2 hashRelic22(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// Smooth 2D value noise (drives uneven, living crack-glow pulses & stone mottling)
+float relicNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hashRelic22(i).x;
+  float b = hashRelic22(i + vec2(1.0, 0.0)).x;
+  float c = hashRelic22(i + vec2(0.0, 1.0)).x;
+  float d = hashRelic22(i + vec2(1.0, 1.0)).x;
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
 // Euclidean Voronoi edge distance for authentic angular geological stone fractures (zero sine loops)
@@ -224,6 +238,19 @@ void main() {
     base = mix(base * coreMul, min(vec3(1.0), base * 1.35 + 0.15), clamp(rim * 1.6, 0.0, 1.0));
     specPower = 64.0;
     specStrength = 0.4;
+  } else if (u_materialStyle == 5) {
+    // stone_surface (STONE-FLOOR-01): world-space weathered stone on tray floors, walls & pillars.
+    // Luminance-only modulation keeps each Board Tray's palette identity; u_stoneTint adds a faint mineral cast.
+    vec2 sp = v_worldPos.xy + v_worldPos.z * vec2(0.7, 1.3);
+    float sMottle = relicNoise(sp * 1.15) * 0.65 + relicNoise(sp * 3.1 + 4.7) * 0.35 - 0.5;
+    float sGrain = sin(sp.x * 41.0 + cos(sp.y * 33.0)) * cos(sp.y * 47.0 + sin(sp.x * 29.0));
+    float sPit = smoothstep(0.72, 0.97, sin(sp.x * 63.0 + sMottle * 6.0) * cos(sp.y * 59.0 - sMottle * 6.0));
+    float sVein = 1.0 - smoothstep(0.0, 0.03 + fwidth(sp.x) * 0.8, voronoiRockCrack(sp * 0.85 + sMottle * 0.3).x);
+    float sAmp = u_highContrast == 1 ? 0.45 : 1.0;
+    float sLum = 1.0 + (sMottle * 0.2 + sGrain * 0.03 - sPit * 0.08 - sVein * 0.15) * sAmp;
+    base = clamp(base * sLum * mix(vec3(1.0), u_stoneTint, 0.35), 0.0, 1.0);
+    specPower = 16.0;
+    specStrength = 0.09;
   }
 
   float spec = pow(max(dot(N, H), 0.0), specPower) * specStrength;
@@ -435,214 +462,66 @@ void main() {
       smoothstep(0.60, 1.0, leyToneMix) * 0.42
     );
 
-    // Incandescent energy inside Voronoi fractures + wide subsurface bloom + subtle radial crepuscular light shafts
-    float crackGlow = (mysticCrackCore + branchCrack * 0.58) * (0.82 + 0.96 * mysticPulse);
+    // Incandescent energy inside Voronoi fractures + wide subsurface bloom + subtle radial crepuscular light shafts.
+    // Living-energy pulses (MYSTIC-RELIC-01): two drifting value-noise fields + a noise-phased heartbeat make each
+    // fissure region throb independently from dim ember-dark to bright, as if something stirs inside the stone.
+    float tA = animTime * isAnimated;
+    float pulseField =
+      relicNoise(wp * 0.58 + vec2(tA * 0.19, -tA * 0.14)) * 0.6 +
+      relicNoise(wp * 1.42 - vec2(tA * 0.33, tA * 0.27) + 7.3) * 0.4;
+    float heartbeat = mix(0.7, 0.5 + 0.5 * sin(tA * 1.9 + pulseField * 11.0), isAnimated);
+    float crackPulse = 0.1 + 0.9 * smoothstep(0.22, 0.86, pulseField) * (0.5 + 0.5 * heartbeat);
+    float crackLines = mysticCrackCore + branchCrack * 0.58;
+    float crackGlow = crackLines * (0.18 + 1.12 * crackPulse);
     float crackHalo =
-      (majorCrackValley * 0.48 + crackBloom * 0.36) * smoothstep(0.12, 0.64, majorRegionMask) * mysticPulse;
+      (majorCrackValley * 0.44 + crackBloom * 0.32) * smoothstep(0.12, 0.64, majorRegionMask) * crackPulse;
     float rayTheta = atan(relCenter.y, relCenter.x);
     float rayShaft = pow(
       0.5 + 0.5 * sin(rayTheta * 5.0 - animTime * 0.28 * isAnimated + sin(rayTheta * 2.0 + 0.9)),
       2.3
     );
     float godRaySweep =
-      rayShaft * (1.0 - smoothstep(0.10, 1.22, normDist)) * (0.09 + 0.32 * (crackBloom + mysticCrackCore)) * mysticPulse;
+      rayShaft * (1.0 - smoothstep(0.10, 1.22, normDist)) * (0.07 + 0.26 * (crackBloom + mysticCrackCore) * crackPulse) * mysticPulse;
 
     float centerMask = exp(-normDist * normDist * 1.35);
     float mortarLey =
       (1.0 - smoothstep(0.004, 0.032, borderDist)) *
       (1.0 - isPiece * 0.78) *
-      (0.14 + 0.28 * breathWave) *
+      (0.10 + 0.22 * breathWave) *
       (0.32 + 0.68 * centerMask);
     float blockBaseUnderGlow =
-      isPiece * smoothstep(0.38, 0.01, localWorldZ) * smoothstep(0.94, 0.30, abs(N.z)) * 0.54 * mysticPulse;
-    float heartAura = centerMask * 0.16 * mysticPulse;
-    float mysticRim = rim * (0.11 + 0.20 * mysticPulse) * caveVignette;
+      isPiece * smoothstep(0.38, 0.01, localWorldZ) * smoothstep(0.94, 0.30, abs(N.z)) * 0.44 * mysticPulse;
+    float heartAura = centerMask * 0.12 * mysticPulse;
+    float mysticRim = rim * (0.09 + 0.16 * mysticPulse) * caveVignette;
 
     float totalMysticGlow = clamp(
       crackGlow + crackHalo + godRaySweep + mortarLey + blockBaseUnderGlow + heartAura + mysticRim,
       0.0,
-      1.48
+      1.18
     );
     stoneArtifact += mysticColor * totalMysticGlow;
     stoneArtifact = mix(
       stoneArtifact,
       vec3(1.0, 0.89, 0.99),
-      clamp(crackGlow * mysticPulse * 0.62, 0.0, 0.72)
+      clamp(crackGlow * crackPulse * 0.5, 0.0, 0.5)
     );
 
     lit = mix(lit, stoneArtifact, u_blueprintMix);
-    // Relic Awakening surge (RELIC-AWAKEN-01): radial warm amethyst-gold transmutation wave + fissure flare
+    // Relic Awakening surge (RELIC-AWAKEN-01): every fissure blazes in the crack-glow palette (mysticColor)
+    // while a bright radial transmutation wave of the same amethyst-orchid-gold light sweeps outward.
     float awaken = (1.0 - u_blueprintMix) * step(u_blueprintMix, 0.998);
     float waveDist = normDist - awaken * 1.7;
-    float wave = exp(-waveDist * waveDist * 36.0) * smoothstep(0.0, 0.06, awaken);
+    float wave = exp(-waveDist * waveDist * 30.0) * smoothstep(0.0, 0.06, awaken);
     float flare = sin(clamp(awaken * 1.4, 0.0, 1.0) * 3.14159265);
-    vec3 awakenTint = mix(vec3(0.90, 0.46, 1.0), vec3(1.0, 0.80, 0.42), 0.44);
-    lit += awakenTint * (wave * 0.46 + crackGlow * flare * 0.64) * step(0.001, awaken);
+    float awakenGlow = (wave * 0.78 + (crackLines * 1.25 + crackHalo * 0.6) * flare) * step(0.001, awaken);
+    lit += mysticColor * awakenGlow;
+    lit = mix(lit, vec3(1.0, 0.9, 0.99), clamp(crackLines * flare * 0.55, 0.0, 0.6) * step(0.001, awaken));
     // Keep opaque 3D stone geometry 100% solid (blueprintAlpha = 1.0) so plinth, floor, walls,
     // and blocks never alpha-bleed through one another like a ghosted rendering error.
     blueprintAlpha = 1.0;
   }
 
   outColor = vec4(clamp(lit, 0.0, 1.0), u_color.a * blueprintAlpha);
-}
-`;
-
-export const PARTICLE_VERTEX_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 3) in vec4 a_instPosScale;
-layout(location = 4) in vec4 a_instColorRot;
-
-uniform mat4 u_viewProj;
-uniform int u_particleStyle; // 0=micro_cubes, 1=star_confetti, 2=pixel_sparks, 3=soap_bubbles, 4=lightning_bolts
-
-out vec3 v_normal;
-out vec3 v_color;
-out vec3 v_localPos;
-flat out float v_archetype; // 0=style particle, 1=stone shard, 2=smoke puff (RELIC-AWAKEN-01)
-flat out float v_life;
-
-void main() {
-  float angle = a_instColorRot.w;
-  float c = cos(angle);
-  float s = sin(angle);
-
-  vec3 p = a_position;
-  vec3 n = a_normal;
-  float w = a_instPosScale.w;
-  v_archetype = w <= -10.0 ? 2.0 : (w < 0.0 ? 1.0 : 0.0);
-  v_life = a_instColorRot.w;
-  v_color = a_instColorRot.rgb;
-  v_localPos = a_position;
-
-  if (v_archetype > 1.5) {
-    // Camera-facing billboard smoke puff (camera pitch ~78deg: up = (0, -0.978, 0.208))
-    float sz = -w - 10.0;
-    vec3 worldPos = a_instPosScale.xyz + vec3(p.x, -0.978 * p.y, 0.208 * p.y) * sz * 2.0;
-    v_normal = vec3(0.0, 0.21, 0.97);
-    gl_Position = u_viewProj * vec4(worldPos, 1.0);
-    return;
-  }
-  if (v_archetype > 0.5) {
-    // Irregular fractured stone slab with full 3-axis tumble
-    p = vec3(p.x * 1.32, p.y * 0.92, p.z * 0.72) * (-w);
-    float ax = angle * 1.3;
-    float ca = cos(ax);
-    float sa = sin(ax);
-    p = vec3(p.x, p.y * ca - p.z * sa, p.y * sa + p.z * ca);
-    n = vec3(n.x, n.y * ca - n.z * sa, n.y * sa + n.z * ca);
-    p = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
-    v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
-    gl_Position = u_viewProj * vec4(p + a_instPosScale.xyz, 1.0);
-    return;
-  }
-
-  if (u_particleStyle == 1) {
-    // star_confetti: flat fluttering ribbon wafers
-    p = vec3(p.x * 1.38, p.y * 1.15, p.z * 0.16);
-  } else if (u_particleStyle == 2) {
-    // pixel_sparks: crisp axis-aligned voxel sparks
-    p = p * 0.78;
-    c = 1.0;
-    s = 0.0;
-  } else if (u_particleStyle == 3) {
-    // soap_bubbles: inflated spherical droplets
-    vec3 sphereDir = normalize(a_position);
-    p = sphereDir * 0.62;
-    n = sphereDir;
-  } else if (u_particleStyle == 4) {
-    // lightning_bolts: elongated jagged electric streaks
-    p = vec3(p.x * 2.45, p.y * 0.28 + sin(p.x * 6.0) * 0.14, p.z * 0.28);
-  }
-
-  p = p * a_instPosScale.w;
-  vec3 rotated = vec3(
-    p.x * c - p.y * s,
-    p.x * s + p.y * c,
-    p.z * c - p.x * s * 0.3
-  );
-
-  vec3 worldPos = rotated + a_instPosScale.xyz;
-  v_normal = n;
-
-  gl_Position = u_viewProj * vec4(worldPos, 1.0);
-}
-`;
-
-export const PARTICLE_FRAGMENT_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-
-in vec3 v_normal;
-in vec3 v_color;
-in vec3 v_localPos;
-flat in float v_archetype;
-flat in float v_life;
-
-uniform int u_particleStyle; // 0=micro_cubes, 1=star_confetti, 2=pixel_sparks, 3=soap_bubbles, 4=lightning_bolts
-
-out vec4 outColor;
-
-void main() {
-  vec3 N = normalize(v_normal);
-  vec3 L = normalize(vec3(-0.3, -0.5, 0.8));
-  vec3 V = normalize(vec3(0.0, 0.21, 0.97));
-  float light = 0.62 + max(dot(N, L), 0.0) * 0.45;
-
-  if (v_archetype > 1.5) {
-    // Soft volumetric smoke/dust puff: radial falloff, smooth fade-in + fade-out, warm inner glow
-    float r = length(v_localPos.xy) * 2.0;
-    float puff = smoothstep(1.0, 0.1, r);
-    float fade = smoothstep(1.0, 0.86, v_life) * smoothstep(0.0, 0.55, v_life);
-    vec3 col = v_color * (0.86 + 0.28 * (1.0 - r)) + vec3(0.98, 0.82, 0.5) * 0.2 * fade * (1.0 - r);
-    float a = puff * fade * 0.58;
-    if (a < 0.004) discard;
-    outColor = vec4(clamp(col, 0.0, 1.0), a);
-    return;
-  }
-  if (v_archetype > 0.5) {
-    // Chiseled weathered stone shard with glowing golden-jade fracture edges (where 2+ faces meet)
-    vec3 lp = abs(v_localPos);
-    float edgeCount = smoothstep(0.34, 0.47, lp.x) + smoothstep(0.34, 0.47, lp.y) + smoothstep(0.34, 0.47, lp.z);
-    float edge = smoothstep(1.25, 1.9, edgeCount);
-    float grit = sin(v_localPos.x * 37.0) * cos(v_localPos.y * 41.0) * 0.05;
-    vec3 stone = v_color * (light + grit);
-    vec3 glow = mix(vec3(1.0, 0.8, 0.36), vec3(0.32, 0.96, 0.82), step(0.5, fract(v_color.r * 13.0)));
-    outColor = vec4(clamp(mix(stone, glow, edge * 0.7), 0.0, 1.0), 1.0);
-    return;
-  }
-
-  if (u_particleStyle == 1) {
-    // star_confetti: glossy metallic foil sheen
-    float foil = 0.75 + 0.45 * abs(dot(N, L));
-    vec3 col = mix(v_color * foil, vec3(1.0, 0.96, 0.8), 0.22);
-    outColor = vec4(clamp(col, 0.0, 1.0), 0.96);
-    return;
-  } else if (u_particleStyle == 2) {
-    // pixel_sparks: white-hot incandescent core with glowing edge
-    float core = clamp(1.0 - length(v_localPos) * 1.15, 0.0, 1.0);
-    vec3 col = mix(v_color * 1.25, vec3(1.0, 0.98, 0.82), core * 0.7);
-    outColor = vec4(clamp(col, 0.0, 1.0), 0.98);
-    return;
-  } else if (u_particleStyle == 3) {
-    // soap_bubbles: translucent sphere with iridescent Fresnel rim glow
-    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 2.0);
-    vec3 irid = mix(v_color, vec3(0.78, 0.96, 1.0), 0.55 * fresnel);
-    float alpha = clamp(0.28 + fresnel * 0.64, 0.25, 0.92);
-    outColor = vec4(clamp(irid + vec3(fresnel * 0.35), 0.0, 1.0), alpha);
-    return;
-  } else if (u_particleStyle == 4) {
-    // lightning_bolts: high-voltage electric cyan/white arc flash
-    float arc = clamp(1.0 - abs(v_localPos.y) * 1.6, 0.0, 1.0);
-    vec3 col = mix(mix(v_color, vec3(0.35, 0.92, 1.0), 0.55), vec3(1.0), arc * 0.75);
-    outColor = vec4(clamp(col, 0.0, 1.0), 0.98);
-    return;
-  }
-
-  outColor = vec4(clamp(v_color * light, 0.0, 1.0), 0.95);
 }
 `;
 

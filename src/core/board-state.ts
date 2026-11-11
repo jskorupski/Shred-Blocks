@@ -338,6 +338,35 @@ export function computeDefaultMoveLimit(
   return par + 4;
 }
 
+/**
+ * Undo Resource Integrity (`UNDO-RES-01`): when an Undo restores an older snapshot, carry forward the live
+ * resources the player already paid for or that must never rewind:
+ * - `TIMED`: the countdown (`timeRemainingSec`) and per-second bomb fuses never wind back.
+ * - `FREEZE`: purchased Stasis Moves (`max`, so undoing a stasis move refunds it) and freeze seconds persist.
+ * - Paid Continues stay counted so Undo can't erase the `1★` cap.
+ */
+export function carryLiveResourcesIntoUndo(restored: BoardState, live: BoardState, playMode: PlayMode): void {
+  restored.freezeRemainingSec = live.freezeRemainingSec;
+  restored.stasisMovesRemaining = Math.max(restored.stasisMovesRemaining, live.stasisMovesRemaining);
+  restored.continuesUsed = Math.max(restored.continuesUsed ?? 0, live.continuesUsed ?? 0);
+  if (playMode === 'TIMED') {
+    restored.timeRemainingSec = live.timeRemainingSec;
+    for (const b of restored.blocks) {
+      if (b.bombMax <= 0) continue;
+      const liveBlock = live.blocks.find((lb) => lb.id === b.id);
+      if (liveBlock) b.bombCount = Math.min(b.bombCount, liveBlock.bombCount);
+    }
+  }
+}
+
+/**
+ * Seconds per bomb-fuse tick in `TIMED` mode (`TIMED-BOMB-01`): fuses are solver-calibrated in *moves*, so the
+ * clock burns one fuse tick per move-equivalent of time (`timeLimitSec / parMoves`, never faster than `2.5s`).
+ */
+export function getTimedBombTickSec(board: BoardState): number {
+  return Math.max(2.5, board.timeLimitSec / Math.max(1, board.parMoves));
+}
+
 export function cloneBoardState(board: BoardState): BoardState {
   return {
     ...board,
@@ -475,10 +504,12 @@ export function isBoardFailed(
  * Computes Gold Star rating (`0..3`) upon level completion (`FR-29`):
  * - `ZEN` mode (or any run that switched into Zen mid-board): `0` Gold Stars (`zenCleared = true` badge).
  * - `TIMED` (`RUSH`) mode: `3★` (`>= 28%` time left), `2★` (`>= 12%` time left), `1★` (`> 0s`).
- * - `CHALLENGE` mode:
- *   - `3★`: `movesCommitted <= Math.max(parMoves + 1, Math.ceil(parMoves * 1.15))`
- *   - `2★`: `movesCommitted <= Math.max(parMoves + 3, Math.ceil(parMoves * 1.45))`
- *   - `1★`: cleared within Move Budget (or after Continue)
+ * - `CHALLENGE` mode (`STARS-SLACK-01`) scales thresholds to the level's real slack (`moveLimit - parMoves`) so
+ *   every tier stays reachable on tight `HARD`/`SUPER_HARD` budgets:
+ *   - `3★`: `movesCommitted <= parMoves + floor(slack / 3)`
+ *   - `2★`: `movesCommitted <= parMoves + floor(2 * slack / 3)`
+ *   - `1★`: cleared within the remaining Move Budget
+ * - Any paid Continue (`continuesUsed > 0`) caps the rating at `1★` in both `CHALLENGE` and `TIMED`.
  */
 export function computeEarnedStars(
   board: BoardState,
@@ -488,6 +519,9 @@ export function computeEarnedStars(
   if (playMode === 'ZEN' || zenTouched) {
     return 0;
   }
+  if ((board.continuesUsed ?? 0) > 0) {
+    return 1;
+  }
   if (playMode === 'TIMED' && board.timeLimitSec > 0) {
     const ratio = board.timeRemainingSec / board.timeLimitSec;
     if (ratio >= 0.28) return 3;
@@ -495,7 +529,8 @@ export function computeEarnedStars(
     return 1;
   }
   const par = Math.max(1, board.parMoves);
-  if (board.movesCommitted <= Math.max(par + 1, Math.ceil(par * 1.15))) return 3;
-  if (board.movesCommitted <= Math.max(par + 3, Math.ceil(par * 1.45))) return 2;
+  const slack = Math.max(0, (board.moveLimit || par) - par);
+  if (board.movesCommitted <= par + Math.floor(slack / 3)) return 3;
+  if (board.movesCommitted <= par + Math.floor((2 * slack) / 3)) return 2;
   return 1;
 }

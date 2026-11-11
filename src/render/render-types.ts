@@ -24,6 +24,11 @@ export const INSTANCE_STRIDE = 8; // x, y, z, scale, r, g, b, rotAngle
  */
 export const MAX_SMOKE_PUFFS = 256;
 export const SMOKE_SCALE_OFFSET = 10;
+/**
+ * `u_materialStyle = 5` (`STONE-FLOOR-01`): world-space weathered stone texture applied to gameplay tray floors,
+ * plinths, perimeter walls & pillars so the Title Stone Relic transitions into a stone courtyard (tinted by tray).
+ */
+export const STONE_SURFACE_STYLE = 5;
 
 export interface TrayPalette {
   bgClear: [number, number, number];

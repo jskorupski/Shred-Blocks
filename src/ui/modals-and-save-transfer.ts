@@ -276,10 +276,16 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
   }
 
   app.saveManager.updateSettings({ playMode: nextMode });
+  // Freeze seconds are a TIMED-only resource; never let them leak into Challenge/Zen move-based bomb ticks
+  if (prevMode === 'TIMED') {
+    app.board.freezeRemainingSec = 0;
+  }
 
   if (nextMode === 'ZEN') {
     app.runTouchedZen = true;
-    app.levelOutcomeHandled = false;
+    if (!isBoardWon(app.board)) {
+      app.levelOutcomeHandled = false;
+    }
     for (const b of app.board.blocks) {
       if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
         b.bombCount = Math.max(4, b.bombMax);
@@ -404,13 +410,13 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
 
 export function continueFailedLevelImpl(app: AppViewContext): void {
   const save = app.saveManager.getPayload();
-  if (save.coins < CONTINUE_COIN_COST) {
+  // Charge first: the +5 Moves / +20s are only granted once the 150-coin payment actually succeeds
+  if (save.coins < CONTINUE_COIN_COST || !app.saveManager.buyBoosterWithCoins('FREEZE', CONTINUE_COIN_COST)) {
     app.showGameToast(`Need ${CONTINUE_COIN_COST} Coins — or Retry, Zen Mode, or Skip for FREE!`);
     return;
   }
-  if (app.saveManager.buyBoosterWithCoins('FREEZE', CONTINUE_COIN_COST)) {
-    app.saveManager.spendBooster('FREEZE');
-  }
+  app.saveManager.spendBooster('FREEZE');
+  app.board.continuesUsed = (app.board.continuesUsed ?? 0) + 1; // STARS-SLACK-01: caps this clear at 1★
   const playMode = save.settings.playMode;
   if (playMode === 'CHALLENGE') {
     app.board.movesRemaining = Math.max(5, app.board.movesRemaining + 5);

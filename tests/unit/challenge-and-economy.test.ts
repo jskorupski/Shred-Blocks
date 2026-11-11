@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyBoosterFreeze,
   applyBoosterHammer,
+  carryLiveResourcesIntoUndo,
   commitBlockMove,
   computeDefaultMoveLimit,
   computeEarnedStars,
   createBoardState,
+  getTimedBombTickSec,
   isBoardDeadlocked,
   isBoardFailed,
   isBoardWon,
@@ -19,6 +21,7 @@ import { decodeSaveCode, encodeSaveCode } from '../../src/storage/save-code';
 import {
   CONTINUE_COIN_COST,
   createDefaultSavePayload,
+  migrateLegacyEconomy,
   SAVE_STORAGE_KEY,
   SaveManager,
   THEME_TIER_PRICES,
@@ -346,5 +349,64 @@ describe('Challenge Mode, Touch-Move Coalescing, Stasis, Authentic L26+ Rules & 
       expect(spec.gates.every((g) => g.spanLength <= 4)).toBe(true);
     }
     expect(totalStagingMoves).toBeGreaterThanOrEqual(14);
+  });
+
+  it('STARS-SLACK-01, UNDO-RES-01, TIMED-BOMB-01 & ECON hardening: slack-scaled stars, Continue 1★ cap, undo resource carry, timed fuse pacing, Zen-skip & migration guards', () => {
+    // 1. Every star tier stays reachable on tight SUPER_HARD budgets (slack = 2) and FTUE budgets (slack = 6)
+    const board = createBoardState(getLevelSpec(1));
+    board.parMoves = 15;
+    board.moveLimit = 17;
+    const starsAt = (moves: number) => {
+      board.movesCommitted = moves;
+      return computeEarnedStars(board, 'CHALLENGE', false);
+    };
+    expect([starsAt(15), starsAt(16), starsAt(17)]).toEqual([3, 2, 1]);
+    board.parMoves = 4;
+    board.moveLimit = 10;
+    expect([starsAt(6), starsAt(8), starsAt(10)]).toEqual([3, 2, 1]);
+    board.continuesUsed = 1;
+    expect(starsAt(4)).toBe(1);
+    board.timeLimitSec = 60;
+    board.timeRemainingSec = 59;
+    expect(computeEarnedStars(board, 'TIMED', false)).toBe(1);
+
+    // 2. Undo never rewinds the TIMED clock/fuses and never deletes purchased stasis or Continue caps
+    const restored = createBoardState(getLevelSpec(1));
+    const live = createBoardState(getLevelSpec(1));
+    restored.timeRemainingSec = 80;
+    live.timeRemainingSec = 41;
+    live.stasisMovesRemaining = 2;
+    live.freezeRemainingSec = 6;
+    live.continuesUsed = 1;
+    carryLiveResourcesIntoUndo(restored, live, 'TIMED');
+    expect(restored.timeRemainingSec).toBe(41);
+    expect(restored.stasisMovesRemaining).toBe(2);
+    expect(restored.freezeRemainingSec).toBe(6);
+    expect(restored.continuesUsed).toBe(1);
+    const challengeRestored = createBoardState(getLevelSpec(1));
+    challengeRestored.timeRemainingSec = 80;
+    carryLiveResourcesIntoUndo(challengeRestored, live, 'CHALLENGE');
+    expect(challengeRestored.timeRemainingSec).toBe(80);
+
+    // 3. TIMED bomb fuses burn one tick per move-equivalent of clock time (never 1 tick/sec)
+    const timed = createBoardState(getLevelSpec(1));
+    timed.timeLimitSec = 60;
+    timed.parMoves = 12;
+    expect(getTimedBombTickSec(timed)).toBe(5);
+    timed.parMoves = 100;
+    expect(getTimedBombTickSec(timed)).toBe(2.5);
+
+    // 4. Skipping a Zen-cleared stage never resets it into a re-farmable first clear
+    const manager = new SaveManager();
+    manager.recordLevelWin(3, 6, 30, 3, 0, 4, 'NORMAL', true);
+    manager.recordLevelSkip(3);
+    expect(manager.getPayload().levelRecords[3]?.zenCleared).toBe(true);
+    expect(manager.getPayload().levelRecords[3]?.skipped).not.toBe(true);
+
+    // 5. Economy v1 -> v2 migration never increases a balance (601..688 band)
+    const legacy = createDefaultSavePayload();
+    legacy.economyVersion = 1;
+    legacy.coins = 650;
+    expect(migrateLegacyEconomy(legacy).coins).toBeLessThanOrEqual(650);
   });
 });

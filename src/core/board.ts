@@ -148,7 +148,7 @@ export function commitBlockMove(
         if (playMode === 'CHALLENGE') {
           board.movesRemaining = Math.max(0, board.movesRemaining - 1);
         }
-        if ((playMode === 'CHALLENGE' || playMode === 'ZEN') && board.freezeRemainingSec <= 0) {
+        if (playMode === 'CHALLENGE' || playMode === 'ZEN') {
           for (const b of board.blocks) {
             if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0 && !isBlockInLockedRoom(board, b)) {
               b.bombCount = Math.max(0, b.bombCount - 1);

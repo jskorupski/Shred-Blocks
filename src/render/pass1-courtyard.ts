@@ -1,7 +1,7 @@
 import { getShape } from '../core/polyomino';
 import type { BoardState, ColorId } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
-import type { RenderPassContext, TrayPalette } from './render-types';
+import { type RenderPassContext, STONE_SURFACE_STYLE, type TrayPalette } from './render-types';
 
 export function renderPass1Courtyard(
   rctx: RenderPassContext,
@@ -108,7 +108,10 @@ export function renderPass1Courtyard(
       palette.wallColor[0] * 0.56 * lum,
       palette.wallColor[1] * 0.55 * lum,
       palette.wallColor[2] * 0.62 * lum,
-      1.0
+      1.0,
+      0,
+      0,
+      STONE_SURFACE_STYLE
     );
 
     const padL = bordersDiffRoomLeft ? 0.02 : 0.38;
@@ -127,7 +130,10 @@ export function renderPass1Courtyard(
       palette.wallColor[0] * 0.78 * lum,
       palette.wallColor[1] * 0.76 * lum,
       palette.wallColor[2] * 0.82 * lum,
-      1.0
+      1.0,
+      0,
+      0,
+      STONE_SURFACE_STYLE
     );
   }
 
@@ -170,7 +176,10 @@ export function renderPass1Courtyard(
           Math.min(1, (pr * 0.62 + checker[0] * 0.38 + sheen) * lum),
           Math.min(1, (pg * 0.62 + checker[1] * 0.38 + sheen) * lum),
           Math.min(1, (pb * 0.62 + checker[2] * 0.38 + sheen * 0.7) * lum),
-          1.0
+          1.0,
+          0,
+          0,
+          STONE_SURFACE_STYLE
         );
         if (colorblind) {
           rctx.drawAtlasBadge(
@@ -199,7 +208,10 @@ export function renderPass1Courtyard(
           Math.min(1, (checker[0] + sheen) * lum),
           Math.min(1, (checker[1] + sheen * 0.9) * lum),
           Math.min(1, (checker[2] + sheen * 0.65) * lum + (1 - lum) * 0.05),
-          1.0
+          1.0,
+          0,
+          0,
+          STONE_SURFACE_STYLE
         );
       }
 
@@ -208,7 +220,23 @@ export function renderPass1Courtyard(
         const pr = Math.min(1, palette.wallColor[0] * 1.38 * lum);
         const pg = Math.min(1, palette.wallColor[1] * 1.38 * lum);
         const pb = Math.min(1, palette.wallColor[2] * 1.38 * lum);
-        rctx.drawMesh(gl, ENVIRONMENT_MESHES.pillarMesh, c, r, zOff, 1.0, 1.0, 1.0, pr, pg, pb, 1.0);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.pillarMesh,
+          c,
+          r,
+          zOff,
+          1.0,
+          1.0,
+          1.0,
+          pr,
+          pg,
+          pb,
+          1.0,
+          0,
+          0,
+          STONE_SURFACE_STYLE
+        );
         if (!isStoneRuin) {
           const pillarBobZ =
             !rctx.lastOptions.reducedMotion && !roomVis.isLocked

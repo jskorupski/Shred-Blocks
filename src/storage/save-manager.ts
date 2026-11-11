@@ -170,7 +170,7 @@ export function migrateLegacyEconomy(payload: SavePayloadV1): SavePayloadV1 {
     migrated.settings.playMode = 'CHALLENGE';
   }
   if (migrated.coins > 600) {
-    migrated.coins = 600 + Math.round((migrated.coins - 600) ** 0.72 * 3.5);
+    migrated.coins = Math.min(migrated.coins, 600 + Math.round((migrated.coins - 600) ** 0.72 * 3.5));
   }
   migrated.starReliquaryLevel = Math.floor((migrated.totalStars || 0) / 25) * 25;
   migrated.economyVersion = 2;
@@ -445,7 +445,8 @@ export class SaveManager {
    */
   public recordLevelSkip(levelId: number): SavePayloadV1 {
     const existing = this.payload.levelRecords[levelId];
-    if (!existing || existing.stars === 0) {
+    // Never overwrite a Zen clear: otherwise Zen clear -> Skip -> Zen clear re-farms first-clear coins & chests
+    if (!existing || (existing.stars === 0 && !existing.zenCleared)) {
       this.payload.levelRecords[levelId] = {
         stars: 0,
         bestMoves: 0,

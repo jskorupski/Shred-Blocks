@@ -1,10 +1,6 @@
 import './styles/main.css';
 import { SoundEngine } from './audio/synth';
 import {
-  applyBoosterFreeze,
-  applyBoosterHammer,
-  applyBoosterRocket,
-  applyBoosterVacuum,
   type CommitMoveOutcome,
   cloneBoardState,
   commitBlockMove,
@@ -14,21 +10,19 @@ import {
   isBoardFailed,
   isBoardWon,
 } from './core/board';
-import { getShape } from './core/polyomino';
-import type { BlockState, BoardState, BoosterType, InputMode, PlayMode, SavePayloadV1 } from './core/types';
+import type { BlockState, BoardState, BoosterType, PlayMode, SavePayloadV1 } from './core/types';
 import { BoardInputController, type BoosterTargetPayload, type HoverState } from './input/pointer-controller';
 import { getLevelSpec } from './levels/catalog';
 import { findNextHintMove } from './levels/solver';
 import { Renderer3D } from './render/renderer-3d';
-import { BOOSTER_RARITY, BOOSTER_UNLOCK_LEVEL, isBoosterUnlocked, SaveManager } from './storage/save-manager';
+import { SaveManager } from './storage/save-manager';
+import { activateBoosterImpl, executeTargetedBoosterImpl } from './ui/boosters-controller';
 import {
   type AppViewContext,
   type BeforeInstallPromptEvent,
   BOOSTER_DEBUT_NOTES,
-  BOOSTER_DISPLAY_NAMES,
   type ModalId,
   type ShredBlocksDebugBridge,
-  UI_BOOSTER_PRICES,
 } from './ui/catalog-meta';
 import { ensureDialogsMounted } from './ui/dialogs-template';
 import {
@@ -96,10 +90,10 @@ export class ShredBlocksApp implements AppViewContext {
   public titleOverlayOpen = true;
   public blueprintMix = 1.0;
   public activeRoadmapRange = 'all';
-  private undoStack: BoardState[] = [];
-  private preRestartSnapshot: BoardState | null = null;
-  private preRestartUndoStack: BoardState[] = [];
-  private preRestartFreeUndos = 3;
+  public undoStack: BoardState[] = [];
+  public preRestartSnapshot: BoardState | null = null;
+  public preRestartUndoStack: BoardState[] = [];
+  public preRestartFreeUndos = 3;
   public freeUndosRemaining = 3;
   public levelOutcomeHandled = false;
   public runTouchedZen = false;
@@ -273,7 +267,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.renderNow();
   }
 
-  private refreshAutoGuideMove(): void {
+  public refreshAutoGuideMove(): void {
     if (this.board.levelId <= 30 || this.currentLevelHasUnlockNote) {
       const hint = findNextHintMove(this.board, 600);
       this.cachedAutoGuideMove = hint
@@ -321,22 +315,13 @@ export class ShredBlocksApp implements AppViewContext {
     if (this.undoStack.length > 50) {
       this.undoStack.shift();
     }
-    this.preRestartSnapshot = null;
-    this.preRestartUndoStack = [];
   }
 
   public commitMove(blockId: number, targetRow: number, targetCol: number): CommitMoveOutcome {
     this.pushUndoSnapshot(this.board);
     const playMode = this.saveManager.getPayload().settings.playMode;
-    const outcome = commitBlockMove(
-      this.board,
-      blockId,
-      targetRow,
-      targetCol,
-      playMode,
-      targetCol,
-      targetRow
-    );
+    // Zero velocity: programmatic/auto-solve moves must not bias corner gate selection toward RIGHT/BOTTOM
+    const outcome = commitBlockMove(this.board, blockId, targetRow, targetCol, playMode, 0, 0);
     if (!outcome.moved) {
       this.undoStack.pop();
     } else {
@@ -362,6 +347,9 @@ export class ShredBlocksApp implements AppViewContext {
     if (outcome.coalesced && this.undoStack.length >= 2) {
       this.undoStack.pop();
     }
+    // UX-11: only a real committed move forfeits accidental-restart recovery (rejected bumps keep it)
+    this.preRestartSnapshot = null;
+    this.preRestartUndoStack = [];
     const unlockToast = document.getElementById('unlock-toast');
     if (unlockToast && !unlockToast.hidden) {
       unlockToast.hidden = true;
@@ -446,200 +434,15 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   // ===========================================================================
-  // BOOSTERS & TARGETING (UX-04, UX-11)
+  // BOOSTERS & TARGETING (UX-04, UX-11) — implemented in src/ui/boosters-controller.ts
   // ===========================================================================
 
-  private canAffordBooster(type: BoosterType): boolean {
-    if (this.saveManager.getBoosterCount(type) > 0) {
-      return true;
-    }
-    const price = UI_BOOSTER_PRICES[type];
-    if (this.saveManager.getPayload().coins >= price) {
-      return true;
-    }
-    this.showGameToast(`Need ${price} Coins for ${type} booster!`);
-    return false;
-  }
-
-  private ensureBoosterAvailable(type: BoosterType): boolean {
-    if (this.saveManager.getBoosterCount(type) > 0) {
-      return true;
-    }
-    const price = UI_BOOSTER_PRICES[type];
-    if (this.saveManager.buyBoosterWithCoins(type, price)) {
-      this.showGameToast(`Purchased ${type} booster for ${price} Coins!`);
-      return true;
-    }
-    this.showGameToast(`Need ${price} Coins for ${type} booster!`);
-    return false;
-  }
-
-  private isBoosterAvailableAtCurrentProgress(type: BoosterType): boolean {
-    const save = this.saveManager.getPayload();
-    const effectiveLevel = Math.max(this.board.levelId, save.highestLevelUnlocked);
-    return isBoosterUnlocked(type, effectiveLevel);
-  }
-
   public activateBooster(type: BoosterType): void {
-    if (!this.isBoosterAvailableAtCurrentProgress(type)) {
-      this.sound.playWallClack();
-      const unlockLvl = BOOSTER_UNLOCK_LEVEL[type];
-      const rarity = BOOSTER_RARITY[type];
-      const displayName = BOOSTER_DISPLAY_NAMES[type];
-      this.showGameToast(`🔒 ${displayName} (${rarity}) unlocks at Level ${unlockLvl}!`);
-      return;
-    }
-
-    if (type === 'UNDO') {
-      this.executeUndoBooster();
-      return;
-    }
-
-    if (type === 'FREEZE') {
-      this.executeHintOrFreezeBooster();
-      return;
-    }
-
-    const modeMap: Record<'HAMMER' | 'ROCKET' | 'VACUUM', InputMode> = {
-      HAMMER: 'TARGET_HAMMER',
-      ROCKET: 'TARGET_ROCKET',
-      VACUUM: 'TARGET_VACUUM',
-    };
-    const targetMode = modeMap[type];
-
-    // Toggle off if already targeting this booster
-    if (this.inputController.getInputMode() === targetMode) {
-      this.inputController.cancelTargeting();
-      return;
-    }
-
-    if (!this.canAffordBooster(type)) {
-      return;
-    }
-
-    this.sound.playButtonTap();
-    this.inputController.setInputMode(targetMode);
-    this.syncBoosterTargetingBanner(this.inputController.getHoverState());
-    this.renderNow();
-  }
-
-  private executeUndoBooster(): void {
-    // UX-11: Check if undoing an accidental level restart first
-    if (this.undoStack.length === 0 && this.preRestartSnapshot) {
-      this.board = cloneBoardState(this.preRestartSnapshot);
-      this.undoStack = this.preRestartUndoStack;
-      this.freeUndosRemaining = this.preRestartFreeUndos;
-      this.preRestartSnapshot = null;
-      this.preRestartUndoStack = [];
-      this.levelOutcomeHandled = false;
-      this.sound.playBooster('UNDO');
-      this.showGameToast('↩️ Restored board before restart!');
-      this.syncInGameHud();
-      this.renderNow();
-      return;
-    }
-
-    if (this.undoStack.length === 0) {
-      this.showGameToast('↩️ No moves to undo yet');
-      return;
-    }
-
-    if (this.freeUndosRemaining > 0) {
-      this.freeUndosRemaining--;
-    } else {
-      if (!this.ensureBoosterAvailable('UNDO')) return;
-      this.saveManager.spendBooster('UNDO');
-    }
-
-    const previous = this.undoStack.pop();
-    if (!previous) return;
-    this.board = previous;
-    this.levelOutcomeHandled = false;
-    this.lastPointerActivityMs = performance.now();
-    this.refreshAutoGuideMove();
-    this.sound.playBooster('UNDO');
-    this.syncInGameHud();
-    this.renderNow();
-  }
-
-  private executeHintOrFreezeBooster(): void {
-    const playMode = this.saveManager.getPayload().settings.playMode;
-    if (!this.canAffordBooster('FREEZE')) return;
-
-    const hint = findNextHintMove(this.board);
-    if (playMode === 'ZEN' && !hint) {
-      this.showGameToast('💡 No hint needed right now!');
-      return;
-    }
-    if (!this.ensureBoosterAvailable('FREEZE')) return;
-    this.saveManager.spendBooster('FREEZE');
-    applyBoosterFreeze(this.board, playMode, hint);
-    this.sound.playBooster('FREEZE');
-    this.showGameToast(
-      playMode === 'CHALLENGE'
-        ? hint
-          ? '❄️ +2 Stasis Moves & Optimal Hint!'
-          : '❄️ +2 Stasis Moves Activated!'
-        : playMode === 'TIMED'
-          ? '❄️ Timer & Bombs Frozen for +10s!'
-          : '💡 Optimal next move highlighted on the board!'
-    );
-    this.syncInGameHud();
-    this.renderNow();
+    activateBoosterImpl(this, type);
   }
 
   private executeTargetedBooster(type: BoosterType, target: BoosterTargetPayload): boolean {
-    if (!this.canAffordBooster(type)) return false;
-
-    const closedBefore = new Set(this.board.barriers.filter((b) => !b.open).map((b) => b.id));
-    let applied = false;
-
-    if (type === 'HAMMER') {
-      const pickedBlock =
-        target.blockId !== null
-          ? this.board.blocks.find((b) => b.id === target.blockId && b.status === 'ACTIVE')
-          : null;
-      const firstCell = pickedBlock ? getShape(pickedBlock.shapeId).cells[0] : null;
-      const r = pickedBlock && firstCell ? pickedBlock.row + firstCell[0] : target.row;
-      const c = pickedBlock && firstCell ? pickedBlock.col + firstCell[1] : target.col;
-      applied = (applyBoosterHammer as (b: BoardState, r: number, c: number, id?: number | null) => boolean)(
-        this.board,
-        r,
-        c,
-        pickedBlock ? pickedBlock.id : null
-      );
-    } else if (type === 'ROCKET') {
-      applied = applyBoosterRocket(this.board, target.row, target.col, target.axis);
-    } else if (type === 'VACUUM') {
-      if (target.color && target.color > 0) {
-        applied = applyBoosterVacuum(this.board, target.color);
-      }
-    }
-
-    if (!applied) {
-      this.sound.playWallClack();
-      this.showGameToast('Tap a valid colored block or crate target!');
-      return false;
-    }
-
-    if (!this.ensureBoosterAvailable(type)) return false;
-    // F-08 / MECH-10: Destructive boosters clear the undo stack so consumed boosters cannot be refunded
-    this.undoStack = [];
-    this.preRestartSnapshot = null;
-    this.preRestartUndoStack = [];
-    this.saveManager.spendBooster(type);
-    const newlyOpened = this.board.barriers.filter((b) => b.open && closedBefore.has(b.id));
-    if (newlyOpened.length > 0) {
-      const openedVault = newlyOpened.some((b) => b.isVault);
-      this.showGameToast(
-        openedVault
-          ? '🔓 Mystery Vault Unlocked! Hidden blocks revealed!'
-          : '⛩️ Portcullis Opened! New chamber unlocked!'
-      );
-    }
-    this.syncInGameHud();
-    this.checkWinOrLossAfterAction();
-    return true;
+    return executeTargetedBoosterImpl(this, type, target);
   }
 
   public syncBoosterTargetingBanner(hoverState: HoverState): void {

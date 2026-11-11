@@ -343,6 +343,8 @@ export interface BoardState {
   timeLimitSec: number;
   timeRemainingSec: number;
   freezeRemainingSec: number;
+  /** Paid Continues used on this board (`STARS-SLACK-01`): any Continue caps the clear at `1★` */
+  continuesUsed?: number;
   timerRunning: boolean;
   movesCommitted: number;
   sessionBlocksShredded: number;

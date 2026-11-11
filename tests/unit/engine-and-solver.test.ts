@@ -524,9 +524,10 @@ describe('All 5 Boosters & Zero-Softlock Law', () => {
   it('computes star ratings and loss states accurately', () => {
     const board = createBoardState(getLevelSpec(1));
     board.parMoves = 4;
-    board.movesCommitted = 5; // <= ceil(4 * 1.25) = 5 -> 3 stars
+    board.moveLimit = 10; // slack 6 -> 3★ <= par + 2, 2★ <= par + 4 (STARS-SLACK-01)
+    board.movesCommitted = 6;
     expect(computeEarnedStars(board)).toBe(3);
-    board.movesCommitted = 7; // <= ceil(4 * 1.75) = 7 -> 2 stars
+    board.movesCommitted = 8;
     expect(computeEarnedStars(board)).toBe(2);
     board.movesCommitted = 9;
     expect(computeEarnedStars(board)).toBe(1);
