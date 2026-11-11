@@ -81,6 +81,9 @@ npm run test:unit
 # Run Playwright E2E interactive browser playtest suite (24 tests across Desktop & Mobile)
 npm run test:e2e
 
+# Golden screenshot regression: pixel-diff 17 deterministic captures (update intended changes with test:visual:update)
+npm run test:visual
+
 # Capture 45 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
 npm run verify:visual
 ```

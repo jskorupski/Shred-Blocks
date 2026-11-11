@@ -1,3 +1,4 @@
+import { fxRandom } from '../core/fx-random';
 import { isBlockInLockedRoom } from '../core/physics';
 import { getShape } from '../core/polyomino';
 import type { BoardState } from '../core/types';
@@ -61,7 +62,7 @@ function writeParticle(
 
 export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: BoardState): void {
   if (rctx.lastOptions.reducedMotion) return;
-  const rand = Math.random;
+  const rand = fxRandom; // seedable for deterministic golden screenshots (VISUAL-GOLDEN-01)
   const isUltra = rctx.qualityGovernor.getActiveTier() === 'ULTRA_120';
   const density = isUltra ? 1 : 0.6;
   const cx = board.cols * 0.5;

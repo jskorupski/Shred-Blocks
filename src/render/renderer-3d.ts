@@ -571,6 +571,19 @@ export class Renderer3D implements RenderPassContext {
     this.qualityGovernor.recordFrameWork(workDurationMs, nowMs);
   }
 
+  /** VISUAL-GOLDEN-01: drop all in-flight particles, motes, shockwaves, bounces & shakes for deterministic frames */
+  public resetTransientFx(): void {
+    this.particlePool.fill(0);
+    this.activeParticleCount = 0;
+    this.activeSmokeCount = 0;
+    this.particleWriteCursor = 0;
+    this.activeShockwaves.length = 0;
+    this.activeVisualShreds.length = 0;
+    this.blockBounceMap.clear();
+    this.boardShakeTimer = 0;
+    this.ambientMoteAccumSec = 0;
+  }
+
   public getColorRgb(colorId: ColorId, highContrast = false): [number, number, number] {
     const entry = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[0];
     return highContrast ? entry.hcRgb : entry.rgb;

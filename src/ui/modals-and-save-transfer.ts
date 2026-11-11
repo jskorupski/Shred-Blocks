@@ -1,4 +1,5 @@
 import { isBoardWon } from '../core/board';
+import { setFxRandomSeed } from '../core/fx-random';
 import { getActiveColor } from '../core/polyomino';
 import type {
   BoosterType,
@@ -400,6 +401,9 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
       canvas.dispatchEvent(new Event('webglcontextrestored'));
       app.renderNow();
     },
+    freezeTime: (timeSec: number | null) => app.freezeTime(timeSec),
+    advanceFrozenFrames: (frames: number, dtSec = 1 / 60) => app.advanceFrozenFrames(frames, dtSec),
+    setFxRandomSeed: (seed: number | null) => setFxRandomSeed(seed),
     boardToScreen: (boardX: number, boardY: number) => {
       const rect = app.renderer.canvas.getBoundingClientRect();
       return app.renderer

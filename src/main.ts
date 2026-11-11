@@ -101,6 +101,7 @@ export class ShredBlocksApp implements AppViewContext {
   public levelOutcomeHandled = false;
   public runTouchedZen = false;
   public bombTickAccumulatorSec = 0;
+  public frozenTimeSec: number | null = null;
   private lastRafMs = performance.now();
   public toastTimerId: ReturnType<typeof setTimeout> | null = null;
   public unlockToastTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -462,6 +463,10 @@ export class ShredBlocksApp implements AppViewContext {
     const tick = (nowMs: number) => {
       const dtSec = Math.min(0.1, Math.max(0.001, (nowMs - this.lastRafMs) / 1000));
       this.lastRafMs = nowMs;
+      if (this.frozenTimeSec !== null) {
+        requestAnimationFrame(tick); // VISUAL-GOLDEN-01: time frozen for deterministic golden captures
+        return;
+      }
 
       stepSimulationImpl(this, dtSec);
       if (this.activeScreen === 'game' || this.titleOverlayOpen) {
@@ -480,7 +485,27 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   public renderNow(dtSec = 1 / 60, timeSec?: number): void {
-    this.renderer.render(this.board, buildRenderOptionsImpl(this, dtSec, timeSec));
+    const t = timeSec ?? (this.frozenTimeSec !== null ? this.frozenTimeSec : undefined);
+    this.renderer.render(this.board, buildRenderOptionsImpl(this, dtSec, t));
+  }
+
+  /** VISUAL-GOLDEN-01: freeze the live rAF loop at a fixed shader time (or resume with `null`) */
+  public freezeTime(timeSec: number | null): void {
+    this.frozenTimeSec = timeSec;
+    if (timeSec !== null) {
+      this.renderer.resetTransientFx();
+      this.renderNow(0, timeSec);
+    }
+  }
+
+  /** VISUAL-GOLDEN-01: deterministic fixed-step frames while frozen (simulation + particles + render) */
+  public advanceFrozenFrames(frames: number, dtSec = 1 / 60): void {
+    if (this.frozenTimeSec === null) return;
+    for (let i = 0; i < frames; i++) {
+      this.frozenTimeSec += dtSec;
+      stepSimulationImpl(this, dtSec);
+      this.renderNow(dtSec, this.frozenTimeSec);
+    }
   }
 
   public isNewPlayerSave(save: SavePayloadV1 = this.saveManager.getPayload()): boolean {
