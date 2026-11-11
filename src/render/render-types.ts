@@ -469,7 +469,7 @@ export interface RenderPassContext {
   lastOptions: RenderSceneOptions;
   startTimeMs: number;
   getEffectiveTrayPalette(trayId: TrayId, highContrast?: boolean): TrayPalette;
-  getColorRgb(colorId: ColorId, highContrast?: boolean): [number, number, number];
+  getColorRgb(colorId: ColorId, highContrast?: boolean, colorblind?: boolean): [number, number, number];
   getMaterialStyleCode(skin?: SkinId): number;
   getParticleStyleCode(style?: ParticleStyleId): number;
   getRoomVisualState(

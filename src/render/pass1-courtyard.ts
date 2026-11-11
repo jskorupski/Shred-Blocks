@@ -193,11 +193,11 @@ export function renderPass1Courtyard(
             c + 0.5,
             r + 0.5,
             zOff + 0.008,
-            0.42,
+            0.46,
             lum,
             lum,
             lum,
-            0.85
+            0.92
           );
         }
       } else {
@@ -557,11 +557,11 @@ export function renderPass1Courtyard(
             gen.col + 0.5,
             gen.row + 0.34,
             zOff + 0.774 + previewBobZ,
-            0.24,
+            0.3,
             lum,
             lum,
             lum,
-            0.96
+            0.98
           );
         }
       }

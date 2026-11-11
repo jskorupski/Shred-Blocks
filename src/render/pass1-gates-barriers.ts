@@ -554,10 +554,10 @@ export function renderPass1WallsAndGates(
           rctx.drawAtlasBadge(
             gl,
             `CB_${gate.shutterLockColor}`,
-            rollerX + spanAxisX * 0.2,
-            rollerY + spanAxisY * 0.2,
+            rollerX + spanAxisX * 0.22,
+            rollerY + spanAxisY * 0.22,
             zOff + 0.725,
-            0.22,
+            0.27,
             lum,
             lum,
             lum,
@@ -651,24 +651,41 @@ export function renderPass1WallsAndGates(
       );
     }
 
-    // Colorblind symbol on gate housing (`UX-10`, `R3D-04`: clear of center badges and outward queue pips)
+    // Sculpted 3D Cloisonne Sigil Medallion on gate housing (`AX-01`, `R3D-04`: pairs visually with block crest)
     if (colorblind) {
       const hasCenterGateBadge = gate.iceCount > 0 || gate.shutterLockColor > 0 || gate.isStar;
       const symSpanOffset =
         gate.iceCount > 0
-          ? -Math.max(0.54, Math.min(0.68, gate.spanLength * 0.5 - 0.22))
+          ? -Math.max(0.56, Math.min(0.7, gate.spanLength * 0.5 - 0.22))
           : hasCenterGateBadge
-            ? -Math.max(0.34, Math.min(0.46, gate.spanLength * 0.5 - 0.22))
+            ? -Math.max(0.38, Math.min(0.48, gate.spanLength * 0.5 - 0.22))
             : 0.0;
-      const inwardX = gate.edge === 'LEFT' ? 0.06 : gate.edge === 'RIGHT' ? -0.06 : 0;
-      const inwardY = gate.edge === 'TOP' ? 0.06 : gate.edge === 'BOTTOM' ? -0.06 : 0;
+      const inwardX = gate.edge === 'LEFT' ? 0.05 : gate.edge === 'RIGHT' ? -0.05 : 0;
+      const inwardY = gate.edge === 'TOP' ? 0.05 : gate.edge === 'BOTTOM' ? -0.05 : 0;
+      const gSymX = rollerX + spanAxisX * symSpanOffset + inwardX;
+      const gSymY = rollerY + spanAxisY * symSpanOffset + inwardY;
+      const medSize = hasCenterGateBadge ? 0.33 : 0.36;
+      const gateSigilZ = rctx.drawBadgeMedallion3D(
+        gl,
+        gSymX,
+        gSymY,
+        zOff + 0.652,
+        medSize,
+        medSize,
+        (rawGr * 0.26 + 0.04) * lum,
+        (rawGg * 0.26 + 0.04) * lum,
+        (rawGb * 0.26 + 0.06) * lum,
+        0.94 * lum,
+        0.83 * lum,
+        0.56 * lum
+      );
       rctx.drawAtlasBadge(
         gl,
         `CB_${activeColor}`,
-        rollerX + spanAxisX * symSpanOffset + inwardX,
-        rollerY + spanAxisY * symSpanOffset + inwardY,
-        zOff + 0.755,
-        0.28,
+        gSymX,
+        gSymY,
+        Math.max(gateSigilZ, zOff + 0.755),
+        hasCenterGateBadge ? 0.33 : 0.36,
         lum,
         lum,
         lum,
@@ -683,10 +700,16 @@ export function renderPass1WallsAndGates(
       const nextCol = gate.colorQueue[gate.colorCursor + 1 + q];
       const [qr, qg, qb] = rctx.getColorRgb(nextCol, highContrast);
       const pipOffset = (q - (visibleQueue - 1) * 0.5) * 0.62;
-      const px = isHorizEdge ? rollerX + pipOffset : rollerX + (gate.edge === 'LEFT' ? -0.18 : 0.18);
-      const py = !isHorizEdge ? rollerY + pipOffset : rollerY + (gate.edge === 'TOP' ? -0.18 : 0.18);
-      const barW = isHorizEdge ? 0.5 : 0.16;
-      const barH = !isHorizEdge ? 0.5 : 0.16;
+      const outwardShift = colorblind ? 0.21 : 0.18;
+      const px = isHorizEdge
+        ? rollerX + pipOffset
+        : rollerX + (gate.edge === 'LEFT' ? -outwardShift : outwardShift);
+      const py = !isHorizEdge
+        ? rollerY + pipOffset
+        : rollerY + (gate.edge === 'TOP' ? -outwardShift : outwardShift);
+      const barThick = colorblind ? 0.22 : 0.16;
+      const barW = isHorizEdge ? 0.5 : barThick;
+      const barH = !isHorizEdge ? 0.5 : barThick;
       const pipBobZ =
         !rctx.lastOptions.reducedMotion && !gateVis.isLocked
           ? Math.sin(timeSec * 3.4 + q * 1.1 + gate.index * 0.8) * 0.025
@@ -721,7 +744,7 @@ export function renderPass1WallsAndGates(
         1.0
       );
       if (colorblind) {
-        rctx.drawAtlasBadge(gl, `CB_${nextCol}`, px, py, zOff + 0.72 + pipBobZ, 0.15, lum, lum, lum, 0.96);
+        rctx.drawAtlasBadge(gl, `CB_${nextCol}`, px, py, zOff + 0.725 + pipBobZ, 0.23, lum, lum, lum, 0.98);
       }
     }
   }

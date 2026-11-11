@@ -610,8 +610,15 @@ export class Renderer3D implements RenderPassContext {
     this.ambientMoteAccumSec = 0;
   }
 
-  public getColorRgb(colorId: ColorId, highContrast = false): [number, number, number] {
+  public getColorRgb(
+    colorId: ColorId,
+    highContrast = false,
+    colorblind = Boolean(this.lastOptions.colorblindSymbols)
+  ): [number, number, number] {
     const entry = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[0];
+    if (colorblind) {
+      return highContrast ? entry.cbHcRgb : entry.cbRgb;
+    }
     return highContrast ? entry.hcRgb : entry.rgb;
   }
 
@@ -682,48 +689,38 @@ export class Renderer3D implements RenderPassContext {
   }
 
   public drawNumberBadges(
-    gl: WebGL2RenderingContext,
-    value: number,
-    cx: number,
-    cy: number,
-    z: number,
-    digitSize: number,
-    r = 1,
-    g = 1,
-    b = 1
+    ...[gl, value, cx, cy, z, digitSize, r, g, b]: [
+      WebGL2RenderingContext,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number?,
+      number?,
+      number?,
+    ]
   ): void {
     drawNumberBadgesImpl(this, gl, value, cx, cy, z, digitSize, r, g, b);
   }
 
   public drawBadgeMedallion3D(
-    gl: WebGL2RenderingContext,
-    cx: number,
-    cy: number,
-    zBase: number,
-    width: number,
-    height: number,
-    faceR: number,
-    faceG: number,
-    faceB: number,
-    rimR = 0.92,
-    rimG = 0.8,
-    rimB = 0.52
+    ...[gl, cx, cy, zBase, w, h, fr, fg, fb, rr, rg, rb]: [
+      WebGL2RenderingContext,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number?,
+      number?,
+      number?,
+    ]
   ): number {
-    return drawBadgeMedallion3DImpl(
-      this,
-      gl,
-      cx,
-      cy,
-      zBase,
-      width,
-      height,
-      faceR,
-      faceG,
-      faceB,
-      rimR,
-      rimG,
-      rimB
-    );
+    return drawBadgeMedallion3DImpl(this, gl, cx, cy, zBase, w, h, fr, fg, fb, rr, rg, rb);
   }
 
   private renderWebGL2(board: BoardState, options: RenderSceneOptions, dtSec = 1 / 60): void {

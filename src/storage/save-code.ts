@@ -3,6 +3,8 @@ import type { ParticleStyleId, QualityTier, SavePayloadV1, SkinId, TrayId } from
 export const CODEC_HEADER_RAW_UTF8 = 0x00;
 export const CODEC_HEADER_LZ77_V1 = 0x01;
 
+// SAVE-COMPAT-01: Enum index arrays are APPEND-ONLY. Never reorder or remove existing entries,
+// because live `SB1-...` binary save codes encode unlocked/equipped cosmetics by array index.
 const SKIN_IDS: ReadonlyArray<SkinId> = [
   'classic_studs',
   'relic_stone',
@@ -737,5 +739,15 @@ export function decodeSaveCode(rawInput: string): SavePayloadV1 {
 
   const framedBytes = base64UrlToBytes(b64Payload);
   const rawBytes = decompressFramedBytes(framedBytes);
+  // SAVE-COMPAT-01: Support both `0x02` compact binary streams and legacy `0x7b` ('{') UTF-8 JSON streams
+  if (rawBytes.length > 0 && rawBytes[0] === 0x7b) {
+    try {
+      const jsonText = new TextDecoder('utf-8', { fatal: true }).decode(rawBytes);
+      return validateSavePayloadV1(JSON.parse(jsonText) as unknown);
+    } catch (err) {
+      if (err instanceof SaveCodeError) throw err;
+      throw new SaveCodeError('INVALID_SCHEMA', 'Malformed UTF-8 JSON save stream.');
+    }
+  }
   return unpackCompactSaveBytes(rawBytes);
 }

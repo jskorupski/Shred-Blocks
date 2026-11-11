@@ -30,6 +30,15 @@ export function renderCanvas2DFallbackImpl(
   const highContrast = Boolean(options.highContrast);
   const colorblind = Boolean(options.colorblindSymbols);
   const palette = rctx.getEffectiveTrayPalette(trayId, highContrast);
+  const pickPrimaryHex = (e: (typeof COLOR_PALETTE)[ColorId]): string =>
+    colorblind
+      ? highContrast
+        ? e.cbHighContrastPrimaryHex
+        : e.cbPrimaryHex
+      : highContrast
+        ? e.highContrastPrimaryHex
+        : e.primaryHex;
+  const pickLipHex = (e: (typeof COLOR_PALETTE)[ColorId]): string => (colorblind ? e.cbLipHex : e.lipHex);
   const toCssRgb = (rgb: [number, number, number], mul = 1.0): string =>
     `rgb(${Math.round(Math.min(1, rgb[0] * mul) * 255)}, ${Math.round(Math.min(1, rgb[1] * mul) * 255)}, ${Math.round(Math.min(1, rgb[2] * mul) * 255)})`;
   const dtMs = dtSec * 1000;
@@ -117,9 +126,7 @@ export function renderCanvas2DFallbackImpl(
       const fc = (board.floorColor[idx] ?? 0) as ColorId;
       const fill =
         fc > 0
-          ? highContrast
-            ? COLOR_PALETTE[fc].highContrastPrimaryHex
-            : COLOR_PALETTE[fc].primaryHex
+          ? pickPrimaryHex(COLOR_PALETTE[fc])
           : (r + c) % 2 === 0
             ? toCssRgb(palette.floorTileA, roomVis.luminanceMul)
             : toCssRgb(palette.floorTileB, roomVis.luminanceMul);
@@ -236,7 +243,7 @@ export function renderCanvas2DFallbackImpl(
               sr + 0.92,
               0.02,
               'rgba(250, 204, 21, 0.24)',
-              nextEntry.primaryHex,
+              pickPrimaryHex(nextEntry),
               1.5
             );
           }
@@ -247,7 +254,7 @@ export function renderCanvas2DFallbackImpl(
           gen.col + 0.8,
           gen.row + 0.52,
           0.7,
-          highContrast ? nextEntry.highContrastPrimaryHex : nextEntry.primaryHex
+          pickPrimaryHex(nextEntry)
         );
         if (colorblind) {
           drawCenteredText(nextEntry.symbol, gen.col + 0.5, gen.row + 0.34, 0.72, '#FFFFFF');
@@ -352,16 +359,7 @@ export function renderCanvas2DFallbackImpl(
       gy1 = gate.spanStart + gate.spanLength;
     }
 
-    fillProjectedQuad(
-      gx0,
-      gy0,
-      gx1,
-      gy1,
-      0.35,
-      highContrast ? entry.highContrastPrimaryHex : entry.primaryHex,
-      entry.lipHex,
-      2
-    );
+    fillProjectedQuad(gx0, gy0, gx1, gy1, 0.35, pickPrimaryHex(entry), pickLipHex(entry), 2);
 
     const gcx = (gx0 + gx1) * 0.5;
     const gcy = (gy0 + gy1) * 0.5;
@@ -369,10 +367,12 @@ export function renderCanvas2DFallbackImpl(
     const spanAxisY = isHorizEdge ? 0 : 1;
 
     if (!gate.shutterOpen || gate.shutterLockColor > 0) {
-      const lockHex = gate.shutterLockColor > 0 ? COLOR_PALETTE[gate.shutterLockColor].primaryHex : '#64748B';
+      const lockHex =
+        gate.shutterLockColor > 0 ? pickPrimaryHex(COLOR_PALETTE[gate.shutterLockColor]) : '#64748B';
       fillProjectedQuad(gx0 + 0.05, gy0 + 0.05, gx1 - 0.05, gy1 - 0.05, 0.48, lockHex, '#0F172A');
       if (gate.shutterLockColor > 0) {
-        drawCenteredText('💎', gcx, gcy, 0.56, '#FFFFFF');
+        const lockSym = COLOR_PALETTE[gate.shutterLockColor].symbol;
+        drawCenteredText(colorblind ? `💎${lockSym}` : '💎', gcx, gcy, 0.56, '#FFFFFF');
       }
     } else if (gate.togglesOnClear) {
       fillProjectedQuad(gx0, gy0, gx0 + 0.1, gy0 + 0.1, 0.45, '#22C55E');
@@ -405,7 +405,7 @@ export function renderCanvas2DFallbackImpl(
         px + 0.08,
         py + 0.08,
         0.64,
-        highContrast ? qEntry.highContrastPrimaryHex : qEntry.primaryHex,
+        pickPrimaryHex(qEntry),
         '#0F172A',
         1
       );
@@ -495,8 +495,8 @@ export function renderCanvas2DFallbackImpl(
         cx + 0.95,
         cy + 0.95,
         BLOCK_TOP_Z,
-        highContrast ? entry.highContrastPrimaryHex : entry.primaryHex,
-        entry.lipHex,
+        pickPrimaryHex(entry),
+        pickLipHex(entry),
         1.5
       );
     }
@@ -555,8 +555,8 @@ export function renderCanvas2DFallbackImpl(
         drawX + dc + 0.96,
         drawY + dr + 0.96,
         z,
-        highContrast ? entry.highContrastPrimaryHex : entry.primaryHex,
-        entry.lipHex,
+        pickPrimaryHex(entry),
+        pickLipHex(entry),
         2
       );
 
@@ -569,8 +569,8 @@ export function renderCanvas2DFallbackImpl(
           drawX + dc + 0.82,
           drawY + dr + 0.82,
           z + 0.02,
-          highContrast ? innerEntry.highContrastPrimaryHex : innerEntry.primaryHex,
-          innerEntry.lipHex,
+          pickPrimaryHex(innerEntry),
+          pickLipHex(innerEntry),
           1.5
         );
       }
@@ -590,92 +590,11 @@ export function renderCanvas2DFallbackImpl(
     }
 
     const first = shape.cells[0];
-    if (colorblind || cId === 0) {
-      drawCenteredText(entry.symbol, drawX + first[1] + 0.22, drawY + first[0] + 0.22, z + 0.03, '#FFFFFF');
-      if (colorblind && layersLeft > 1) {
-        const innerId = block.colorStack[block.colorCursor + 1] ?? cId;
-        drawCenteredText(
-          COLOR_PALETTE[innerId].symbol,
-          drawX + first[1] + 0.78,
-          drawY + first[0] + 0.78,
-          z + 0.03,
-          '#FFFFFF',
-          'bold 10px sans-serif'
-        );
-      }
-    }
-
-    const anchor = shape.cells[shape.anchorCellIndex] ?? shape.cells[0];
+    const anchor = shape.cells[shape.anchorCellIndex] ?? first;
     const anchorCx = drawX + anchor[1] + 0.5;
     const anchorCy = drawY + anchor[0] + 0.5;
-
-    if (block.ropeColor > 0) {
-      const ropeEntry = COLOR_PALETTE[block.ropeColor];
-      fillProjectedQuad(
-        drawX + anchor[1] + 0.06,
-        drawY + anchor[0] + 0.36,
-        drawX + anchor[1] + 0.94,
-        drawY + anchor[0] + 0.64,
-        z + 0.028,
-        ropeEntry.primaryHex,
-        ropeEntry.lipHex,
-        1.5
-      );
-    }
-
-    if (block.chained) {
-      fillProjectedQuad(
-        drawX + anchor[1] + 0.08,
-        drawY + anchor[0] + 0.4,
-        drawX + anchor[1] + 0.92,
-        drawY + anchor[0] + 0.6,
-        z + 0.028,
-        '#475569',
-        '#0F172A',
-        1.5
-      );
-    }
-
-    if (block.axisLock === 'H') {
-      fillProjectedQuad(
-        drawX + 0.22,
-        drawY + shape.rows * 0.5 - 0.16,
-        drawX + shape.cols - 0.22,
-        drawY + shape.rows * 0.5 + 0.16,
-        z + 0.025,
-        entry.lipHex,
-        entry.highlightHex,
-        1.5
-      );
-      drawCenteredText(
-        '↔',
-        drawX + shape.cols * 0.5,
-        drawY + shape.rows * 0.5,
-        z + 0.032,
-        '#FFFDF9',
-        'bold 15px sans-serif'
-      );
-    } else if (block.axisLock === 'V') {
-      fillProjectedQuad(
-        drawX + shape.cols * 0.5 - 0.16,
-        drawY + 0.22,
-        drawX + shape.cols * 0.5 + 0.16,
-        drawY + shape.rows - 0.22,
-        z + 0.025,
-        entry.lipHex,
-        entry.highlightHex,
-        1.5
-      );
-      drawCenteredText(
-        '↕',
-        drawX + shape.cols * 0.5,
-        drawY + shape.rows * 0.5,
-        z + 0.032,
-        '#FFFDF9',
-        'bold 15px sans-serif'
-      );
-    }
-
+    const lockCx = drawX + shape.cols * 0.5;
+    const lockCy = drawY + shape.rows * 0.5;
     const hasImmobilizer = block.iceCount > 0 || block.chained;
     const hasPayload =
       (block.bombMax > 0 && block.bombCount > 0) ||
@@ -701,20 +620,83 @@ export function renderCanvas2DFallbackImpl(
       }
     }
 
-    if (block.iceCount > 0) {
-      drawCenteredText(`❄${block.iceCount}`, immCx, immCy, z + 0.04, '#E0F2FE');
-    } else if (block.chained) {
-      drawCenteredText('🔒', immCx, immCy, z + 0.04, '#FDE047');
+    if (colorblind) {
+      const freeCell = shape.cells.find(([cr, cc], ci) => {
+        const cx = drawX + cc + 0.5;
+        const cy = drawY + cr + 0.5;
+        return (
+          (!hasImmobilizer || Math.hypot(cx - immCx, cy - immCy) >= 0.36) &&
+          (!hasPayload || Math.hypot(cx - payCx, cy - payCy) >= 0.36) &&
+          (block.axisLock === 'NONE' || Math.hypot(cx - lockCx, cy - lockCy) >= 0.36) &&
+          !(block.ropeColor > 0 && ci === shape.anchorCellIndex)
+        );
+      });
+      const sx = freeCell ? drawX + freeCell[1] + 0.5 : drawX + first[1] + 0.22;
+      const sy = freeCell ? drawY + freeCell[0] + 0.5 : drawY + first[0] + 0.22;
+      drawCenteredText(entry.symbol, sx, sy, z + 0.03, '#FFFDF5', 'bold 13px sans-serif');
+      if (layersLeft > 1) {
+        const innerId = block.colorStack[block.colorCursor + 1] ?? cId;
+        const ix = drawX + first[1] + 0.78;
+        const iy = drawY + first[0] + 0.78;
+        drawCenteredText(COLOR_PALETTE[innerId].symbol, ix, iy, z + 0.03, '#FFFDF5', 'bold 10px sans-serif');
+      }
+    } else if (cId === 0) {
+      drawCenteredText(entry.symbol, drawX + first[1] + 0.22, drawY + first[0] + 0.22, z + 0.03, '#FFFFFF');
     }
+
+    if (block.ropeColor > 0) {
+      const rE = COLOR_PALETTE[block.ropeColor];
+      const rx0 = drawX + anchor[1] + 0.06;
+      const ry0 = drawY + anchor[0] + 0.36;
+      fillProjectedQuad(rx0, ry0, rx0 + 0.88, ry0 + 0.28, z + 0.028, pickPrimaryHex(rE), pickLipHex(rE), 1.5);
+      if (colorblind) {
+        drawCenteredText(rE.symbol, anchorCx, anchorCy, z + 0.034, '#FFFDF5', 'bold 11px sans-serif');
+      }
+    }
+    if (block.chained) {
+      const cx0 = drawX + anchor[1] + 0.08;
+      const cy0 = drawY + anchor[0] + 0.4;
+      fillProjectedQuad(cx0, cy0, cx0 + 0.84, cy0 + 0.2, z + 0.028, '#475569', '#0F172A', 1.5);
+    }
+    if (block.axisLock === 'H') {
+      fillProjectedQuad(
+        drawX + 0.22,
+        lockCy - 0.16,
+        drawX + shape.cols - 0.22,
+        lockCy + 0.16,
+        z + 0.025,
+        pickLipHex(entry),
+        entry.highlightHex,
+        1.5
+      );
+      drawCenteredText('↔', lockCx, lockCy, z + 0.032, '#FFFDF9', 'bold 15px sans-serif');
+    } else if (block.axisLock === 'V') {
+      fillProjectedQuad(
+        lockCx - 0.16,
+        drawY + 0.22,
+        lockCx + 0.16,
+        drawY + shape.rows - 0.22,
+        z + 0.025,
+        pickLipHex(entry),
+        entry.highlightHex,
+        1.5
+      );
+      drawCenteredText('↕', lockCx, lockCy, z + 0.032, '#FFFDF9', 'bold 15px sans-serif');
+    }
+
+    if (block.iceCount > 0) drawCenteredText(`❄${block.iceCount}`, immCx, immCy, z + 0.04, '#E0F2FE');
+    else if (block.chained) drawCenteredText('🔒', immCx, immCy, z + 0.04, '#FDE047');
 
     if (block.bombMax > 0 && block.bombCount > 0) {
       drawCenteredText(`💣${block.bombCount}`, payCx, payCy, z + 0.04, '#FCA5A5');
     } else if (block.hasKey > 0) {
       drawCenteredText('🔑', payCx, payCy, z + 0.04, '#FDE047');
     } else if (block.scissorColor > 0) {
-      drawCenteredText('✂', payCx, payCy, z + 0.04, COLOR_PALETTE[block.scissorColor].primaryHex);
+      const scE = COLOR_PALETTE[block.scissorColor];
+      drawCenteredText(colorblind ? `✂${scE.symbol}` : '✂', payCx, payCy, z + 0.04, pickPrimaryHex(scE));
     } else if (block.shutterGemColor > 0) {
-      drawCenteredText('💎', payCx, payCy, z + 0.04, COLOR_PALETTE[block.shutterGemColor].primaryHex);
+      const gmE = COLOR_PALETTE[block.shutterGemColor];
+      drawCenteredText(colorblind ? `💎${gmE.symbol}` : '💎', payCx, payCy, z + 0.04, pickPrimaryHex(gmE));
     } else if (block.isStar) {
       drawCenteredText('★', payCx, payCy, z + 0.04, '#FDE047');
     }

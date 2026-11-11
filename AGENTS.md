@@ -22,6 +22,9 @@ Authoritative engineering entrypoint for autonomous coding agents and contributo
    - Preserve the 3-plane tactile stone UI (`UI-DEPTH-01`), self-hosted `Fraunces` + `Plus Jakarta Sans` variable `.woff2` fonts (`TYPOGRAPHY-01` — never use external font CDNs), full `8 Settings × 15 Cosmetics` compatibility (`AX-01`, `AX-02`, `zCbSymbol = 0.692`), sculpted 3D modifiers (never flat 2D dark sticker overlays), and opaque `blueprintAlpha = 1.0` Satin Astrolabe Title rendering (`MYSTIC-RELIC-01`, zero CSS `filter` on `#game-canvas`, `0px` canvas layout shift via `TITLE-TRANSITION-01`, `VIEWPORT-01` without `viewport-fit=cover`).
    - Never use raw Tailwind `#0f172a` boxes, unstyled checkboxes, or the `🪙` emoji (use `.coin-emblem` or `Coins`). Keep `#game-toast` directly inside `#app-shell` and `closedby="none"` on `#dialog-victory` / `#dialog-failure` (`PLAY-02`).
    - **Self-Contained Comment Hygiene**: Code comments, tests, and docs must reference only self-contained domain concepts or invariant IDs—never transient review rounds or plan step numbers.
+5. **Live Player Save Backward-Compatibility & Append-Only Migration (`SAVE-COMPAT-01`)**:
+   - Real players have active saves in `localStorage` (`'shredblocks.save.v1'`), `IndexedDB` (`'ShredBlocksDB'`), `.json` backups, and `SB1-...` / QR codes. **Never** break existing saves or wipe player progress.
+   - Keep cosmetic/tier index arrays (`SKIN_IDS`, `TRAY_IDS`, `PARTICLE_IDS`, `QUALITY_TIERS`) and `sFlags` bits in [`src/storage/save-code.ts`](src/storage/save-code.ts) strictly **append-only**. Add new save fields with safe defaults in `sanitizeSavePayload`, append-only tagged binary trailers (after `0xa5`), and sequential forward-migration functions tested against frozen v1 fixtures in [`tests/unit/save-security.test.ts`](tests/unit/save-security.test.ts).
 
 ---
 
@@ -73,7 +76,10 @@ Run this sequence before concluding code, level, shader, icon, or style changes:
 
 ---
 
-## 5. Browser Support & Upstream Hosting Notes
+## 5. Public Repository Portability, Security & Upstream Hosting (`REPO-PORTABILITY-01`)
 
+- **Public Repo Hygiene & Zero Machine-Specific Bindings (`REPO-PORTABILITY-01`)**:
+  - This is a public open-source repository (`MIT`). **Never** commit secrets, API keys, tokens, `.env*` files, TLS private keys/certs (`.certs/`), Cloudflare `account_id`/`zone_id` values, private LAN IPs, or machine-specific filesystem paths (`/Users/<user>`, `/home/<user>`, `C:\Users\<user>`, `.gemini/<dir>`).
+  - All scripts, configs, and tests must resolve paths portably via `process.cwd()` or `fileURLToPath(new URL(..., import.meta.url))` (with optional env-var overrides like `VISUAL_OUT_DIR`), enforced automatically by [`tests/unit/sanctums-and-architecture.test.ts`](tests/unit/sanctums-and-architecture.test.ts).
 - **Browser Support**: Baseline Widely Available + progressive enhancement (`@supports` `in oklab`/`in oklch`, `devicePixelContentBoxSize` with `devicePixelRatio` fallback).
 - **Upstream Fork Customization**: Only `https://shredblocks.skorupski.org` references ([`index.html`](index.html), [`public/robots.txt`](public/robots.txt), [`public/sitemap.xml`](public/sitemap.xml), [`src/storage/save-manager.ts`](src/storage/save-manager.ts)) and optional Cloudflare config ([`wrangler.jsonc`](wrangler.jsonc), [`public/_headers`](public/_headers)) are deployment-specific; `dist/` runs on any static host.

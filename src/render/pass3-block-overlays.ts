@@ -273,43 +273,155 @@ export function renderBlockSurfaceOverlays3D(
     }
   }
 
-  // AX-01 Colorblind Symbols embossed above all studs/medallions (`zCbSymbol = zLift + 0.692 * scaleZ`)
+  // AX-01 Colorblind Sigils: single sculpted 3D cloisonne crest per block (zero polka-dot cell spam!)
   if (colorblind) {
+    // Rank cells so the primary sigil lands on an unobstructed cell (preferring anchor, then closest to centroid)
+    const freeCellIndices: number[] = [];
     for (let ci = 0; ci < shape.cells.length; ci++) {
       const cell = shape.cells[ci];
-      const isBusyCell = layersLeft > 1 || isCellCenterBusy(cell[0], cell[1], ci);
-      const symX = drawX + cell[1] + (isBusyCell ? 0.21 : 0.5);
-      const symY = drawY + cell[0] + (isBusyCell ? 0.21 : 0.5);
-      const symSize = isBusyCell ? 0.25 : 0.35;
-      rctx.drawAtlasBadge(
-        gl,
-        `CB_${activeColor}`,
-        symX,
-        symY,
-        zCbSymbol,
-        symSize,
-        roomLum,
-        roomLum,
-        roomLum,
-        0.98
-      );
+      if (!isCellCenterBusy(cell[0], cell[1], ci)) {
+        freeCellIndices.push(ci);
+      }
     }
-    const firstCell = shape.cells[0];
-    if (layersLeft > 1) {
-      const innerColor = block.colorStack[block.colorCursor + 1] ?? activeColor;
-      const firstBusy = isCellCenterBusy(firstCell[0], firstCell[1], 0);
-      rctx.drawAtlasBadge(
-        gl,
-        `CB_${innerColor}`,
-        drawX + firstCell[1] + (firstBusy ? 0.79 : 0.5),
-        drawY + firstCell[0] + (firstBusy ? 0.79 : 0.5),
-        zCbSymbol + 0.004,
-        firstBusy ? 0.24 : 0.31,
-        roomLum,
-        roomLum,
-        roomLum,
-        0.98
+    const centroidR = (shape.rows - 1) * 0.5;
+    const centroidC = (shape.cols - 1) * 0.5;
+    freeCellIndices.sort((ia, ib) => {
+      if (ia === shape.anchorCellIndex) return -1;
+      if (ib === shape.anchorCellIndex) return 1;
+      const ca = shape.cells[ia];
+      const cb = shape.cells[ib];
+      return (
+        Math.hypot(ca[0] - centroidR, ca[1] - centroidC) - Math.hypot(cb[0] - centroidR, cb[1] - centroidC)
       );
+    });
+
+    // Deep hue-matched enamel face + warm champagne bezel so #FFFDF9 sigil achieves >= 9.5:1 contrast
+    const enamelR = (r * 0.26 + 0.04) * roomLum;
+    const enamelG = (g * 0.26 + 0.04) * roomLum;
+    const enamelB = (b * 0.26 + 0.06) * roomLum;
+    const zCrestBase = zLift + (0.678 * scaleZ - 0.076);
+
+    if (layersLeft === 1) {
+      if (freeCellIndices.length > 0) {
+        const primaryCell = shape.cells[freeCellIndices[0]];
+        const px = drawX + primaryCell[1] + 0.5;
+        const py = drawY + primaryCell[0] + 0.5;
+        const crestZ = rctx.drawBadgeMedallion3D(
+          gl,
+          px,
+          py,
+          zCrestBase,
+          0.42,
+          0.42,
+          enamelR,
+          enamelG,
+          enamelB,
+          0.94 * roomLum,
+          0.83 * roomLum,
+          0.56 * roomLum
+        );
+        rctx.drawAtlasBadge(
+          gl,
+          `CB_${activeColor}`,
+          px,
+          py,
+          Math.max(crestZ, zCbSymbol),
+          0.41,
+          roomLum,
+          roomLum,
+          roomLum,
+          1.0
+        );
+      } else {
+        const fallbackCell = shape.cells[0];
+        rctx.drawAtlasBadge(
+          gl,
+          `CB_${activeColor}`,
+          drawX + fallbackCell[1] + 0.2,
+          drawY + fallbackCell[0] + 0.2,
+          zCbSymbol + 0.004,
+          0.32,
+          roomLum,
+          roomLum,
+          roomLum,
+          1.0
+        );
+      }
+    } else {
+      // Multi-layer block: gold-rimmed 3D crest for active outer color + compact core seal for next inner layer
+      const innerColor = block.colorStack[block.colorCursor + 1] ?? activeColor;
+      if (shape.cells.length >= 2 && freeCellIndices.length >= 2) {
+        const outerCell = shape.cells[freeCellIndices[0]];
+        const innerCell = shape.cells[freeCellIndices[1]];
+        const ox = drawX + outerCell[1] + 0.5;
+        const oy = drawY + outerCell[0] + 0.5;
+        const crestZ = rctx.drawBadgeMedallion3D(
+          gl,
+          ox,
+          oy,
+          zCrestBase,
+          0.42,
+          0.42,
+          enamelR,
+          enamelG,
+          enamelB,
+          0.94 * roomLum,
+          0.83 * roomLum,
+          0.56 * roomLum
+        );
+        rctx.drawAtlasBadge(
+          gl,
+          `CB_${activeColor}`,
+          ox,
+          oy,
+          Math.max(crestZ, zCbSymbol),
+          0.41,
+          roomLum,
+          roomLum,
+          roomLum,
+          1.0
+        );
+        rctx.drawAtlasBadge(
+          gl,
+          `CB_${innerColor}`,
+          drawX + innerCell[1] + 0.5,
+          drawY + innerCell[0] + 0.5,
+          zCbSymbol + 0.002,
+          0.34,
+          roomLum,
+          roomLum,
+          roomLum,
+          0.98
+        );
+      } else {
+        const targetIdx = freeCellIndices[0] ?? 0;
+        const targetCell = shape.cells[targetIdx];
+        const cellBusy = freeCellIndices.length === 0;
+        rctx.drawAtlasBadge(
+          gl,
+          `CB_${activeColor}`,
+          drawX + targetCell[1] + 0.21,
+          drawY + targetCell[0] + 0.21,
+          zCbSymbol + 0.002,
+          0.33,
+          roomLum,
+          roomLum,
+          roomLum,
+          1.0
+        );
+        rctx.drawAtlasBadge(
+          gl,
+          `CB_${innerColor}`,
+          drawX + targetCell[1] + (cellBusy ? 0.79 : 0.54),
+          drawY + targetCell[0] + (cellBusy ? 0.79 : 0.54),
+          zCbSymbol + 0.005,
+          cellBusy ? 0.29 : 0.34,
+          roomLum,
+          roomLum,
+          roomLum,
+          0.98
+        );
+      }
     }
   }
 
@@ -475,10 +587,10 @@ export function renderBlockSurfaceOverlays3D(
       rctx.drawAtlasBadge(
         gl,
         `CB_${block.scissorColor}`,
-        payCx + 0.2 * payPulseScale,
-        payCy + 0.18 * payPulseScale,
+        payCx + 0.21 * payPulseScale,
+        payCy + 0.19 * payPulseScale,
         scisBadgeZ + 0.003,
-        0.22 * payPulseScale,
+        0.28 * payPulseScale,
         roomLum,
         roomLum,
         roomLum,
@@ -514,10 +626,10 @@ export function renderBlockSurfaceOverlays3D(
       rctx.drawAtlasBadge(
         gl,
         `CB_${block.shutterGemColor}`,
-        payCx + 0.2 * payPulseScale,
-        payCy + 0.18 * payPulseScale,
+        payCx + 0.21 * payPulseScale,
+        payCy + 0.19 * payPulseScale,
         gemBadgeZ + 0.003,
-        0.22 * payPulseScale,
+        0.28 * payPulseScale,
         roomLum,
         roomLum,
         roomLum,

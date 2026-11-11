@@ -729,15 +729,19 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       }
     });
 
-    it('ensures every COLOR_PALETTE entry (0..9) has unique colorblind symbols and distinct High-Contrast RGB values', () => {
+    it('ensures every COLOR_PALETTE entry (0..9) has unique collision-free sacred-geometry sigils, distinct High-Contrast RGB values, and Universal CVD-safe perceptual separation (AX-01, AX-02)', () => {
       const symbols = new Set<string>();
       const hcHexes = new Set<string>();
+      const cbHexes = new Set<string>();
       for (let c = 0 as ColorId; c <= 9; c = (c + 1) as ColorId) {
         const entry = COLOR_PALETTE[c];
         expect(entry).toBeDefined();
         expect(entry.symbol.length).toBeGreaterThan(0);
+        // Never collide with Star Block / Star Gate mechanic glyph ('★')
+        expect(entry.symbol).not.toBe('★');
         symbols.add(entry.symbol);
         hcHexes.add(entry.highContrastPrimaryHex);
+        cbHexes.add(entry.cbPrimaryHex);
 
         // Verify hcRgb differs meaningfully from normal rgb so High Contrast is visually distinct
         const delta =
@@ -745,9 +749,16 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
           Math.abs(entry.hcRgb[1] - entry.rgb[1]) +
           Math.abs(entry.hcRgb[2] - entry.rgb[2]);
         expect(delta).toBeGreaterThan(0.12);
+
+        if (c >= 1) {
+          // MYSTIC-RELIC-01 shader invariant: active piece colors maintain chroma >= 0.48
+          expect(Math.max(...entry.cbRgb) - Math.min(...entry.cbRgb)).toBeGreaterThanOrEqual(0.48);
+          expect(Math.max(...entry.cbHcRgb) - Math.min(...entry.cbHcRgb)).toBeGreaterThanOrEqual(0.48);
+        }
       }
       expect(symbols.size).toBe(10);
       expect(hcHexes.size).toBe(10);
+      expect(cbHexes.size).toBe(10);
     });
 
     it('enforces dark high-contrast floor tiles and bright wall rims across all 5 custom Board Trays when highContrast is enabled', () => {

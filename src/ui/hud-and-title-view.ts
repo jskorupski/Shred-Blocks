@@ -49,7 +49,13 @@ export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockStat
   } else if (block.chained) {
     app.showGameToast('🔒 Chained! Shred a block carrying a 🔑 Key to unlock');
   } else if (block.ropeColor > 0) {
-    const cName = COLOR_PALETTE[block.ropeColor]?.name ?? 'matching';
+    const ropeEntry = COLOR_PALETTE[block.ropeColor];
+    const cb = app.saveManager.getPayload().settings.colorblindSymbols;
+    const cName = ropeEntry
+      ? cb
+        ? `${ropeEntry.cbName} (${ropeEntry.symbol})`
+        : ropeEntry.name
+      : 'matching';
     app.showGameToast(`🪢 Tied with ${cName} Rope! Shred matching ✂️ Scissors first`);
   }
 }

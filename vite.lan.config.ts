@@ -4,9 +4,12 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 // @ts-expect-error Node built-in module resolved at runtime by Vite
 import { resolve } from 'node:path';
+// @ts-expect-error Node built-in module resolved at runtime by Vite
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
-const CERT_DIR = resolve('/Users/james/projects/krista-game/.certs');
+const REPO_ROOT = fileURLToPath(new URL('.', import.meta.url));
+const CERT_DIR = resolve(REPO_ROOT, '.certs');
 const KEY_PATH = resolve(CERT_DIR, 'key.pem');
 const CERT_PATH = resolve(CERT_DIR, 'cert.pem');
 

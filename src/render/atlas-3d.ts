@@ -76,78 +76,106 @@ function drawStarPolygon(
 }
 
 const ATLAS_SLOTS: GlyphSlotSpec[] = [
-  // Row 0: Colorblind Symbols 0..5
+  // Row 0: Sacred-Geometry Colorblind Sigils 0..5 (`AX-01` — collision-free, topologically distinct)
   {
     keys: ['CB_0', '▨', 'STONE'],
     glyph: '▨',
     drawCustom: (ctx, cx, cy, r) => {
-      const s = r * 0.72;
-      ctx.strokeRect(cx - s, cy - s, s * 2, s * 2);
-      ctx.fillRect(cx - s, cy - s, s * 2, s * 2);
-      ctx.save();
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.lineWidth = 4;
+      const s = r * 0.64;
       ctx.beginPath();
-      ctx.moveTo(cx - s * 0.7, cy - s * 0.2);
-      ctx.lineTo(cx - s * 0.2, cy - s * 0.7);
-      ctx.moveTo(cx - s * 0.6, cy + s * 0.6);
-      ctx.lineTo(cx + s * 0.6, cy - s * 0.6);
-      ctx.moveTo(cx + s * 0.2, cy + s * 0.7);
-      ctx.lineTo(cx + s * 0.7, cy + s * 0.2);
+      ctx.rect(cx - s, cy - s, s * 2, s * 2);
+      ctx.fill();
+      ctx.save();
+      ctx.strokeStyle = 'rgba(10, 14, 26, 0.9)';
+      ctx.lineWidth = 4.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.72, cy - s * 0.18);
+      ctx.lineTo(cx - s * 0.18, cy - s * 0.72);
+      ctx.moveTo(cx - s * 0.64, cy + s * 0.64);
+      ctx.lineTo(cx + s * 0.64, cy - s * 0.64);
+      ctx.moveTo(cx + s * 0.18, cy + s * 0.72);
+      ctx.lineTo(cx + s * 0.72, cy + s * 0.18);
       ctx.stroke();
       ctx.restore();
     },
   },
   {
-    keys: ['CB_1', '●', 'CIRCLE'],
-    glyph: '●',
+    keys: ['CB_1', '◯', 'RING'],
+    glyph: '◯',
     drawCustom: (ctx, cx, cy, r) => {
+      // Solar Ring: crisp concentric open ring (distinct from every filled polygon)
       ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.68, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fill();
+      ctx.arc(cx, cy, r * 0.68, 0, Math.PI * 2, false);
+      ctx.arc(cx, cy, r * 0.34, 0, Math.PI * 2, true);
+      ctx.fill('evenodd');
     },
   },
   {
     keys: ['CB_2', '▲', 'TRIANGLE'],
     glyph: '▲',
     drawCustom: (ctx, cx, cy, r) => {
-      drawPolygon(ctx, cx, cy + r * 0.08, r * 0.76, 3, -Math.PI / 2);
+      // Sanctuary Delta: sharp equilateral upward triangle
+      const topY = cy - r * 0.72;
+      const botY = cy + r * 0.56;
+      const halfW = r * 0.74;
+      ctx.beginPath();
+      ctx.moveTo(cx, topY);
+      ctx.lineTo(cx + halfW, botY);
+      ctx.lineTo(cx - halfW, botY);
+      ctx.closePath();
+      ctx.fill();
     },
   },
   {
     keys: ['CB_3', '■', 'SQUARE'],
     glyph: '■',
     drawCustom: (ctx, cx, cy, r) => {
-      const s = r * 0.62;
+      // Jade Tablet: crisp 90-degree solid square with tiny inner pinpoint for refined jeweler balance
+      const s = r * 0.58;
       ctx.beginPath();
       ctx.rect(cx - s, cy - s, s * 2, s * 2);
-      ctx.stroke();
       ctx.fill();
     },
   },
   {
-    keys: ['CB_4', '★', 'STAR_SYM'],
-    glyph: '★',
+    keys: ['CB_4', '═', 'BARS'],
+    glyph: '═',
     drawCustom: (ctx, cx, cy, r) => {
-      drawStarPolygon(ctx, cx, cy + r * 0.04, r * 0.78, r * 0.34, 5);
+      // Twin Sun Bars: two bold horizontal bars (replaces ★ so Star Blocks/Gates never collide!)
+      const w = r * 0.68;
+      const h = r * 0.17;
+      const gap = r * 0.31;
+      ctx.beginPath();
+      ctx.roundRect(cx - w, cy - gap - h, w * 2, h * 2, h * 0.65);
+      ctx.roundRect(cx - w, cy + gap - h, w * 2, h * 2, h * 0.65);
+      ctx.fill();
     },
   },
   {
-    keys: ['CB_5', '◆', 'DIAMOND'],
+    keys: ['CB_5', '◆'],
     glyph: '◆',
     drawCustom: (ctx, cx, cy, r) => {
-      drawPolygon(ctx, cx, cy, r * 0.76, 4, -Math.PI / 2);
+      // Astral Lozenge: tall faceted 4-point diamond (rx=0.52, ry=0.80 so it never blurs into ■)
+      const rx = r * 0.52;
+      const ry = r * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - ry);
+      ctx.lineTo(cx + rx, cy);
+      ctx.lineTo(cx, cy + ry);
+      ctx.lineTo(cx - rx, cy);
+      ctx.closePath();
+      ctx.fill();
     },
   },
 
-  // Row 1: Colorblind Symbols 6..9 + Axis-Lock Chevrons
+  // Row 1: Sacred-Geometry Colorblind Sigils 6..9 + Axis-Lock Chevrons
   {
     keys: ['CB_6', '✚', 'CROSS'],
     glyph: '✚',
     drawCustom: (ctx, cx, cy, r) => {
-      const w = r * 0.28;
-      const l = r * 0.72;
+      // Greek Cross: bold orthogonal +
+      const w = r * 0.25;
+      const l = r * 0.74;
       ctx.beginPath();
       ctx.moveTo(cx - w, cy - l);
       ctx.lineTo(cx + w, cy - l);
@@ -162,43 +190,72 @@ const ATLAS_SLOTS: GlyphSlotSpec[] = [
       ctx.lineTo(cx - l, cy - w);
       ctx.lineTo(cx - w, cy - w);
       ctx.closePath();
-      ctx.stroke();
       ctx.fill();
     },
   },
   {
-    keys: ['CB_7', '⬢', 'HEX'],
-    glyph: '⬢',
+    keys: ['CB_7', '✖', 'SALTIRE'],
+    glyph: '✖',
     drawCustom: (ctx, cx, cy, r) => {
-      drawPolygon(ctx, cx, cy, r * 0.74, 6, -Math.PI / 2);
-    },
-  },
-  {
-    keys: ['CB_8', '♥', 'HEART'],
-    glyph: '♥',
-    drawCustom: (ctx, cx, cy, r) => {
-      const s = r * 0.72;
+      // Saltire Cross: bold 45-degree diagonal X (replaces ⬢ hexagon which blurred into ●)
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.PI * 0.25);
+      const w = r * 0.23;
+      const l = r * 0.78;
       ctx.beginPath();
-      ctx.moveTo(cx, cy + s * 0.85);
-      ctx.bezierCurveTo(cx - s * 1.2, cy + s * 0.1, cx - s * 0.95, cy - s * 0.85, cx, cy - s * 0.3);
-      ctx.bezierCurveTo(cx + s * 0.95, cy - s * 0.85, cx + s * 1.2, cy + s * 0.1, cx, cy + s * 0.85);
+      ctx.moveTo(-w, -l);
+      ctx.lineTo(w, -l);
+      ctx.lineTo(w, -w);
+      ctx.lineTo(l, -w);
+      ctx.lineTo(l, w);
+      ctx.lineTo(w, w);
+      ctx.lineTo(w, l);
+      ctx.lineTo(-w, l);
+      ctx.lineTo(-w, w);
+      ctx.lineTo(-l, w);
+      ctx.lineTo(-l, -w);
+      ctx.lineTo(-w, -w);
       ctx.closePath();
-      ctx.stroke();
+      ctx.fill();
+      ctx.restore();
+    },
+  },
+  {
+    keys: ['CB_8', '☾', 'CRESCENT'],
+    glyph: '☾',
+    drawCustom: (ctx, cx, cy, r) => {
+      // Astrolabe Crescent Moon: sweeping asymmetric crescent silhouette
+      const outerR = r * 0.7;
+      const cutR = r * 0.56;
+      const cutDx = r * 0.34;
+      const cutDy = -r * 0.06;
+      // Compute exact intersection angles of the two circles for a razor-sharp vector crescent
+      const d = Math.hypot(cutDx, cutDy);
+      const baseAngle = Math.atan2(cutDy, cutDx);
+      const a1 = Math.acos((outerR * outerR + d * d - cutR * cutR) / (2 * outerR * d));
+      const a2 = Math.acos((cutR * cutR + d * d - outerR * outerR) / (2 * cutR * d));
+      ctx.beginPath();
+      ctx.arc(cx, cy, outerR, baseAngle + a1, baseAngle - a1 + Math.PI * 2, false);
+      ctx.arc(cx + cutDx, cy + cutDy, cutR, baseAngle + Math.PI - a2, baseAngle + Math.PI + a2, true);
+      ctx.closePath();
       ctx.fill();
     },
   },
   {
-    keys: ['CB_9', '═', 'BARS'],
-    glyph: '═',
+    keys: ['CB_9', '∴', 'TRIAD'],
+    glyph: '∴',
     drawCustom: (ctx, cx, cy, r) => {
-      const w = r * 0.72;
-      const h = r * 0.18;
-      const gap = r * 0.28;
-      ctx.beginPath();
-      ctx.rect(cx - w, cy - gap - h, w * 2, h * 2);
-      ctx.rect(cx - w, cy + gap - h, w * 2, h * 2);
-      ctx.stroke();
-      ctx.fill();
+      // Trinity Pearls: 3 sacred-geometry circular pips in an equilateral triad
+      const dotR = r * 0.23;
+      const orbitR = r * 0.44;
+      const cyShift = cy + r * 0.06;
+      for (let k = 0; k < 3; k++) {
+        const ang = -Math.PI * 0.5 + (k * Math.PI * 2) / 3;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(ang) * orbitR, cyShift + Math.sin(ang) * orbitR, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      }
     },
   },
   {
@@ -446,6 +503,28 @@ const ATLAS_SLOTS: GlyphSlotSpec[] = [
       }
     },
   },
+  {
+    // Dedicated architectural pillar capstone emblem (`pass1-courtyard.ts`), decoupled from `CB_5`
+    keys: ['DIAMOND', 'PILLAR_DIAMOND'],
+    glyph: '◆',
+    drawCustom: (ctx, cx, cy, r) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.94, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(11, 15, 29, 0.88)';
+      ctx.fill();
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = 'rgba(255, 250, 235, 0.72)';
+      ctx.stroke();
+      ctx.restore();
+      ctx.save();
+      ctx.fillStyle = '#FFFDF9';
+      ctx.strokeStyle = 'rgba(8, 12, 24, 0.94)';
+      ctx.lineWidth = 4.4;
+      drawPolygon(ctx, cx, cy, r * 0.86 * 0.76, 4, -Math.PI / 2);
+      ctx.restore();
+    },
+  },
 ];
 
 let cachedAtlasData: AtlasTextureData | null = null;
@@ -486,24 +565,25 @@ export function createAtlasTextureData(): AtlasTextureData {
       ctx.save();
       const isColorblindGlyph = slot.keys[0]?.startsWith('CB_') ?? false;
       if (isColorblindGlyph) {
+        // Refined cloisonne enamel seal: deep velvet disc + warm champagne-ivory inner fillet ring
         ctx.save();
         ctx.beginPath();
-        ctx.arc(cx, cy, radius * 0.94, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(11, 15, 29, 0.88)';
+        ctx.arc(cx, cy, radius * 0.96, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(9, 13, 24, 0.78)';
         ctx.fill();
-        ctx.lineWidth = 2.4;
-        ctx.strokeStyle = 'rgba(255, 250, 235, 0.72)';
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = 'rgba(255, 248, 226, 0.86)';
         ctx.stroke();
         ctx.restore();
       }
       ctx.fillStyle = '#FFFDF9';
-      ctx.strokeStyle = isColorblindGlyph ? 'rgba(8, 12, 24, 0.94)' : 'rgba(18, 22, 38, 0.65)';
-      ctx.lineWidth = isColorblindGlyph ? 4.4 : 4.0;
+      ctx.strokeStyle = isColorblindGlyph ? 'rgba(6, 10, 20, 0.92)' : 'rgba(18, 22, 38, 0.65)';
+      ctx.lineWidth = isColorblindGlyph ? 3.2 : 4.0;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
       if (slot.drawCustom) {
-        slot.drawCustom(ctx, cx, cy, isColorblindGlyph ? radius * 0.86 : radius);
+        slot.drawCustom(ctx, cx, cy, isColorblindGlyph ? radius * 0.88 : radius);
       } else if (slot.glyph) {
         ctx.font = '900 48px "Inter", "SF Pro Rounded", system-ui, -apple-system, sans-serif';
         ctx.strokeText(slot.glyph, cx, cy + 2);

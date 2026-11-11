@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import type { SavePayloadV1 } from '../../src/core/types';
 import {
+  compressLz77,
   computeCrc32Hex,
   decodeSaveCode,
+  decompressFramedBytes,
   encodeSaveCode,
   SaveCodeError,
   validateSavePayloadV1,
 } from '../../src/storage/save-code';
-import { createDefaultSavePayload, extractImportCodeFromHash } from '../../src/storage/save-manager';
+import {
+  createDefaultSavePayload,
+  extractImportCodeFromHash,
+  IDB_DB_NAME,
+  IDB_PRIMARY_KEY,
+  IDB_STORE_NAME,
+  migrateLegacyEconomy,
+  SAVE_STORAGE_KEY,
+  SaveManager,
+} from '../../src/storage/save-manager';
 
 const SKINS = ['classic_studs', 'relic_stone', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
 const TRAYS = ['industrial_slate', 'warm_birch', 'midnight_arcade', 'frosted_quartz', 'mint_studio'];
@@ -151,5 +162,124 @@ describe('SAVE-SEC-01: untrusted save URL / code / JSON import hardening', () =>
     expect(decoded.equippedSkin).toBe('neon_cyber');
     expect(decoded.levelRecords).toEqual(save.levelRecords);
     expect(validateSavePayloadV1(JSON.parse(JSON.stringify(save)))).toEqual(save);
+  });
+});
+
+describe('SAVE-COMPAT-01: Live Player Save Backward-Compatibility & Forward Migration Guard', () => {
+  // Frozen production v1 save code covering all 5 skins, 5 trays, 5 particles, Endless L312,
+  // skipped & zenCleared records, ULTRA_120, High Contrast, and Colorblind Mode.
+  const PINNED_V1_FULL_SAVE_CODE =
+    'SB1-AQAAAFYAAiqkxc7IBnsAuAKxArUOmwYACRjgIYYwFLYAAgsGBAMCBQAQAQIDBABZAQEBALoBBgABGDFMADJvurSLAg4SAAAdFlX3BFwAAIIBtQilAocGAAHIAQ-cb46191d';
+
+  // Frozen pre-0xa5-trailer binary save code from early Economy v1 builds (before starReliquaryLevel & zenCleared).
+  const PINNED_PRE_A5_LEGACY_CODE = 'SB1-AQAAACkAAgeA8J3HBgBAEhK2BzAAAAIDtAIBAAAAABEAAB8AgQCwAgo-15d4377b';
+
+  // Frozen Codec 0x00 raw UTF-8 JSON save code (`STOR-01` fallback stream).
+  const PINNED_RAW_JSON_SAVE_CODE =
+    'SB1-AHsic2NoZW1hVmVyc2lvbiI6MSwiYXBwSWQiOiJzaHJlZGJsb2Nrcy1jb2xvci1qYW0iLCJ3cml0ZVNlcSI6NywidXBkYXRlZEF0IjoxNzYwMDAwMDAwMDAwLCJoaWdoZXN0TGV2ZWxVbmxvY2tlZCI6MTgsImN1cnJlbnRMZXZlbElkIjoxOCwiY29pbnMiOjk1MCwidG90YWxTdGFycyI6NDgsIndpblN0cmVhayI6MCwiYmVzdFdpblN0cmVhayI6MCwidG90YWxCbG9ja3NTaHJlZGRlZCI6MCwidG90YWxNb3Zlc0NvbW1pdHRlZCI6MCwic2hyZWRkZXJDaGVzdFByb2dyZXNzIjowLCJtaWxlc3RvbmVDaGVzdExldmVsIjowLCJzdGFyUmVsaXF1YXJ5TGV2ZWwiOjAsImVjb25vbXlWZXJzaW9uIjoxLCJib29zdGVycyI6eyJVTkRPIjozLCJGUkVFWkUiOjIsIkhBTU1FUiI6MSwiUk9DS0VUIjoxLCJWQUNVVU0iOjF9LCJ1bmxvY2tlZFNraW5zIjpbImNsYXNzaWNfc3R1ZHMiXSwidW5sb2NrZWRUcmF5cyI6WyJpbmR1c3RyaWFsX3NsYXRlIl0sInVubG9ja2VkUGFydGljbGVzIjpbIm1pY3JvX2N1YmVzIl0sImVxdWlwcGVkU2tpbiI6ImNsYXNzaWNfc3R1ZHMiLCJlcXVpcHBlZFRyYXkiOiJpbmR1c3RyaWFsX3NsYXRlIiwiZXF1aXBwZWRQYXJ0aWNsZSI6Im1pY3JvX2N1YmVzIiwic2V0dGluZ3MiOnsicGxheU1vZGUiOiJaRU4iLCJzZnhFbmFibGVkIjp0cnVlLCJtdXNpY0VuYWJsZWQiOnRydWUsImhhcHRpY3NFbmFibGVkIjp0cnVlLCJjb2xvcmJsaW5kU3ltYm9scyI6dHJ1ZSwiaGlnaENvbnRyYXN0IjpmYWxzZSwicmVkdWNlZE1vdGlvbiI6ZmFsc2UsInF1YWxpdHlUaWVyIjoiQVVUTyJ9LCJsZXZlbFJlY29yZHMiOnsiMSI6eyJzdGFycyI6MywiYmVzdE1vdmVzIjoyLCJiZXN0VGltZVNlYyI6NX19fQ-3c23d657';
+
+  it('pins storage keys, IndexedDB identifiers, and append-only cosmetic/tier enum indices', () => {
+    expect(SAVE_STORAGE_KEY).toBe('shredblocks.save.v1');
+    expect(IDB_DB_NAME).toBe('ShredBlocksDB');
+    expect(IDB_STORE_NAME).toBe('saves');
+    expect(IDB_PRIMARY_KEY).toBe('primary');
+
+    const decoded = decodeSaveCode(PINNED_V1_FULL_SAVE_CODE);
+    expect(decoded.writeSeq).toBe(42);
+    expect(decoded.updatedAt).toBe(1762894500123);
+    expect(decoded.highestLevelUnlocked).toBe(312);
+    expect(decoded.currentLevelId).toBe(305);
+    expect(decoded.coins).toBe(1845);
+    expect(decoded.totalStars).toBe(795);
+    expect(decoded.starReliquaryLevel).toBe(775);
+    expect(decoded.economyVersion).toBe(2);
+    expect(decoded.boosters).toEqual({ UNDO: 11, FREEZE: 6, HAMMER: 4, ROCKET: 3, VACUUM: 2 });
+    expect(decoded.unlockedSkins).toEqual(SKINS);
+    expect(decoded.unlockedTrays).toEqual(TRAYS);
+    expect(decoded.unlockedParticles).toEqual(PARTICLES);
+    expect(decoded.equippedSkin).toBe('relic_stone');
+    expect(decoded.equippedTray).toBe('warm_birch');
+    expect(decoded.equippedParticle).toBe('star_confetti');
+    expect(decoded.settings).toEqual({
+      playMode: 'CHALLENGE',
+      sfxEnabled: true,
+      musicEnabled: false,
+      hapticsEnabled: true,
+      colorblindSymbols: true,
+      highContrast: true,
+      reducedMotion: false,
+      qualityTier: 'ULTRA_120',
+    });
+    expect(decoded.levelRecords).toEqual({
+      1: { stars: 3, bestMoves: 2, bestTimeSec: 4.2 },
+      25: { stars: 2, bestMoves: 14, bestTimeSec: 31.5 },
+      74: { stars: 3, bestMoves: 18, bestTimeSec: 46 },
+      150: { stars: 0, bestMoves: 0, bestTimeSec: 0, skipped: true },
+      200: { stars: 0, bestMoves: 29, bestTimeSec: 65, zenCleared: true },
+      311: { stars: 3, bestMoves: 22, bestTimeSec: 53.8 },
+    });
+  });
+
+  it('decodes pre-0xa5 binary saves, raw UTF-8 JSON codes, partial localStorage JSON, and future-trailer streams without losing progress', () => {
+    // 1. Pre-0xa5 binary code + Economy v1 -> v2 migration via SaveManager.importSaveCode
+    const preA5 = decodeSaveCode(PINNED_PRE_A5_LEGACY_CODE);
+    expect(preA5.highestLevelUnlocked).toBe(18);
+    expect(preA5.coins).toBe(950);
+    expect(preA5.economyVersion).toBe(1);
+    expect(preA5.settings.colorblindSymbols).toBe(true);
+
+    const migratedPreA5 = migrateLegacyEconomy(preA5);
+    expect(migratedPreA5.economyVersion).toBe(2);
+    expect(migratedPreA5.settings.playMode).toBe('CHALLENGE');
+    expect(migratedPreA5.starReliquaryLevel).toBe(25);
+    expect(migratedPreA5.settings.colorblindSymbols).toBe(true);
+
+    // 2. Legacy Codec 0x00 raw UTF-8 JSON code + SaveManager import pipeline
+    const mgr = new SaveManager();
+    const importedFromRawJson = mgr.importSaveCode(PINNED_RAW_JSON_SAVE_CODE);
+    expect(importedFromRawJson.highestLevelUnlocked).toBe(18);
+    expect(importedFromRawJson.economyVersion).toBe(2);
+    expect(importedFromRawJson.settings.playMode).toBe('CHALLENGE');
+    expect(importedFromRawJson.settings.colorblindSymbols).toBe(true);
+    expect(importedFromRawJson.levelRecords[1]).toEqual({ stars: 3, bestMoves: 2, bestTimeSec: 5 });
+
+    // 3. Partial early-v1 JSON missing newer optional fields + containing unknown future keys
+    const legacyPartialJson = JSON.stringify({
+      schemaVersion: 1,
+      appId: 'shredblocks-color-jam',
+      writeSeq: 12,
+      highestLevelUnlocked: 44,
+      coins: 410,
+      totalStars: 92,
+      boosters: { UNDO: 5, FREEZE: 1 },
+      unlockedSkins: ['classic_studs', 'carved_wood'],
+      equippedSkin: 'carved_wood',
+      settings: { colorblindSymbols: true },
+      levelRecords: { '1': { stars: 3, bestMoves: 2, bestTimeSec: 4 }, '43': { stars: 2, bestMoves: 19 } },
+      futureTelemetryFieldV3: { ignoredSafely: true },
+    });
+    const importedJson = mgr.importSaveJson(legacyPartialJson);
+    expect(importedJson.highestLevelUnlocked).toBe(44);
+    expect(importedJson.currentLevelId).toBe(44);
+    expect(importedJson.coins).toBe(410);
+    expect(importedJson.economyVersion).toBe(2);
+    expect(importedJson.starReliquaryLevel).toBe(75);
+    expect(importedJson.equippedSkin).toBe('carved_wood');
+    expect(importedJson.boosters).toEqual({ UNDO: 5, FREEZE: 1, HAMMER: 0, ROCKET: 0, VACUUM: 0 });
+    expect(importedJson.settings.colorblindSymbols).toBe(true);
+    expect('futureTelemetryFieldV3' in importedJson).toBe(false);
+
+    // 4. Append-only forward trailer tolerance: appending a hypothetical future `0xa6` trailer after `0xa5`
+    const baseRaw = decompressFramedBytes(
+      fromB64Url(PINNED_V1_FULL_SAVE_CODE.slice(4, PINNED_V1_FULL_SAVE_CODE.lastIndexOf('-')))
+    );
+    const withFutureTrailer = new Uint8Array(baseRaw.length + 4);
+    withFutureTrailer.set(baseRaw, 0);
+    withFutureTrailer.set([0xa6, 0x01, 0x2a, 0x00], baseRaw.length);
+    const futureCode = forgeCode(compressLz77(withFutureTrailer));
+    const decodedFuture = decodeSaveCode(futureCode);
+    expect(decodedFuture.highestLevelUnlocked).toBe(312);
+    expect(decodedFuture.coins).toBe(1845);
+    expect(decodedFuture.settings.colorblindSymbols).toBe(true);
   });
 });

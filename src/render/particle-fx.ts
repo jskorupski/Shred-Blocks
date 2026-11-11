@@ -34,7 +34,9 @@ export function spawnParticlesAtImpl(
   particleStyle: ParticleStyleId = 'micro_cubes'
 ): void {
   const entry = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[1];
-  const [r, g, b] = entry.rgb;
+  const [r, g, b] = rctx.lastOptions.colorblindSymbols
+    ? rctx.getColorRgb(colorId, Boolean(rctx.lastOptions.highContrast), true)
+    : entry.rgb;
   const burstCount =
     count ?? rctx.qualityGovernor.getBurstParticleCount(Boolean(rctx.lastOptions.reducedMotion));
 

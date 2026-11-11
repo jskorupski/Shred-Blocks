@@ -180,10 +180,12 @@ export function renderPass3BlocksImpl(
       : 0;
 
     const idleColorBoost = isIdleMovable ? wave01 * 0.048 + blockHopEnv * 0.075 : bombHeartbeat * 1.2;
-    const colorMul = (isGrabbed ? 1.14 : anyDragActive ? 0.88 : 1.0 + idleColorBoost) * roomLum;
-    const r = Math.min(1, rawR * colorMul + (1 - roomLum) * 0.03);
-    const g = Math.min(1, rawG * colorMul + (1 - roomLum) * 0.04);
-    const b = Math.min(1, rawB * colorMul + (1 - roomLum) * 0.09);
+    // Preserve `pieceChroma >= 0.48` (`MYSTIC-RELIC-01`) on locked-room blocks during Satin Astrolabe Title rendering in Colorblind Mode
+    const effectiveRoomLum = colorblind ? roomLum + (1 - roomLum) * (1 - live3DMix) * 0.85 : roomLum;
+    const colorMul = (isGrabbed ? 1.14 : anyDragActive ? 0.88 : 1.0 + idleColorBoost) * effectiveRoomLum;
+    const r = Math.min(1, rawR * colorMul + (1 - effectiveRoomLum) * 0.03);
+    const g = Math.min(1, rawG * colorMul + (1 - effectiveRoomLum) * 0.04);
+    const b = Math.min(1, rawB * colorMul + (1 - effectiveRoomLum) * 0.09);
 
     // Gentle 3D vertical buoyancy + Spotlight Double-Bounce Hop (`IDLE-01`, `IDLE-02`)
     // Scaled by `live3DMix` so blocks lie still as an etched scroll diagram on the Title Screen
@@ -423,10 +425,10 @@ export function renderPass3BlocksImpl(
         rctx.drawAtlasBadge(
           gl,
           `CB_${block.ropeColor}`,
-          drawX + anchorCell[1] + 0.79,
+          drawX + anchorCell[1] + 0.78,
           rCy,
           zCbSymbol + 0.006,
-          0.25,
+          0.31,
           roomLum,
           roomLum,
           roomLum,

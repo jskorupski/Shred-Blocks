@@ -588,9 +588,11 @@ export class SaveManager {
     // Save current state to Pre-Import Backup Slot before overwriting
     this.writeLocalStorage(PRE_IMPORT_BACKUP_KEY, this.payload);
 
-    const nextSeq = Math.max(this.payload.writeSeq || 0, incoming.writeSeq || 0) + 1;
+    // Run forward-migration pipeline (`SAVE-COMPAT-01`, `ECON-V2`) so older v1 codes/JSON backups migrate cleanly
+    const migrated = migrateLegacyEconomy(incoming);
+    const nextSeq = Math.max(this.payload.writeSeq || 0, migrated.writeSeq || 0) + 1;
     this.payload = clonePayload({
-      ...incoming,
+      ...migrated,
       writeSeq: nextSeq,
       updatedAt: Date.now(),
     });

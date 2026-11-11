@@ -23,7 +23,7 @@ import {
   isGateInLockedRoom,
   isRoomUnlocked,
 } from '../../src/core/physics';
-import type { LevelSpec, SkinId, TrayId } from '../../src/core/types';
+import { COLOR_PALETTE, type ColorId, type LevelSpec, type SkinId, type TrayId } from '../../src/core/types';
 import { pickBlockAtBoardPoint } from '../../src/input/pointer-controller';
 import { getAllCampaignLevels, getLevelSpec } from '../../src/levels/catalog';
 import { computeStateHash, solveBoard } from '../../src/levels/solver';
@@ -588,17 +588,47 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(files.length).toBeGreaterThanOrEqual(65);
 
     const violations: string[] = [];
+    const portabilityViolations: string[] = [];
+    const forbiddenPatterns: Array<{ label: string; regex: RegExp }> = [
+      { label: 'macOS user home path', regex: /\/Users\/[A-Za-z0-9][A-Za-z0-9._-]*/ },
+      { label: 'Linux user home path', regex: /\/home\/[A-Za-z0-9][A-Za-z0-9._-]*/ },
+      { label: 'Windows user home path', regex: /[A-Za-z]:\\Users\\[A-Za-z0-9][A-Za-z0-9._-]*/ },
+      { label: 'Agent local config path', regex: /\.gemini\/[A-Za-z0-9][A-Za-z0-9._-]*/ },
+      { label: 'PEM private key', regex: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/ },
+      {
+        label: 'API token or secret key',
+        regex:
+          /\b(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})\b/,
+      },
+    ];
+
     for (const filePath of files) {
       const rel = path.relative(repoRoot, filePath);
       const buf = fs.readFileSync(filePath);
-      const lineCount = buf.toString('utf8').split('\n').length;
+      const text = buf.toString('utf8');
+      const lineCount = text.split('\n').length;
       const byteCount = buf.byteLength;
       if (lineCount > 800 || byteCount > 45_000) {
         violations.push(`${rel} (${lineCount} lines, ${byteCount} bytes)`);
       }
+      for (const { label, regex } of forbiddenPatterns) {
+        const match = text.match(regex);
+        if (match) {
+          portabilityViolations.push(`${rel}: ${label} (${match[0]})`);
+        }
+      }
     }
 
     expect(violations).toEqual([]);
+    expect(portabilityViolations).toEqual([]);
+
+    // REPO-PORTABILITY-01: Ensure .gitignore excludes local TLS certs and .env files, and wrangler.jsonc stays account-agnostic
+    const gitignore = fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
+    expect(gitignore).toContain('.certs');
+    expect(gitignore).toContain('.env');
+    const wranglerJsonc = fs.readFileSync(path.join(repoRoot, 'wrangler.jsonc'), 'utf8');
+    expect(wranglerJsonc).not.toContain('account_id');
+    expect(wranglerJsonc).not.toContain('zone_id');
   });
 
   it('STONE-TABLET-01 theme mineral tint: derives distinct desaturated stone mineral tints across all 5 trays and 5 skins without punchy saturation', () => {
@@ -630,6 +660,72 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
           expect(ch).toBeLessThanOrEqual(1.16);
         }
         expect(Math.max(...rgb) - Math.min(...rgb)).toBeLessThanOrEqual(0.28);
+      }
+    }
+  });
+
+  it('AX-01 & AX-02: Universal CVD-Safe Jewel Palette maintains strong OKLab ΔE separation across Deuteranopia, Protanopia, and Tritanopia', () => {
+    const srgbToLin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    const linToSrgb = (v: number) => {
+      const cl = Math.max(0, Math.min(1, v));
+      return cl <= 0.0031308 ? 12.92 * cl : 1.055 * cl ** (1 / 2.4) - 0.055;
+    };
+    const simCvd = (rgb: [number, number, number], m: number[][]): [number, number, number] => {
+      const lr = srgbToLin(rgb[0]);
+      const lg = srgbToLin(rgb[1]);
+      const lb = srgbToLin(rgb[2]);
+      return [
+        linToSrgb(m[0][0] * lr + m[0][1] * lg + m[0][2] * lb),
+        linToSrgb(m[1][0] * lr + m[1][1] * lg + m[1][2] * lb),
+        linToSrgb(m[2][0] * lr + m[2][1] * lg + m[2][2] * lb),
+      ];
+    };
+    const toOklab = (rgb: [number, number, number]): [number, number, number] => {
+      const r = srgbToLin(rgb[0]);
+      const g = srgbToLin(rgb[1]);
+      const b = srgbToLin(rgb[2]);
+      const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+      const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+      const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+      return [
+        0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+        1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+        0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+      ];
+    };
+    const deltaE = (a: [number, number, number], b: [number, number, number]) => {
+      const oa = toOklab(a);
+      const ob = toOklab(b);
+      return Math.hypot(oa[0] - ob[0], oa[1] - ob[1], oa[2] - ob[2]) * 100;
+    };
+    const mDeut = [
+      [0.367322, 0.860646, -0.227968],
+      [0.280085, 0.672501, 0.047413],
+      [-0.01182, 0.04294, 0.968881],
+    ];
+    const mProt = [
+      [0.152286, 1.052583, -0.204868],
+      [0.114503, 0.786281, 0.099216],
+      [-0.003882, -0.048116, 1.051998],
+    ];
+    const mTrit = [
+      [1.255528, -0.076749, -0.178779],
+      [-0.078411, 0.930809, 0.147602],
+      [0.004733, 0.691367, 0.3039],
+    ];
+
+    for (const pick of [
+      (e: (typeof COLOR_PALETTE)[ColorId]) => e.cbRgb,
+      (e: (typeof COLOR_PALETTE)[ColorId]) => e.cbHcRgb,
+    ]) {
+      for (let i = 1 as ColorId; i <= 9; i = (i + 1) as ColorId) {
+        for (let j = (i + 1) as ColorId; j <= 9; j = (j + 1) as ColorId) {
+          const ci = pick(COLOR_PALETTE[i]);
+          const cj = pick(COLOR_PALETTE[j]);
+          expect(deltaE(simCvd(ci, mDeut), simCvd(cj, mDeut))).toBeGreaterThanOrEqual(12.5);
+          expect(deltaE(simCvd(ci, mProt), simCvd(cj, mProt))).toBeGreaterThanOrEqual(12.5);
+          expect(deltaE(simCvd(ci, mTrit), simCvd(cj, mTrit))).toBeGreaterThanOrEqual(9.5);
+        }
       }
     }
   });
