@@ -209,32 +209,52 @@ export const SKIN_CATALOG: ReadonlyArray<{ id: SkinId; name: string; desc: strin
   {
     id: 'relic_stone',
     name: 'Relic Stone',
-    desc: 'Heavy pigmented ancient stone blocks with carved socket glyphs',
+    desc: 'Worn chiseled stone blocks with beveled edges & carved runes',
   },
   { id: 'classic_studs', name: 'Classic Studs', desc: 'Tactile toy-box blocks with raised top studs' },
-  { id: 'gummy_jelly', name: 'Gummy Jelly', desc: 'Glossy translucent subsurface candy blocks' },
+  {
+    id: 'gummy_jelly',
+    name: 'Gummy Jelly',
+    desc: 'Glossy translucent candy blocks with glowing cores & bubbles',
+  },
   {
     id: 'carved_wood',
     name: 'Carved Wood',
-    desc: 'Stained hardwood blocks with flowing grain, rings & pores',
+    desc: 'Fine straight-grained hardwood blocks with natural knots',
   },
-  { id: 'neon_cyber', name: 'Neon Cyber', desc: 'Dark obsidian core with glowing neon rim light' },
+  {
+    id: 'neon_cyber',
+    name: 'Neon Cyber',
+    desc: 'Glossy black glass with neon edges & pulsing circuit traces',
+  },
 ];
 
 export const TRAY_CATALOG: ReadonlyArray<{ id: TrayId; name: string; desc: string }> = [
   {
     id: 'industrial_slate',
     name: 'Industrial Slate',
-    desc: 'High-contrast dark steel puzzle tray',
+    desc: 'Cleft slate flagstones framed by dressed ashlar stone walls',
   },
-  { id: 'warm_birch', name: 'Warm Birch', desc: 'Cozy Scandinavian wooden tabletop board' },
-  { id: 'midnight_arcade', name: 'Midnight Arcade', desc: 'Deep synthwave indigo cabinet frame' },
+  {
+    id: 'warm_birch',
+    name: 'Warm Birch',
+    desc: 'Joined Scandinavian birch planks with stained timber beam rims',
+  },
+  {
+    id: 'midnight_arcade',
+    name: 'Midnight Arcade',
+    desc: 'Polished obsidian floor with glowing cyan-magenta neon grid',
+  },
   {
     id: 'frosted_quartz',
     name: 'Frosted Quartz',
-    desc: 'Crisp architectural alabaster stone tray',
+    desc: 'Faceted glacial crystal ice tiles with frost veins & glints',
   },
-  { id: 'mint_studio', name: 'Mint Studio', desc: 'Refreshing seafoam studio workbench' },
+  {
+    id: 'mint_studio',
+    name: 'Mint Studio',
+    desc: 'Polished jade terrazzo with marble flecks & gold rim inlay',
+  },
 ];
 
 export const PARTICLE_CATALOG: ReadonlyArray<{ id: ParticleStyleId; name: string; desc: string }> = [

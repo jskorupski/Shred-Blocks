@@ -2,6 +2,10 @@ import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 import { type GLMeshHandle, INSTANCE_STRIDE } from './render-types';
 
 export { MAIN_VERTEX_SHADER } from './shaders-main-vertex';
+
+import { GLSL_STONE_LIB } from './shaders-glsl-lib';
+import { GLSL_TRAY_MATERIALS } from './shaders-tray-materials';
+
 export { PARTICLE_FRAGMENT_SHADER, PARTICLE_VERTEX_SHADER } from './shaders-particles';
 
 export const MAIN_FRAGMENT_SHADER = `#version 300 es
@@ -18,92 +22,19 @@ uniform vec3 u_capColor;
 uniform vec4 u_clipPlane;
 uniform int u_useClipPlane;
 uniform int u_useTexture;
-uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=stone_surface, 6=relic_stone
+uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=tray_floor, 6=relic_stone, 7=tray_wall
 uniform sampler2D u_atlas;
 uniform float u_blueprintMix;
 uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
-uniform vec3 u_stoneTint; // subtle mineral tint multiplier from equipped tray + skin
+uniform vec3 u_stoneTint;
+uniform int u_trayMaterial; // TRAY-IDENTITY-01: 0 slate, 1 birch planks, 2 obsidian grid, 3 frost crystal, 4 jade terrazzo
+uniform float u_blockSeed; // BLOCK-STONE-01: integer per-block seed (offsets the rune/chip cell grid) // subtle mineral tint multiplier from equipped tray + skin
 uniform int u_highContrast;
 
 out vec4 outColor;
 
-vec2 hashRelic22(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.xx + p3.yz) * p3.zy);
-}
-
-// Smooth 2D value noise (drives uneven, living crack-glow pulses & stone mottling)
-float relicNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  float a = hashRelic22(i).x;
-  float b = hashRelic22(i + vec2(1.0, 0.0)).x;
-  float c = hashRelic22(i + vec2(0.0, 1.0)).x;
-  float d = hashRelic22(i + vec2(1.0, 1.0)).x;
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-// Euclidean Voronoi edge distance for authentic angular geological stone fractures (zero sine loops)
-vec2 voronoiRockCrack(vec2 x) {
-  vec2 n = floor(x);
-  vec2 f = fract(x);
-  vec2 mg = vec2(0.0);
-  vec2 mr = vec2(0.0);
-  float md = 8.0;
-  float shardHash = 0.0;
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 g = vec2(float(i), float(j));
-      vec2 o = hashRelic22(n + g);
-      vec2 r = g + (0.14 + 0.72 * o) - f;
-      float d = dot(r, r);
-      if (d < md) {
-        md = d;
-        mr = r;
-        mg = g;
-        shardHash = o.x;
-      }
-    }
-  }
-  md = 8.0;
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 g = vec2(float(i), float(j));
-      if (abs(g.x - mg.x) + abs(g.y - mg.y) > 0.01) {
-        vec2 o = hashRelic22(n + g);
-        vec2 r = g + (0.14 + 0.72 * o) - f;
-        if (dot(mr - r, mr - r) > 0.00001) {
-          md = min(md, dot(0.5 * (mr + r), normalize(r - mr)));
-        }
-      }
-    }
-  }
-  return vec2(md, shardHash);
-}
-
-// Relic Stone relief height (BLOCK-STONE-01): rough grit, chunks broken off the worn rim, small spalled flakes,
-// and irregular hand-carved socket sigils (per-cell jitter, radius, depth & erosion). Sampled twice by the
-// caller (here + a step toward the light) for smooth per-pixel relief shading without derivative blockiness.
-float stoneRelief(vec2 bp, float z, float isTop, float wornBand) {
-  vec2 sp = bp + z * vec2(0.73, 1.31);
-  float grit = relicNoise(sp * 3.1) * 0.4 + relicNoise(sp * 8.3 + 2.0) * 0.35 + relicNoise(sp * 19.0 + 4.0) * 0.25;
-  float chipNoise = relicNoise(sp * 4.2 + 40.0) * 0.65 + relicNoise(sp * 9.5 + 9.0) * 0.35;
-  float chip = smoothstep(0.5, 0.6, chipNoise) * smoothstep(0.05, 0.55, wornBand) * (1.0 - isTop * 0.55);
-  vec2 sv = voronoiRockCrack(sp * 3.4 + relicNoise(sp * 2.0) * 0.6 + 23.0);
-  float spall = step(0.9, sv.y) * smoothstep(0.0, 0.05, sv.x);
-  vec2 cellHash = hashRelic22(floor(bp) + 3.0);
-  vec2 cuv = fract(bp) - 0.5 - (cellHash - 0.5) * 0.08;
-  float rr = length(cuv);
-  float ang = atan(cuv.y, cuv.x);
-  float erode = smoothstep(0.22, 0.62, relicNoise(vec2(ang * 1.9 + cellHash.x * 20.0, rr * 7.0 + cellHash.y * 9.0)));
-  float sigDepth = mix(0.35, 1.0, cellHash.x);
-  float ringG = (1.0 - smoothstep(0.012, 0.05, abs(rr - (0.17 + cellHash.y * 0.05)))) * erode * sigDepth;
-  float drill = (1.0 - smoothstep(0.01, 0.045, rr)) * sigDepth * 0.8;
-  float sigil = clamp(ringG + drill, 0.0, 1.0) * isTop;
-  return grit * 0.32 - chip * 1.0 - spall * 0.3 - sigil * 0.75;
-}
+${GLSL_STONE_LIB}
+${GLSL_TRAY_MATERIALS}
 
 void main() {
   if (u_useClipPlane == 1) {
@@ -159,10 +90,28 @@ void main() {
   vec3 emissive = vec3(0.0);
 
   if (u_materialStyle == 1) {
-    // gummy_jelly: subsurface glow + glossy highlight
-    specPower = 48.0;
-    specStrength = u_highContrast == 1 ? 0.34 : 0.45;
-    base = mix(base, vec3(1.0), 0.12 * rim);
+    // gummy_jelly (GUMMY-01): rich translucent candy. Saturated syrup rim around each cell & bevel melts into a
+    // glowing subsurface core at the cell center, topped with a glossy wet candy highlight and tiny air bubbles.
+    vec2 gCell = fract(v_localPos.xy);
+    float cellEdgeD = min(min(gCell.x, 1.0 - gCell.x), min(gCell.y, 1.0 - gCell.y));
+    float coreT = smoothstep(0.04, 0.42, cellEdgeD) * smoothstep(0.35, 0.95, N.z);
+    float hcG = u_highContrast == 1 ? 0.45 : 1.0;
+    vec3 syrupEdge = base * mix(1.0, 0.72, hcG);
+    vec3 jellyCore = min(vec3(1.0), base * 1.16 + vec3(0.11) * hcG);
+    base = mix(syrupEdge, jellyCore, coreT);
+    // Glossy candy dome catch-light near top-left of each cell + tiny trapped bubbles
+    float glossSpot = (1.0 - smoothstep(0.04, 0.22, length(gCell - vec2(0.3, 0.3)))) * smoothstep(0.85, 0.96, N.z);
+    vec2 bq = v_localPos.xy * 5.2 + v_localPos.z * 2.5;
+    vec2 bh = hashRelic22(floor(bq) + 21.0);
+    vec2 bRel = fract(bq) - 0.5 - (bh - 0.5) * 0.4;
+    float bd = length(bRel);
+    float bubbleOn = step(0.8, bh.x) * hcG;
+    float bubRim = bubbleOn * (1.0 - smoothstep(0.0, 0.028, abs(bd - 0.1)));
+    float bubGlint = bubbleOn * (1.0 - smoothstep(0.0, 0.032, length(bRel + vec2(0.04, 0.04))));
+    base = clamp(base + vec3(glossSpot * 0.26 * hcG + bubRim * 0.24 + bubGlint * 0.42 + rim * 0.18), 0.0, 1.0);
+    emissive = base * 0.06 * coreT;
+    specPower = 88.0;
+    specStrength = u_highContrast == 1 ? 0.48 : 0.75;
   } else if (u_materialStyle == 2) {
     // carved_wood (WOOD-GRAIN-01): stained hardwood. Concentric growth rings around a log axis running along
     // block-local X (flowing cathedral arcs on top faces, end-grain arcs on sides), noise-warped figure,
@@ -197,50 +146,43 @@ void main() {
     specPower = 22.0;
     specStrength = 0.13 + earlywood * 0.05;
   } else if (u_materialStyle == 6) {
-    // relic_stone (BLOCK-STONE-01, default skin): heavy pigmented ancient stone with mineral mottling, hue drift,
-    // grain, pitting, hairline veins, worn edges, and a carved socket sigil on every top cell.
-    vec2 bp = v_localPos.xy;
+    // relic_stone (BLOCK-STONE-01, default skin): fast 120Hz pigmented ancient stone with mineral mottling,
+    // clear chiseled bevel facets, occasional edge chips, and a varied hand-cut rune on every top cell.
+    vec2 bp = v_localPos.xy + vec2(13.0, 7.0) * u_blockSeed;
     float sAmp6 = u_highContrast == 1 ? 0.45 : 1.0;
-    // Time-worn rounded edges: bend the flat chamfer/upper-side normals along a smooth quarter-round profile so
-    // the deep worn bevel shades like an eroded, rounded stone edge instead of a crisp machined facet.
     float faceNz = N.z;
     float wornBand = clamp((v_localPos.z - (0.58 - 0.16)) / 0.16, 0.0, 1.0);
     if (N.z < 0.95 && wornBand > 0.0) {
       vec3 sideN = normalize(vec3(N.xy, 0.0001));
       float roundT = wornBand * wornBand * (3.0 - 2.0 * wornBand);
-      N = normalize(mix(sideN, vec3(0.0, 0.0, 1.0), roundT * 0.92));
+      N = normalize(mix(N, normalize(mix(sideN, vec3(0.0, 0.0, 1.0), roundT)), 0.22));
       diff1 = max(dot(N, L1), 0.0);
       diff2 = max(dot(N, L2), 0.0) * 0.28;
       rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
     }
-    float bMottle = relicNoise(bp * 2.2 + v_localPos.z * 1.7) * 0.6 + relicNoise(bp * 6.3 + 3.1) * 0.4 - 0.5;
-    float bVein = 1.0 - smoothstep(0.0, 0.022 + fwidth(bp.x) * 0.8, voronoiRockCrack(bp * 1.25 + bMottle * 0.4 + 11.0).x);
+    float regionVar = relicNoise(bp * 0.95 + v_localPos.z * 0.7 + 31.0) - 0.5;
+    float fineGrit = relicNoise(bp * 6.8 + 7.4) - 0.5;
+    float bMottle = regionVar * 0.62 + (relicNoise(bp * 3.2 + 3.1) - 0.5) * 0.38;
     float isTopFace = smoothstep(0.86, 0.96, faceNz) * step(0.45, v_localPos.z);
-    // Hewn stone relief: height sampled here and one step toward the light -> raking-light shading of chips,
-    // flakes and carved sigils (bright lit lips, dark shadowed hollows), plus recess grime.
-    vec2 lightStep = normalize(-L1.xy) * 0.022;
-    float reliefH = stoneRelief(bp, v_localPos.z, isTopFace, wornBand);
-    float reliefL = stoneRelief(bp + lightStep, v_localPos.z, isTopFace, wornBand);
-    float raking = clamp((reliefL - reliefH) * 8.0, -0.5, 0.5) * sAmp6;
-    float recess = clamp(-reliefH, 0.0, 1.0);
-    float chip = smoothstep(0.25, 0.9, recess) * (1.0 - isTopFace * 0.4);
-    float spall = 0.0;
-    float grit = relicNoise(bp * 8.3 + 2.0);
+    vec2 relief = stoneRelief(bp, v_localPos.z, isTopFace, wornBand, normalize(-L1.xy));
+    float recess = relief.x;
+    float raking = relief.y * sAmp6;
+    float chip = smoothstep(0.25, 0.9, recess) * (1.0 - isTopFace * 0.85);
     float sigil = recess * isTopFace;
-    // Worn, chalky exposed edges (rounded chamfer band) + large blotchy weathering zones
     float edgeWear = (1.0 - smoothstep(0.88, 0.97, faceNz)) * smoothstep(0.15, 0.6, wornBand);
-    float regionVar = relicNoise(bp * 0.85 + v_localPos.z * 0.6 + 31.0) - 0.5;
-    float stoneLum =
-      1.0 + (bMottle * 0.28 + regionVar * 0.22 + (grit - 0.5) * 0.12 - bVein * 0.16 - spall * 0.05) * sAmp6;
-    // Time-faded pigment: bleached toward warm chalky stone on weathered zones & edges; freshly broken chunks
-    // expose deeper, less-faded pigment; carved grooves collect dark grime.
+    float stoneLum = 1.0 + (bMottle * 0.32 + regionVar * 0.16 + fineGrit * 0.1) * sAmp6;
     vec3 lumC = vec3(dot(base, vec3(0.299, 0.587, 0.114)));
-    float fadeAmt = clamp(0.3 + regionVar * 0.45 + edgeWear * 0.35 - chip * 0.4, 0.0, 0.8) * mix(1.0, 0.4, float(u_highContrast));
-    vec3 pigment = mix(base, lumC * vec3(1.05, 1.0, 0.92) + vec3(0.09, 0.085, 0.075), fadeAmt);
-    float hueDrift = (relicNoise(bp * 1.4 + 21.0) - 0.5) * 0.18 * sAmp6;
+    float fadeAmt = clamp(0.28 + regionVar * 0.42 + edgeWear * 0.34 - chip * 0.38, 0.0, 0.76) * mix(1.0, 0.4, float(u_highContrast));
+    vec3 pigment = mix(base, lumC * vec3(1.05, 1.0, 0.92) + vec3(0.085, 0.08, 0.072), fadeAmt);
+    float hueDrift = regionVar * 0.16 * sAmp6;
     pigment *= vec3(1.0 + hueDrift, 1.0 + hueDrift * 0.3, 1.0 - hueDrift);
-    float grime = recess * 0.38;
+    float grime = recess * 0.38 + sigil * 0.2;
+    // Obvious chiseled bevel: lit-facing chamfers brighten, shadow-facing darken, and a crisp arris lines the top edge
+    float bevelFacet = smoothstep(0.24, 0.4, faceNz) * (1.0 - smoothstep(0.85, 0.94, faceNz)) * step(0.02, wornBand);
+    float bevelLight = (max(dot(N, L1), 0.0) - 0.44) * 0.58 * bevelFacet;
+    float arris = bevelFacet * smoothstep(0.78, 0.99, wornBand) * 0.16;
     base = clamp(pigment * stoneLum * (1.0 - grime * mix(1.0, 0.6, float(u_highContrast))) * (1.0 + raking * 0.55), 0.0, 1.0);
+    base = clamp(base * (1.0 + bevelLight) + vec3(arris * sAmp6), 0.0, 1.0);
     specPower = 14.0;
     specStrength = 0.06;
   } else if (u_materialStyle == 3) {
@@ -274,19 +216,25 @@ void main() {
     emissive = neonCol * (bevelEdge * 0.95 + circuit * 0.85 * pulse * hcMul);
     specPower = 96.0;
     specStrength = 0.85;
-  } else if (u_materialStyle == 5) {
-    // stone_surface (STONE-FLOOR-01): world-space weathered stone on tray floors, walls & pillars.
-    // Luminance-only modulation keeps each Board Tray's palette identity; u_stoneTint adds a faint mineral cast.
-    vec2 sp = v_worldPos.xy + v_worldPos.z * vec2(0.7, 1.3);
-    float sMottle = relicNoise(sp * 1.15) * 0.65 + relicNoise(sp * 3.1 + 4.7) * 0.35 - 0.5;
-    float sGrain = (relicNoise(sp * 37.0 + 3.0) - 0.5) * 2.0;
-    float sPit = smoothstep(0.8, 0.95, relicNoise(sp * 21.0 + sMottle * 3.0 + 5.0));
-    float sVein = 1.0 - smoothstep(0.0, 0.03 + fwidth(sp.x) * 0.8, voronoiRockCrack(sp * 0.85 + sMottle * 0.3).x);
-    float sAmp = u_highContrast == 1 ? 0.45 : 1.0;
-    float sLum = 1.0 + (sMottle * 0.2 + sGrain * 0.03 - sPit * 0.08 - sVein * 0.15) * sAmp;
-    base = clamp(base * sLum * mix(vec3(1.0), u_stoneTint, 0.35), 0.0, 1.0);
-    specPower = 16.0;
-    specStrength = 0.09;
+  } else if (u_materialStyle == 5 || u_materialStyle == 7) {
+    // Board Tray surfaces (TRAY-IDENTITY-01): 5 = floor tiles, 7 = walls / plinth / pillars
+    if (u_trayMaterial == 0) {
+      // Industrial Slate (STONE-FLOOR-01): fast cleft slate flagstones & dressed ashlar (zero Voronoi loops)
+      vec2 sp = v_worldPos.xy + v_worldPos.z * vec2(0.7, 1.3);
+      float sMottle = relicNoise(sp * 1.2) * 0.6 + relicNoise(sp * 4.2 + 4.7) * 0.4 - 0.5;
+      vec2 cellF0 = fract(v_worldPos.xy);
+      float joint0 = (u_materialStyle == 5)
+        ? (1.0 - smoothstep(0.0, 0.036, min(min(cellF0.x, 1.0 - cellF0.x), min(cellF0.y, 1.0 - cellF0.y))))
+        : 0.0;
+      float sAmp = u_highContrast == 1 ? 0.45 : 1.0;
+      float sLum = 1.0 + (sMottle * 0.24 - joint0 * 0.16) * sAmp;
+      base = clamp(base * sLum * mix(vec3(1.0), u_stoneTint, 0.35), 0.0, 1.0);
+      specPower = 16.0;
+      specStrength = 0.09;
+    } else {
+      applyTrayMaterial(base, emissive, specPower, specStrength, v_worldPos, N, u_materialStyle == 7,
+        float(u_highContrast), u_boardInfo.z);
+    }
   }
 
   float spec = pow(max(dot(N, H), 0.0), specPower) * specStrength;

@@ -39,7 +39,10 @@ import {
   drawNumberBadgesImpl,
   executeBenchmarkFramesImpl,
   type GLMeshHandle,
+  getMaterialStyleCodeForSkin,
+  getParticleStyleCodeForId,
   getStoneThemeMineralTint,
+  getTrayMaterialCode,
   HIGH_CONTRAST_TRAY_PALETTES,
   INSTANCE_STRIDE,
   MAX_PARTICLES,
@@ -98,12 +101,14 @@ export class Renderer3D implements RenderPassContext {
   public uCapColor: WebGLUniformLocation | null = null;
   public uClipPlane: WebGLUniformLocation | null = null;
   public uUseClipPlane: WebGLUniformLocation | null = null;
+  public uBlockSeed: WebGLUniformLocation | null = null;
   private uUseTexture: WebGLUniformLocation | null = null;
   private uMaterialStyle: WebGLUniformLocation | null = null;
   private uAtlas: WebGLUniformLocation | null = null;
   private uBlueprintMix: WebGLUniformLocation | null = null;
   private uBoardInfo: WebGLUniformLocation | null = null;
   private uStoneTint: WebGLUniformLocation | null = null;
+  private uTrayMaterial: WebGLUniformLocation | null = null;
   private uHighContrast: WebGLUniformLocation | null = null;
 
   // Uniform locations for particle program
@@ -382,12 +387,14 @@ export class Renderer3D implements RenderPassContext {
     this.uCapColor = gl.getUniformLocation(mainProg, 'u_capColor');
     this.uClipPlane = gl.getUniformLocation(mainProg, 'u_clipPlane');
     this.uUseClipPlane = gl.getUniformLocation(mainProg, 'u_useClipPlane');
+    this.uBlockSeed = gl.getUniformLocation(mainProg, 'u_blockSeed');
     this.uUseTexture = gl.getUniformLocation(mainProg, 'u_useTexture');
     this.uMaterialStyle = gl.getUniformLocation(mainProg, 'u_materialStyle');
     this.uAtlas = gl.getUniformLocation(mainProg, 'u_atlas');
     this.uBlueprintMix = gl.getUniformLocation(mainProg, 'u_blueprintMix');
     this.uBoardInfo = gl.getUniformLocation(mainProg, 'u_boardInfo');
     this.uStoneTint = gl.getUniformLocation(mainProg, 'u_stoneTint');
+    this.uTrayMaterial = gl.getUniformLocation(mainProg, 'u_trayMaterial');
     this.uHighContrast = gl.getUniformLocation(mainProg, 'u_highContrast');
 
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
@@ -405,12 +412,14 @@ export class Renderer3D implements RenderPassContext {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlasData.canvas);
     }
 
-    // Pre-upload all 66 static polyomino meshes + environment meshes
+    // Pre-upload static polyomino meshes (standard, studded, worn stone) + environment meshes
     for (const entry of Object.values(POLYOMINO_MESH_CATALOG)) {
       this.getOrCreateMeshHandle(gl, entry.meshOuter);
       this.getOrCreateMeshHandle(gl, entry.meshInnerCore);
       this.getOrCreateMeshHandle(gl, entry.meshOuterStudded);
       this.getOrCreateMeshHandle(gl, entry.meshInnerCoreStudded);
+      this.getOrCreateMeshHandle(gl, entry.meshOuterWorn);
+      this.getOrCreateMeshHandle(gl, entry.meshInnerCoreWorn);
     }
     for (const envMesh of Object.values(ENVIRONMENT_MESHES) as MeshData[]) {
       this.getOrCreateMeshHandle(gl, envMesh);
@@ -590,11 +599,7 @@ export class Renderer3D implements RenderPassContext {
   }
 
   public getMaterialStyleCode(skin: SkinId = 'relic_stone'): number {
-    if (skin === 'relic_stone') return 6;
-    if (skin === 'gummy_jelly') return 1;
-    if (skin === 'carved_wood') return 2;
-    if (skin === 'neon_cyber') return 3;
-    return 0;
+    return getMaterialStyleCodeForSkin(skin);
   }
 
   public drawMesh(
@@ -730,11 +735,13 @@ export class Renderer3D implements RenderPassContext {
     gl.useProgram(this.mainProgram);
     gl.uniformMatrix4fv(this.uViewProj, false, this.camera.getViewProjectionMatrix(false));
     gl.uniform1i(this.uUseClipPlane, 0);
+    gl.uniform1f(this.uBlockSeed, 0);
     gl.uniform4f(this.uClipPlane, 0, 0, 1, 0);
     gl.uniform3f(this.uCapColor, 0.2, 0.2, 0.2);
     gl.uniform1f(this.uBlueprintMix, blueprintMix);
     gl.uniform3f(this.uBoardInfo, board.cols * 0.5, board.rows * 0.5, options.reducedMotion ? -1.0 : timeSec);
     gl.uniform3f(this.uStoneTint, stoneTint[0], stoneTint[1], stoneTint[2]);
+    gl.uniform1i(this.uTrayMaterial, getTrayMaterialCode(trayId));
     gl.uniform1i(this.uHighContrast, highContrast ? 1 : 0);
 
     if (this.atlasTexture) {
@@ -767,11 +774,7 @@ export class Renderer3D implements RenderPassContext {
   }
 
   public getParticleStyleCode(style: ParticleStyleId = 'micro_cubes'): number {
-    if (style === 'star_confetti') return 1;
-    if (style === 'pixel_sparks') return 2;
-    if (style === 'soap_bubbles') return 3;
-    if (style === 'lightning_bolts') return 4;
-    return 0;
+    return getParticleStyleCodeForId(style);
   }
 
   public dispose(): void {

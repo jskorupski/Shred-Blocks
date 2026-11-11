@@ -1,7 +1,7 @@
 import { getGateActiveColor } from '../core/gate-clearance';
 import type { BoardState, GateState } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
-import { type RenderPassContext, STONE_SURFACE_STYLE, type TrayPalette } from './render-types';
+import { type RenderPassContext, TRAY_WALL_STYLE, type TrayPalette } from './render-types';
 
 export function renderPass1WallsAndGates(
   rctx: RenderPassContext,
@@ -80,7 +80,7 @@ export function renderPass1WallsAndGates(
             1.0,
             0,
             0,
-            STONE_SURFACE_STYLE
+            TRAY_WALL_STYLE
           );
           rctx.drawMesh(
             gl,
@@ -120,7 +120,7 @@ export function renderPass1WallsAndGates(
             1.0,
             0,
             0,
-            STONE_SURFACE_STYLE
+            TRAY_WALL_STYLE
           );
           rctx.drawMesh(
             gl,
@@ -166,7 +166,7 @@ export function renderPass1WallsAndGates(
             1.0,
             0,
             0,
-            STONE_SURFACE_STYLE
+            TRAY_WALL_STYLE
           );
           rctx.drawMesh(
             gl,
@@ -212,7 +212,7 @@ export function renderPass1WallsAndGates(
             1.0,
             0,
             0,
-            STONE_SURFACE_STYLE
+            TRAY_WALL_STYLE
           );
           rctx.drawMesh(
             gl,
@@ -248,7 +248,7 @@ export function renderPass1WallsAndGates(
           1.0,
           0,
           0,
-          STONE_SURFACE_STYLE
+          TRAY_WALL_STYLE
         );
       };
       if (topOpen && leftOpen) drawCornerPost(c - wallThick, r - wallThick);

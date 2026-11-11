@@ -1,7 +1,12 @@
 import { getShape } from '../core/polyomino';
 import type { BoardState, ColorId } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
-import { type RenderPassContext, STONE_SURFACE_STYLE, type TrayPalette } from './render-types';
+import {
+  type RenderPassContext,
+  STONE_SURFACE_STYLE,
+  TRAY_WALL_STYLE,
+  type TrayPalette,
+} from './render-types';
 
 export function renderPass1Courtyard(
   rctx: RenderPassContext,
@@ -111,7 +116,7 @@ export function renderPass1Courtyard(
       1.0,
       0,
       0,
-      STONE_SURFACE_STYLE
+      TRAY_WALL_STYLE
     );
 
     const padL = bordersDiffRoomLeft ? 0.02 : 0.38;
@@ -133,7 +138,7 @@ export function renderPass1Courtyard(
       1.0,
       0,
       0,
-      STONE_SURFACE_STYLE
+      TRAY_WALL_STYLE
     );
   }
 
@@ -235,7 +240,7 @@ export function renderPass1Courtyard(
           1.0,
           0,
           0,
-          STONE_SURFACE_STYLE
+          TRAY_WALL_STYLE
         );
         if (!isStoneRuin) {
           const pillarBobZ =

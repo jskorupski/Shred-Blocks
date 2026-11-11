@@ -86,6 +86,7 @@ export function renderPass3BlocksImpl(
         : 0;
     const shredRoomVis = rctx.getRoomVisualState(board, shredRoomId);
 
+    gl.uniform1f(rctx.uBlockSeed, (anim.gateIndex * 17 + anim.colorId * 7) % 97);
     rctx.drawMesh(
       gl,
       shredOuterMesh,
@@ -317,6 +318,7 @@ export function renderPass3BlocksImpl(
         ? (POLYOMINO_MESH_CATALOG[block.shapeId]?.meshOuter ?? meshPair.meshOuter)
         : meshPair.meshOuter;
 
+    gl.uniform1f(rctx.uBlockSeed, block.id % 97);
     rctx.drawMesh(
       gl,
       outerMesh,
@@ -523,6 +525,7 @@ export function renderPass3BlocksImpl(
       gl.enable(gl.CULL_FACE);
     }
   }
+  gl.uniform1f(rctx.uBlockSeed, 0);
 
   if (!isStoneRuin) {
     renderGhostAndWeldClamps3D(

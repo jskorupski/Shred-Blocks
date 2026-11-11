@@ -431,8 +431,14 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
 
     const shadersTs =
       fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8') +
-      fs.readFileSync(path.join(repoRoot, 'src/render/shaders-main-vertex.ts'), 'utf8');
+      fs.readFileSync(path.join(repoRoot, 'src/render/shaders-main-vertex.ts'), 'utf8') +
+      fs.readFileSync(path.join(repoRoot, 'src/render/shaders-glsl-lib.ts'), 'utf8') +
+      fs.readFileSync(path.join(repoRoot, 'src/render/shaders-tray-materials.ts'), 'utf8');
     expect(shadersTs).toContain('stoneRelief');
+    expect(shadersTs).toContain('runeDist');
+    expect(shadersTs).toContain('u_blockSeed');
+    expect(shadersTs).toContain('applyTrayMaterial');
+    expect(shadersTs).toContain('u_trayMaterial');
     expect(shadersTs).toContain('neonCol');
     expect(shadersTs).toContain('knotDist');
     expect(shadersTs).toContain('float zRelief = mix(1.0, 0.22, u_blueprintMix)');
@@ -464,12 +470,18 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     const saveManagerTs = fs.readFileSync(path.join(repoRoot, 'src/storage/save-manager.ts'), 'utf8');
     expect(saveManagerTs).toContain("equippedSkin: 'relic_stone'");
     expect(shadersTs).toContain("from './shaders-particles'");
-    for (const passFile of ['src/render/pass1-courtyard.ts', 'src/render/pass1-gates-barriers.ts']) {
-      expect(fs.readFileSync(path.join(repoRoot, passFile), 'utf8')).toContain('STONE_SURFACE_STYLE');
-    }
-    expect(fs.readFileSync(path.join(repoRoot, 'src/render/render-types.ts'), 'utf8')).toContain(
-      'export const STONE_SURFACE_STYLE = 5'
+    expect(fs.readFileSync(path.join(repoRoot, 'src/render/pass1-courtyard.ts'), 'utf8')).toContain(
+      'STONE_SURFACE_STYLE'
     );
+    expect(fs.readFileSync(path.join(repoRoot, 'src/render/pass1-courtyard.ts'), 'utf8')).toContain(
+      'TRAY_WALL_STYLE'
+    );
+    expect(fs.readFileSync(path.join(repoRoot, 'src/render/pass1-gates-barriers.ts'), 'utf8')).toContain(
+      'TRAY_WALL_STYLE'
+    );
+    const renderTypesTs = fs.readFileSync(path.join(repoRoot, 'src/render/render-types.ts'), 'utf8');
+    expect(renderTypesTs).toContain('export const STONE_SURFACE_STYLE = 5');
+    expect(renderTypesTs).toContain('export const TRAY_WALL_STYLE = 7');
 
     // ARCH-ERGONOMICS-01 extracted modules stay wired into the orchestrator
     const mainTs = fs.readFileSync(path.join(repoRoot, 'src/main.ts'), 'utf8');

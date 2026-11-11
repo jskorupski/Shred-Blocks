@@ -25,10 +25,35 @@ export const INSTANCE_STRIDE = 8; // x, y, z, scale, r, g, b, rotAngle
 export const MAX_SMOKE_PUFFS = 256;
 export const SMOKE_SCALE_OFFSET = 10;
 /**
- * `u_materialStyle = 5` (`STONE-FLOOR-01`): world-space weathered stone texture applied to gameplay tray floors,
- * plinths, perimeter walls & pillars so the Title Stone Relic transitions into a stone courtyard (tinted by tray).
+ * `u_materialStyle = 5` (`STONE-FLOOR-01` / `TRAY-IDENTITY-01`): world-space tray floor tiles;
+ * `u_materialStyle = 7`: perimeter walls, pedestal plinths & interior pillars.
  */
 export const STONE_SURFACE_STYLE = 5;
+export const TRAY_WALL_STYLE = 7;
+
+export function getMaterialStyleCodeForSkin(skin: SkinId = 'relic_stone'): number {
+  if (skin === 'relic_stone') return 6;
+  if (skin === 'gummy_jelly') return 1;
+  if (skin === 'carved_wood') return 2;
+  if (skin === 'neon_cyber') return 3;
+  return 0;
+}
+
+export function getTrayMaterialCode(tray: TrayId = 'industrial_slate'): number {
+  if (tray === 'warm_birch') return 1;
+  if (tray === 'midnight_arcade') return 2;
+  if (tray === 'frosted_quartz') return 3;
+  if (tray === 'mint_studio') return 4;
+  return 0;
+}
+
+export function getParticleStyleCodeForId(style: ParticleStyleId = 'micro_cubes'): number {
+  if (style === 'star_confetti') return 1;
+  if (style === 'pixel_sparks') return 2;
+  if (style === 'soap_bubbles') return 3;
+  if (style === 'lightning_bolts') return 4;
+  return 0;
+}
 
 export interface TrayPalette {
   bgClear: [number, number, number];
@@ -51,28 +76,28 @@ export const TRAY_PALETTES: Record<TrayId, TrayPalette> = {
     floorTileA: [0.76, 0.65, 0.5],
     floorTileB: [0.72, 0.61, 0.46],
     wallColor: [0.48, 0.34, 0.22],
-    rimHighlight: [0.62, 0.46, 0.32],
+    rimHighlight: [0.68, 0.52, 0.36],
   },
   midnight_arcade: {
-    bgClear: [0.03, 0.04, 0.1],
-    floorTileA: [0.08, 0.11, 0.22],
-    floorTileB: [0.065, 0.09, 0.19],
-    wallColor: [0.18, 0.16, 0.42],
-    rimHighlight: [0.38, 0.32, 0.78],
+    bgClear: [0.025, 0.03, 0.08],
+    floorTileA: [0.06, 0.075, 0.145],
+    floorTileB: [0.048, 0.062, 0.12],
+    wallColor: [0.11, 0.12, 0.22],
+    rimHighlight: [0.24, 0.78, 0.98],
   },
   frosted_quartz: {
     bgClear: [0.11, 0.15, 0.21],
-    floorTileA: [0.78, 0.83, 0.89],
-    floorTileB: [0.74, 0.79, 0.86],
-    wallColor: [0.52, 0.59, 0.68],
-    rimHighlight: [0.68, 0.75, 0.84],
+    floorTileA: [0.76, 0.84, 0.93],
+    floorTileB: [0.71, 0.8, 0.9],
+    wallColor: [0.56, 0.67, 0.8],
+    rimHighlight: [0.86, 0.94, 1.0],
   },
   mint_studio: {
     bgClear: [0.04, 0.12, 0.1],
-    floorTileA: [0.68, 0.86, 0.78],
-    floorTileB: [0.63, 0.82, 0.74],
-    wallColor: [0.11, 0.36, 0.29],
-    rimHighlight: [0.2, 0.52, 0.42],
+    floorTileA: [0.52, 0.76, 0.66],
+    floorTileB: [0.47, 0.72, 0.62],
+    wallColor: [0.18, 0.44, 0.36],
+    rimHighlight: [0.9, 0.78, 0.42],
   },
 };
 
@@ -373,6 +398,8 @@ export interface RenderPassContext {
   gl: WebGL2RenderingContext | null;
   ctx2d: CanvasRenderingContext2D | null;
   uUseClipPlane: WebGLUniformLocation | null;
+  /** BLOCK-STONE-01: per-block integer seed so Relic Stone runes/chips differ between blocks */
+  uBlockSeed: WebGLUniformLocation | null;
   uClipPlane: WebGLUniformLocation | null;
   uCapColor: WebGLUniformLocation | null;
   readonly particlePool: Float32Array;
