@@ -38,10 +38,8 @@ import {
 import {
   buildRenderOptionsImpl,
   handleImmobileBlockTapImpl,
-  handleLevelFailureImpl,
   handleLockedVaultTapImpl,
   isNewPlayerSaveImpl,
-  populateVictoryModalImpl,
   stepSimulationImpl,
   syncAllUiFromSaveImpl,
   syncBoosterTargetingBannerImpl,
@@ -68,7 +66,12 @@ import {
   switchScreenImpl,
   updateTelemetryReadoutImpl,
 } from './ui/modals-and-save-transfer';
-import { notifyFinalTouchImpl, scheduleStuckBoardCheckImpl } from './ui/outcome-modals-view';
+import {
+  handleLevelFailureImpl,
+  notifyFinalTouchImpl,
+  populateVictoryModalImpl,
+  scheduleStuckBoardCheckImpl,
+} from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
 
 export * from './ui/catalog-meta';
@@ -97,7 +100,7 @@ export class ShredBlocksApp implements AppViewContext {
   public freeUndosRemaining = 3;
   public levelOutcomeHandled = false;
   public runTouchedZen = false;
-  public bombSecondAccumulator = 0;
+  public bombTickAccumulatorSec = 0;
   private lastRafMs = performance.now();
   public toastTimerId: ReturnType<typeof setTimeout> | null = null;
   public unlockToastTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -239,7 +242,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.levelOutcomeHandled = false;
     this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
     this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
-    this.bombSecondAccumulator = 0;
+    this.bombTickAccumulatorSec = 0;
 
     this.inputController.cancelTargeting();
     if (this.toastTimerId !== null) {
@@ -296,7 +299,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.levelOutcomeHandled = false;
     this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
     this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
-    this.bombSecondAccumulator = 0;
+    this.bombTickAccumulatorSec = 0;
     this.inputController.cancelTargeting();
     this.refreshAutoGuideMove();
     this.syncInGameHud();

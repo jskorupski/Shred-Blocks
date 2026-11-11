@@ -44,7 +44,8 @@ export interface CommitMoveOutcome {
  *   repositions of the same `lead.id` (or finishing that block's drag into its gate) coalesce
  *   into 1 move tick so players aren't penalized for micro-adjustments.
  * - Honors `stasisMovesRemaining` (`FREEZE` booster in `CHALLENGE` / `ZEN` modes) before
- *   decrementing `movesRemaining` (`CHALLENGE`) or Bomb counters (`CHALLENGE` / `ZEN`).
+ *   decrementing `movesRemaining` (`CHALLENGE`) or Bomb counters (`CHALLENGE`; inert in Zen via `bombsInert`).
+ * - `FINAL-TOUCH-01`: at `0` moves in `CHALLENGE`, rejects every move except a coalesced finish of `lastMovedBlockId`.
  */
 export function commitBlockMove(
   board: BoardState,

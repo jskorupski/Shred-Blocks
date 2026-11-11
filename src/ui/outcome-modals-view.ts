@@ -7,7 +7,7 @@ import { type AppViewContext, BOOSTER_DISPLAY_NAMES } from './catalog-meta';
 /**
  * Level outcome feedback (`ECON-V2` victory rewards, `OUT_OF_MOVES` / `TIME_OUT` / `BOMB_EXPLODED` failure options,
  * `FINAL-TOUCH-01` grace hints, and `STUCK-01` provably-unsolvable warnings), extracted from `hud-and-title-view.ts`
- * (`ARCH-ERGONOMICS-01`) and re-exported from it.
+ * (`ARCH-ERGONOMICS-01`); imported directly by `main.ts`.
  */
 
 export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinRewardSummary): void {

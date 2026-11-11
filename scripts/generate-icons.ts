@@ -6,11 +6,12 @@ import { chromium } from '@playwright/test';
 
 declare const process: {
   cwd: () => string;
+  env: Record<string, string | undefined>;
   exit: (code: number) => void;
 };
 
-const ARTIFACT_SCRATCH_DIR =
-  '/Users/james/.gemini/antigravity/brain/17772f07-37b9-4f49-9df5-0a104c9e8a28/scratch';
+// Preview output dir: override with VISUAL_OUT_DIR; defaults to test-results/visual
+const ARTIFACT_SCRATCH_DIR = process.env.VISUAL_OUT_DIR ?? resolve(process.cwd(), 'test-results', 'visual');
 
 async function main(): Promise<void> {
   const publicDir = resolve(process.cwd(), 'public');

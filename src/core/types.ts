@@ -217,7 +217,7 @@ export interface BlockState {
   lockId: number;
   /** Carries a Key that unlocks chained blocks with matching lockId */
   hasKey: number;
-  /** Bomb countdown: seconds in TIMED mode, moves in CHALLENGE/ZEN mode (0 = not a bomb) */
+  /** Bomb fuse in move ticks (TIMED burns one tick per `getTimedBombTickSec`; inert in ZEN via `bombsInert`; 0 = not a bomb) */
   bombCount: number;
   bombMax: number;
   /** Combined / Glued group ID (0 = independent; >0 = moves as rigid assembly with siblings sharing groupId) */

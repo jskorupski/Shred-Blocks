@@ -88,7 +88,7 @@ export function activateBoosterImpl(app: BoosterAppContext, type: BoosterType): 
   app.renderNow();
 }
 
-export function executeUndoBoosterImpl(app: BoosterAppContext): void {
+function executeUndoBoosterImpl(app: BoosterAppContext): void {
   // UX-11: Check if undoing an accidental level restart first
   if (app.undoStack.length === 0 && app.preRestartSnapshot) {
     app.board = cloneBoardState(app.preRestartSnapshot);
@@ -131,7 +131,7 @@ export function executeUndoBoosterImpl(app: BoosterAppContext): void {
   app.renderNow();
 }
 
-export function executeHintOrFreezeBoosterImpl(app: BoosterAppContext): void {
+function executeHintOrFreezeBoosterImpl(app: BoosterAppContext): void {
   const playMode = app.saveManager.getPayload().settings.playMode;
   if (!canAffordBooster(app, 'FREEZE')) return;
 

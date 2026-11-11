@@ -25,8 +25,6 @@ import {
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
 
-export { handleLevelFailureImpl, populateVictoryModalImpl } from './outcome-modals-view';
-
 export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockState): void {
   if (isBlockInLockedRoom(app.board, block)) {
     const roomId = getBlockRoomId(app.board, block);
@@ -604,9 +602,9 @@ export function stepSimulationImpl(app: AppViewContext, dtSec: number): void {
     app.board.timeRemainingSec = Math.max(0, app.board.timeRemainingSec - dtSec);
     // TIMED-BOMB-01: move-calibrated fuses burn one tick per move-equivalent of clock time
     const bombTickSec = getTimedBombTickSec(app.board);
-    app.bombSecondAccumulator += dtSec;
-    while (app.bombSecondAccumulator >= bombTickSec) {
-      app.bombSecondAccumulator -= bombTickSec;
+    app.bombTickAccumulatorSec += dtSec;
+    while (app.bombTickAccumulatorSec >= bombTickSec) {
+      app.bombTickAccumulatorSec -= bombTickSec;
       for (const b of app.board.blocks) {
         if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0 && !isBlockInLockedRoom(app.board, b)) {
           b.bombCount = Math.max(0, b.bombCount - 1);

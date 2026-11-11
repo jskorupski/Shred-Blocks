@@ -258,7 +258,8 @@ export interface AppViewContext {
   freeUndosRemaining: number;
   runTouchedZen: boolean;
   levelOutcomeHandled: boolean;
-  bombSecondAccumulator: number;
+  /** TIMED fuse clock: accumulates seconds toward the next `getTimedBombTickSec` bomb tick (`TIMED-BOMB-01`) */
+  bombTickAccumulatorSec: number;
   lastPointerActivityMs: number;
   toastTimerId: ReturnType<typeof setTimeout> | null;
   unlockToastTimerId: ReturnType<typeof setTimeout> | null;

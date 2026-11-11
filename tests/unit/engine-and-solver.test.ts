@@ -29,7 +29,7 @@ import type { LevelSpec } from '../../src/core/types';
 import { getLevelSpec } from '../../src/levels/catalog';
 import { findNextHintMove } from '../../src/levels/solver';
 
-describe('Polyomino Shape Catalog (33 Orientations)', () => {
+describe('Polyomino Shape Catalog (37 Orientations)', () => {
   it('contains all 37 canonical polyomino orientations with accurate non-convex flags', () => {
     const keys = Object.keys(POLYOMINO_SHAPES);
     expect(keys.length).toBe(37);
@@ -76,7 +76,7 @@ describe('Swept Collision Physics & F-04 Clamping / Floor-Path Exemption', () =>
     expect(res.leadY).toBeCloseTo(2.0, 4);
   });
 
-  it('applies corner bevel assist + immediate same-substep retry within 0.30 cell threshold', () => {
+  it('applies corner bevel assist + immediate same-substep retry within CORNER_BEVEL_THRESHOLD (0.35 cell)', () => {
     const spec: LevelSpec = {
       id: 902,
       name: 'Corner Bevel Test',
@@ -89,7 +89,7 @@ describe('Swept Collision Physics & F-04 Clamping / Floor-Path Exemption', () =>
     };
     const board = createBoardState(spec);
     const blk = board.blocks[0];
-    // Position block slightly misaligned into row 1.78 (within 0.22 <= 0.30 of lane row=2)
+    // Position block slightly misaligned into row 1.78 (within 0.22 <= 0.35 of lane row=2)
     blk.x = 1.0;
     blk.y = 1.78;
     // Sweep right toward x=4.0: X hits pillar at (1, 2) unless corner bevel snaps y -> 2.0 and retries X!
@@ -111,7 +111,7 @@ describe('Swept Collision Physics & F-04 Clamping / Floor-Path Exemption', () =>
     };
     const board = createBoardState(spec);
 
-    // Move diagonally into the 0.30 x 0.30 corner bevel zone around (col=1, row=1)
+    // Move diagonally into the 0.35 x 0.35 corner bevel zone around (col=1, row=1)
     const first = sweepBlockToTarget(board, 1, 1.24, 1.26);
     // Block should choose the dominant Y channel cleanly (x=1.0, y=1.26)
     expect(first.leadX).toBeCloseTo(1.0, 4);

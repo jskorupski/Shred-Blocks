@@ -75,13 +75,13 @@ npm run dev:lan
 # Run Biome TypeScript & CSS linter/formatter check (< 150ms)
 npm run lint
 
-# Run Vitest unit & 300-level A* solver verification suite (56 tests across 6 suites)
+# Run Vitest unit & 300-level A* solver verification suite (59+ tests across 6 suites)
 npm run test:unit
 
-# Run Playwright E2E interactive browser playtest suite (22 tests across Desktop & Mobile)
+# Run Playwright E2E interactive browser playtest suite (24 tests across Desktop & Mobile)
 npm run test:e2e
 
-# Capture 42 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
+# Capture 45 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
 npm run verify:visual
 ```
 </details>
@@ -111,7 +111,7 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
 | **8** | **Lvl 61** | **Key (`🔑`) & Chained Lock (`🔒`)** | Chained blocks are immobilized until the block carrying the matching Key is shredded. |
 | **9** | **Lvl 71** | **Neutral Stone Sliders** | Heavy charcoal monoliths that never shred through any gate but slide freely to unblock lanes. |
 | **10** | **Lvl 81** | **Wooden Crates (`📦`)** | Destructible `1×1` crates (`1–3 HP`) that crack and shatter whenever an adjacent block shreds at a gate. |
-| **11** | **Lvl 91** | **Time-Bombs (`💣 N`)** | Tick down by `1` per committed move in Challenge/Zen Mode (paused during `❄️` Stasis Moves) or `1` per second in Timed Rush; shred before `0` to defuse. |
+| **11** | **Lvl 91** | **Time-Bombs (`💣 N`)** | Tick down by `1` per committed move in Challenge (paused during `❄️` Stasis Moves) or one tick per move-equivalent of clock time in Timed Rush (`max(2.5s, timeLimit / par)`); inert in Zen. Shred before `0` to defuse. |
 | **12** | **Lvl 101** | **Glued Linked Groups** | Separate blocks bonded by golden solder bars move together as a rigid multi-block assembly. |
 | **13** | **Lvl 111** | **Colored Ropes (`🪢`) & Scissors (`✂️`)** | Blocks tied in colored rope untie automatically when matching-color Scissors are shredded. |
 | **14** | **Lvl 121** | **Color-Changing Gates** | Gates with a multi-color queue advance to their next queued color after each shred. |

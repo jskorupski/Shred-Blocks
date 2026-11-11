@@ -268,10 +268,10 @@ void main() {
   float blueprintAlpha = 1.0;
 
   if (u_blueprintMix > 0.001) {
-    // Discovered Monochrome Ancient Stone Tablet Artifact Mode (STONE-TABLET-01 / CAVE-ETCH-01):
-    // Renders the board as a 100% solid (alpha = 1.0) monochrome weathered stone bas-relief
-    // (aged limestone, sandstone, and travertine with organic patina mottling, hairline fissures,
-    // pitted grain, and chiseled bevels) that pops into vibrant 3D color when play begins.
+    // Mystic Stone Relic Mode (STONE-TABLET-01 / MYSTIC-RELIC-01): renders the board as a 100% solid
+    // (alpha = 1.0) weathered stone bas-relief, desaturated and faintly mineral-tinted per theme (u_stoneTint),
+    // with Voronoi fissures, grime, chiseled bevels, and a noise-driven crackPulse amethyst-orchid/gold glow;
+    // it fades into full gameplay color as u_blueprintMix -> 0.
     float isSunkenRoom = smoothstep(-0.02, -0.10, v_worldPos.z);
     vec3 restoredRgb = clamp(u_color.rgb / mix(1.0, 0.58, isSunkenRoom), 0.0, 1.0);
     float maxC = max(restoredRgb.r, max(restoredRgb.g, restoredRgb.b));

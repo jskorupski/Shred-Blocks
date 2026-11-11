@@ -98,7 +98,7 @@ Every source, stylesheet, HTML, test, script, and documentation file is kept `<=
 | [`src/input/pointer-controller.ts`](src/input/pointer-controller.ts) & [`src/input/targeting-and-keyboard.ts`](src/input/targeting-and-keyboard.ts) | Unified pointer/touch/mouse drag controller (`setPointerCapture`, `pointercancel`/`blur` snap-back, 32px outward gate funnel), booster canvas targeting, and `AX-03` keyboard navigation. |
 | [`src/audio/synth.ts`](src/audio/synth.ts) & [`src/audio/synth-voices.ts`](src/audio/synth-voices.ts) | Zero-asset procedural Web Audio API synthesizer + ambient pentatonic chime loop + haptic feedback wrapper. |
 | [`src/storage/save-manager.ts`](src/storage/save-manager.ts), [`save-code.ts`](src/storage/save-code.ts), [`qr-svg.ts`](src/storage/qr-svg.ts) | Dual-layer `localStorage` + `IndexedDB` persistence (`writeSeq` reconciliation + `QuotaExceededError` backup eviction), 53-bit `SB1-<base64url>-<crc32hex>` binary varint + O(N) LZ77 save codec (`qrCompact` mode for QR Version 40 safety), ISO/IEC 18004 QR SVG generator, and 1-tap rollback. |
-| [`tests/unit/*.test.ts`](tests/unit/) & [`tests/e2e/*.spec.ts`](tests/e2e/) | 6 unit suites ([`engine-and-solver.test.ts`](tests/unit/engine-and-solver.test.ts), [`campaign-and-invariants.test.ts`](tests/unit/campaign-and-invariants.test.ts), [`sanctums-and-architecture.test.ts`](tests/unit/sanctums-and-architecture.test.ts), [`storage-and-integration.test.ts`](tests/unit/storage-and-integration.test.ts), [`save-security.test.ts`](tests/unit/save-security.test.ts), [`challenge-and-economy.test.ts`](tests/unit/challenge-and-economy.test.ts)) and 22 Playwright E2E browser playtests ([`shredblocks.spec.ts`](tests/e2e/shredblocks.spec.ts), [`navigation-and-endless.spec.ts`](tests/e2e/navigation-and-endless.spec.ts)). |
+| [`tests/unit/*.test.ts`](tests/unit/) & [`tests/e2e/*.spec.ts`](tests/e2e/) | 6 unit suites ([`engine-and-solver.test.ts`](tests/unit/engine-and-solver.test.ts), [`campaign-and-invariants.test.ts`](tests/unit/campaign-and-invariants.test.ts), [`sanctums-and-architecture.test.ts`](tests/unit/sanctums-and-architecture.test.ts), [`storage-and-integration.test.ts`](tests/unit/storage-and-integration.test.ts), [`save-security.test.ts`](tests/unit/save-security.test.ts), [`challenge-and-economy.test.ts`](tests/unit/challenge-and-economy.test.ts)) and 24 Playwright E2E browser playtests ([`shredblocks.spec.ts`](tests/e2e/shredblocks.spec.ts), [`navigation-and-endless.spec.ts`](tests/e2e/navigation-and-endless.spec.ts)). |
 | [`public/sw.js`](public/sw.js), [`scripts/generate-icons.ts`](scripts/generate-icons.ts), [`vite.lan.config.ts`](vite.lan.config.ts), [`biome.json`](biome.json) | Offline-first PWA Service Worker, cross-platform launcher icon rasterizer, self-healing LAN HTTPS preview server (`0.0.0.0:8443`), and Biome TypeScript/CSS linter & formatter configuration. |
 
 ---
@@ -116,7 +116,7 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
    ```bash
    npm run test:unit
    ```
-   Must pass all 56+ tests across 6 suites, including 100% booster-free solvability, non-overlapping cell verification across all 300 campaign levels, `CHALLENGE` move budgets, Touch-Move Coalescing, `+2` Stasis Moves, `L26+` non-rescue vs. `C1-03` booster rescues, Economy v2 payouts/migration, `VAULT-01`–`02` / `PORTRAIT-01` / `GATE-ICE-01` / `DENSITY-01` / `ENDLESS-SAVE-01` invariants, and `ARCH-ERGONOMICS-01` file-size enforcement.
+   Must pass all 59+ tests across 6 suites, including 100% booster-free solvability, non-overlapping cell verification across all 300 campaign levels, `CHALLENGE` move budgets, Touch-Move Coalescing, `+2` Stasis Moves, `L26+` non-rescue vs. `C1-03` booster rescues, Economy v2 payouts/migration, `VAULT-01`–`02` / `PORTRAIT-01` / `GATE-ICE-01` / `DENSITY-01` / `ENDLESS-SAVE-01` invariants, and `ARCH-ERGONOMICS-01` file-size enforcement.
 3. **TypeScript Typecheck & Production Build**:
    ```bash
    npm run build
@@ -126,13 +126,13 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
    ```bash
    npm run test:e2e
    ```
-   Must pass all 22 Playwright tests (11 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (`MYSTIC-RELIC-01`), Grouped Linked Sanctuary Map (`MAP-LINKED-PATH-01`: Cleared, `🌿 Zen`, Skipped, & Locked stage jump), `CHALLENGE-MODE-01` (default Challenge HUD, Touch-Move Coalescing, `OUT_OF_MOVES` -> 1-tap `🌿 Zen` live rescue, and anti-cheese `Zen -> Timed/Challenge` reset), browser Back/Forward history (`NAV-HISTORY-01`), Infinite Mode (`ENDLESS-SAVE-01`), cross-screen button colors (`UI-BTN-COLOR-01`), pointer drag-and-drop, keyboard controls, all 5 boosters, all 8 settings across custom themes, and all 18 obstacle + multi-room sanctum + Mystery Vault mechanics.
+   Must pass all 24 Playwright tests (12 specs × Desktop Chrome & Mobile Portrait), exercising the Title Screen (`MYSTIC-RELIC-01`), Grouped Linked Sanctuary Map (`MAP-LINKED-PATH-01`: Cleared, `🌿 Zen`, Skipped, & Locked stage jump), `CHALLENGE-MODE-01` (default Challenge HUD, Touch-Move Coalescing, `OUT_OF_MOVES` -> 1-tap `🌿 Zen` live rescue, and anti-cheese `Zen -> Timed/Challenge` reset), browser Back/Forward history (`NAV-HISTORY-01`), Infinite Mode (`ENDLESS-SAVE-01`), cross-screen button colors (`UI-BTN-COLOR-01`), title dock fit + gear icon (`TITLE-DOCK-FIT-01`), pointer drag-and-drop, keyboard controls, all 5 boosters, all 8 settings across custom themes, and all 18 obstacle + multi-room sanctum + Mystery Vault mechanics.
 5. **Multi-Viewport Visual Screenshot & Launcher Icon Harness (when touching UI/CSS/3D rendering/icons)**:
    ```bash
    npm run verify:visual
    ./node_modules/.bin/tsx scripts/generate-icons.ts
    ```
-   Captures 42+ screenshots (`00..44`) across `360×640`, `390×844`, `768×1024`, and `1440×900` plus `29-launcher-icons-preview.png` and verifies zero orphan server/browser processes afterward.
+   Captures 45 screenshots (`00..45`, `29` comes from `generate-icons.ts`) across `360×640`, `390×844`, `768×1024`, and `1440×900` plus `29-launcher-icons-preview.png` and verifies zero orphan server/browser processes afterward.
 6. **Multi-Level Subagent Adversarial Audit & UX Sign-Off (MANDATORY FOR UI / UX / GAMEPLAY UPDATES)**:
    - Every non-trivial UI, UX, icon, or gameplay change must be independently audited by dedicated subagents (`invoke_subagent` / `send_message`):
      1. **Visual Aesthetics & UX Design Critic**: Inspects multi-viewport screenshots (`00-title-screen-new-player-mobile.png`, `30-title-screen-returning-player-mobile.png`, `01-home-roadmap-mobile.png`, `02-level-001-gameplay-mobile.png`, `29-launcher-icons-preview.png`, `32..42`, etc.) for Sacred-Geometry Sanctuary cohesion, typography, hierarchy, navigation clarity, and zero clipping/overlap.
@@ -155,7 +155,7 @@ Whenever you modify code, levels, icons, or styles, execute this exact sequence 
 5. **4-Entry-Point Clear & Barrier Unlock Parity (`C1-03`)**:
    - All 4 block-clearing entry points (`commitBlockMove`, `applyBoosterHammer`, `applyBoosterRocket`, `applyBoosterVacuum`) must share post-clear side effects (`triggerCarrierItems`, `stepPortcullisBarriersOnShred`, `trySpawnReadyGenerators`, and `⛩️ Portcullis Opened!` toast), while Booster clears additionally invoke `rescueDynamicGatesOnBoard` + `autoAdvanceColorQueues(board, true)` (`C1-03`).
 6. **Visual Harness Context Isolation**:
-   - In [`scripts/visual-harness.ts`](scripts/visual-harness.ts), explicitly reset `setHighContrast(false)`, `setColorblindMode(false)`, `setReducedMotion(false)`, and `setTheme('classic_studs', 'industrial_slate', 'micro_cubes')` after any custom-state capture.
+   - In [`scripts/visual-harness.ts`](scripts/visual-harness.ts), explicitly reset `setHighContrast(false)`, `setColorblindMode(false)`, and `setTheme('classic_studs', 'industrial_slate', 'micro_cubes')` after any custom-state capture.
 7. **Single-Call Agentic File-Size Invariant (`ARCH-ERGONOMICS-01`) & Atomic Commit Hygiene**:
    - Keep every `.ts`, `.css`, `.html`, `.md`, `.js`, `.json`, `.jsonc`, or `.svg` file (except `package-lock.json`) `<= 800 lines` and `<= 45,000 bytes` (aim for `<= 750 lines`). Place new features in focused domain sub-modules re-exported via domain barrels, and keep git commits atomic and verified.
 8. **Open-Space 2D Drag Glide & Continuous Wide-Gate Span Capture (`DRAG-04` / `F-01`)**:

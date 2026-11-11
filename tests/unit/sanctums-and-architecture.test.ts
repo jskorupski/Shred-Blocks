@@ -444,6 +444,25 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     const screenGameCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-game.css'), 'utf8');
     expect(screenGameCss).toContain('@keyframes mysticGodRays');
 
+    // MYSTIC-RELIC-01 living crack pulses + STONE-FLOOR-01 gameplay stone surfaces
+    expect(shadersTs).toContain('crackPulse');
+    expect(shadersTs).toContain('voronoiRockCrack');
+    expect(shadersTs).toContain('creviceGrime');
+    expect(shadersTs).toContain('u_materialStyle == 5');
+    expect(shadersTs).toContain("from './shaders-particles'");
+    for (const passFile of ['src/render/pass1-courtyard.ts', 'src/render/pass1-gates-barriers.ts']) {
+      expect(fs.readFileSync(path.join(repoRoot, passFile), 'utf8')).toContain('STONE_SURFACE_STYLE');
+    }
+    expect(fs.readFileSync(path.join(repoRoot, 'src/render/render-types.ts'), 'utf8')).toContain(
+      'export const STONE_SURFACE_STYLE = 5'
+    );
+
+    // ARCH-ERGONOMICS-01 extracted modules stay wired into the orchestrator
+    const mainTs = fs.readFileSync(path.join(repoRoot, 'src/main.ts'), 'utf8');
+    expect(mainTs).toContain("from './ui/boosters-controller'");
+    expect(mainTs).toContain("from './ui/outcome-modals-view'");
+    expect(fs.existsSync(path.join(repoRoot, 'src/render/shaders-particles.ts'))).toBe(true);
+
     const pass1Gates = fs.readFileSync(path.join(repoRoot, 'src/render/pass1-gates-barriers.ts'), 'utf8');
     const pass2Barriers = fs.readFileSync(
       path.join(repoRoot, 'src/render/pass2-barriers-and-reticles.ts'),

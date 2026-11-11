@@ -662,4 +662,43 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     expect(errors).toEqual([]);
   });
+
+  test('TITLE-DOCK-FIT-01: title dock (with Install) never overflows its card at narrow widths and Settings uses the gear icon', async ({
+    page,
+  }) => {
+    for (const width of [360, 390]) {
+      await page.setViewportSize({ width, height: 760 });
+      await page.goto('/');
+      await expect(page.locator('#title-overlay')).toBeVisible();
+      await page.evaluate(() => {
+        const install = document.getElementById('btn-title-install');
+        if (install) install.hidden = false;
+      });
+      const fit = await page.evaluate(() => {
+        const card = (document.querySelector('.title-crest-card') as HTMLElement).getBoundingClientRect();
+        const pills = Array.from(
+          document.querySelectorAll<HTMLElement>('.title-dock-bar .title-utility-pill')
+        ).filter((p) => p.offsetParent !== null);
+        return {
+          count: pills.length,
+          overflow: pills.some((p) => {
+            const r = p.getBoundingClientRect();
+            return r.left < card.left - 0.5 || r.right > card.right + 0.5;
+          }),
+          clipped: pills.some((p) => {
+            const span = p.querySelector('span');
+            return span ? span.scrollWidth > span.clientWidth + 1 : false;
+          }),
+        };
+      });
+      expect(fit.count).toBeGreaterThanOrEqual(3);
+      expect(fit.overflow).toBe(false);
+      expect(fit.clipped).toBe(false);
+    }
+    // Gear icon (circle hub + cog outline path) on every Settings entry point
+    for (const id of ['#btn-title-settings', '#tab-btn-settings', '#btn-pause']) {
+      await expect(page.locator(`${id} svg circle[r="3"]`)).toHaveCount(1);
+      await expect(page.locator(`${id} svg path`)).toHaveCount(1);
+    }
+  });
 });

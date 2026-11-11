@@ -342,7 +342,7 @@ export function computeDefaultMoveLimit(
 /**
  * Undo Resource Integrity (`UNDO-RES-01`): when an Undo restores an older snapshot, carry forward the live
  * resources the player already paid for or that must never rewind:
- * - `TIMED`: the countdown (`timeRemainingSec`) and per-second bomb fuses never wind back.
+ * - `TIMED`: the countdown (`timeRemainingSec`) and clock-driven bomb fuses (`TIMED-BOMB-01`) never wind back.
  * - `FREEZE`: purchased Stasis Moves (`max`, so undoing a stasis move refunds it) and freeze seconds persist.
  * - Paid Continues stay counted so Undo can't erase the `1★` cap; Zen's inert-bomb state (`bombsInert`) persists.
  */

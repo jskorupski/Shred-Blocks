@@ -7,12 +7,14 @@ import { join } from 'node:path';
 import { type Browser, chromium } from '@playwright/test';
 
 declare const process: {
+  cwd: () => string;
+  env: Record<string, string | undefined>;
   exit: (code: number) => void;
   on: (event: string, listener: () => void) => void;
 };
 
-const ARTIFACT_SCRATCH_DIR =
-  '/Users/james/.gemini/antigravity/brain/17772f07-37b9-4f49-9df5-0a104c9e8a28/scratch';
+// Output dir: override with VISUAL_OUT_DIR (e.g. an agent artifact scratch folder); defaults to test-results/visual
+const ARTIFACT_SCRATCH_DIR = process.env.VISUAL_OUT_DIR ?? join(process.cwd(), 'test-results', 'visual');
 const PORT = 4179;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
@@ -84,7 +86,7 @@ async function runVisualHarness(): Promise<void> {
       './node_modules/.bin/vite',
       ['preview', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
       {
-        cwd: '/Users/james/projects/krista-game',
+        cwd: process.cwd(),
         stdio: 'ignore',
         detached: false,
       }
@@ -614,7 +616,7 @@ async function runVisualHarness(): Promise<void> {
       throw new Error(`Visual harness encountered runtime errors:\n${errors.join('\n')}`);
     }
 
-    console.log('✅ Captured all 42 multi-viewport visual verification screenshots cleanly with 0 errors.');
+    console.log('✅ Captured all 45 multi-viewport visual verification screenshots cleanly with 0 errors.');
   } finally {
     if (browser) {
       await browser.close().catch(() => {});
