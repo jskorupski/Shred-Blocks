@@ -585,12 +585,12 @@ export class SoundEngine {
 
   /**
    * 12. Relic Awakening (`RELIC-AWAKEN-01`, Title Screen -> Gameplay):
-   * Deep rumbling mystic boom + warm swept whoosh/swish (zero bells, dings, or harsh highs).
+   * Deep sustained tectonic stone-break rumble + warm swept whoosh/swish (zero bells, dings, or harsh highs).
    */
   public playRelicAwaken(): void {
     if (this.hapticsEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       try {
-        navigator.vibrate([18, 24, 12]);
+        navigator.vibrate([26, 28, 18, 34, 14]);
       } catch {
         // Ignore on unsupported devices
       }

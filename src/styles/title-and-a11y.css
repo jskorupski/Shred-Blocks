@@ -22,18 +22,20 @@
 }
 
 #screen-game.title-backdrop-mode .sacred-geometry-ornament {
-  color: rgba(232, 184, 118, 0.3);
+  color: rgba(228, 172, 236, 0.34);
 }
 
 @keyframes mysticRelicAura {
   0%,
   100% {
-    filter: drop-shadow(0 20px 34px rgba(5, 3, 14, 0.74)) drop-shadow(0 0 22px rgba(238, 174, 72, 0.22))
-      drop-shadow(0 0 38px rgba(46, 214, 186, 0.12));
+    filter: brightness(1.03) drop-shadow(0 20px 34px rgba(5, 3, 14, 0.76))
+      drop-shadow(0 0 20px rgba(206, 98, 255, 0.44)) drop-shadow(0 0 42px rgba(154, 62, 236, 0.28))
+      drop-shadow(0 0 62px rgba(246, 178, 92, 0.16));
   }
   50% {
-    filter: drop-shadow(0 26px 42px rgba(5, 3, 14, 0.82)) drop-shadow(0 0 32px rgba(248, 188, 84, 0.38))
-      drop-shadow(0 0 54px rgba(52, 232, 198, 0.24));
+    filter: brightness(1.09) drop-shadow(0 26px 42px rgba(5, 3, 14, 0.84))
+      drop-shadow(0 0 30px rgba(224, 118, 255, 0.64)) drop-shadow(0 0 58px rgba(172, 74, 248, 0.42))
+      drop-shadow(0 0 80px rgba(252, 190, 102, 0.26));
   }
 }
 
@@ -41,32 +43,33 @@
   border-color: transparent;
   box-shadow: none;
   background: transparent;
-  filter: drop-shadow(0 22px 38px rgba(6, 3, 15, 0.76)) drop-shadow(0 0 26px rgba(242, 180, 78, 0.28))
-    drop-shadow(0 0 44px rgba(48, 224, 192, 0.16));
+  filter: brightness(1.05) drop-shadow(0 22px 38px rgba(6, 3, 15, 0.78))
+    drop-shadow(0 0 24px rgba(214, 106, 255, 0.52)) drop-shadow(0 0 48px rgba(162, 68, 242, 0.34))
+    drop-shadow(0 0 68px rgba(248, 182, 96, 0.2));
   animation: mysticRelicAura 3.4s ease-in-out infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
 }
 
-/* RELIC-AWAKEN-01: single soft golden-jade halo bloom as the stone relic bursts into play.
+/* RELIC-AWAKEN-01: warm amethyst-orchid & sanctuary gold halo bloom as the stone relic bursts into play.
    Filter-only (never transform) so #game-canvas keeps 0px layout shift (TITLE-TRANSITION-01). */
 @keyframes relicAwakeningBloom {
   0% {
-    filter: brightness(1.05) drop-shadow(0 0 18px rgba(248, 196, 96, 0.45))
-      drop-shadow(0 0 34px rgba(56, 232, 200, 0.28));
+    filter: brightness(1.08) drop-shadow(0 0 22px rgba(222, 116, 255, 0.58))
+      drop-shadow(0 0 44px rgba(248, 190, 102, 0.36));
   }
   22% {
-    filter: brightness(1.22) drop-shadow(0 0 34px rgba(255, 214, 120, 0.62))
-      drop-shadow(0 0 64px rgba(64, 240, 208, 0.4));
+    filter: brightness(1.26) drop-shadow(0 0 38px rgba(236, 138, 255, 0.76))
+      drop-shadow(0 0 72px rgba(255, 206, 118, 0.5));
   }
   100% {
-    filter: brightness(1) drop-shadow(0 0 0 rgba(255, 214, 120, 0)) drop-shadow(0 0 0 rgba(64, 240, 208, 0));
+    filter: brightness(1) drop-shadow(0 0 0 rgba(236, 138, 255, 0)) drop-shadow(0 0 0 rgba(255, 206, 118, 0));
   }
 }
 
 #screen-game.relic-awakening-burst:not(.title-backdrop-mode) #game-canvas {
-  animation: relicAwakeningBloom 0.76s ease-out forwards;
+  animation: relicAwakeningBloom 0.78s ease-out forwards;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }

@@ -287,6 +287,7 @@
 /* Center 3D Board Stage */
 .board-stage {
   position: relative;
+  isolation: isolate;
   flex: 1 1 0%;
   min-height: 0;
   container-type: size;
@@ -302,6 +303,132 @@
     rgba(115, 70, 99, 0.13) 56%,
     rgba(115, 70, 99, 0) 100%
   );
+}
+
+@keyframes mysticGodRays {
+  0%,
+  100% {
+    rotate: 0deg;
+    opacity: 0.68;
+  }
+  50% {
+    rotate: 180deg;
+    opacity: 0.94;
+  }
+}
+
+@keyframes mysticGodRaysCounter {
+  0%,
+  100% {
+    rotate: 360deg;
+    opacity: 0.28;
+  }
+  50% {
+    rotate: 180deg;
+    opacity: 0.46;
+  }
+}
+
+/* Subtle volumetric god rays radiating from the Title Screen stone relic (MYSTIC-RELIC-01) */
+#screen-game.title-backdrop-mode .board-stage::before,
+#screen-game.title-backdrop-mode .board-stage::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+#screen-game.title-backdrop-mode .board-stage::before {
+  inset: -14%;
+  z-index: 1;
+  background: conic-gradient(
+    from 0deg at 50% 50% var(--in-oklab),
+    rgba(186, 78, 248, 0) 0deg,
+    rgba(214, 108, 255, 0.36) 22deg,
+    rgba(248, 184, 96, 0.22) 40deg,
+    rgba(186, 78, 248, 0) 64deg,
+    rgba(168, 68, 242, 0.32) 98deg,
+    rgba(236, 122, 214, 0.26) 122deg,
+    rgba(186, 78, 248, 0) 150deg,
+    rgba(246, 178, 92, 0.2) 182deg,
+    rgba(206, 96, 252, 0.34) 210deg,
+    rgba(186, 78, 248, 0) 240deg,
+    rgba(176, 74, 246, 0.3) 276deg,
+    rgba(242, 146, 206, 0.24) 306deg,
+    rgba(186, 78, 248, 0) 360deg
+  );
+  -webkit-mask-image: radial-gradient(
+    closest-side at 50% 50%,
+    rgba(0, 0, 0, 0.95) 14%,
+    rgba(0, 0, 0, 0.56) 54%,
+    transparent 94%
+  );
+  mask-image: radial-gradient(
+    closest-side at 50% 50%,
+    rgba(0, 0, 0, 0.95) 14%,
+    rgba(0, 0, 0, 0.56) 54%,
+    transparent 94%
+  );
+  filter: blur(12px);
+  opacity: 0.78;
+  animation: mysticGodRays 38s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0.68;
+  }
+}
+
+#screen-game.title-backdrop-mode .board-stage::after {
+  inset: -6%;
+  z-index: 3;
+  background: conic-gradient(
+    from 32deg at 50% 50% var(--in-oklab),
+    rgba(208, 102, 255, 0) 0deg,
+    rgba(226, 128, 255, 0.26) 28deg,
+    rgba(208, 102, 255, 0) 62deg,
+    rgba(250, 190, 106, 0.18) 108deg,
+    rgba(208, 102, 255, 0) 146deg,
+    rgba(218, 114, 248, 0.24) 198deg,
+    rgba(208, 102, 255, 0) 238deg,
+    rgba(246, 172, 198, 0.2) 292deg,
+    rgba(208, 102, 255, 0) 360deg
+  );
+  -webkit-mask-image: radial-gradient(
+    closest-side at 50% 50%,
+    rgba(0, 0, 0, 0.72) 10%,
+    rgba(0, 0, 0, 0.36) 46%,
+    transparent 84%
+  );
+  mask-image: radial-gradient(
+    closest-side at 50% 50%,
+    rgba(0, 0, 0, 0.72) 10%,
+    rgba(0, 0, 0, 0.36) 46%,
+    transparent 84%
+  );
+  filter: blur(16px);
+  opacity: 0.38;
+  animation: mysticGodRaysCounter 52s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0.3;
+  }
+}
+
+body.reduced-motion #screen-game.title-backdrop-mode .board-stage::before,
+body.reduced-motion #screen-game.title-backdrop-mode .board-stage::after {
+  /* biome-ignore lint/complexity/noImportantStyles: Reduced-motion accessibility toggle must unconditionally halt all keyframe animations */
+  animation: none !important;
+}
+
+body.high-contrast #screen-game.title-backdrop-mode .board-stage::after {
+  display: none;
+}
+
+@media (forced-colors: active) {
+  #screen-game.title-backdrop-mode .board-stage::before,
+  #screen-game.title-backdrop-mode .board-stage::after {
+    display: none;
+  }
 }
 
 .sacred-geometry-ornament {

@@ -39,6 +39,7 @@ import {
   drawNumberBadgesImpl,
   executeBenchmarkFramesImpl,
   type GLMeshHandle,
+  getStoneThemeMineralTint,
   HIGH_CONTRAST_TRAY_PALETTES,
   INSTANCE_STRIDE,
   MAX_PARTICLES,
@@ -102,6 +103,7 @@ export class Renderer3D implements RenderPassContext {
   private uAtlas: WebGLUniformLocation | null = null;
   private uBlueprintMix: WebGLUniformLocation | null = null;
   private uBoardInfo: WebGLUniformLocation | null = null;
+  private uStoneTint: WebGLUniformLocation | null = null;
   private uHighContrast: WebGLUniformLocation | null = null;
 
   // Uniform locations for particle program
@@ -385,6 +387,7 @@ export class Renderer3D implements RenderPassContext {
     this.uAtlas = gl.getUniformLocation(mainProg, 'u_atlas');
     this.uBlueprintMix = gl.getUniformLocation(mainProg, 'u_blueprintMix');
     this.uBoardInfo = gl.getUniformLocation(mainProg, 'u_boardInfo');
+    this.uStoneTint = gl.getUniformLocation(mainProg, 'u_stoneTint');
     this.uHighContrast = gl.getUniformLocation(mainProg, 'u_highContrast');
 
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
@@ -709,6 +712,7 @@ export class Renderer3D implements RenderPassContext {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     const blueprintMix = Math.max(0, Math.min(1, options.blueprintMix ?? 0));
+    const stoneTint = getStoneThemeMineralTint(trayId, skinId);
     gl.useProgram(this.mainProgram);
     gl.uniformMatrix4fv(this.uViewProj, false, this.camera.getViewProjectionMatrix(false));
     gl.uniform1i(this.uUseClipPlane, 0);
@@ -716,6 +720,7 @@ export class Renderer3D implements RenderPassContext {
     gl.uniform3f(this.uCapColor, 0.2, 0.2, 0.2);
     gl.uniform1f(this.uBlueprintMix, blueprintMix);
     gl.uniform3f(this.uBoardInfo, board.cols * 0.5, board.rows * 0.5, options.reducedMotion ? -1.0 : timeSec);
+    gl.uniform3f(this.uStoneTint, stoneTint[0], stoneTint[1], stoneTint[2]);
     gl.uniform1i(this.uHighContrast, highContrast ? 1 : 0);
 
     if (this.atlasTexture) {
@@ -724,28 +729,12 @@ export class Renderer3D implements RenderPassContext {
       gl.uniform1i(this.uAtlas, 0);
     }
 
-    // =========================================================================
-    // PASS 1: TRAY & ENVIRONMENT PASS
-    // =========================================================================
+    // PASS 1..4: Courtyard, Gates & Barriers, Reticles, Blocks, and GPU-Instanced Particles
     renderPass1Courtyard(this, gl, board, palette, highContrast, colorblind, timeSec);
     renderPass1WallsAndGates(this, gl, board, palette, highContrast, colorblind, timeSec);
     renderPass1PortcullisBarriers(this, gl, board, palette, timeSec);
-
-    // =========================================================================
-    // PASS 2: TARGET RETICLE & GATE ALIGNMENT BEAM PASS (`UX-01`)
-    // =========================================================================
     renderPass2ReticleAndPromptsImpl(this, gl, board, options, highContrast, pulse);
-
-    // =========================================================================
-    // PASS 3: 3D POLYOMINO BLOCKS & CLIP-PLANE SHREDDING PASS
-    // =========================================================================
     renderPass3BlocksImpl(this, gl, board, options, skinId, highContrast, colorblind, pulse, timeSec, dtSec);
-
-    // =========================================================================
-    // PASS 4: GPU-INSTANCED 3D SHREDDER PARTICLES PASS (+ RELIC-AWAKEN-01 shards & smoke)
-    // =========================================================================
-    // Hidden only while the Title Screen relic is fully stone (`blueprintMix === 1`), so the
-    // awakening burst renders from the very first frame after Play is tapped.
     if (blueprintMix < 0.999) {
       renderPass4ParticlesImpl(
         this,

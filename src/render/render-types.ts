@@ -115,6 +115,37 @@ export const HIGH_CONTRAST_TRAY_PALETTES: Record<TrayId, TrayPalette> = {
   },
 };
 
+const TRAY_STONE_TINTS: Record<TrayId, readonly [number, number, number]> = {
+  industrial_slate: [0.92, 0.95, 1.05], // Cool architectural slate-gray granite
+  warm_birch: [1.11, 0.99, 0.84], // Warm sun-baked travertine & sandstone
+  midnight_arcade: [0.95, 0.9, 1.12], // Smoky twilight obsidian-amethyst basalt
+  frosted_quartz: [0.98, 1.03, 1.1], // Pale glacial quartzite & alabaster
+  mint_studio: [0.9, 1.04, 0.98], // Muted celadon-sage serpentine slate
+};
+
+const SKIN_STONE_NUANCES: Record<SkinId, readonly [number, number, number]> = {
+  classic_studs: [1.0, 1.0, 1.0],
+  smooth_bevel: [1.01, 1.01, 1.02],
+  gummy_jelly: [1.04, 0.97, 1.02],
+  carved_wood: [1.07, 0.98, 0.88],
+  neon_cyber: [0.94, 0.93, 1.08],
+};
+
+/**
+ * Computes a subtle, desaturated mineral tint multiplier (`~0.88..1.11`) for the Title Screen
+ * Stone Relic (`STONE-TABLET-01`) and awakening shards so the stone naturally harmonizes with the
+ * player's equipped Board Tray & Block Skin (cool slate gray, warm sandstone, smoky basalt, etc.)
+ * without ever turning into punchy saturated color.
+ */
+export function getStoneThemeMineralTint(
+  trayId: TrayId = 'industrial_slate',
+  skinId: SkinId = 'classic_studs'
+): [number, number, number] {
+  const t = TRAY_STONE_TINTS[trayId] ?? TRAY_STONE_TINTS.industrial_slate;
+  const s = SKIN_STONE_NUANCES[skinId] ?? SKIN_STONE_NUANCES.classic_studs;
+  return [t[0] * 0.82 + s[0] * 0.18, t[1] * 0.82 + s[1] * 0.18, t[2] * 0.82 + s[2] * 0.18];
+}
+
 export interface RenderSceneOptions {
   draggedBlockId?: number | null;
   dragTargetRow?: number | null;

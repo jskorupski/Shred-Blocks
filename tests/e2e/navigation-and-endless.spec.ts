@@ -213,19 +213,28 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     const titleState = await page.evaluate(() => {
       const canvas = document.getElementById('game-canvas');
+      const stage = document.querySelector('#screen-game .board-stage');
       const cs = canvas ? window.getComputedStyle(canvas) : null;
+      const stageCs = stage ? window.getComputedStyle(stage) : null;
+      const raysCs = stage ? window.getComputedStyle(stage, '::before') : null;
       return {
         backend: window.__SHREDBLOCKS_DEBUG__.getTelemetry().rendererBackend,
         mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
         hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
         canvasFilter: cs ? cs.filter : '',
         canvasAnim: cs ? cs.animationName : '',
+        stageIsolation: stageCs ? stageCs.isolation : '',
+        godRaysAnim: raysCs ? raysCs.animationName : '',
+        godRaysBlend: raysCs ? raysCs.mixBlendMode : '',
       };
     });
     expect(titleState.backend).toBe('WEBGL2');
     expect(titleState.mix).toBe(1);
     expect(titleState.hasBackdropClass).toBe(true);
     expect(titleState.canvasAnim).toBe('mysticRelicAura');
+    expect(titleState.stageIsolation).toBe('isolate');
+    expect(titleState.godRaysAnim).toBe('mysticGodRays');
+    expect(titleState.godRaysBlend).toBe('screen');
 
     // Verify subtle levitating/twisting + pulsating glow animates live frames on Title Screen
     const frameA = await page.evaluate(() =>

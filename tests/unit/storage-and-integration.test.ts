@@ -566,10 +566,12 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       sound.destroy();
     });
 
-    it('RELIC-AWAKEN-01 audio: synthesizes low-frequency rumbling boom + warm swept whoosh/swish with zero harsh or high-pitched chime oscillators', () => {
+    it('RELIC-AWAKEN-01 audio: synthesizes sustained (~1.68s), slightly louder low-frequency stone-break rumble + warm swept whoosh/swish with zero harsh or high-pitched chime oscillators', () => {
       const oscFreqs: number[] = [];
       const filterConfigs: Array<{ type: string; freq: number; q: number }> = [];
       const initialGains: number[] = [];
+      const bufferLengths: number[] = [];
+      const stopTimes: number[] = [];
 
       const makeParam = (record?: (v: number) => void) => ({
         value: 0,
@@ -582,15 +584,18 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       const mockCtx = {
         currentTime: 1.0,
         sampleRate: 44100,
-        createBuffer: (_ch: number, len: number) => ({
-          getChannelData: () => new Float32Array(len),
-        }),
+        createBuffer: (_ch: number, len: number) => {
+          bufferLengths.push(len);
+          return {
+            getChannelData: () => new Float32Array(len),
+          };
+        },
         createBufferSource: () => ({
           buffer: null,
           playbackRate: makeParam(),
           connect: () => {},
           start: () => {},
-          stop: () => {},
+          stop: (t: number) => stopTimes.push(t),
         }),
         createOscillator: () => ({
           type: 'sine',
@@ -598,7 +603,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
           detune: makeParam(),
           connect: () => {},
           start: () => {},
-          stop: () => {},
+          stop: (t: number) => stopTimes.push(t),
         }),
         createBiquadFilter: () => {
           const cfg = { type: 'lowpass', freq: 0, q: 1 };
@@ -640,14 +645,21 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(Math.max(...oscFreqs)).toBeLessThanOrEqual(170);
       expect(Math.min(...oscFreqs)).toBeLessThanOrEqual(45);
 
-      // Includes lowpass warmth ceiling + swept bandpass whoosh/swish with gentle non-resonant Q <= 1.0
+      // Sustained stone-break rumble lasts >= 1.55s with a slightly louder master bus (>= 0.95)
+      expect((bufferLengths[0] ?? 0) / 44100).toBeGreaterThanOrEqual(1.55);
+      expect(Math.max(...stopTimes) - 1.0).toBeGreaterThanOrEqual(1.55);
+      const masterBusGains = initialGains.filter((g) => g >= 0.5);
+      expect(masterBusGains[0]).toBeGreaterThanOrEqual(0.95);
+
+      // Includes lowpass warmth ceiling + dual rumble lowpasses + swept bandpass whoosh/swish with Q <= 1.0
       expect(filterConfigs.some((f) => f.type === 'lowpass' && f.freq <= 1300)).toBe(true);
+      expect(filterConfigs.filter((f) => f.type === 'lowpass').length).toBeGreaterThanOrEqual(4);
       expect(filterConfigs.filter((f) => f.type === 'bandpass').length).toBeGreaterThanOrEqual(2);
       expect(Math.max(...filterConfigs.map((f) => f.q))).toBeLessThanOrEqual(1.0);
 
-      // All voice envelopes start near silence (0.0001) except the static master bus gain (0.86) -> zero clicks!
+      // All voice envelopes start near silence (0.0001) -> zero clicks!
       const voiceInitialGains = initialGains.filter((g) => g < 0.5);
-      expect(voiceInitialGains.length).toBeGreaterThanOrEqual(6);
+      expect(voiceInitialGains.length).toBeGreaterThanOrEqual(8);
       expect(Math.max(...voiceInitialGains)).toBeLessThanOrEqual(0.001);
     });
   });

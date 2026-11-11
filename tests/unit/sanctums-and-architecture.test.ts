@@ -23,10 +23,11 @@ import {
   isGateInLockedRoom,
   isRoomUnlocked,
 } from '../../src/core/physics';
-import type { LevelSpec } from '../../src/core/types';
+import type { LevelSpec, SkinId, TrayId } from '../../src/core/types';
 import { pickBlockAtBoardPoint } from '../../src/input/pointer-controller';
 import { getAllCampaignLevels, getLevelSpec } from '../../src/levels/catalog';
 import { computeStateHash, solveBoard } from '../../src/levels/solver';
+import { getStoneThemeMineralTint } from '../../src/render/render-types';
 
 describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
   it('SANCTUM-01 & SANCTUM-02: validates Multi-Room Portcullis Barriers (shredsRemaining, Key lockId, dormant room stasis, cross-room archway traversal, and Zero-Softlock Law)', () => {
@@ -431,11 +432,17 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     const shadersTs = fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8');
     expect(shadersTs).toContain('float zRelief = mix(1.0, 0.22, u_blueprintMix)');
     expect(shadersTs).toContain('rotateRelicVec');
+    expect(shadersTs).toContain('u_stoneTint');
     expect(shadersTs).toContain('quarryStone');
     expect(shadersTs).toContain('stoneCrack');
     expect(shadersTs).toContain('ancientEarthDirt');
+    expect(shadersTs).toContain('arcanePurple');
+    expect(shadersTs).toContain('godRaySweep');
     expect(shadersTs).toContain('totalMysticGlow');
     expect(shadersTs).toContain('blueprintAlpha = 1.0');
+
+    const screenGameCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-game.css'), 'utf8');
+    expect(screenGameCss).toContain('@keyframes mysticGodRays');
 
     const pass1Gates = fs.readFileSync(path.join(repoRoot, 'src/render/pass1-gates-barriers.ts'), 'utf8');
     const pass2Barriers = fs.readFileSync(
@@ -500,5 +507,38 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  it('STONE-TABLET-01 theme mineral tint: derives distinct desaturated stone mineral tints across all 5 trays and 5 skins without punchy saturation', () => {
+    const slateTint = getStoneThemeMineralTint('industrial_slate', 'classic_studs');
+    const birchTint = getStoneThemeMineralTint('warm_birch', 'carved_wood');
+    const midnightTint = getStoneThemeMineralTint('midnight_arcade', 'neon_cyber');
+    const quartzTint = getStoneThemeMineralTint('frosted_quartz', 'smooth_bevel');
+    const mintTint = getStoneThemeMineralTint('mint_studio', 'gummy_jelly');
+
+    expect(slateTint[2]).toBeGreaterThan(slateTint[0]); // Cool architectural slate-gray
+    expect(birchTint[0]).toBeGreaterThan(birchTint[2]); // Warm sun-baked travertine/sandstone
+    expect(midnightTint[2]).toBeGreaterThan(midnightTint[1]); // Smoky obsidian-violet basalt
+    expect(quartzTint[2]).toBeGreaterThan(quartzTint[0]); // Pale glacial quartzite
+    expect(mintTint[1]).toBeGreaterThan(mintTint[0]); // Muted celadon-sage slate
+
+    const skins: SkinId[] = ['classic_studs', 'smooth_bevel', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
+    const trays: TrayId[] = [
+      'industrial_slate',
+      'warm_birch',
+      'midnight_arcade',
+      'frosted_quartz',
+      'mint_studio',
+    ];
+    for (const tray of trays) {
+      for (const skin of skins) {
+        const rgb = getStoneThemeMineralTint(tray, skin);
+        for (const ch of rgb) {
+          expect(ch).toBeGreaterThanOrEqual(0.84);
+          expect(ch).toBeLessThanOrEqual(1.16);
+        }
+        expect(Math.max(...rgb) - Math.min(...rgb)).toBeLessThanOrEqual(0.28);
+      }
+    }
   });
 });

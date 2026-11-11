@@ -2,6 +2,7 @@ import { isBlockInLockedRoom } from '../core/physics';
 import { getShape } from '../core/polyomino';
 import type { BoardState } from '../core/types';
 import {
+  getStoneThemeMineralTint,
   INSTANCE_STRIDE,
   MAX_PARTICLES,
   PARTICLE_STRIDE,
@@ -12,17 +13,17 @@ import {
 /**
  * Relic Awakening Transformation (`RELIC-AWAKEN-01`):
  * When the player taps Play on the Title Screen, the levitating stone relic bursts apart —
- * tumbling 3D stone shards fly off, ancient dust/smoke billows upward, golden-jade embers rise,
+ * tumbling 3D theme-tinted stone shards fly off, ancient dust/smoke billows upward, warm amethyst & gold embers rise,
  * and concentric glow shockwaves sweep the board as vibrant gameplay colors emerge underneath.
  * Never spawns when `reducedMotion === true`.
  */
 
-const SANDSTONE_TONES: ReadonlyArray<[number, number, number]> = [
-  [0.56, 0.5, 0.44],
-  [0.47, 0.42, 0.37],
-  [0.64, 0.58, 0.5],
-  [0.4, 0.36, 0.32],
-  [0.52, 0.48, 0.43],
+const STONE_MINERAL_TONES: ReadonlyArray<[number, number, number]> = [
+  [0.54, 0.53, 0.52],
+  [0.45, 0.44, 0.43],
+  [0.62, 0.61, 0.6],
+  [0.38, 0.37, 0.36],
+  [0.5, 0.49, 0.48],
 ];
 
 function writeParticle(
@@ -67,9 +68,9 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
   const cy = board.rows * 0.5;
   const span = Math.max(board.cols, board.rows);
 
-  // 1. Glow shockwaves: white-gold core flash above the blocks + jade wave sweeping the floor beneath
-  rctx.spawnShockwave(cx, cy, 0.66, 1.0, 0.9, 0.6, 0.15, span * 0.38, 0.42);
-  rctx.spawnShockwave(cx, cy, 0.04, 0.3, 0.95, 0.82, 0.3, span * 0.62, 0.62);
+  // 1. Glow shockwaves: warm orchid-gold flash above the blocks + royal amethyst wave sweeping the floor beneath
+  rctx.spawnShockwave(cx, cy, 0.66, 1.0, 0.86, 0.95, 0.16, span * 0.42, 0.48);
+  rctx.spawnShockwave(cx, cy, 0.04, 0.84, 0.42, 0.98, 0.32, span * 0.66, 0.74);
 
   // 2. Tactile board micro-recoil + staggered block awakening bounces
   rctx.boardShakeTimer = 0.16;
@@ -109,7 +110,8 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
   }
   if (cells.length === 0) cells.push([cx, cy, 0.4]);
 
-  // 3. Tumbling 3D fractured stone shards flying outward & upward
+  // 3. Tumbling 3D fractured stone shards flying outward & upward (tinted to active theme stone)
+  const stoneTint = getStoneThemeMineralTint(rctx.lastOptions.equippedTray, rctx.lastOptions.equippedSkin);
   const shardCount = Math.round(68 * density);
   for (let i = 0; i < shardCount; i++) {
     const [sx, sy, sz] = cells[i % cells.length];
@@ -124,6 +126,12 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
     const ang = (rand() - 0.5) * 0.9;
     const vx = (dx * Math.cos(ang) - dy * Math.sin(ang)) * speed;
     const vy = (dx * Math.sin(ang) + dy * Math.cos(ang)) * speed;
+    const baseTone = STONE_MINERAL_TONES[i % STONE_MINERAL_TONES.length];
+    const shardRgb: [number, number, number] = [
+      Math.min(1, baseTone[0] * stoneTint[0]),
+      Math.min(1, baseTone[1] * stoneTint[1]),
+      Math.min(1, baseTone[2] * stoneTint[2]),
+    ];
     writeParticle(
       rctx,
       jx,
@@ -132,7 +140,7 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
       vx,
       vy,
       2.6 + rand() * 2.8,
-      SANDSTONE_TONES[i % SANDSTONE_TONES.length],
+      shardRgb,
       -(0.14 + rand() * 0.12),
       0.85 + rand() * 0.4,
       rand() * 6.283,
@@ -140,15 +148,19 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
     );
   }
 
-  // 4. Billowing ancient smoke & glowing dust puffs
+  // 4. Billowing ancient smoke & warm amethyst-amber glowing dust puffs
   const smokeCount = Math.round(48 * density);
   for (let i = 0; i < smokeCount; i++) {
     const [sx, sy] = cells[(i * 7) % cells.length];
-    const glowTint = i % 5 === 0 ? [0.62, 0.92, 0.82] : i % 4 === 0 ? [0.98, 0.84, 0.56] : null;
-    const dust = 0.66 + rand() * 0.14;
+    const glowTint = i % 5 === 0 ? [0.84, 0.52, 0.98] : i % 4 === 0 ? [0.98, 0.8, 0.54] : null;
+    const dust = 0.62 + rand() * 0.14;
     const rgb: [number, number, number] = glowTint
       ? [glowTint[0], glowTint[1], glowTint[2]]
-      : [dust, dust * 0.92, dust * 0.82];
+      : [
+          Math.min(1, dust * stoneTint[0]),
+          Math.min(1, dust * 0.96 * stoneTint[1]),
+          Math.min(1, dust * 0.94 * stoneTint[2]),
+        ];
     const ang = rand() * 6.283;
     const drift = 0.4 + rand() * 1.1;
     writeParticle(
@@ -161,17 +173,18 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
       0.6 + rand() * 0.9,
       rgb,
       -(SMOKE_SCALE_OFFSET + 0.5 + rand() * 0.36),
-      0.8 + rand() * 0.45,
+      0.92 + rand() * 0.52,
       0,
       0
     );
   }
 
-  // 5. Incandescent golden & jade embers rising through the smoke
-  const emberCount = Math.round(34 * density);
+  // 5. Incandescent warm amethyst, orchid & golden embers rising through the smoke
+  const emberCount = Math.round(38 * density);
   for (let i = 0; i < emberCount; i++) {
     const [sx, sy] = cells[(i * 3) % cells.length];
-    const rgb: [number, number, number] = i % 2 === 0 ? [1.0, 0.82, 0.38] : [0.42, 1.0, 0.86];
+    const rgb: [number, number, number] =
+      i % 3 === 0 ? [0.88, 0.46, 1.0] : i % 3 === 1 ? [0.98, 0.56, 0.86] : [1.0, 0.8, 0.38];
     writeParticle(
       rctx,
       sx,
