@@ -8,6 +8,7 @@ import {
   computeEarnedStars,
   createBoardState,
   getTimedBombTickSec,
+  hasFinalTouchGrace,
   isBoardDeadlocked,
   isBoardFailed,
   isBoardWon,
@@ -408,5 +409,58 @@ describe('Challenge Mode, Touch-Move Coalescing, Stasis, Authentic L26+ Rules & 
     legacy.economyVersion = 1;
     legacy.coins = 650;
     expect(migrateLegacyEconomy(legacy).coins).toBeLessThanOrEqual(650);
+  });
+
+  it('FINAL-TOUCH-01, ZEN-CALM-01 & STUCK-01: free final touch of the last-moved block, inert Zen bombs, and provable stuck detection', () => {
+    const spec: LevelSpec = {
+      id: 43,
+      name: 'Final Touch Test',
+      difficulty: 'HARD',
+      rows: 5,
+      cols: 5,
+      parMoves: 2,
+      moveLimit: 2,
+      blocks: [
+        { id: 1, shapeId: '1x1', row: 3, col: 0, colorStack: [1] },
+        { id: 2, shapeId: '1x1', row: 2, col: 2, colorStack: [2], bombCount: 9 },
+      ],
+      gates: [
+        { edge: 'TOP', spanStart: 1, spanLength: 2, colorQueue: [1] },
+        { edge: 'BOTTOM', spanStart: 1, spanLength: 2, colorQueue: [2] },
+      ],
+    };
+
+    // 1. Spending the last tick on a slide defers OUT_OF_MOVES while that block can still finish into its gate
+    const board = createBoardState(spec);
+    commitBlockMove(board, 2, 2, 1, 'CHALLENGE');
+    commitBlockMove(board, 1, 3, 3, 'CHALLENGE');
+    expect(board.movesRemaining).toBe(0);
+    expect(hasFinalTouchGrace(board)).toBe(true);
+    expect(isBoardFailed(board, 'CHALLENGE').failed).toBe(false);
+    // Any other block's move is rejected outright (no free extra moves)
+    expect(commitBlockMove(board, 2, 4, 1, 'CHALLENGE').moved).toBe(false);
+    // Finishing the last-moved block is a free coalesced touch; with block 2 still left, the run then fails
+    const finish = commitBlockMove(board, 1, 0, 2, 'CHALLENGE');
+    expect(finish.coalesced).toBe(true);
+    expect(finish.clearedBlockIds).toContain(1);
+    expect(isBoardFailed(board, 'CHALLENGE')).toEqual({ failed: true, reason: 'OUT_OF_MOVES' });
+
+    // 2. Zen: fuses never tick or detonate while bombsInert
+    const zen = createBoardState(spec);
+    zen.bombsInert = true;
+    commitBlockMove(zen, 1, 3, 3, 'ZEN');
+    commitBlockMove(zen, 2, 2, 1, 'ZEN');
+    expect(zen.blocks[1].bombCount).toBe(9);
+    zen.blocks[1].bombCount = 0;
+    expect(isBoardFailed(zen, 'ZEN').failed).toBe(false);
+    zen.bombsInert = false;
+    expect(isBoardFailed(zen, 'ZEN')).toEqual({ failed: true, reason: 'BOMB_EXPLODED' });
+
+    // 3. Exhaustive solver probes distinguish a proof of unsolvability from a budget timeout
+    const solvable = solveBoard(createBoardState(spec), 450);
+    expect(solvable.solvable).toBe(true);
+    const tiny = solveBoard(createBoardState(getLevelSpec(200)), 1);
+    expect(tiny.solvable).toBe(false);
+    expect(tiny.searchExhausted).toBe(false);
   });
 });

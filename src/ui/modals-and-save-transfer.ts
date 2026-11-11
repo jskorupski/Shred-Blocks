@@ -283,6 +283,7 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
 
   if (nextMode === 'ZEN') {
     app.runTouchedZen = true;
+    app.board.bombsInert = true; // ZEN-CALM-01: fuses freeze for the rest of this Zen run
     if (!isBoardWon(app.board)) {
       app.levelOutcomeHandled = false;
     }

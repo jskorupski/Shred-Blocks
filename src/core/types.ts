@@ -345,6 +345,8 @@ export interface BoardState {
   freezeRemainingSec: number;
   /** Paid Continues used on this board (`STARS-SLACK-01`): any Continue caps the clear at `1★` */
   continuesUsed?: number;
+  /** Zen Sanctuary (`ZEN-CALM-01`): bomb fuses are inert (never tick, never detonate) while the run is in Zen */
+  bombsInert?: boolean;
   timerRunning: boolean;
   movesCommitted: number;
   sessionBlocksShredded: number;

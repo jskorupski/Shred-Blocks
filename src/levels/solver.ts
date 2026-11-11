@@ -24,6 +24,8 @@ export interface SolverMove {
 
 export interface SolverResult {
   solvable: boolean;
+  /** `true` when the open set emptied before the node budget: an unsolvable result is then a proof, not a timeout */
+  searchExhausted?: boolean;
   minMoves: number;
   firstMove: SolverMove | null;
   solutionPath: SolverMove[];
@@ -745,7 +747,14 @@ export function solveBoard(board: BoardState, maxExpandedNodes = 2400): SolverRe
     }
   }
 
-  return { solvable: false, minMoves: -1, firstMove: null, solutionPath: [], expandedNodes };
+  return {
+    solvable: false,
+    minMoves: -1,
+    firstMove: null,
+    solutionPath: [],
+    expandedNodes,
+    searchExhausted: open.length === 0,
+  };
 }
 
 /**

@@ -96,6 +96,7 @@ export function executeUndoBoosterImpl(app: BoosterAppContext): void {
     app.freeUndosRemaining = app.preRestartFreeUndos;
     app.preRestartSnapshot = null;
     app.preRestartUndoStack = [];
+    app.board.bombsInert = app.saveManager.getPayload().settings.playMode === 'ZEN';
     app.levelOutcomeHandled = false;
     app.sound.playBooster('UNDO');
     app.showGameToast('↩️ Restored board before restart!');

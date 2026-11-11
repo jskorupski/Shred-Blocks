@@ -6,7 +6,6 @@ import {
   commitBlockMove,
   computeEarnedStars,
   createBoardState,
-  isBoardDeadlocked,
   isBoardFailed,
   isBoardWon,
 } from './core/board';
@@ -69,6 +68,7 @@ import {
   switchScreenImpl,
   updateTelemetryReadoutImpl,
 } from './ui/modals-and-save-transfer';
+import { notifyFinalTouchImpl, scheduleStuckBoardCheckImpl } from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
 
 export * from './ui/catalog-meta';
@@ -238,6 +238,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.freeUndosRemaining = 3;
     this.levelOutcomeHandled = false;
     this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
+    this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
     this.bombSecondAccumulator = 0;
 
     this.inputController.cancelTargeting();
@@ -294,6 +295,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.freeUndosRemaining = 3;
     this.levelOutcomeHandled = false;
     this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
+    this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
     this.bombSecondAccumulator = 0;
     this.inputController.cancelTargeting();
     this.refreshAutoGuideMove();
@@ -342,6 +344,7 @@ export class ShredBlocksApp implements AppViewContext {
   private handleMoveCommitted(outcome: CommitMoveOutcome): void {
     if (!outcome.moved && outcome.clearedBlockIds.length === 0 && outcome.peeledBlockIds.length === 0) {
       this.undoStack.pop();
+      notifyFinalTouchImpl(this, false);
       return;
     }
     if (outcome.coalesced && this.undoStack.length >= 2) {
@@ -368,9 +371,8 @@ export class ShredBlocksApp implements AppViewContext {
     this.syncInGameHud();
     this.checkWinOrLossAfterAction();
     if (!this.levelOutcomeHandled) {
-      if (isBoardDeadlocked(this.board)) {
-        this.showGameToast('⚠️ Gate gridlocked — use Undo, a Power-Up, or Retry!');
-      }
+      notifyFinalTouchImpl(this, true);
+      scheduleStuckBoardCheckImpl(this);
       this.refreshAutoGuideMove();
     }
   }

@@ -74,7 +74,11 @@ export function commitBlockMove(
   const dRow = targetRow - lead.row;
   const dCol = targetCol - lead.col;
 
-  if (!canGroupOccupyOffset(board, group, dRow, dCol)) {
+  // FINAL-TOUCH-01: with 0 moves left in CHALLENGE, only a free coalesced finish of the last-moved block is allowed
+  const outOfMoves = playMode === 'CHALLENGE' && board.movesRemaining <= 0 && board.stasisMovesRemaining <= 0;
+  const isFinishingLastBlock =
+    allowCoalesce && board.lastMovedBlockId > 0 && board.lastMovedBlockId === lead.id;
+  if ((outOfMoves && !isFinishingLastBlock) || !canGroupOccupyOffset(board, group, dRow, dCol)) {
     return {
       moved: false,
       coalesced: false,
@@ -148,7 +152,7 @@ export function commitBlockMove(
         if (playMode === 'CHALLENGE') {
           board.movesRemaining = Math.max(0, board.movesRemaining - 1);
         }
-        if (playMode === 'CHALLENGE' || playMode === 'ZEN') {
+        if ((playMode === 'CHALLENGE' || playMode === 'ZEN') && !board.bombsInert) {
           for (const b of board.blocks) {
             if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount > 0 && !isBlockInLockedRoom(board, b)) {
               b.bombCount = Math.max(0, b.bombCount - 1);

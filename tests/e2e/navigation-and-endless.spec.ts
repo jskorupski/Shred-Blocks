@@ -626,8 +626,13 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
       window.__SHREDBLOCKS_DEBUG__.loadLevel(1);
       window.__SHREDBLOCKS_DEBUG__.getBoard().movesRemaining = 1;
     });
-    // Non-shredding move on Block 2 (col 3, row 2 -> col 3, row 1) spends the final move without winning -> Failure modal!
+    // Non-shredding move on Block 2 (col 3, row 2 -> col 3, row 1) spends the final move tick. FINAL-TOUCH-01:
+    // Block 2 can still slide into its gate, so OUT_OF_MOVES is deferred and the final-touch hint appears.
     await dragCell(3, 2, 3, 1);
+    await expect(page.locator('#game-toast')).toContainText('Last move');
+    await expect(page.locator('#dialog-failure')).toBeHidden();
+    // Finishing Block 2 is a free coalesced touch; Block 1 still remains -> Failure modal!
+    await dragCell(3, 1, 4, 1);
     await expect(page.locator('#dialog-failure')).toBeVisible();
     await expect(page.locator('#failure-title')).toContainText('Out of Moves');
     await page.locator('#btn-failure-zen').click();
@@ -636,7 +641,6 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     // Finish Level 1 in Zen Mode (board state preserved!) -> awards `🌿 Zen Clear` (0 Gold Stars)
     await dragCell(1, 1, 1, 0);
-    await dragCell(3, 1, 4, 1);
     await expect(page.locator('#dialog-victory')).toBeVisible();
     await expect(page.locator('#victory-stars')).toContainText('🌿 Zen Clear');
     await page.locator('#btn-victory-home').click();

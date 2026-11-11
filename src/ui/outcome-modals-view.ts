@@ -1,5 +1,14 @@
+import { isBoardDeadlocked, isBoardWon } from '../core/board';
+import { hasFinalTouchGrace } from '../core/board-state';
+import { solveBoard } from '../levels/solver';
 import { BOOSTER_RARITY, CONTINUE_COIN_COST, type LevelWinRewardSummary } from '../storage/save-manager';
 import { type AppViewContext, BOOSTER_DISPLAY_NAMES } from './catalog-meta';
+
+/**
+ * Level outcome feedback (`ECON-V2` victory rewards, `OUT_OF_MOVES` / `TIME_OUT` / `BOMB_EXPLODED` failure options,
+ * `FINAL-TOUCH-01` grace hints, and `STUCK-01` provably-unsolvable warnings), extracted from `hud-and-title-view.ts`
+ * (`ARCH-ERGONOMICS-01`) and re-exported from it.
+ */
 
 export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinRewardSummary): void {
   const titleEl = document.getElementById('victory-title');
@@ -161,4 +170,55 @@ export function handleLevelFailureImpl(
   }
 
   app.openModal('failure');
+}
+
+/**
+ * `FINAL-TOUCH-01`: with `0` moves left in `CHALLENGE`, explain the free final touch (after a committed move that
+ * leaves grace) or why a different block's move was rejected.
+ */
+export function notifyFinalTouchImpl(app: AppViewContext, moved: boolean): void {
+  if (app.levelOutcomeHandled || app.saveManager.getPayload().settings.playMode !== 'CHALLENGE') return;
+  if (app.board.movesRemaining > 0 || app.board.stasisMovesRemaining > 0 || !hasFinalTouchGrace(app.board))
+    return;
+  app.showGameToast(
+    moved
+      ? '✋ Last move! Finish sliding that block into its gate — it stays free.'
+      : '✋ Out of moves — only your last block can still finish into its gate.',
+    3200
+  );
+}
+
+let stuckCheckToken = 0;
+
+/**
+ * `STUCK-01`: after each committed move, an idle-time exhaustive solver probe warns when the board has become
+ * provably unsolvable (immediate gridlock, or a search that empties its open set without a solution). Budget-limited
+ * searches that merely time out never warn, so there are zero false positives. Critical in Zen, where no move
+ * budget, clock, or bomb will ever end a stuck run on its own.
+ */
+export function scheduleStuckBoardCheckImpl(app: AppViewContext): void {
+  const token = ++stuckCheckToken;
+  const boardAtSchedule = app.board;
+  const run = () => {
+    if (token !== stuckCheckToken || app.board !== boardAtSchedule || app.levelOutcomeHandled) return;
+    if (isBoardWon(app.board)) return;
+    const stuck =
+      isBoardDeadlocked(app.board) ||
+      (() => {
+        const res = solveBoard(app.board, 450);
+        return !res.solvable && res.searchExhausted === true;
+      })();
+    if (!stuck || token !== stuckCheckToken) return;
+    const zen = app.saveManager.getPayload().settings.playMode === 'ZEN';
+    app.showGameToast(
+      zen
+        ? '🌿 This board can no longer be solved — tap Undo, a Power-Up, or Retry to keep flowing.'
+        : '⚠️ No solution left from here — use Undo, a Power-Up, or Retry!',
+      4200
+    );
+  };
+  const ric = (globalThis as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+    .requestIdleCallback;
+  if (ric) ric(run, { timeout: 700 });
+  else setTimeout(run, 60);
 }

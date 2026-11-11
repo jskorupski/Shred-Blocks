@@ -7,6 +7,7 @@ import {
 import {
   canBlockStepAnyDirection,
   getPlayableEdgeSpanBounds,
+  getReachableAnchors,
   isBlockMovable,
   isGateInLockedRoom,
   isRoomUnlocked,
@@ -343,10 +344,11 @@ export function computeDefaultMoveLimit(
  * resources the player already paid for or that must never rewind:
  * - `TIMED`: the countdown (`timeRemainingSec`) and per-second bomb fuses never wind back.
  * - `FREEZE`: purchased Stasis Moves (`max`, so undoing a stasis move refunds it) and freeze seconds persist.
- * - Paid Continues stay counted so Undo can't erase the `1★` cap.
+ * - Paid Continues stay counted so Undo can't erase the `1★` cap; Zen's inert-bomb state (`bombsInert`) persists.
  */
 export function carryLiveResourcesIntoUndo(restored: BoardState, live: BoardState, playMode: PlayMode): void {
   restored.freezeRemainingSec = live.freezeRemainingSec;
+  restored.bombsInert = live.bombsInert;
   restored.stasisMovesRemaining = Math.max(restored.stasisMovesRemaining, live.stasisMovesRemaining);
   restored.continuesUsed = Math.max(restored.continuesUsed ?? 0, live.continuesUsed ?? 0);
   if (playMode === 'TIMED') {
@@ -473,11 +475,27 @@ export function isBoardDeadlocked(board: BoardState): boolean {
 }
 
 /**
+ * Final-Touch Grace (`FINAL-TOUCH-01`): when the last move tick is spent sliding a block that has not shredded yet
+ * (`lastMovedBlockId > 0`), finishing that same block's drag into a matching gate is a free coalesced touch.
+ * `OUT_OF_MOVES` is deferred while that block can still reach an eligible gate; any other move is rejected.
+ */
+export function hasFinalTouchGrace(board: BoardState): boolean {
+  if (board.lastMovedBlockId <= 0) return false;
+  const block = board.blocks.find((b) => b.id === board.lastMovedBlockId);
+  if (!block) return false;
+  if (block.status !== 'ACTIVE' || getActiveColor(block.colorStack, block.colorCursor) === 0) return false;
+  if (findEligibleGateForBlockAt(board, block, block.row, block.col) >= 0) return true;
+  return getReachableAnchors(board, block.id).some(
+    (a) => findEligibleGateForBlockAt(board, block, a.row, a.col) >= 0
+  );
+}
+
+/**
  * Checks whether the board is in a loss state:
  * - Winning on the final move (`isBoardWon`) always succeeds first.
- * - Active Bomb reaching `0` -> `'BOMB_EXPLODED'`.
+ * - Active Bomb reaching `0` -> `'BOMB_EXPLODED'` (never while `bombsInert` in Zen, `ZEN-CALM-01`).
  * - `TIMED` mode reaching `00:00` -> `'TIME_OUT'`.
- * - `CHALLENGE` mode exhausting `movesRemaining <= 0` -> `'OUT_OF_MOVES'`.
+ * - `CHALLENGE` mode exhausting `movesRemaining <= 0` -> `'OUT_OF_MOVES'` (deferred by `hasFinalTouchGrace`).
  */
 export function isBoardFailed(
   board: BoardState,
@@ -487,14 +505,19 @@ export function isBoardFailed(
     return { failed: false, reason: null };
   }
   for (const b of board.blocks) {
-    if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
+    if (!board.bombsInert && b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
       return { failed: true, reason: 'BOMB_EXPLODED' };
     }
   }
   if (playMode === 'TIMED' && board.timeRemainingSec <= 0) {
     return { failed: true, reason: 'TIME_OUT' };
   }
-  if (playMode === 'CHALLENGE' && board.movesRemaining <= 0) {
+  if (
+    playMode === 'CHALLENGE' &&
+    board.movesRemaining <= 0 &&
+    board.stasisMovesRemaining <= 0 &&
+    !hasFinalTouchGrace(board)
+  ) {
     return { failed: true, reason: 'OUT_OF_MOVES' };
   }
   return { failed: false, reason: null };
