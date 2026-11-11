@@ -1,94 +1,8 @@
 import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 import { type GLMeshHandle, INSTANCE_STRIDE } from './render-types';
 
+export { MAIN_VERTEX_SHADER } from './shaders-main-vertex';
 export { PARTICLE_FRAGMENT_SHADER, PARTICLE_VERTEX_SHADER } from './shaders-particles';
-
-export const MAIN_VERTEX_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_uv;
-
-uniform mat4 u_viewProj;
-uniform vec3 u_translate;
-uniform vec3 u_scale;
-uniform float u_rotX;
-uniform float u_rotZ;
-uniform vec4 u_uvRect;
-uniform float u_blueprintMix;
-uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec (-1.0 when reducedMotion)
-
-out vec3 v_worldPos;
-out vec3 v_localPos;
-out vec3 v_normal;
-out vec2 v_uv;
-
-vec3 rotateRelicVec(vec3 v, float rx, float ry, float rz) {
-  float cz = cos(rz);
-  float sz = sin(rz);
-  vec3 r1 = vec3(v.x * cz - v.y * sz, v.x * sz + v.y * cz, v.z);
-  float cx = cos(rx);
-  float sx = sin(rx);
-  vec3 r2 = vec3(r1.x, r1.y * cx - r1.z * sx, r1.y * sx + r1.z * cx);
-  float cy = cos(ry);
-  float sy = sin(ry);
-  return vec3(r2.x * cy + r2.z * sy, r2.y, -r2.x * sy + r2.z * cy);
-}
-
-void main() {
-  vec3 p = a_position * u_scale;
-  vec3 n = a_normal;
-
-  if (abs(u_rotX) > 0.0001) {
-    float cx = cos(u_rotX);
-    float sx = sin(u_rotX);
-    p = vec3(p.x, p.y * cx - p.z * sx, p.y * sx + p.z * cx);
-    n = vec3(n.x, n.y * cx - n.z * sx, n.y * sx + n.z * cx);
-  }
-
-  if (abs(u_rotZ) > 0.0001) {
-    float cz = cos(u_rotZ);
-    float sz = sin(u_rotZ);
-    p = vec3(p.x * cz - p.y * sz, p.x * sz + p.y * cz, p.z);
-    n = vec3(n.x * cz - n.y * sz, n.x * sz + n.y * cz, n.z);
-  }
-
-  vec3 rawWorldPos = p + u_translate;
-  v_worldPos = rawWorldPos;
-  v_localPos = p;
-  v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
-
-  // In Mystic Stone Relic Title Mode (u_blueprintMix = 1.0), compress Z relief into a carved
-  // stone bas-relief (0.22) and levitate the entire relic with a subtle floating & twisting motion
-  // that settles seamlessly into grounded 3D gameplay as u_blueprintMix fades to 0.0.
-  float zRelief = mix(1.0, 0.22, u_blueprintMix);
-  vec3 stagePos = vec3(rawWorldPos.x, rawWorldPos.y, rawWorldPos.z * zRelief);
-  vec3 worldNorm = normalize(n);
-
-  if (u_blueprintMix > 0.001) {
-    float relicEnv = smoothstep(0.0, 1.0, u_blueprintMix);
-    if (u_boardInfo.z >= 0.0) {
-      float t = u_boardInfo.z;
-      float hoverZ = (0.14 + 0.11 * sin(t * 1.18) + 0.032 * sin(t * 2.36 + 0.7)) * relicEnv;
-      vec2 driftXY = vec2(sin(t * 0.76) * 0.072, cos(t * 0.62 + 0.5) * 0.056) * relicEnv;
-      float tiltX = sin(t * 0.94 + 0.3) * 0.054 * relicEnv;
-      float tiltY = cos(t * 0.78 + 1.1) * 0.060 * relicEnv;
-      float twistZ = (sin(t * 0.58) * 0.045 + sin(t * 1.22 + 1.7) * 0.014) * relicEnv;
-
-      vec3 pivot = vec3(u_boardInfo.x, u_boardInfo.y, 0.08);
-      stagePos = pivot + rotateRelicVec(stagePos - pivot, tiltX, tiltY, twistZ) + vec3(driftXY, hoverZ);
-      worldNorm = normalize(rotateRelicVec(worldNorm, tiltX, tiltY, twistZ));
-    } else {
-      stagePos.z += 0.12 * relicEnv;
-    }
-  }
-
-  v_normal = worldNorm;
-  gl_Position = u_viewProj * vec4(stagePos, 1.0);
-}
-`;
 
 export const MAIN_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
@@ -169,6 +83,28 @@ vec2 voronoiRockCrack(vec2 x) {
   return vec2(md, shardHash);
 }
 
+// Relic Stone relief height (BLOCK-STONE-01): rough grit, chunks broken off the worn rim, small spalled flakes,
+// and irregular hand-carved socket sigils (per-cell jitter, radius, depth & erosion). Sampled twice by the
+// caller (here + a step toward the light) for smooth per-pixel relief shading without derivative blockiness.
+float stoneRelief(vec2 bp, float z, float isTop, float wornBand) {
+  vec2 sp = bp + z * vec2(0.73, 1.31);
+  float grit = relicNoise(sp * 3.1) * 0.4 + relicNoise(sp * 8.3 + 2.0) * 0.35 + relicNoise(sp * 19.0 + 4.0) * 0.25;
+  float chipNoise = relicNoise(sp * 4.2 + 40.0) * 0.65 + relicNoise(sp * 9.5 + 9.0) * 0.35;
+  float chip = smoothstep(0.5, 0.6, chipNoise) * smoothstep(0.05, 0.55, wornBand) * (1.0 - isTop * 0.55);
+  vec2 sv = voronoiRockCrack(sp * 3.4 + relicNoise(sp * 2.0) * 0.6 + 23.0);
+  float spall = step(0.9, sv.y) * smoothstep(0.0, 0.05, sv.x);
+  vec2 cellHash = hashRelic22(floor(bp) + 3.0);
+  vec2 cuv = fract(bp) - 0.5 - (cellHash - 0.5) * 0.08;
+  float rr = length(cuv);
+  float ang = atan(cuv.y, cuv.x);
+  float erode = smoothstep(0.22, 0.62, relicNoise(vec2(ang * 1.9 + cellHash.x * 20.0, rr * 7.0 + cellHash.y * 9.0)));
+  float sigDepth = mix(0.35, 1.0, cellHash.x);
+  float ringG = (1.0 - smoothstep(0.012, 0.05, abs(rr - (0.17 + cellHash.y * 0.05)))) * erode * sigDepth;
+  float drill = (1.0 - smoothstep(0.01, 0.045, rr)) * sigDepth * 0.8;
+  float sigil = clamp(ringG + drill, 0.0, 1.0) * isTop;
+  return grit * 0.32 - chip * 1.0 - spall * 0.3 - sigil * 0.75;
+}
+
 void main() {
   if (u_useClipPlane == 1) {
     float clipDist = dot(v_worldPos, u_clipPlane.xyz) + u_clipPlane.w;
@@ -220,6 +156,7 @@ void main() {
   vec3 base = u_color.rgb;
   float specPower = 28.0;
   float specStrength = 0.26;
+  vec3 emissive = vec3(0.0);
 
   if (u_materialStyle == 1) {
     // gummy_jelly: subsurface glow + glossy highlight
@@ -231,16 +168,31 @@ void main() {
     // block-local X (flowing cathedral arcs on top faces, end-grain arcs on sides), noise-warped figure,
     // earlywood/latewood contrast, elongated open pores, and a satin varnish sheen.
     vec3 wq = v_localPos;
-    float figureWarp = relicNoise(wq.xy * vec2(0.9, 2.6) + 3.7) * 1.35 + relicNoise(wq.xy * vec2(2.4, 7.5)) * 0.35;
-    float ringCoord = length(vec2(wq.y * 2.6 + figureWarp, (wq.z - 1.4) * 2.6)) * 1.15;
+    // Fine straight-grained hardwood: long fiber lines running along block-local X whose spacing drifts with
+    // low-frequency noise (no regular waves), thin dark latewood lines, fine pores, and occasional dark knots
+    // that the grain visibly bends around.
+    float figureWarp = relicNoise(vec2(wq.x * 0.55, wq.y * 1.8) + 3.7) * 1.1 + relicNoise(vec2(wq.x * 1.6, wq.y * 4.0)) * 0.3;
+    vec2 knotCell = floor(wq.xy * vec2(0.55, 0.8));
+    vec2 knotHash = hashRelic22(knotCell + 17.0);
+    vec2 knotPos = (knotCell + 0.25 + 0.5 * knotHash) / vec2(0.55, 0.8);
+    vec2 knotRel = (wq.xy - knotPos) * vec2(0.8, 1.7);
+    float knotDist = length(knotRel);
+    float hasKnot = step(0.55, hashRelic22(knotCell + 5.0).x);
+    float knotBend = hasKnot * 0.55 * exp(-knotDist * knotDist * 9.0) * sign(knotRel.y + 1e-4);
+    float ringCoord = wq.y * 11.0 + figureWarp * 2.2 + (wq.z - 0.3) * 3.0 + knotBend * 6.0;
     float ringPhase = fract(ringCoord);
-    float earlywood = smoothstep(0.0, 0.16, ringPhase) * smoothstep(1.0, 0.62, ringPhase);
-    float latewood = 1.0 - earlywood;
-    float pores = smoothstep(0.62, 0.92, relicNoise(vec2(wq.x * 5.5, wq.y * 95.0 + figureWarp * 30.0)));
-    float streak = relicNoise(vec2(wq.x * 0.7, wq.y * 18.0 + figureWarp * 4.0)) - 0.5;
+    float latewood = smoothstep(0.78, 0.9, ringPhase) * (1.0 - smoothstep(0.95, 1.0, ringPhase));
+    float earlywood = 1.0 - latewood;
+    float fibers = relicNoise(vec2(wq.x * 3.0, wq.y * 140.0 + figureWarp * 30.0)) - 0.5;
+    float pores = smoothstep(0.7, 0.93, relicNoise(vec2(wq.x * 10.0, wq.y * 210.0 + figureWarp * 40.0)));
+    float streak = relicNoise(vec2(wq.x * 0.5, wq.y * 9.0 + figureWarp)) - 0.5;
+    float knotRings = hasKnot * exp(-knotDist * knotDist * 22.0) * (0.5 + 0.5 * sin(knotDist * 70.0));
+    float knotCore = hasKnot * (1.0 - smoothstep(0.07, 0.14, knotDist));
+    float knotHalo = hasKnot * exp(-knotDist * knotDist * 14.0) * 0.6;
     float woodAmp = u_highContrast == 1 ? 0.45 : 1.0;
     vec3 stained = mix(base, base * vec3(1.05, 0.9, 0.74) + vec3(0.045, 0.026, 0.006), 0.42);
-    float woodLum = 1.0 + (earlywood * 0.07 - latewood * 0.16 - pores * 0.07 + streak * 0.08) * woodAmp;
+    float woodLum =
+      1.0 + (-latewood * 0.2 + fibers * 0.07 - pores * 0.08 + streak * 0.1 - knotHalo * 0.16 - knotRings * 0.12 - knotCore * 0.45) * woodAmp;
     base = clamp(stained * woodLum, 0.0, 1.0);
     specPower = 22.0;
     specStrength = 0.13 + earlywood * 0.05;
@@ -262,48 +214,66 @@ void main() {
       rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
     }
     float bMottle = relicNoise(bp * 2.2 + v_localPos.z * 1.7) * 0.6 + relicNoise(bp * 6.3 + 3.1) * 0.4 - 0.5;
-    float bGrain = (relicNoise(bp * 41.0 + 7.0) - 0.5) * 2.0; // organic fine grain (no lattice)
-    float bPit = smoothstep(0.8, 0.95, relicNoise(bp * 23.0 + bMottle * 3.0 + 13.0)); // scattered weathering pits
     float bVein = 1.0 - smoothstep(0.0, 0.022 + fwidth(bp.x) * 0.8, voronoiRockCrack(bp * 1.25 + bMottle * 0.4 + 11.0).x);
     float isTopFace = smoothstep(0.86, 0.96, faceNz) * step(0.45, v_localPos.z);
-    vec2 cuv = fract(bp) - 0.5;
-    float rr = length(cuv);
-    float aa = fwidth(rr) + 0.004;
-    // Carved socket sigil: deep ring groove around a worn raised boss, a faint outer incised ring, and a tiny
-    // drilled center — an ancient-relic echo of toy-block studs (no crosshair ticks).
-    float ringGroove = 1.0 - smoothstep(0.02, 0.02 + aa * 1.5, abs(rr - 0.2));
-    float outerIncise = (1.0 - smoothstep(0.006, 0.006 + aa, abs(rr - 0.3))) * 0.45;
-    float drill = (1.0 - smoothstep(0.022, 0.022 + aa, rr)) * 0.7;
-    float carve = clamp(ringGroove + outerIncise + drill, 0.0, 1.0) * isTopFace;
-    // Directional catch-light on the far inner wall of the groove + lit top of the raised boss (sells the cut)
-    vec2 lightDir2 = normalize(vec2(0.35, 0.55));
-    vec2 cdir = normalize(cuv + 1e-4);
-    float grooveWall = (1.0 - smoothstep(0.0, 0.012 + aa, abs(rr - 0.222))) * isTopFace;
-    float lipLit = grooveWall * max(dot(cdir, lightDir2), 0.0);
-    float bossRim = (1.0 - smoothstep(0.0, 0.012 + aa, abs(rr - 0.172))) * isTopFace;
-    float bossLit = bossRim * max(dot(cdir, -lightDir2), 0.0);
-    float boss = (1.0 - smoothstep(0.16, 0.18, rr)) * isTopFace;
+    // Hewn stone relief: height sampled here and one step toward the light -> raking-light shading of chips,
+    // flakes and carved sigils (bright lit lips, dark shadowed hollows), plus recess grime.
+    vec2 lightStep = normalize(-L1.xy) * 0.022;
+    float reliefH = stoneRelief(bp, v_localPos.z, isTopFace, wornBand);
+    float reliefL = stoneRelief(bp + lightStep, v_localPos.z, isTopFace, wornBand);
+    float raking = clamp((reliefL - reliefH) * 8.0, -0.5, 0.5) * sAmp6;
+    float recess = clamp(-reliefH, 0.0, 1.0);
+    float chip = smoothstep(0.25, 0.9, recess) * (1.0 - isTopFace * 0.4);
+    float spall = 0.0;
+    float grit = relicNoise(bp * 8.3 + 2.0);
+    float sigil = recess * isTopFace;
     // Worn, chalky exposed edges (rounded chamfer band) + large blotchy weathering zones
     float edgeWear = (1.0 - smoothstep(0.88, 0.97, faceNz)) * smoothstep(0.15, 0.6, wornBand);
     float regionVar = relicNoise(bp * 0.85 + v_localPos.z * 0.6 + 31.0) - 0.5;
     float stoneLum =
-      1.0 + (bMottle * 0.3 + regionVar * 0.22 + bGrain * 0.035 - bPit * 0.13 - bVein * 0.16 + boss * 0.06) * sAmp6;
-    // Time-faded pigment: partially bleached toward warm chalky stone, more on worn edges & exposed zones
+      1.0 + (bMottle * 0.28 + regionVar * 0.22 + (grit - 0.5) * 0.12 - bVein * 0.16 - spall * 0.05) * sAmp6;
+    // Time-faded pigment: bleached toward warm chalky stone on weathered zones & edges; freshly broken chunks
+    // expose deeper, less-faded pigment; carved grooves collect dark grime.
     vec3 lumC = vec3(dot(base, vec3(0.299, 0.587, 0.114)));
-    float fadeAmt = clamp(0.3 + regionVar * 0.45 + edgeWear * 0.35, 0.0, 0.8) * mix(1.0, 0.4, float(u_highContrast));
+    float fadeAmt = clamp(0.3 + regionVar * 0.45 + edgeWear * 0.35 - chip * 0.4, 0.0, 0.8) * mix(1.0, 0.4, float(u_highContrast));
     vec3 pigment = mix(base, lumC * vec3(1.05, 1.0, 0.92) + vec3(0.09, 0.085, 0.075), fadeAmt);
     float hueDrift = (relicNoise(bp * 1.4 + 21.0) - 0.5) * 0.18 * sAmp6;
     pigment *= vec3(1.0 + hueDrift, 1.0 + hueDrift * 0.3, 1.0 - hueDrift);
-    base = clamp(pigment * stoneLum * (1.0 - carve * 0.36 * mix(1.0, 0.7, float(u_highContrast))), 0.0, 1.0);
-    base += vec3((lipLit + bossLit) * 0.1 * sAmp6);
+    float grime = recess * 0.38;
+    base = clamp(pigment * stoneLum * (1.0 - grime * mix(1.0, 0.6, float(u_highContrast))) * (1.0 + raking * 0.55), 0.0, 1.0);
     specPower = 14.0;
     specStrength = 0.06;
   } else if (u_materialStyle == 3) {
-    // neon_cyber: dark core with bright edge rim (kept brighter in High Contrast mode)
-    float coreMul = u_highContrast == 1 ? 0.92 : 0.72;
-    base = mix(base * coreMul, min(vec3(1.0), base * 1.35 + 0.15), clamp(rim * 1.6, 0.0, 1.0));
-    specPower = 64.0;
-    specStrength = 0.4;
+    // neon_cyber (NEON-CYBER-01): glossy black-glass/chrome shell reflecting a cool sky gradient, bright
+    // self-lit neon edges in the block color, and glowing circuit traces + pads on top that pulse in time
+    // (static under Reduced Motion). Emissive is added after lighting so it stays vivid.
+    vec3 lpN = v_localPos;
+    float isTop3 = smoothstep(0.86, 0.96, N.z) * step(0.45, lpN.z);
+    float hcMul = u_highContrast == 1 ? 0.55 : 1.0;
+    vec3 neonCol = min(vec3(1.0), base * 1.3 + 0.1);
+    vec3 R = reflect(-V, N);
+    float sky = smoothstep(-0.2, 0.95, R.y * 0.55 + R.z * 0.45);
+    vec3 env = mix(vec3(0.02, 0.015, 0.06), vec3(0.62, 0.7, 1.0), sky) + base * 0.3 * sky;
+    float coreMul = u_highContrast == 1 ? 0.35 : 0.12;
+    base = base * coreMul + vec3(0.012, 0.015, 0.028) + env * 0.42;
+    float bevelEdge = (1.0 - smoothstep(0.8, 0.95, N.z)) * smoothstep(0.12, 0.4, N.z);
+    vec2 gq = lpN.xy * 4.0;
+    vec2 gc = floor(gq);
+    vec2 gf = fract(gq) - 0.5;
+    vec2 gh = hashRelic22(gc + 9.0);
+    float lineD = mix(abs(gf.x), abs(gf.y), step(0.5, gh.x));
+    float traceAA = fwidth(gq.x) * 1.5;
+    float trace = (1.0 - smoothstep(0.045, 0.045 + traceAA, lineD)) * step(0.35, gh.y);
+    float pad = (1.0 - smoothstep(0.11, 0.11 + traceAA, length(gf))) * step(0.82, gh.y);
+    float tN = max(u_boardInfo.z, 0.0) * step(0.0, u_boardInfo.z);
+    float pulse = 0.55 + 0.45 * smoothstep(0.72, 1.0, fract(lpN.x * 0.35 + lpN.y * 0.2 - tN * 0.45));
+    float circuit = clamp(trace + pad, 0.0, 1.0) * isTop3;
+    // Polished glass sheen: a soft diagonal reflection streak sweeping across top faces
+    float sheenBand = 1.0 - smoothstep(0.0, 0.16, abs(fract((v_worldPos.x + v_worldPos.y) * 0.16 + 0.1) - 0.5));
+    base += vec3(0.75, 0.82, 1.0) * sheenBand * isTop3 * 0.22 * hcMul + vec3(0.6, 0.7, 1.0) * rim * 0.25;
+    emissive = neonCol * (bevelEdge * 0.95 + circuit * 0.85 * pulse * hcMul);
+    specPower = 96.0;
+    specStrength = 0.85;
   } else if (u_materialStyle == 5) {
     // stone_surface (STONE-FLOOR-01): world-space weathered stone on tray floors, walls & pillars.
     // Luminance-only modulation keeps each Board Tray's palette identity; u_stoneTint adds a faint mineral cast.
@@ -323,7 +293,7 @@ void main() {
   float ambient = u_highContrast == 1 ? 0.54 : 0.50;
   float heightShade = clamp((v_localPos.z - 0.54) * 1.45, -0.08, 0.14);
   float studRim = (v_localPos.z > 0.565 && N.z < 0.96 && N.z > 0.05) ? (0.16 * max(dot(N, L1), -0.35)) : 0.0;
-  vec3 lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim);
+  vec3 lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim) + emissive;
 
   if (u_highContrast == 1) {
     // Crisp high-contrast 3D bevel edge contour so every block and wall edge has razor-sharp definition

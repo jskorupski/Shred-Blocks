@@ -429,7 +429,12 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(roadmapPathCss).toContain('.level-node-card:not(.current-level) .badge-difficulty');
     expect(roadmapPathCss).toContain('.level-node-card.milestone-node:not(.current-level)');
 
-    const shadersTs = fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8');
+    const shadersTs =
+      fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8') +
+      fs.readFileSync(path.join(repoRoot, 'src/render/shaders-main-vertex.ts'), 'utf8');
+    expect(shadersTs).toContain('stoneRelief');
+    expect(shadersTs).toContain('neonCol');
+    expect(shadersTs).toContain('knotDist');
     expect(shadersTs).toContain('float zRelief = mix(1.0, 0.22, u_blueprintMix)');
     expect(shadersTs).toContain('rotateRelicVec');
     expect(shadersTs).toContain('u_stoneTint');
