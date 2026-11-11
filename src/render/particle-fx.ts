@@ -10,8 +10,8 @@ import {
   type ParticleStyleId,
 } from '../core/types';
 import {
+  allocParticleSlot,
   INSTANCE_STRIDE,
-  MAX_PARTICLES,
   MAX_SMOKE_PUFFS,
   PARTICLE_STRIDE,
   type RenderPassContext,
@@ -56,8 +56,7 @@ export function spawnParticlesAtImpl(
   const tanY = hasDir ? dirX : 0;
 
   for (let i = 0; i < burstCount; i++) {
-    const idx = rctx.particleWriteCursor * PARTICLE_STRIDE;
-    rctx.particleWriteCursor = (rctx.particleWriteCursor + 1) % MAX_PARTICLES;
+    const idx = allocParticleSlot(rctx);
 
     const angle = (i / burstCount) * Math.PI * 2 + i * 1.6180339;
     const radialSpeed = (0.45 + ((i * 7) % 13) * 0.14) * styleSpeedMul;
@@ -263,49 +262,65 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
   }
 
   let activeSmoke = 0;
-  for (let i = 0; i < MAX_PARTICLES; i++) {
+  let writeSlot = 0;
+  const pool = rctx.particlePool;
+  const totalSlots = rctx.particlePoolCount;
+  for (let i = 0; i < totalSlots; i++) {
     const idx = i * PARTICLE_STRIDE;
-    const age = rctx.particlePool[idx + 10];
-    const maxAge = rctx.particlePool[idx + 11];
+    const age = pool[idx + 10];
+    const maxAge = pool[idx + 11];
     if (age <= 0 || age >= maxAge) continue;
 
     const nextAge = age + dt;
     if (nextAge >= maxAge || active + activeSmoke >= maxActive) {
-      rctx.particlePool[idx + 10] = 0;
+      pool[idx + 10] = 0;
       continue;
     }
 
-    const baseScale = rctx.particlePool[idx + 9];
+    const baseScale = pool[idx + 9];
     const isSmoke = baseScale <= -SMOKE_SCALE_OFFSET;
     const isShard = !isSmoke && baseScale < 0;
-    rctx.particlePool[idx + 10] = nextAge;
-    rctx.particlePool[idx + 0] += rctx.particlePool[idx + 3] * dt;
-    rctx.particlePool[idx + 1] += rctx.particlePool[idx + 4] * dt;
-    rctx.particlePool[idx + 2] += rctx.particlePool[idx + 5] * dt;
+    pool[idx + 10] = nextAge;
+    pool[idx + 0] += pool[idx + 3] * dt;
+    pool[idx + 1] += pool[idx + 4] * dt;
+    pool[idx + 2] += pool[idx + 5] * dt;
     if (isSmoke) {
       // Buoyant billowing smoke: horizontal drag + gentle upward drift (`RELIC-AWAKEN-01`)
       const drag = Math.max(0, 1 - 2.2 * dt);
-      rctx.particlePool[idx + 3] *= drag;
-      rctx.particlePool[idx + 4] *= drag;
-      rctx.particlePool[idx + 5] = rctx.particlePool[idx + 5] * Math.max(0, 1 - 1.6 * dt) + 0.35 * dt;
+      pool[idx + 3] *= drag;
+      pool[idx + 4] *= drag;
+      pool[idx + 5] = pool[idx + 5] * Math.max(0, 1 - 1.6 * dt) + 0.35 * dt;
     } else {
       // Gravity (stone shards fall a little heavier for a crisp tumbling arc)
-      rctx.particlePool[idx + 5] -= (isShard ? 8.4 : 6.8) * dt;
+      pool[idx + 5] -= (isShard ? 8.4 : 6.8) * dt;
     }
-    rctx.particlePool[idx + 12] += rctx.particlePool[idx + 13] * dt;
+    pool[idx + 12] += pool[idx + 13] * dt;
+
+    const px = pool[idx + 0];
+    const py = pool[idx + 1];
+    const pz = pool[idx + 2];
+    const pr = pool[idx + 6];
+    const pg = pool[idx + 7];
+    const pb = pool[idx + 8];
+    const prot = pool[idx + 12];
+
+    if (writeSlot !== i) {
+      pool.copyWithin(writeSlot * PARTICLE_STRIDE, idx, idx + PARTICLE_STRIDE);
+    }
+    writeSlot++;
 
     const lifeRatio = 1.0 - nextAge / maxAge;
     if (isSmoke) {
       if (activeSmoke >= MAX_SMOKE_PUFFS) continue;
       const puffRadius = -baseScale - SMOKE_SCALE_OFFSET;
       const sIdx = activeSmoke * INSTANCE_STRIDE;
-      rctx.smokeInstanceData[sIdx + 0] = rctx.particlePool[idx + 0];
-      rctx.smokeInstanceData[sIdx + 1] = rctx.particlePool[idx + 1];
-      rctx.smokeInstanceData[sIdx + 2] = rctx.particlePool[idx + 2];
+      rctx.smokeInstanceData[sIdx + 0] = px;
+      rctx.smokeInstanceData[sIdx + 1] = py;
+      rctx.smokeInstanceData[sIdx + 2] = pz;
       rctx.smokeInstanceData[sIdx + 3] = -(SMOKE_SCALE_OFFSET + puffRadius * (0.55 + 1.4 * (1 - lifeRatio)));
-      rctx.smokeInstanceData[sIdx + 4] = rctx.particlePool[idx + 6];
-      rctx.smokeInstanceData[sIdx + 5] = rctx.particlePool[idx + 7];
-      rctx.smokeInstanceData[sIdx + 6] = rctx.particlePool[idx + 8];
+      rctx.smokeInstanceData[sIdx + 4] = pr;
+      rctx.smokeInstanceData[sIdx + 5] = pg;
+      rctx.smokeInstanceData[sIdx + 6] = pb;
       rctx.smokeInstanceData[sIdx + 7] = lifeRatio;
       activeSmoke++;
       continue;
@@ -315,19 +330,18 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
       : baseScale * (0.35 + 0.65 * lifeRatio);
 
     const outIdx = active * INSTANCE_STRIDE;
-    rctx.particleInstanceData[outIdx + 0] = rctx.particlePool[idx + 0];
-    rctx.particleInstanceData[outIdx + 1] = rctx.particlePool[idx + 1];
-    rctx.particleInstanceData[outIdx + 2] = isShard
-      ? rctx.particlePool[idx + 2]
-      : Math.max(-0.1, rctx.particlePool[idx + 2]);
+    rctx.particleInstanceData[outIdx + 0] = px;
+    rctx.particleInstanceData[outIdx + 1] = py;
+    rctx.particleInstanceData[outIdx + 2] = isShard ? pz : Math.max(-0.1, pz);
     rctx.particleInstanceData[outIdx + 3] = scale;
-    rctx.particleInstanceData[outIdx + 4] = rctx.particlePool[idx + 6];
-    rctx.particleInstanceData[outIdx + 5] = rctx.particlePool[idx + 7];
-    rctx.particleInstanceData[outIdx + 6] = rctx.particlePool[idx + 8];
-    rctx.particleInstanceData[outIdx + 7] = rctx.particlePool[idx + 12];
+    rctx.particleInstanceData[outIdx + 4] = pr;
+    rctx.particleInstanceData[outIdx + 5] = pg;
+    rctx.particleInstanceData[outIdx + 6] = pb;
+    rctx.particleInstanceData[outIdx + 7] = prot;
     active++;
   }
 
+  rctx.particlePoolCount = writeSlot;
   rctx.activeParticleCount = active;
   rctx.activeSmokeCount = activeSmoke;
   rctx.qualityGovernor.setActiveParticles(active + activeSmoke);
@@ -403,8 +417,7 @@ export function spawnAmbientCourtyardMotesImpl(
       const gy = !isHoriz ? along : gate.edge === 'TOP' ? gate.edgeLine - 0.14 : gate.edgeLine + 1 + 0.14;
       const [nx, ny] = getGateOutwardNormal(gate.edge);
 
-      const idx = rctx.particleWriteCursor * PARTICLE_STRIDE;
-      rctx.particleWriteCursor = (rctx.particleWriteCursor + 1) % MAX_PARTICLES;
+      const idx = allocParticleSlot(rctx);
       rctx.particlePool[idx + 0] = gx;
       rctx.particlePool[idx + 1] = gy;
       rctx.particlePool[idx + 2] = 0.42;
@@ -456,8 +469,7 @@ export function spawnAmbientCourtyardMotesImpl(
         }
       }
 
-      const idx = rctx.particleWriteCursor * PARTICLE_STRIDE;
-      rctx.particleWriteCursor = (rctx.particleWriteCursor + 1) % MAX_PARTICLES;
+      const idx = allocParticleSlot(rctx);
       rctx.particlePool[idx + 0] = mx;
       rctx.particlePool[idx + 1] = my;
       rctx.particlePool[idx + 2] = 0.62;
@@ -542,7 +554,8 @@ export function detectAutomaticShredEventsImpl(
       rctx.activeShockwaves.length = 0;
       rctx.blockBounceMap.clear();
       rctx.boardShakeTimer = 0;
-      rctx.particlePool.fill(0);
+      rctx.particlePoolCount = 0;
+      rctx.particleWriteCursor = 0;
       rctx.activeParticleCount = 0;
       rctx.activeSmokeCount = 0;
     }

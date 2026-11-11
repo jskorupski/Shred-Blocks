@@ -24,6 +24,22 @@ export const INSTANCE_STRIDE = 8; // x, y, z, scale, r, g, b, rotAngle
  */
 export const MAX_SMOKE_PUFFS = 256;
 export const SMOKE_SCALE_OFFSET = 10;
+
+/**
+ * Allocates the next compacted particle slot (`0 .. particlePoolCount - 1`, capped at `MAX_PARTICLES`)
+ * so `stepParticlesImpl` only iterates live particles instead of scanning all 2,048 slots every frame.
+ */
+export function allocParticleSlot(rctx: { particlePoolCount: number; particleWriteCursor: number }): number {
+  if (rctx.particlePoolCount < MAX_PARTICLES) {
+    const slot = rctx.particlePoolCount;
+    rctx.particlePoolCount = slot + 1;
+    rctx.particleWriteCursor = rctx.particlePoolCount % MAX_PARTICLES;
+    return slot * PARTICLE_STRIDE;
+  }
+  const slot = rctx.particleWriteCursor;
+  rctx.particleWriteCursor = (slot + 1) % MAX_PARTICLES;
+  return slot * PARTICLE_STRIDE;
+}
 /**
  * `u_materialStyle = 5` (`STONE-FLOOR-01` / `TRAY-IDENTITY-01`): world-space tray floor tiles;
  * `u_materialStyle = 7`: perimeter walls, pedestal plinths & interior pillars.
@@ -408,6 +424,7 @@ export interface RenderPassContext {
   /** Translucent relic-awakening smoke puffs (`RELIC-AWAKEN-01`), drawn in a 2nd depth-write-off pass. */
   readonly smokeInstanceData: Float32Array;
   activeSmokeCount: number;
+  particlePoolCount: number;
   particleWriteCursor: number;
   lastBoardLevelId: number;
   lastSessionShredded: number;

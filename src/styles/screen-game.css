@@ -299,8 +299,8 @@
   padding: 0.35rem;
   background: radial-gradient(
     closest-side at 50% 48%,
-    rgba(246, 189, 96, 0.2) 0%,
-    rgba(115, 70, 99, 0.13) 56%,
+    rgba(246, 189, 96, 0.22) 0%,
+    rgba(115, 70, 99, 0.14) 56%,
     rgba(115, 70, 99, 0) 100%
   );
 }
@@ -323,7 +323,9 @@
   }
 }
 
-/* Subtle volumetric god rays radiating from the Title Screen relic (MYSTIC-RELIC-01), fading smoothly on Play */
+/* Subtle volumetric god rays radiating from the Title Screen relic (MYSTIC-RELIC-01), fading smoothly on Play.
+   Uses soft angular conic stops + radial mask with zero CSS blur filter (PERF-TRANSITION-01) so mobile GPUs
+   composite rotation & fade purely on the compositor thread. */
 #screen-game .board-stage::before,
 #screen-game .board-stage::after {
   content: "";
@@ -331,7 +333,7 @@
   pointer-events: none;
   mix-blend-mode: screen;
   opacity: 0;
-  transition: opacity 0.78s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.58s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 #screen-game .board-stage::before {
@@ -339,33 +341,32 @@
   z-index: 1;
   background: conic-gradient(
     from 0deg at 50% 50% var(--in-oklab),
-    rgba(186, 78, 248, 0) 0deg,
-    rgba(214, 108, 255, 0.36) 22deg,
-    rgba(248, 184, 96, 0.24) 40deg,
-    rgba(186, 78, 248, 0) 64deg,
-    rgba(168, 68, 242, 0.32) 98deg,
-    rgba(236, 122, 214, 0.26) 122deg,
-    rgba(186, 78, 248, 0) 150deg,
-    rgba(246, 178, 92, 0.22) 182deg,
-    rgba(206, 96, 252, 0.34) 210deg,
-    rgba(186, 78, 248, 0) 240deg,
-    rgba(176, 74, 246, 0.3) 276deg,
-    rgba(242, 146, 206, 0.24) 306deg,
-    rgba(186, 78, 248, 0) 360deg
+    rgba(186, 78, 248, 0.04) 0deg,
+    rgba(214, 108, 255, 0.3) 22deg,
+    rgba(248, 184, 96, 0.21) 42deg,
+    rgba(186, 78, 248, 0.03) 68deg,
+    rgba(168, 68, 242, 0.27) 98deg,
+    rgba(236, 122, 214, 0.22) 124deg,
+    rgba(186, 78, 248, 0.03) 152deg,
+    rgba(246, 178, 92, 0.19) 182deg,
+    rgba(206, 96, 252, 0.29) 212deg,
+    rgba(186, 78, 248, 0.03) 242deg,
+    rgba(176, 74, 246, 0.25) 276deg,
+    rgba(242, 146, 206, 0.2) 308deg,
+    rgba(186, 78, 248, 0.04) 360deg
   );
   -webkit-mask-image: radial-gradient(
     closest-side at 50% 50%,
-    rgba(0, 0, 0, 0.95) 14%,
-    rgba(0, 0, 0, 0.56) 54%,
-    transparent 94%
+    rgba(0, 0, 0, 0.9) 12%,
+    rgba(0, 0, 0, 0.52) 52%,
+    transparent 92%
   );
   mask-image: radial-gradient(
     closest-side at 50% 50%,
-    rgba(0, 0, 0, 0.95) 14%,
-    rgba(0, 0, 0, 0.56) 54%,
-    transparent 94%
+    rgba(0, 0, 0, 0.9) 12%,
+    rgba(0, 0, 0, 0.52) 52%,
+    transparent 92%
   );
-  filter: blur(12px);
 }
 
 #screen-game .board-stage::after {
@@ -373,33 +374,33 @@
   z-index: 3;
   background: conic-gradient(
     from 32deg at 50% 50% var(--in-oklab),
-    rgba(208, 102, 255, 0) 0deg,
-    rgba(226, 128, 255, 0.26) 28deg,
-    rgba(208, 102, 255, 0) 62deg,
-    rgba(250, 190, 106, 0.18) 108deg,
-    rgba(208, 102, 255, 0) 146deg,
-    rgba(218, 114, 248, 0.24) 198deg,
-    rgba(208, 102, 255, 0) 238deg,
-    rgba(246, 172, 198, 0.2) 292deg,
-    rgba(208, 102, 255, 0) 360deg
+    rgba(208, 102, 255, 0.02) 0deg,
+    rgba(226, 128, 255, 0.21) 30deg,
+    rgba(208, 102, 255, 0.02) 66deg,
+    rgba(250, 190, 106, 0.15) 108deg,
+    rgba(208, 102, 255, 0.02) 150deg,
+    rgba(218, 114, 248, 0.2) 198deg,
+    rgba(208, 102, 255, 0.02) 242deg,
+    rgba(246, 172, 198, 0.16) 294deg,
+    rgba(208, 102, 255, 0.02) 360deg
   );
   -webkit-mask-image: radial-gradient(
     closest-side at 50% 50%,
-    rgba(0, 0, 0, 0.72) 10%,
-    rgba(0, 0, 0, 0.36) 46%,
-    transparent 84%
+    rgba(0, 0, 0, 0.66) 10%,
+    rgba(0, 0, 0, 0.32) 46%,
+    transparent 82%
   );
   mask-image: radial-gradient(
     closest-side at 50% 50%,
-    rgba(0, 0, 0, 0.72) 10%,
-    rgba(0, 0, 0, 0.36) 46%,
-    transparent 84%
+    rgba(0, 0, 0, 0.66) 10%,
+    rgba(0, 0, 0, 0.32) 46%,
+    transparent 82%
   );
-  filter: blur(16px);
 }
 
 #screen-game.title-backdrop-mode .board-stage::before {
-  opacity: 0.76;
+  opacity: 0.78;
+  will-change: rotate, opacity;
   animation: mysticGodRays 38s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -408,6 +409,7 @@
 
 #screen-game.title-backdrop-mode .board-stage::after {
   opacity: 0.36;
+  will-change: rotate, opacity;
   animation: mysticGodRaysCounter 52s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -497,7 +499,6 @@ body.high-contrast #screen-game.title-backdrop-mode .board-stage::after {
   border-radius: var(--radius-lg);
   border: none;
   background: transparent;
-  filter: drop-shadow(0 18px 28px rgba(8, 5, 20, 0.6));
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;

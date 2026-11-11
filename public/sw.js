@@ -2,7 +2,7 @@
    ShredBlocks: Color Jam — Offline-First Service Worker (STOR-03)
    ========================================================================== */
 
-const CACHE_VERSION = 'shredblocks-v1.2.1';
+const CACHE_VERSION = 'shredblocks-v1.2.2';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -110,6 +110,13 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/node_modules/')
+  ) {
+    return;
+  }
 
   // 1. Navigation requests (HTML documents): Offline-First Atomic Shell with network fallback
   if (request.mode === 'navigate' || request.destination === 'document') {

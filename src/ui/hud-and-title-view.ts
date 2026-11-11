@@ -157,9 +157,6 @@ export function syncTitleOverlayDomImpl(app: AppViewContext): void {
     gameEl.inert = false;
     gameEl.classList.remove('title-backdrop-mode');
   }
-  if (app.activeScreen === 'game') {
-    app.renderer.resize();
-  }
 }
 
 export function syncAllUiFromSaveImpl(app: AppViewContext): void {
@@ -567,7 +564,7 @@ export function stepSimulationImpl(app: AppViewContext, dtSec: number): void {
     if (app.saveManager.getPayload().settings.reducedMotion) {
       app.blueprintMix = 0;
     } else {
-      app.blueprintMix = Math.max(0, app.blueprintMix - dtSec / 0.72);
+      app.blueprintMix = Math.max(0, app.blueprintMix - dtSec / 0.58);
     }
     if (app.blueprintMix === 0) {
       document.getElementById('screen-game')?.classList.remove('relic-awakening-burst');

@@ -1,5 +1,6 @@
 import type { BoosterType } from '../core/types';
 import {
+  getOrCreateRelicAwakenNoiseBuffer,
   playBoosterVoice,
   playButtonTapVoice,
   playFilteredNoiseBurstVoice,
@@ -157,12 +158,14 @@ export class SoundEngine {
     if (!this.unlocked) {
       this.unlocked = true;
       // Play a silent 1-sample warm-up pulse to unlock iOS WebKit audio pipeline
+      // and pre-cache the Relic Awakening pink-noise buffer on pointerdown before click fires.
       try {
         const buffer = ctx.createBuffer(1, 1, 22050);
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
         source.start(0);
+        getOrCreateRelicAwakenNoiseBuffer(ctx);
       } catch {
         // Ignore
       }

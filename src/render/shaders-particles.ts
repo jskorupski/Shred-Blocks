@@ -108,13 +108,14 @@ void main() {
   float light = 0.62 + max(dot(N, L), 0.0) * 0.45;
 
   if (v_archetype > 1.5) {
-    // Soft volumetric smoke/dust puff: radial falloff, smooth fade-in + fade-out, warm inner glow
-    float r = length(v_localPos.xy) * 2.0;
+    // Soft volumetric smoke/dust puff: single-sided 2-triangle quad using exact composite alpha
+    // a1 * (2.0 - a1), with zero fragment discard so mobile tile-GPU LRZ Early-Z stays active.
+    float r = min(1.0, length(v_localPos.xy) * 2.0);
     float puff = smoothstep(1.0, 0.1, r);
     float fade = smoothstep(1.0, 0.86, v_life) * smoothstep(0.0, 0.55, v_life);
     vec3 col = v_color * (0.86 + 0.28 * (1.0 - r)) + vec3(0.98, 0.82, 0.5) * 0.2 * fade * (1.0 - r);
-    float a = puff * fade * 0.58;
-    if (a < 0.004) discard;
+    float a1 = puff * fade * 0.58;
+    float a = a1 * (2.0 - a1);
     outColor = vec4(clamp(col, 0.0, 1.0), a);
     return;
   }

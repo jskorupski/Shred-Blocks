@@ -461,7 +461,9 @@ export class ShredBlocksApp implements AppViewContext {
 
   private startAnimationLoop(): void {
     const tick = (nowMs: number) => {
-      const dtSec = Math.min(0.1, Math.max(0.001, (nowMs - this.lastRafMs) / 1000));
+      const rawDt = Math.min(0.1, Math.max(0.001, (nowMs - this.lastRafMs) / 1000));
+      // PERF-TRANSITION-01: prevent first-frame dtSec jump if mobile touch/AudioContext unlock took >16ms
+      const dtSec = !this.titleOverlayOpen && this.blueprintMix > 0.98 ? Math.min(1 / 60, rawDt) : rawDt;
       this.lastRafMs = nowMs;
       if (this.frozenTimeSec !== null) {
         requestAnimationFrame(tick); // VISUAL-GOLDEN-01: time frozen for deterministic golden captures

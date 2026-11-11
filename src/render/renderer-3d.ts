@@ -32,7 +32,11 @@ import {
   renderPass2ReticleAndPromptsImpl,
 } from './pass2-barriers-and-reticles';
 import { renderPass3BlocksImpl } from './pass3-block-shells';
-import { renderPass4ParticlesImpl, spawnRelicAwakeningBurstImpl } from './relic-awakening-fx';
+import {
+  renderPass4ParticlesImpl,
+  spawnRelicAwakeningBurstImpl,
+  warmUpWebGLPipelinesImpl,
+} from './relic-awakening-fx';
 import {
   drawAtlasBadgeImpl,
   drawBadgeMedallion3DImpl,
@@ -60,10 +64,12 @@ import {
   createMeshHandle,
   createParticleInstancedVao,
   createShaderProgram,
+  createSmokeBillboardInstancedVao,
   MAIN_FRAGMENT_SHADER,
   MAIN_VERTEX_SHADER,
   PARTICLE_FRAGMENT_SHADER,
   PARTICLE_VERTEX_SHADER,
+  type ParticleInstancedVaoHandle,
 } from './shaders-3d';
 
 export * from './render-types';
@@ -83,12 +89,8 @@ export class Renderer3D implements RenderPassContext {
   private atlasData: AtlasTextureData;
 
   private meshHandles = new Map<MeshData, GLMeshHandle>();
-  private particleVao: WebGLVertexArrayObject | null = null;
-  private particlePosBuffer: WebGLBuffer | null = null;
-  private particleNormBuffer: WebGLBuffer | null = null;
-  private particleIndexBuffer: WebGLBuffer | null = null;
-  private particleInstanceBuffer: WebGLBuffer | null = null;
-  private particleIndexCount = 0;
+  private particleHandle: ParticleInstancedVaoHandle | null = null;
+  private smokeHandle: ParticleInstancedVaoHandle | null = null;
 
   // Uniform locations for main program
   private uViewProj: WebGLUniformLocation | null = null;
@@ -121,6 +123,7 @@ export class Renderer3D implements RenderPassContext {
   public readonly smokeInstanceData = new Float32Array(MAX_SMOKE_PUFFS * INSTANCE_STRIDE);
   public activeParticleCount = 0;
   public activeSmokeCount = 0;
+  public particlePoolCount = 0;
   public particleWriteCursor = 0;
 
   // Automatic state diff tracking for automatic shred particle bursts, knock-on shockwaves, and bounces
@@ -225,7 +228,7 @@ export class Renderer3D implements RenderPassContext {
         stencil: false,
         antialias: true,
         powerPreference: 'high-performance',
-        preserveDrawingBuffer: true,
+        preserveDrawingBuffer: false,
       }) as WebGL2RenderingContext | null;
 
       if (gl) {
@@ -335,22 +338,22 @@ export class Renderer3D implements RenderPassContext {
         gl.deleteBuffer(handle.uvBuffer);
         gl.deleteBuffer(handle.indexBuffer);
       }
-      if (this.particleVao) gl.deleteVertexArray(this.particleVao);
-      if (this.particlePosBuffer) gl.deleteBuffer(this.particlePosBuffer);
-      if (this.particleNormBuffer) gl.deleteBuffer(this.particleNormBuffer);
-      if (this.particleIndexBuffer) gl.deleteBuffer(this.particleIndexBuffer);
-      if (this.particleInstanceBuffer) gl.deleteBuffer(this.particleInstanceBuffer);
+      for (const h of [this.particleHandle, this.smokeHandle]) {
+        if (!h) continue;
+        gl.deleteVertexArray(h.vao);
+        gl.deleteBuffer(h.posBuf);
+        gl.deleteBuffer(h.normBuf);
+        gl.deleteBuffer(h.idxBuf);
+        gl.deleteBuffer(h.instBuf);
+      }
       if (this.atlasTexture) gl.deleteTexture(this.atlasTexture);
       if (this.mainProgram) gl.deleteProgram(this.mainProgram);
       if (this.particleProgram) gl.deleteProgram(this.particleProgram);
     }
 
     this.meshHandles.clear();
-    this.particleVao = null;
-    this.particlePosBuffer = null;
-    this.particleNormBuffer = null;
-    this.particleIndexBuffer = null;
-    this.particleInstanceBuffer = null;
+    this.particleHandle = null;
+    this.smokeHandle = null;
     this.atlasTexture = null;
     this.mainProgram = null;
     this.particleProgram = null;
@@ -425,19 +428,33 @@ export class Renderer3D implements RenderPassContext {
       this.getOrCreateMeshHandle(gl, envMesh);
     }
 
-    // Setup GPU-instanced particle VAO
-    this.initParticleInstancedVao(gl);
+    // Setup GPU-instanced particle & smoke quad VAOs + pre-warm Vulkan/Adreno PSOs
+    this.particleHandle = createParticleInstancedVao(gl, this.particleInstanceData.byteLength);
+    this.smokeHandle = createSmokeBillboardInstancedVao(gl, this.smokeInstanceData.byteLength);
+    warmUpWebGLPipelinesImpl(
+      this,
+      gl,
+      mainProg,
+      this.uViewProj,
+      this.uBlueprintMix,
+      this.uAtlas,
+      this.atlasTexture,
+      this.getParticleDrawHandles()
+    );
   }
 
-  private initParticleInstancedVao(gl: WebGL2RenderingContext): void {
-    const h = createParticleInstancedVao(gl, this.particleInstanceData.byteLength);
-    if (!h) return;
-    this.particleVao = h.vao;
-    this.particlePosBuffer = h.posBuf;
-    this.particleNormBuffer = h.normBuf;
-    this.particleIndexBuffer = h.idxBuf;
-    this.particleInstanceBuffer = h.instBuf;
-    this.particleIndexCount = h.indexCount;
+  private getParticleDrawHandles() {
+    return {
+      program: this.particleProgram,
+      vao: this.particleHandle?.vao ?? null,
+      instanceBuffer: this.particleHandle?.instBuf ?? null,
+      indexCount: this.particleHandle?.indexCount ?? 0,
+      smokeVao: this.smokeHandle?.vao ?? null,
+      smokeInstanceBuffer: this.smokeHandle?.instBuf ?? null,
+      smokeIndexCount: this.smokeHandle?.indexCount ?? 0,
+      uViewProj: this.uPartViewProj,
+      uStyle: this.uPartStyle,
+    };
   }
 
   private getOrCreateMeshHandle(gl: WebGL2RenderingContext, mesh: MeshData): GLMeshHandle {
@@ -582,9 +599,9 @@ export class Renderer3D implements RenderPassContext {
 
   /** VISUAL-GOLDEN-01: drop all in-flight particles, motes, shockwaves, bounces & shakes for deterministic frames */
   public resetTransientFx(): void {
-    this.particlePool.fill(0);
     this.activeParticleCount = 0;
     this.activeSmokeCount = 0;
+    this.particlePoolCount = 0;
     this.particleWriteCursor = 0;
     this.activeShockwaves.length = 0;
     this.activeVisualShreds.length = 0;
@@ -760,14 +777,7 @@ export class Renderer3D implements RenderPassContext {
       renderPass4ParticlesImpl(
         this,
         gl,
-        {
-          program: this.particleProgram,
-          vao: this.particleVao,
-          instanceBuffer: this.particleInstanceBuffer,
-          indexCount: this.particleIndexCount,
-          uViewProj: this.uPartViewProj,
-          uStyle: this.uPartStyle,
-        },
+        this.getParticleDrawHandles(),
         this.getParticleStyleCode(options.equippedParticle ?? 'micro_cubes')
       );
     }

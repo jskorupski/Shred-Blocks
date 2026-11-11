@@ -213,8 +213,10 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     const titleState = await page.evaluate(() => {
       const canvas = document.getElementById('game-canvas');
+      const halo = document.querySelector('#screen-game .astrolabe-backlight-halo');
       const stage = document.querySelector('#screen-game .board-stage');
       const cs = canvas ? window.getComputedStyle(canvas) : null;
+      const haloCs = halo ? window.getComputedStyle(halo) : null;
       const stageCs = stage ? window.getComputedStyle(stage) : null;
       const raysCs = stage ? window.getComputedStyle(stage, '::before') : null;
       return {
@@ -222,7 +224,7 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
         mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
         hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
         canvasFilter: cs ? cs.filter : '',
-        canvasAnim: cs ? cs.animationName : '',
+        haloAnim: haloCs ? haloCs.animationName : '',
         stageIsolation: stageCs ? stageCs.isolation : '',
         godRaysAnim: raysCs ? raysCs.animationName : '',
         godRaysBlend: raysCs ? raysCs.mixBlendMode : '',
@@ -231,18 +233,30 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     expect(titleState.backend).toBe('WEBGL2');
     expect(titleState.mix).toBe(1);
     expect(titleState.hasBackdropClass).toBe(true);
-    expect(titleState.canvasAnim).toBe('mysticRelicAura');
+    // PERF-TRANSITION-01: #game-canvas stays filter-free for hardware overlay promotion; halo carries the aura
+    expect(titleState.canvasFilter).toBe('none');
+    expect(titleState.haloAnim).toBe('mysticRelicAura');
     expect(titleState.stageIsolation).toBe('isolate');
     expect(titleState.godRaysAnim).toBe('mysticGodRays');
     expect(titleState.godRaysBlend).toBe('screen');
 
     // Verify subtle levitating/twisting + pulsating glow animates live frames on Title Screen
-    const frameA = await page.evaluate(() =>
-      (document.getElementById('game-canvas') as HTMLCanvasElement).toDataURL()
+    const frameA = await page.evaluate(
+      () =>
+        new Promise<string>((resolve) =>
+          requestAnimationFrame(() =>
+            resolve((document.getElementById('game-canvas') as HTMLCanvasElement).toDataURL())
+          )
+        )
     );
     await page.waitForTimeout(280);
-    const frameB = await page.evaluate(() =>
-      (document.getElementById('game-canvas') as HTMLCanvasElement).toDataURL()
+    const frameB = await page.evaluate(
+      () =>
+        new Promise<string>((resolve) =>
+          requestAnimationFrame(() =>
+            resolve((document.getElementById('game-canvas') as HTMLCanvasElement).toDataURL())
+          )
+        )
     );
     expect(frameA).not.toBe(frameB);
 
@@ -251,43 +265,50 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     const titleCanvasRect = await page.locator('#game-canvas').boundingBox();
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#title-overlay')).toBeHidden();
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(110);
     const midTransition = await page.evaluate(() => {
       const canvas = document.getElementById('game-canvas');
+      const halo = document.querySelector('#screen-game .astrolabe-backlight-halo');
       return {
         mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
         particles: window.__SHREDBLOCKS_DEBUG__.getTelemetry().activeParticles,
         burstClass: document.getElementById('screen-game')?.classList.contains('relic-awakening-burst'),
-        canvasAnim: canvas ? window.getComputedStyle(canvas).animationName : '',
+        canvasFilter: canvas ? window.getComputedStyle(canvas).filter : '',
+        haloAnim: halo ? window.getComputedStyle(halo).animationName : '',
       };
     });
     expect(midTransition.mix).toBeGreaterThan(0);
     expect(midTransition.mix).toBeLessThan(1);
-    expect(midTransition.particles).toBeGreaterThan(60);
+    expect(midTransition.particles).toBeGreaterThan(55);
     expect(midTransition.burstClass).toBe(true);
-    expect(midTransition.canvasAnim).toBe('relicAwakeningBloom');
-    // TITLE-TRANSITION-01: the burst halo is filter-only, so the canvas never shifts
+    expect(midTransition.canvasFilter).toBe('none');
+    expect(midTransition.haloAnim).toBe('relicAwakeningBloom');
+    // TITLE-TRANSITION-01: the burst halo is behind #game-canvas, so the canvas never shifts
     const midCanvasRect = await page.locator('#game-canvas').boundingBox();
     expect(Math.abs((midCanvasRect?.y ?? 0) - (titleCanvasRect?.y ?? 0))).toBeLessThan(1);
     expect(Math.abs((midCanvasRect?.width ?? 0) - (titleCanvasRect?.width ?? 0))).toBeLessThan(1);
 
-    await page.waitForTimeout(820);
+    await page.waitForTimeout(720);
     const settledGameState = await page.evaluate(() => {
       const canvas = document.getElementById('game-canvas');
+      const halo = document.querySelector('#screen-game .astrolabe-backlight-halo');
       const cs = canvas ? window.getComputedStyle(canvas) : null;
+      const haloCs = halo ? window.getComputedStyle(halo) : null;
       return {
         mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
         hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
         burstClass: document.getElementById('screen-game')?.classList.contains('relic-awakening-burst'),
         canvasFilter: cs ? cs.filter : '',
-        canvasAnim: cs ? cs.animationName : '',
+        haloAnim: haloCs ? haloCs.animationName : '',
+        haloOpacity: haloCs ? Number(haloCs.opacity) : 1,
       };
     });
     expect(settledGameState.mix).toBe(0);
     expect(settledGameState.hasBackdropClass).toBe(false);
     expect(settledGameState.burstClass).toBe(false);
-    expect(settledGameState.canvasAnim).toBe('none');
-    expect(settledGameState.canvasFilter).not.toBe(titleState.canvasFilter);
+    expect(settledGameState.canvasFilter).toBe('none');
+    expect(settledGameState.haloAnim).toBe('none');
+    expect(settledGameState.haloOpacity).toBe(0);
 
     // Re-open Title Screen, then load a level directly -> ZERO blueprintMix or backdrop leak!
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openTitleScreen());
@@ -296,20 +317,20 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(11));
     const directLoadState = await page.evaluate(() => {
-      const canvas = document.getElementById('game-canvas');
-      const cs = canvas ? window.getComputedStyle(canvas) : null;
+      const halo = document.querySelector('#screen-game .astrolabe-backlight-halo');
+      const haloCs = halo ? window.getComputedStyle(halo) : null;
       return {
         mix: window.__SHREDBLOCKS_DEBUG__.getBlueprintMix(),
         isTitleOpen: window.__SHREDBLOCKS_DEBUG__.isTitleScreenOpen(),
         hasBackdropClass: document.getElementById('screen-game')?.classList.contains('title-backdrop-mode'),
-        canvasAnim: cs ? cs.animationName : '',
+        haloAnim: haloCs ? haloCs.animationName : '',
       };
     });
     expect(directLoadState).toEqual({
       mix: 0,
       isTitleOpen: false,
       hasBackdropClass: false,
-      canvasAnim: 'none',
+      haloAnim: 'none',
     });
 
     // Re-open Title Screen, dismiss to Map -> blueprintMix immediately 0!

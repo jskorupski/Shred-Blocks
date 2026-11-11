@@ -21,38 +21,41 @@ float relicNoise(vec2 p) {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// Euclidean Voronoi edge distance reserved for the Title Screen Mystic Stone Relic (u_blueprintMix > 0)
+// Euclidean Voronoi edge distance reserved for the Title Screen Mystic Stone Relic (u_blueprintMix > 0).
+// Caches the 3x3 neighbor offsets in rv[9] so the edge-distance pass does zero redundant hashRelic22 calls.
 vec2 voronoiRockCrack(vec2 x) {
   vec2 n = floor(x);
   vec2 f = fract(x);
-  vec2 mg = vec2(0.0);
+  vec2 rv[9];
   vec2 mr = vec2(0.0);
+  int minIdx = 0;
   float md = 8.0;
   float shardHash = 0.0;
+  int k = 0;
   for (int j = -1; j <= 1; j++) {
     for (int i = -1; i <= 1; i++) {
       vec2 g = vec2(float(i), float(j));
       vec2 o = hashRelic22(n + g);
       vec2 r = g + (0.14 + 0.72 * o) - f;
+      rv[k] = r;
       float d = dot(r, r);
       if (d < md) {
         md = d;
         mr = r;
-        mg = g;
+        minIdx = k;
         shardHash = o.x;
       }
+      k++;
     }
   }
   md = 8.0;
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 g = vec2(float(i), float(j));
-      if (abs(g.x - mg.x) + abs(g.y - mg.y) > 0.01) {
-        vec2 o = hashRelic22(n + g);
-        vec2 r = g + (0.14 + 0.72 * o) - f;
-        if (dot(mr - r, mr - r) > 0.00001) {
-          md = min(md, dot(0.5 * (mr + r), normalize(r - mr)));
-        }
+  for (int idx = 0; idx < 9; idx++) {
+    if (idx != minIdx) {
+      vec2 r = rv[idx];
+      vec2 diff = r - mr;
+      float d2 = dot(diff, diff);
+      if (d2 > 0.00001) {
+        md = min(md, dot(0.5 * (mr + r), diff * inversesqrt(d2)));
       }
     }
   }

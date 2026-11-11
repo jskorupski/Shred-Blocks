@@ -2,11 +2,11 @@ import { fxRandom } from '../core/fx-random';
 import { isBlockInLockedRoom } from '../core/physics';
 import { getShape } from '../core/polyomino';
 import type { BoardState } from '../core/types';
+import { ENVIRONMENT_MESHES } from './mesh-generator';
 import {
+  allocParticleSlot,
   getStoneThemeMineralTint,
   INSTANCE_STRIDE,
-  MAX_PARTICLES,
-  PARTICLE_STRIDE,
   type RenderPassContext,
   SMOKE_SCALE_OFFSET,
 } from './render-types';
@@ -41,8 +41,7 @@ function writeParticle(
   rot: number,
   rotSpeed: number
 ): void {
-  const idx = rctx.particleWriteCursor * PARTICLE_STRIDE;
-  rctx.particleWriteCursor = (rctx.particleWriteCursor + 1) % MAX_PARTICLES;
+  const idx = allocParticleSlot(rctx);
   const pool = rctx.particlePool;
   pool[idx + 0] = px;
   pool[idx + 1] = py;
@@ -152,7 +151,9 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
   }
 
   // 4. Billowing twilight-slate vapor & warm amethyst-champagne glowing mist puffs
-  const smokeCount = Math.round(48 * density);
+  //    Scaled to active source cell count so compact 5x5 boards avoid excessive alpha overdraw.
+  const baseSmoke = Math.min(44, Math.max(28, Math.round(cells.length * 0.9)));
+  const smokeCount = Math.round(baseSmoke * density);
   for (let i = 0; i < smokeCount; i++) {
     const [sx, sy] = cells[(i * 7) % cells.length];
     const glowTint = i % 5 === 0 ? [0.84, 0.52, 0.98] : i % 4 === 0 ? [0.98, 0.8, 0.54] : null;
@@ -210,14 +211,17 @@ export interface ParticleDrawHandles {
   vao: WebGLVertexArrayObject | null;
   instanceBuffer: WebGLBuffer | null;
   indexCount: number;
+  smokeVao: WebGLVertexArrayObject | null;
+  smokeInstanceBuffer: WebGLBuffer | null;
+  smokeIndexCount: number;
   uViewProj: WebGLUniformLocation | null;
   uStyle: WebGLUniformLocation | null;
 }
 
 /**
- * Pass 4: GPU-instanced particles. Solid particles & stone shards draw with depth writes;
- * translucent smoke puffs draw in a 2nd instanced call with `depthMask(false)` so they never
- * punch holes through each other or the shards behind them.
+ * Pass 4: GPU-instanced particles. Solid particles & stone shards draw on `vao` with depth writes;
+ * translucent smoke puffs draw on a dedicated 2-triangle `smokeVao` + `smokeInstanceBuffer` with
+ * `depthMask(false)` so tile GPUs never experience mid-pass VBO write hazards or double-face cube overdraw.
  */
 export function renderPass4ParticlesImpl(
   rctx: RenderPassContext,
@@ -227,25 +231,136 @@ export function renderPass4ParticlesImpl(
 ): void {
   const solid = rctx.activeParticleCount;
   const smoke = rctx.activeSmokeCount;
-  if (solid + smoke <= 0 || !h.program || !h.vao || !h.instanceBuffer) return;
+  if (solid + smoke <= 0 || !h.program) return;
 
   gl.useProgram(h.program);
   gl.uniformMatrix4fv(h.uViewProj, false, rctx.camera.getViewProjectionMatrix(false));
   gl.uniform1i(h.uStyle, styleCode);
-  gl.bindVertexArray(h.vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, h.instanceBuffer);
 
-  if (solid > 0) {
+  if (solid > 0 && h.vao && h.instanceBuffer) {
+    gl.bindVertexArray(h.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, h.instanceBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, rctx.particleInstanceData.subarray(0, solid * INSTANCE_STRIDE));
     gl.drawElementsInstanced(gl.TRIANGLES, h.indexCount, gl.UNSIGNED_SHORT, 0, solid);
   }
-  if (smoke > 0) {
+  if (smoke > 0 && h.smokeVao && h.smokeInstanceBuffer) {
+    gl.bindVertexArray(h.smokeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, h.smokeInstanceBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, rctx.smokeInstanceData.subarray(0, smoke * INSTANCE_STRIDE));
     gl.depthMask(false);
     gl.disable(gl.CULL_FACE);
-    gl.drawElementsInstanced(gl.TRIANGLES, h.indexCount, gl.UNSIGNED_SHORT, 0, smoke);
+    gl.drawElementsInstanced(gl.TRIANGLES, h.smokeIndexCount, gl.UNSIGNED_SHORT, 0, smoke);
     gl.enable(gl.CULL_FACE);
     gl.depthMask(true);
   }
   gl.bindVertexArray(null);
+}
+
+const WARMUP_SOLID_INST = new Float32Array([0, 0, -50, -0.1, 0.3, 0.3, 0.4, 0]);
+const WARMUP_SMOKE_INST = new Float32Array([0, 0, -50, -10.5, 0.4, 0.4, 0.5, 0.5]);
+
+/**
+ * Pre-warms WebGL2 / ANGLE-Vulkan hardware pipeline state objects (`VkPipeline`) inside a 1x1
+ * color-masked scissor box during `initWebGLResources()` (`PERF-TRANSITION-01`) so Frame 1 of
+ * clicking Play and Frame 1 of block shredding never suffer lazy mobile driver PSO compilation stalls.
+ */
+export function warmUpWebGLPipelinesImpl(
+  rctx: RenderPassContext,
+  gl: WebGL2RenderingContext,
+  mainProgram: WebGLProgram,
+  uViewProj: WebGLUniformLocation | null,
+  uBlueprintMix: WebGLUniformLocation | null,
+  uAtlas: WebGLUniformLocation | null,
+  atlasTexture: WebGLTexture | null,
+  h: ParticleDrawHandles
+): void {
+  gl.enable(gl.SCISSOR_TEST);
+  gl.scissor(0, 0, 1, 1);
+  gl.colorMask(false, false, false, false);
+  gl.depthMask(false);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.enable(gl.BLEND);
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+  gl.useProgram(mainProgram);
+  gl.uniformMatrix4fv(uViewProj, false, rctx.camera.getViewProjectionMatrix(false));
+  gl.uniform1i(rctx.uUseClipPlane, 0);
+  gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
+  if (atlasTexture) {
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+    gl.uniform1i(uAtlas, 0);
+  }
+
+  for (const mix of [1.0, 0.5, 0.0]) {
+    gl.uniform1f(uBlueprintMix, mix);
+    rctx.drawMesh(
+      gl,
+      ENVIRONMENT_MESHES.unitParticleCube,
+      0,
+      0,
+      -50,
+      0.01,
+      0.01,
+      0.01,
+      0.5,
+      0.5,
+      0.5,
+      1,
+      0,
+      0,
+      0
+    );
+  }
+  rctx.drawAtlasBadge(gl, 'DIGIT_1', 0, 0, -50, 0.01, 1, 1, 1, 1);
+  gl.disable(gl.CULL_FACE);
+  gl.uniform1i(rctx.uUseClipPlane, 1);
+  rctx.drawMesh(
+    gl,
+    ENVIRONMENT_MESHES.unitParticleCube,
+    0,
+    0,
+    -50,
+    0.01,
+    0.01,
+    0.01,
+    0.5,
+    0.5,
+    0.5,
+    1,
+    0,
+    0,
+    0
+  );
+  gl.uniform1i(rctx.uUseClipPlane, 0);
+  gl.enable(gl.CULL_FACE);
+
+  if (h.program && h.vao && h.instanceBuffer && h.smokeVao && h.smokeInstanceBuffer) {
+    gl.useProgram(h.program);
+    gl.uniformMatrix4fv(h.uViewProj, false, rctx.camera.getViewProjectionMatrix(false));
+    gl.uniform1i(h.uStyle, 0);
+
+    gl.depthMask(true);
+    gl.bindVertexArray(h.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, h.instanceBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, WARMUP_SOLID_INST);
+    gl.drawElementsInstanced(gl.TRIANGLES, h.indexCount, gl.UNSIGNED_SHORT, 0, 1);
+
+    gl.depthMask(false);
+    gl.disable(gl.CULL_FACE);
+    gl.bindVertexArray(h.smokeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, h.smokeInstanceBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, WARMUP_SMOKE_INST);
+    gl.drawElementsInstanced(gl.TRIANGLES, h.smokeIndexCount, gl.UNSIGNED_SHORT, 0, 1);
+    gl.enable(gl.CULL_FACE);
+  }
+
+  gl.bindVertexArray(null);
+  gl.colorMask(true, true, true, true);
+  gl.depthMask(true);
+  gl.disable(gl.SCISSOR_TEST);
+  gl.flush();
 }

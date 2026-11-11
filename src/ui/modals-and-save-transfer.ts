@@ -538,13 +538,15 @@ export function dismissTitleScreenImpl(
     !app.saveManager.getPayload().settings.reducedMotion;
   if (!awaken) {
     app.blueprintMix = 0;
-  }
-  app.switchScreen(targetScreen);
-  if (awaken) {
-    // Relic Awakening Transformation (RELIC-AWAKEN-01): stone shatters into smoke, shards & glow
+  } else {
+    // Relic Awakening Transformation (RELIC-AWAKEN-01 / PERF-TRANSITION-01):
+    // Prepare burst state before screen switch so we never execute a wasted pre-burst WebGL render
+    // or double layout reflow on the click frame.
     app.blueprintMix = Math.min(app.blueprintMix, 0.995);
     app.renderer.spawnRelicAwakeningBurst(app.board);
-    document.getElementById('screen-game')?.classList.add('relic-awakening-burst');
+  }
+  switchScreenImpl(app, targetScreen, awaken);
+  if (awaken) {
     app.sound.playRelicAwaken();
   }
   if (targetScreen === 'game' && app.board.movesCommitted === 0) {
@@ -554,13 +556,20 @@ export function dismissTitleScreenImpl(
   }
 }
 
-export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 'themes'): void {
+export function switchScreenImpl(
+  app: AppViewContext,
+  screen: 'home' | 'game' | 'themes',
+  preserveAwakeningBurst = false
+): void {
   const wasTitleOpen = app.titleOverlayOpen;
   app.activeScreen = screen;
   app.titleOverlayOpen = false;
-  // Any screen switch (direct loadLevel, Map, Themes) cancels a running relic-awakening halo;
-  // dismissTitleScreenImpl re-adds it right after when launching gameplay from the Title Screen.
-  document.getElementById('screen-game')?.classList.remove('relic-awakening-burst');
+  const gameEl = document.getElementById('screen-game');
+  if (preserveAwakeningBurst) {
+    gameEl?.classList.add('relic-awakening-burst');
+  } else {
+    gameEl?.classList.remove('relic-awakening-burst');
+  }
   if (screen !== 'game') {
     app.blueprintMix = 0;
   }
@@ -580,9 +589,13 @@ export function switchScreenImpl(app: AppViewContext, screen: 'home' | 'game' | 
   } else if (screen === 'themes') {
     app.renderThemesStudio();
   } else if (screen === 'game') {
-    app.renderer.resize();
+    if (!preserveAwakeningBurst || app.renderer.canvas.width <= 64) {
+      app.renderer.resize();
+    }
     app.syncInGameHud();
-    app.renderNow();
+    if (!preserveAwakeningBurst) {
+      app.renderNow();
+    }
   }
 
   if (typeof history !== 'undefined' && !app.isApplyingPopstate) {

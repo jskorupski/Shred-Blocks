@@ -264,30 +264,18 @@ export function playButtonTapVoice(ctx: AudioContext, sfxGain: GainNode): void {
   osc.stop(now + 0.025);
 }
 
+const RELIC_AWAKEN_DURATION_SEC = 1.68;
+const relicAwakenNoiseCache = new WeakMap<AudioContext, AudioBuffer>();
+
 /**
- * Relic Awakening (`RELIC-AWAKEN-01`, Title Screen -> Gameplay):
- * Warm, longer-lasting mystic stone detonation (~1.68s): slightly louder sub-bass boom (`116 -> 34 Hz`),
- * sustained rolling tectonic stone-fracture rumble + secondary aftershock rumble, sub-octave seismic sine,
- * and dual-band warm pink-noise whoosh + airy swish through a flat `1280 Hz` Butterworth warmth ceiling
- * (zero bells, dings, or harsh highs).
+ * Pre-generates and caches the `1.68s` 1-pole warm pink/brown noise buffer once per `AudioContext`
+ * (`PERF-TRANSITION-01`) so tapping Play on mobile never runs an `80,640`-sample loop on the click frame.
  */
-export function playRelicAwakenVoice(ctx: AudioContext, sfxGain: GainNode): void {
-  const now = ctx.currentTime;
-  const totalDur = 1.68;
+export function getOrCreateRelicAwakenNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  const cached = relicAwakenNoiseCache.get(ctx);
+  if (cached) return cached;
 
-  // Velvet master bus: 1280 Hz Butterworth lowpass (Q = 0.5) guarantees zero harsh highs or clipping
-  const masterFilter = ctx.createBiquadFilter();
-  masterFilter.type = 'lowpass';
-  masterFilter.frequency.setValueAtTime(1280, now);
-  masterFilter.Q.setValueAtTime(0.5, now);
-
-  const masterGain = ctx.createGain();
-  masterGain.gain.setValueAtTime(0.98, now);
-  masterFilter.connect(masterGain);
-  masterGain.connect(sfxGain);
-
-  // Shared 1-pole warm pink/brown noise buffer with feathered cosine edges (click-free)
-  const sampleCount = Math.max(1, Math.floor(ctx.sampleRate * totalDur));
+  const sampleCount = Math.max(1, Math.floor(ctx.sampleRate * RELIC_AWAKEN_DURATION_SEC));
   const noiseBuffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
   const data = noiseBuffer.getChannelData(0);
   const edgeSamples = Math.max(1, Math.floor(ctx.sampleRate * 0.032));
@@ -304,6 +292,33 @@ export function playRelicAwakenVoice(ctx: AudioContext, sfxGain: GainNode): void
     }
     data[i] = lpState * 2.9 * env;
   }
+
+  relicAwakenNoiseCache.set(ctx, noiseBuffer);
+  return noiseBuffer;
+}
+
+/**
+ * Relic Awakening (`RELIC-AWAKEN-01`, Title Screen -> Gameplay):
+ * Warm, longer-lasting mystic stone detonation (~1.68s): slightly louder sub-bass boom (`116 -> 34 Hz`),
+ * sustained rolling tectonic stone-fracture rumble + secondary aftershock rumble, sub-octave seismic sine,
+ * and dual-band warm pink-noise whoosh + airy swish through a flat `1280 Hz` Butterworth warmth ceiling
+ * (zero bells, dings, or harsh highs).
+ */
+export function playRelicAwakenVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  const now = ctx.currentTime;
+
+  // Velvet master bus: 1280 Hz Butterworth lowpass (Q = 0.5) guarantees zero harsh highs or clipping
+  const masterFilter = ctx.createBiquadFilter();
+  masterFilter.type = 'lowpass';
+  masterFilter.frequency.setValueAtTime(1280, now);
+  masterFilter.Q.setValueAtTime(0.5, now);
+
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(0.98, now);
+  masterFilter.connect(masterGain);
+  masterGain.connect(sfxGain);
+
+  const noiseBuffer = getOrCreateRelicAwakenNoiseBuffer(ctx);
 
   // 1. Deep Sub-Bass Boom + Sub-Octave Seismic Rumble (116 -> 50 -> 34 Hz & 45 -> 33 Hz sines)
   const subOsc = ctx.createOscillator();
