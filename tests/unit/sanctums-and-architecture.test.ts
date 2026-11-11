@@ -449,6 +449,15 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(shadersTs).toContain('voronoiRockCrack');
     expect(shadersTs).toContain('creviceGrime');
     expect(shadersTs).toContain('u_materialStyle == 5');
+    // BLOCK-STONE-01 default Relic Stone skin (worn meshes + carved sigils) & WOOD-GRAIN-01 realistic wood
+    expect(shadersTs).toContain('u_materialStyle == 6');
+    expect(shadersTs).toContain('ringCoord');
+    const meshGenTs = fs.readFileSync(path.join(repoRoot, 'src/render/mesh-generator.ts'), 'utf8');
+    expect(meshGenTs).toContain('meshOuterWorn');
+    const catalogTs = fs.readFileSync(path.join(repoRoot, 'src/ui/catalog-meta.ts'), 'utf8');
+    expect(catalogTs.indexOf("id: 'relic_stone'")).toBeLessThan(catalogTs.indexOf("id: 'classic_studs'"));
+    const saveManagerTs = fs.readFileSync(path.join(repoRoot, 'src/storage/save-manager.ts'), 'utf8');
+    expect(saveManagerTs).toContain("equippedSkin: 'relic_stone'");
     expect(shadersTs).toContain("from './shaders-particles'");
     for (const passFile of ['src/render/pass1-courtyard.ts', 'src/render/pass1-gates-barriers.ts']) {
       expect(fs.readFileSync(path.join(repoRoot, passFile), 'utf8')).toContain('STONE_SURFACE_STYLE');
@@ -532,7 +541,7 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     const slateTint = getStoneThemeMineralTint('industrial_slate', 'classic_studs');
     const birchTint = getStoneThemeMineralTint('warm_birch', 'carved_wood');
     const midnightTint = getStoneThemeMineralTint('midnight_arcade', 'neon_cyber');
-    const quartzTint = getStoneThemeMineralTint('frosted_quartz', 'smooth_bevel');
+    const quartzTint = getStoneThemeMineralTint('frosted_quartz', 'relic_stone');
     const mintTint = getStoneThemeMineralTint('mint_studio', 'gummy_jelly');
 
     expect(slateTint[2]).toBeGreaterThan(slateTint[0]); // Cool architectural slate-gray
@@ -541,7 +550,7 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(quartzTint[2]).toBeGreaterThan(quartzTint[0]); // Pale glacial quartzite
     expect(mintTint[1]).toBeGreaterThan(mintTint[0]); // Muted celadon-sage slate
 
-    const skins: SkinId[] = ['classic_studs', 'smooth_bevel', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
+    const skins: SkinId[] = ['classic_studs', 'relic_stone', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
     const trays: TrayId[] = [
       'industrial_slate',
       'warm_birch',

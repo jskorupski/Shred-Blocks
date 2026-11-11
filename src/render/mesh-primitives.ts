@@ -19,6 +19,10 @@ export interface PolyominoMeshEntry {
   meshOuterStudded: MeshData;
   /** Inner nested core shell with top cylindrical studs (`classic_studs` skin) */
   meshInnerCoreStudded: MeshData;
+  /** Outer shell with deep worn chamfers (`relic_stone` default skin, `BLOCK-STONE-01`) */
+  meshOuterWorn: MeshData;
+  /** Inner nested core shell with deep worn chamfers (`relic_stone` default skin) */
+  meshInnerCoreWorn: MeshData;
 }
 
 export class MeshBuilder {

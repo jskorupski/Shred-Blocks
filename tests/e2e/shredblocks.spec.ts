@@ -411,10 +411,10 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.locator('#tab-btn-themes').click();
     await expect(page.locator('#screen-themes')).toBeVisible();
 
-    // Unlock & equip Smooth Bevel skin (250 coins -> leaves 100 coins)
-    await page.locator('button[data-theme-id="smooth_bevel"]').click();
+    // Unlock & equip Classic Studs skin (250 coins -> leaves 100 coins)
+    await page.locator('button[data-theme-id="classic_studs"]').click();
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave().equippedSkin)).toBe(
-      'smooth_bevel'
+      'classic_studs'
     );
     await expect(page.locator('#themes-coins-display')).toHaveText('100');
 
@@ -461,7 +461,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
 
     // Cycle through all 5 Block Skins x 5 Board Trays while High Contrast + Colorblind Symbols are active
     await page.evaluate(() => {
-      const skins = ['classic_studs', 'smooth_bevel', 'gummy_jelly', 'carved_wood', 'neon_cyber'] as const;
+      const skins = ['classic_studs', 'relic_stone', 'gummy_jelly', 'carved_wood', 'neon_cyber'] as const;
       const trays = [
         'industrial_slate',
         'warm_birch',
@@ -500,7 +500,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
       dbg.setHighContrast(false);
       dbg.setColorblindMode(false);
       dbg.setReducedMotion(false);
-      dbg.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      dbg.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
     });
     await page.locator('#btn-pause').click();
     await page.locator('#btn-pause-home').click();

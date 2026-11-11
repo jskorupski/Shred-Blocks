@@ -101,7 +101,7 @@ export function renderPass3BlocksImpl(
       1.0,
       0,
       0,
-      anim.colorId === 0 ? 0 : matStyle
+      anim.colorId === 0 ? 6 : matStyle
     );
 
     gl.uniform1i(rctx.uUseClipPlane, 0);
@@ -332,7 +332,7 @@ export function renderPass3BlocksImpl(
       1.0,
       0,
       0,
-      activeColor === 0 ? 0 : matStyle
+      activeColor === 0 ? 6 : matStyle
     );
 
     if (isStoneRuin) {

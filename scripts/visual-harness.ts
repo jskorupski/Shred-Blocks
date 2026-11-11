@@ -385,9 +385,9 @@ async function runVisualHarness(): Promise<void> {
       path: join(ARTIFACT_SCRATCH_DIR, '13-level-200-desktop-wood-theme.png'),
     });
 
-    // 22. Desktop Widescreen Smooth Bevel + Midnight Arcade Theme on Level 81 (Wooden Crates)
+    // 22. Desktop Widescreen Classic Studs + Midnight Arcade Theme on Level 81 (Wooden Crates)
     await desktopPage.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setTheme('smooth_bevel', 'midnight_arcade', 'pixel_sparks');
+      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'midnight_arcade', 'pixel_sparks');
       window.__SHREDBLOCKS_DEBUG__.loadLevel(81);
     });
     await desktopPage.waitForTimeout(150);
@@ -397,7 +397,7 @@ async function runVisualHarness(): Promise<void> {
 
     // 23. Level 21: Immovable Interior Pillars (occ === -2, Dark Obsidian-Bronze + Brass Lock) & Cutouts
     await desktopPage.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
       window.__SHREDBLOCKS_DEBUG__.loadLevel(21);
     });
     await desktopPage.waitForTimeout(150);
@@ -407,7 +407,7 @@ async function runVisualHarness(): Promise<void> {
 
     // 24. Level 71: Movable Neutral Stone Sliders (color: 0, Brushed Silver-Steel + Crosshatch)
     await desktopPage.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
       window.__SHREDBLOCKS_DEBUG__.loadLevel(71);
     });
     await desktopPage.waitForTimeout(150);
@@ -417,7 +417,7 @@ async function runVisualHarness(): Promise<void> {
 
     // 25. Level 11: Full-Block 3D Axis-Lock Directional Rail Channels + Sculpted Medallion + 3D Perimeter Frame Guide (Desktop)
     await desktopPage.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
       window.__SHREDBLOCKS_DEBUG__.loadLevel(11);
     });
     await desktopPage.waitForTimeout(180);
@@ -453,7 +453,7 @@ async function runVisualHarness(): Promise<void> {
     const mobileL11Page = await mobileL11Ctx.newPage();
     await mobileL11Page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await mobileL11Page.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
       window.__SHREDBLOCKS_DEBUG__.loadLevel(11);
     });
     await mobileL11Page.waitForTimeout(180);
@@ -517,7 +517,7 @@ async function runVisualHarness(): Promise<void> {
     await mobileL11Page.evaluate(() => {
       window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
       window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
-      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
       window.__SHREDBLOCKS_DEBUG__.loadLevel(28);
     });
     await mobileL11Page.waitForTimeout(180);
@@ -570,7 +570,7 @@ async function runVisualHarness(): Promise<void> {
     await mobileL11Page.evaluate(() => {
       window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
       window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
-      window.__SHREDBLOCKS_DEBUG__.setTheme('classic_studs', 'industrial_slate', 'micro_cubes');
+      window.__SHREDBLOCKS_DEBUG__.setTheme('relic_stone', 'industrial_slate', 'micro_cubes');
       window.__SHREDBLOCKS_DEBUG__.loadLevel(25);
       window.__SHREDBLOCKS_DEBUG__.openTitleScreen();
     });

@@ -104,7 +104,7 @@ uniform vec3 u_capColor;
 uniform vec4 u_clipPlane;
 uniform int u_useClipPlane;
 uniform int u_useTexture;
-uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=stone_surface
+uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=stone_surface, 6=relic_stone
 uniform sampler2D u_atlas;
 uniform float u_blueprintMix;
 uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
@@ -227,11 +227,77 @@ void main() {
     specStrength = u_highContrast == 1 ? 0.34 : 0.45;
     base = mix(base, vec3(1.0), 0.12 * rim);
   } else if (u_materialStyle == 2) {
-    // carved_wood: warm procedural woodgrain bands locked to block-local coordinates
-    float grainAmp = u_highContrast == 1 ? 0.048 : 0.105;
-    float grain = sin(v_localPos.x * 16.0 + v_localPos.y * 6.0 + sin(v_localPos.x * 5.0 - v_localPos.y * 4.0) * 1.6) * grainAmp;
-    base = clamp(base + vec3(grain * 1.1, grain * 0.85, grain * 0.55), 0.0, 1.0);
-    specStrength = 0.16;
+    // carved_wood (WOOD-GRAIN-01): stained hardwood. Concentric growth rings around a log axis running along
+    // block-local X (flowing cathedral arcs on top faces, end-grain arcs on sides), noise-warped figure,
+    // earlywood/latewood contrast, elongated open pores, and a satin varnish sheen.
+    vec3 wq = v_localPos;
+    float figureWarp = relicNoise(wq.xy * vec2(0.9, 2.6) + 3.7) * 1.35 + relicNoise(wq.xy * vec2(2.4, 7.5)) * 0.35;
+    float ringCoord = length(vec2(wq.y * 2.6 + figureWarp, (wq.z - 1.4) * 2.6)) * 1.15;
+    float ringPhase = fract(ringCoord);
+    float earlywood = smoothstep(0.0, 0.16, ringPhase) * smoothstep(1.0, 0.62, ringPhase);
+    float latewood = 1.0 - earlywood;
+    float pores = smoothstep(0.62, 0.92, relicNoise(vec2(wq.x * 5.5, wq.y * 95.0 + figureWarp * 30.0)));
+    float streak = relicNoise(vec2(wq.x * 0.7, wq.y * 18.0 + figureWarp * 4.0)) - 0.5;
+    float woodAmp = u_highContrast == 1 ? 0.45 : 1.0;
+    vec3 stained = mix(base, base * vec3(1.05, 0.9, 0.74) + vec3(0.045, 0.026, 0.006), 0.42);
+    float woodLum = 1.0 + (earlywood * 0.07 - latewood * 0.16 - pores * 0.07 + streak * 0.08) * woodAmp;
+    base = clamp(stained * woodLum, 0.0, 1.0);
+    specPower = 22.0;
+    specStrength = 0.13 + earlywood * 0.05;
+  } else if (u_materialStyle == 6) {
+    // relic_stone (BLOCK-STONE-01, default skin): heavy pigmented ancient stone with mineral mottling, hue drift,
+    // grain, pitting, hairline veins, worn edges, and a carved socket sigil on every top cell.
+    vec2 bp = v_localPos.xy;
+    float sAmp6 = u_highContrast == 1 ? 0.45 : 1.0;
+    // Time-worn rounded edges: bend the flat chamfer/upper-side normals along a smooth quarter-round profile so
+    // the deep worn bevel shades like an eroded, rounded stone edge instead of a crisp machined facet.
+    float faceNz = N.z;
+    float wornBand = clamp((v_localPos.z - (0.58 - 0.16)) / 0.16, 0.0, 1.0);
+    if (N.z < 0.95 && wornBand > 0.0) {
+      vec3 sideN = normalize(vec3(N.xy, 0.0001));
+      float roundT = wornBand * wornBand * (3.0 - 2.0 * wornBand);
+      N = normalize(mix(sideN, vec3(0.0, 0.0, 1.0), roundT * 0.92));
+      diff1 = max(dot(N, L1), 0.0);
+      diff2 = max(dot(N, L2), 0.0) * 0.28;
+      rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+    }
+    float bMottle = relicNoise(bp * 2.2 + v_localPos.z * 1.7) * 0.6 + relicNoise(bp * 6.3 + 3.1) * 0.4 - 0.5;
+    float bGrain = (relicNoise(bp * 41.0 + 7.0) - 0.5) * 2.0; // organic fine grain (no lattice)
+    float bPit = smoothstep(0.8, 0.95, relicNoise(bp * 23.0 + bMottle * 3.0 + 13.0)); // scattered weathering pits
+    float bVein = 1.0 - smoothstep(0.0, 0.022 + fwidth(bp.x) * 0.8, voronoiRockCrack(bp * 1.25 + bMottle * 0.4 + 11.0).x);
+    float isTopFace = smoothstep(0.86, 0.96, faceNz) * step(0.45, v_localPos.z);
+    vec2 cuv = fract(bp) - 0.5;
+    float rr = length(cuv);
+    float aa = fwidth(rr) + 0.004;
+    // Carved socket sigil: deep ring groove around a worn raised boss, a faint outer incised ring, and a tiny
+    // drilled center — an ancient-relic echo of toy-block studs (no crosshair ticks).
+    float ringGroove = 1.0 - smoothstep(0.02, 0.02 + aa * 1.5, abs(rr - 0.2));
+    float outerIncise = (1.0 - smoothstep(0.006, 0.006 + aa, abs(rr - 0.3))) * 0.45;
+    float drill = (1.0 - smoothstep(0.022, 0.022 + aa, rr)) * 0.7;
+    float carve = clamp(ringGroove + outerIncise + drill, 0.0, 1.0) * isTopFace;
+    // Directional catch-light on the far inner wall of the groove + lit top of the raised boss (sells the cut)
+    vec2 lightDir2 = normalize(vec2(0.35, 0.55));
+    vec2 cdir = normalize(cuv + 1e-4);
+    float grooveWall = (1.0 - smoothstep(0.0, 0.012 + aa, abs(rr - 0.222))) * isTopFace;
+    float lipLit = grooveWall * max(dot(cdir, lightDir2), 0.0);
+    float bossRim = (1.0 - smoothstep(0.0, 0.012 + aa, abs(rr - 0.172))) * isTopFace;
+    float bossLit = bossRim * max(dot(cdir, -lightDir2), 0.0);
+    float boss = (1.0 - smoothstep(0.16, 0.18, rr)) * isTopFace;
+    // Worn, chalky exposed edges (rounded chamfer band) + large blotchy weathering zones
+    float edgeWear = (1.0 - smoothstep(0.88, 0.97, faceNz)) * smoothstep(0.15, 0.6, wornBand);
+    float regionVar = relicNoise(bp * 0.85 + v_localPos.z * 0.6 + 31.0) - 0.5;
+    float stoneLum =
+      1.0 + (bMottle * 0.3 + regionVar * 0.22 + bGrain * 0.035 - bPit * 0.13 - bVein * 0.16 + boss * 0.06) * sAmp6;
+    // Time-faded pigment: partially bleached toward warm chalky stone, more on worn edges & exposed zones
+    vec3 lumC = vec3(dot(base, vec3(0.299, 0.587, 0.114)));
+    float fadeAmt = clamp(0.3 + regionVar * 0.45 + edgeWear * 0.35, 0.0, 0.8) * mix(1.0, 0.4, float(u_highContrast));
+    vec3 pigment = mix(base, lumC * vec3(1.05, 1.0, 0.92) + vec3(0.09, 0.085, 0.075), fadeAmt);
+    float hueDrift = (relicNoise(bp * 1.4 + 21.0) - 0.5) * 0.18 * sAmp6;
+    pigment *= vec3(1.0 + hueDrift, 1.0 + hueDrift * 0.3, 1.0 - hueDrift);
+    base = clamp(pigment * stoneLum * (1.0 - carve * 0.36 * mix(1.0, 0.7, float(u_highContrast))), 0.0, 1.0);
+    base += vec3((lipLit + bossLit) * 0.1 * sAmp6);
+    specPower = 14.0;
+    specStrength = 0.06;
   } else if (u_materialStyle == 3) {
     // neon_cyber: dark core with bright edge rim (kept brighter in High Contrast mode)
     float coreMul = u_highContrast == 1 ? 0.92 : 0.72;
@@ -243,8 +309,8 @@ void main() {
     // Luminance-only modulation keeps each Board Tray's palette identity; u_stoneTint adds a faint mineral cast.
     vec2 sp = v_worldPos.xy + v_worldPos.z * vec2(0.7, 1.3);
     float sMottle = relicNoise(sp * 1.15) * 0.65 + relicNoise(sp * 3.1 + 4.7) * 0.35 - 0.5;
-    float sGrain = sin(sp.x * 41.0 + cos(sp.y * 33.0)) * cos(sp.y * 47.0 + sin(sp.x * 29.0));
-    float sPit = smoothstep(0.72, 0.97, sin(sp.x * 63.0 + sMottle * 6.0) * cos(sp.y * 59.0 - sMottle * 6.0));
+    float sGrain = (relicNoise(sp * 37.0 + 3.0) - 0.5) * 2.0;
+    float sPit = smoothstep(0.8, 0.95, relicNoise(sp * 21.0 + sMottle * 3.0 + 5.0));
     float sVein = 1.0 - smoothstep(0.0, 0.03 + fwidth(sp.x) * 0.8, voronoiRockCrack(sp * 0.85 + sMottle * 0.3).x);
     float sAmp = u_highContrast == 1 ? 0.45 : 1.0;
     float sLum = 1.0 + (sMottle * 0.2 + sGrain * 0.03 - sPit * 0.08 - sVein * 0.15) * sAmp;

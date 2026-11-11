@@ -130,7 +130,7 @@ const TRAY_STONE_TINTS: Record<TrayId, readonly [number, number, number]> = {
 
 const SKIN_STONE_NUANCES: Record<SkinId, readonly [number, number, number]> = {
   classic_studs: [1.0, 1.0, 1.0],
-  smooth_bevel: [1.01, 1.01, 1.02],
+  relic_stone: [1.01, 1.01, 1.02],
   gummy_jelly: [1.04, 0.97, 1.02],
   carved_wood: [1.07, 0.98, 0.88],
   neon_cyber: [0.94, 0.93, 1.08],
@@ -144,10 +144,10 @@ const SKIN_STONE_NUANCES: Record<SkinId, readonly [number, number, number]> = {
  */
 export function getStoneThemeMineralTint(
   trayId: TrayId = 'industrial_slate',
-  skinId: SkinId = 'classic_studs'
+  skinId: SkinId = 'relic_stone'
 ): [number, number, number] {
   const t = TRAY_STONE_TINTS[trayId] ?? TRAY_STONE_TINTS.industrial_slate;
-  const s = SKIN_STONE_NUANCES[skinId] ?? SKIN_STONE_NUANCES.classic_studs;
+  const s = SKIN_STONE_NUANCES[skinId] ?? SKIN_STONE_NUANCES.relic_stone;
   return [t[0] * 0.82 + s[0] * 0.18, t[1] * 0.82 + s[1] * 0.18, t[2] * 0.82 + s[2] * 0.18];
 }
 

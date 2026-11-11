@@ -144,7 +144,7 @@ export type InputMode = 'DRAG' | 'TARGET_HAMMER' | 'TARGET_ROCKET' | 'TARGET_VAC
 export type RocketAxis = 'ROW' | 'COL';
 export type QualityTier = 'AUTO' | 'ULTRA_120' | 'BALANCED_60';
 
-export type SkinId = 'classic_studs' | 'smooth_bevel' | 'gummy_jelly' | 'carved_wood' | 'neon_cyber';
+export type SkinId = 'classic_studs' | 'relic_stone' | 'gummy_jelly' | 'carved_wood' | 'neon_cyber';
 export type TrayId = 'industrial_slate' | 'warm_birch' | 'midnight_arcade' | 'frosted_quartz' | 'mint_studio';
 export type ParticleStyleId =
   | 'micro_cubes'

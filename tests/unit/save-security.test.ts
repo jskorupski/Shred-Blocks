@@ -9,7 +9,7 @@ import {
 } from '../../src/storage/save-code';
 import { createDefaultSavePayload, extractImportCodeFromHash } from '../../src/storage/save-manager';
 
-const SKINS = ['classic_studs', 'smooth_bevel', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
+const SKINS = ['classic_studs', 'relic_stone', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
 const TRAYS = ['industrial_slate', 'warm_birch', 'midnight_arcade', 'frosted_quartz', 'mint_studio'];
 const PARTICLES = ['micro_cubes', 'star_confetti', 'pixel_sparks', 'soap_bubbles', 'lightning_bolts'];
 

@@ -708,12 +708,33 @@ export const POLYOMINO_MESH_CATALOG: Record<string, PolyominoMeshEntry> = (() =>
       studRadius: 0.15,
     });
 
+    // Relic Stone (`BLOCK-STONE-01`): deep worn chamfers (smoothed into rounded edges by the shader)
+    const meshOuterWorn = buildMorphologicalPolyominoMesh(shape, STD_INSET, {
+      zBottom: 0.0,
+      zTop: BLOCK_HEIGHT,
+      bevelXY: 0.085,
+      bevelZ: 0.11,
+      recessedInnerCavity: true,
+      withStuds: false,
+    });
+
+    const meshInnerCoreWorn = buildMorphologicalPolyominoMesh(shape, CORE_INSET, {
+      zBottom: 0.52,
+      zTop: BLOCK_HEIGHT + 0.022,
+      bevelXY: 0.06,
+      bevelZ: 0.07,
+      recessedInnerCavity: false,
+      withStuds: false,
+    });
+
     catalog[shapeId] = {
       shapeId,
       meshOuter,
       meshInnerCore,
       meshOuterStudded,
       meshInnerCoreStudded,
+      meshOuterWorn,
+      meshInnerCoreWorn,
     };
   }
   return catalog;
@@ -721,7 +742,7 @@ export const POLYOMINO_MESH_CATALOG: Record<string, PolyominoMeshEntry> = (() =>
 
 export function getPolyominoMeshPair(
   shapeId: string,
-  skin: SkinId = 'smooth_bevel'
+  skin: SkinId = 'relic_stone'
 ): { meshOuter: MeshData; meshInnerCore: MeshData } {
   const entry = POLYOMINO_MESH_CATALOG[shapeId] ?? POLYOMINO_MESH_CATALOG['1x1'];
   if (skin === 'classic_studs') {
@@ -729,6 +750,9 @@ export function getPolyominoMeshPair(
       meshOuter: entry.meshOuterStudded,
       meshInnerCore: entry.meshInnerCoreStudded,
     };
+  }
+  if (skin === 'relic_stone') {
+    return { meshOuter: entry.meshOuterWorn, meshInnerCore: entry.meshInnerCoreWorn };
   }
   return {
     meshOuter: entry.meshOuter,

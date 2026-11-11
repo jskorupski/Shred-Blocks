@@ -105,7 +105,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       fullSave.totalMovesCommitted = 1980;
       fullSave.shredderChestProgress = 50;
       fullSave.milestoneChestLevel = 200;
-      fullSave.unlockedSkins = ['classic_studs', 'smooth_bevel', 'gummy_jelly', 'neon_cyber'];
+      fullSave.unlockedSkins = ['classic_studs', 'relic_stone', 'gummy_jelly', 'neon_cyber'];
       fullSave.equippedSkin = 'neon_cyber';
 
       for (let lvl = 1; lvl <= 200; lvl++) {
@@ -668,7 +668,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
     it('persists and round-trips all 8 settings and all 15 customization items across SaveManager and SaveCode', () => {
       const manager = new SaveManager();
 
-      const skins: SkinId[] = ['classic_studs', 'smooth_bevel', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
+      const skins: SkinId[] = ['classic_studs', 'relic_stone', 'gummy_jelly', 'carved_wood', 'neon_cyber'];
       const trays: TrayId[] = [
         'industrial_slate',
         'warm_birch',

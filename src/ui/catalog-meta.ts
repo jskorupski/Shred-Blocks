@@ -207,13 +207,17 @@ export function getThemeItemPrice(catalogIndex: number): number {
 
 export const SKIN_CATALOG: ReadonlyArray<{ id: SkinId; name: string; desc: string }> = [
   {
-    id: 'classic_studs',
-    name: 'Classic Studs',
-    desc: 'Tactile toy-box blocks with raised top studs',
+    id: 'relic_stone',
+    name: 'Relic Stone',
+    desc: 'Heavy pigmented ancient stone blocks with carved socket glyphs',
   },
-  { id: 'smooth_bevel', name: 'Smooth Bevel', desc: 'Sleek satin-matte chamfered acrylic blocks' },
+  { id: 'classic_studs', name: 'Classic Studs', desc: 'Tactile toy-box blocks with raised top studs' },
   { id: 'gummy_jelly', name: 'Gummy Jelly', desc: 'Glossy translucent subsurface candy blocks' },
-  { id: 'carved_wood', name: 'Carved Wood', desc: 'Warm artisan hardwood blocks with grain bands' },
+  {
+    id: 'carved_wood',
+    name: 'Carved Wood',
+    desc: 'Stained hardwood blocks with flowing grain, rings & pores',
+  },
   { id: 'neon_cyber', name: 'Neon Cyber', desc: 'Dark obsidian core with glowing neon rim light' },
 ];
 

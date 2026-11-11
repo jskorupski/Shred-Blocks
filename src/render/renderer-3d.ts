@@ -589,7 +589,8 @@ export class Renderer3D implements RenderPassContext {
     return highContrast ? entry.hcRgb : entry.rgb;
   }
 
-  public getMaterialStyleCode(skin: SkinId = 'smooth_bevel'): number {
+  public getMaterialStyleCode(skin: SkinId = 'relic_stone'): number {
+    if (skin === 'relic_stone') return 6;
     if (skin === 'gummy_jelly') return 1;
     if (skin === 'carved_wood') return 2;
     if (skin === 'neon_cyber') return 3;
@@ -707,7 +708,7 @@ export class Renderer3D implements RenderPassContext {
     const gl = this.gl;
     if (!gl) return;
     const trayId = options.equippedTray ?? 'industrial_slate';
-    const skinId = options.equippedSkin ?? 'smooth_bevel';
+    const skinId = options.equippedSkin ?? 'relic_stone';
     const highContrast = Boolean(options.highContrast);
     const colorblind = Boolean(options.colorblindSymbols);
     const palette = this.getEffectiveTrayPalette(trayId, highContrast);
