@@ -1,60 +1,90 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Twilight Architectural Sanctuary Sky Gradient -->
-    <linearGradient id="sanctuarySky" x1="0" y1="0" x2="0.35" y2="1">
-      <stop offset="0%" stop-color="#17122B"/>
-      <stop offset="48%" stop-color="#2D204E"/>
-      <stop offset="82%" stop-color="#4B2F61"/>
-      <stop offset="100%" stop-color="#6B3E63"/>
+    <!-- Zen Mystic Twilight-to-Amethyst Sanctuary Sky -->
+    <linearGradient id="sanctuarySky" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0%" stop-color="#120E24"/>
+      <stop offset="44%" stop-color="#241944"/>
+      <stop offset="78%" stop-color="#3D2459"/>
+      <stop offset="100%" stop-color="#58325D"/>
     </linearGradient>
 
-    <!-- Warm Golden Sanctuary Sunburst Glow -->
-    <radialGradient id="sunburstGlow" cx="50%" cy="46%" r="54%">
-      <stop offset="0%" stop-color="#F6BD60" stop-opacity="0.34"/>
-      <stop offset="55%" stop-color="#E07A5F" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#17122B" stop-opacity="0"/>
+    <!-- Champagne-Gold to Mystic Amethyst-Orchid Astrolabe Backlight Halo -->
+    <radialGradient id="sunburstGlow" cx="50%" cy="49%" r="54%">
+      <stop offset="0%" stop-color="#FFE6A3" stop-opacity="0.52"/>
+      <stop offset="44%" stop-color="#F6BD60" stop-opacity="0.38"/>
+      <stop offset="68%" stop-color="#CF6BFA" stop-opacity="0.28"/>
+      <stop offset="88%" stop-color="#8B46D8" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#120E24" stop-opacity="0"/>
     </radialGradient>
 
-    <!-- Outer Squircle Champagne-Gold Architectural Rim -->
-    <linearGradient id="goldRim" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#FFEAD0" stop-opacity="0.72"/>
-      <stop offset="50%" stop-color="#F6BD60" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="#9B72CF" stop-opacity="0.38"/>
+    <!-- Satin Astrolabe Slate Inner Courtyard Plinth -->
+    <linearGradient id="slatePlinth" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#2E274A" stop-opacity="0.92"/>
+      <stop offset="55%" stop-color="#211B38" stop-opacity="0.94"/>
+      <stop offset="100%" stop-color="#171229" stop-opacity="0.96"/>
+    </linearGradient>
+    <linearGradient id="plinthRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFE4A0" stop-opacity="0.46"/>
+      <stop offset="55%" stop-color="#D67BFF" stop-opacity="0.36"/>
+      <stop offset="100%" stop-color="#F6BD60" stop-opacity="0.32"/>
     </linearGradient>
 
-    <!-- Coral-Red 3D Block Gradients -->
+    <!-- Outer Squircle Champagne-to-Orchid Architectural Rim -->
+    <linearGradient id="goldRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFECC8" stop-opacity="0.8"/>
+      <stop offset="52%" stop-color="#F6BD60" stop-opacity="0.52"/>
+      <stop offset="100%" stop-color="#C77DFF" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- Gilded Sanctuary Gate Collar -->
+    <linearGradient id="bronzeCap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE8A8"/>
+      <stop offset="100%" stop-color="#C5862D"/>
+    </linearGradient>
+
+    <!-- Coral-Terracotta 3D Block Gradients -->
     <linearGradient id="coralFace" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FF786E"/>
-      <stop offset="100%" stop-color="#E83142"/>
+      <stop offset="0%" stop-color="#FF8274"/>
+      <stop offset="100%" stop-color="#DC3246"/>
     </linearGradient>
     <linearGradient id="coralStud" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFA39B"/>
-      <stop offset="100%" stop-color="#F04352"/>
+      <stop offset="0%" stop-color="#FFACA3"/>
+      <stop offset="100%" stop-color="#EC4355"/>
     </linearGradient>
 
-    <!-- Amber-Gold 3D Block Gradients -->
+    <!-- Burnished Sanctuary Gold 3D Block Gradients -->
     <linearGradient id="goldFace" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFE678"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
+      <stop offset="0%" stop-color="#FFEA85"/>
+      <stop offset="100%" stop-color="#E69212"/>
     </linearGradient>
     <linearGradient id="goldStud" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFF3B0"/>
-      <stop offset="100%" stop-color="#FBBF24"/>
+      <stop offset="0%" stop-color="#FFF5BE"/>
+      <stop offset="100%" stop-color="#F7B32B"/>
     </linearGradient>
 
-    <!-- Teal-Azure 3D Domino Block Gradients -->
-    <linearGradient id="azureFace" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#5CE1E6"/>
-      <stop offset="100%" stop-color="#1D7AFC"/>
+    <!-- Luminous Zen Jade-Teal 3D Domino Block Gradients -->
+    <linearGradient id="jadeFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5CF2E2"/>
+      <stop offset="52%" stop-color="#22C1B0"/>
+      <stop offset="100%" stop-color="#0E7C7B"/>
     </linearGradient>
-    <linearGradient id="azureStud" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#9BF2F5"/>
-      <stop offset="100%" stop-color="#3894FF"/>
+    <linearGradient id="jadeStud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A6FFF5"/>
+      <stop offset="100%" stop-color="#1FB5A5"/>
     </linearGradient>
+
+    <!-- Soft Glow Filter for Mystic Fissures & Sparks -->
+    <filter id="mysticGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
 
     <!-- Drop Shadow Filter for 3D Blocks -->
     <filter id="blockShadow" x="-16%" y="-12%" width="132%" height="136%">
-      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#090614" flood-opacity="0.62"/>
+      <feDropShadow dx="0" dy="11" stdDeviation="9" flood-color="#080513" flood-opacity="0.64"/>
     </filter>
   </defs>
 
@@ -62,72 +92,87 @@
   <rect x="6" y="6" width="500" height="500" rx="112" fill="url(#sanctuarySky)"/>
   <rect x="6" y="6" width="500" height="500" rx="112" fill="url(#sunburstGlow)"/>
 
-  <!-- Sacred-Geometry Astrolabe Watermark -->
-  <g stroke="#F6BD60" fill="none">
-    <circle cx="256" cy="256" r="206" stroke-width="2.2" stroke-opacity="0.24" stroke-dasharray="6 10"/>
-    <circle cx="256" cy="256" r="176" stroke-width="2" stroke-opacity="0.28"/>
-    <rect x="132" y="132" width="248" height="248" rx="18" stroke-width="1.8" stroke-opacity="0.18"/>
-    <rect x="132" y="132" width="248" height="248" rx="18" stroke-width="1.8" stroke-opacity="0.22" transform="rotate(45 256 256)"/>
+  <!-- Sacred-Geometry Zen Mystic Astrolabe Wheel & Compass Points -->
+  <g fill="none">
+    <circle cx="256" cy="256" r="222" stroke="#F8CF7A" stroke-width="2" stroke-opacity="0.34" stroke-dasharray="5 9"/>
+    <circle cx="256" cy="256" r="204" stroke="#F8CF7A" stroke-width="2.2" stroke-opacity="0.44"/>
+    <circle cx="256" cy="256" r="184" stroke="#DA8BFF" stroke-width="1.6" stroke-opacity="0.3" stroke-dasharray="10 7"/>
+    <rect x="112" y="112" width="288" height="288" rx="18" stroke="#F8CF7A" stroke-width="1.6" stroke-opacity="0.24" transform="rotate(45 256 256)"/>
+    <rect x="122" y="122" width="268" height="268" rx="16" stroke="#DA8BFF" stroke-width="1.4" stroke-opacity="0.22" transform="rotate(22.5 256 256)"/>
+    <!-- Cardinal Astrolabe Compass Diamonds (Left, Right, Bottom; Top is crowned by Gate Sparks) -->
+    <polygon points="256,462 263,476 256,490 249,476" fill="#FFE4A0" fill-opacity="0.78"/>
+    <polygon points="22,256 36,263 50,256 36,249" fill="#FFE4A0" fill-opacity="0.78"/>
+    <polygon points="462,256 476,263 490,256 476,249" fill="#FFE4A0" fill-opacity="0.78"/>
+    <!-- Floating Zen Starlight Motes -->
+    <polygon points="84,82 88,92 98,96 88,100 84,110 80,100 70,96 80,92" fill="#FFE8A8" fill-opacity="0.78"/>
+    <polygon points="428,86 431,94 439,97 431,100 428,108 425,100 417,97 425,94" fill="#E59EFF" fill-opacity="0.8"/>
+    <circle cx="76" cy="422" r="4" fill="#E59EFF" fill-opacity="0.65"/>
+    <circle cx="434" cy="424" r="4.5" fill="#FFE4A0" fill-opacity="0.68"/>
   </g>
 
-  <!-- Top Perimeter Shredder Gate & Flying Voxel Sparks -->
+  <!-- Recessed Satin Astrolabe Slate Courtyard Tray + Glowing Voronoi Mystic Fissures -->
+  <g>
+    <rect x="74" y="108" width="364" height="354" rx="46" fill="#0E0A1D" fill-opacity="0.65"/>
+    <rect x="74" y="102" width="364" height="352" rx="46" fill="url(#slatePlinth)" stroke="url(#plinthRim)" stroke-width="2.5"/>
+    <!-- Organic Awakened Relic Voronoi Fissures Glowing Through the Courtyard Seams -->
+    <g filter="url(#mysticGlow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 88 272 L 136 266 L 182 276 L 228 268 L 254 274 L 260 222 L 250 174 L 258 118" stroke="#E07BFF" stroke-width="3.2" stroke-opacity="0.82"/>
+      <path d="M 254 274 L 248 326 L 260 378 L 252 438" stroke="#FFB86C" stroke-width="3" stroke-opacity="0.78"/>
+      <path d="M 254 274 L 298 264 L 352 274 L 418 260" stroke="#E07BFF" stroke-width="2.4" stroke-opacity="0.58"/>
+      <path d="M 92 272 L 136 266 L 182 276 L 228 268 L 254 274 L 248 326 L 260 378 L 252 436" stroke="#FFF2FC" stroke-width="1.2" stroke-opacity="0.78"/>
+    </g>
+  </g>
+
+  <!-- Top Perimeter Shredder Gate & Mystic Sparks -->
   <g filter="url(#blockShadow)">
-    <!-- Brass Gate Brackets -->
-    <rect x="128" y="60" width="256" height="44" rx="22" fill="#8C1D28"/>
-    <rect x="128" y="54" width="256" height="42" rx="21" fill="url(#coralFace)" stroke="#FFD6A5" stroke-width="3" stroke-opacity="0.65"/>
+    <rect x="116" y="60" width="280" height="44" rx="22" fill="#7D1827"/>
+    <rect x="116" y="54" width="280" height="42" rx="21" fill="url(#coralFace)" stroke="#FFE2A8" stroke-width="3" stroke-opacity="0.82"/>
+    <!-- Gilded Bronze Sanctuary Gate Endcaps -->
+    <rect x="114" y="52" width="26" height="46" rx="11" fill="url(#bronzeCap)"/>
+    <rect x="372" y="52" width="26" height="46" rx="11" fill="url(#bronzeCap)"/>
     <!-- Shredder Roller Teeth -->
-    <circle cx="168" cy="75" r="8.5" fill="#FFF8F0"/>
-    <circle cx="203" cy="75" r="8.5" fill="#FFF8F0"/>
-    <circle cx="238" cy="75" r="8.5" fill="#FFF8F0"/>
-    <circle cx="274" cy="75" r="8.5" fill="#FFF8F0"/>
-    <circle cx="309" cy="75" r="8.5" fill="#FFF8F0"/>
-    <circle cx="344" cy="75" r="8.5" fill="#FFF8F0"/>
+    <circle cx="168" cy="75" r="8" fill="#FFF8F0"/>
+    <circle cx="203" cy="75" r="8" fill="#FFF8F0"/>
+    <circle cx="238" cy="75" r="8" fill="#FFF8F0"/>
+    <circle cx="274" cy="75" r="8" fill="#FFF8F0"/>
+    <circle cx="309" cy="75" r="8" fill="#FFF8F0"/>
+    <circle cx="344" cy="75" r="8" fill="#FFF8F0"/>
   </g>
-  <!-- Shredded Micro-Cube Sparks -->
-  <rect x="192" y="28" width="14" height="14" rx="4" fill="#FF8A80" transform="rotate(-18 199 35)"/>
-  <rect x="250" y="22" width="16" height="16" rx="4" fill="#FFE678" transform="rotate(22 258 30)"/>
-  <rect x="308" y="30" width="13" height="13" rx="3.5" fill="#5CE1E6" transform="rotate(14 314 36)"/>
+  <!-- Rising Voxel & Mystic Astrolabe Sparks -->
+  <rect x="184" y="27" width="13" height="13" rx="3.5" fill="#FF8E80" transform="rotate(-18 190 33)"/>
+  <polygon points="256,14 263,25 256,36 249,25" fill="#FFE885"/>
+  <rect x="314" y="28" width="13" height="13" rx="3.5" fill="#5CF2E2" transform="rotate(16 320 34)"/>
+  <circle cx="222" cy="24" r="4.5" fill="#E288FF"/>
 
-  <!-- 1. Top-Left Coral-Red 3D Block (1x1) -->
+  <!-- 1. Top-Left Coral-Terracotta 3D Block (1x1) -->
   <g filter="url(#blockShadow)">
-    <!-- 3D Extruded Bottom Lip -->
-    <rect x="88" y="138" width="152" height="144" rx="34" fill="#8F1522"/>
-    <!-- Beveled Top Face -->
-    <rect x="88" y="118" width="152" height="142" rx="34" fill="url(#coralFace)"/>
-    <!-- Inner Specular Chamfer Rim -->
-    <rect x="94" y="123" width="140" height="132" rx="29" fill="none" stroke="#FFC2BC" stroke-width="3" stroke-opacity="0.52"/>
-    <!-- 3D Circular Stud Shadow + Cap -->
-    <circle cx="164" cy="194" r="35" fill="#9E1926"/>
-    <circle cx="164" cy="187" r="35" fill="url(#coralStud)" stroke="#FFDAD6" stroke-width="2.5" stroke-opacity="0.65"/>
+    <rect x="92" y="138" width="148" height="140" rx="33" fill="#821423"/>
+    <rect x="92" y="118" width="148" height="138" rx="33" fill="url(#coralFace)"/>
+    <rect x="98" y="123" width="136" height="128" rx="28" fill="none" stroke="#FFD0CA" stroke-width="3" stroke-opacity="0.56"/>
+    <circle cx="166" cy="192" r="34" fill="#961828"/>
+    <circle cx="166" cy="185" r="34" fill="url(#coralStud)" stroke="#FFE2DE" stroke-width="2.5" stroke-opacity="0.7"/>
   </g>
 
-  <!-- 2. Bottom-Left Amber-Gold 3D Block (1x1) -->
+  <!-- 2. Bottom-Left Burnished Sanctuary Gold 3D Block (1x1) -->
   <g filter="url(#blockShadow)">
-    <!-- 3D Extruded Bottom Lip -->
-    <rect x="88" y="308" width="152" height="136" rx="34" fill="#9E5808"/>
-    <!-- Beveled Top Face -->
-    <rect x="88" y="288" width="152" height="134" rx="34" fill="url(#goldFace)"/>
-    <!-- Inner Specular Chamfer Rim -->
-    <rect x="94" y="293" width="140" height="124" rx="29" fill="none" stroke="#FFF6CC" stroke-width="3" stroke-opacity="0.6"/>
-    <!-- 3D Circular Stud Shadow + Cap -->
-    <circle cx="164" cy="360" r="34" fill="#B46509"/>
-    <circle cx="164" cy="353" r="34" fill="url(#goldStud)" stroke="#FFFBEB" stroke-width="2.5" stroke-opacity="0.72"/>
+    <rect x="92" y="304" width="148" height="134" rx="33" fill="#8C4E08"/>
+    <rect x="92" y="284" width="148" height="132" rx="33" fill="url(#goldFace)"/>
+    <rect x="98" y="289" width="136" height="122" rx="28" fill="none" stroke="#FFF7D1" stroke-width="3" stroke-opacity="0.64"/>
+    <circle cx="166" cy="355" r="33" fill="#A65D09"/>
+    <circle cx="166" cy="348" r="33" fill="url(#goldStud)" stroke="#FFFDF0" stroke-width="2.5" stroke-opacity="0.76"/>
   </g>
 
-  <!-- 3. Right Teal-Azure 3D Vertical Domino Block (1x2) -->
+  <!-- 3. Right Luminous Zen Jade-Teal 3D Vertical Domino Block (1x2) -->
   <g filter="url(#blockShadow)">
-    <!-- 3D Extruded Bottom Lip -->
-    <rect x="266" y="138" width="158" height="306" rx="36" fill="#0D4296"/>
-    <!-- Beveled Top Face -->
-    <rect x="266" y="118" width="158" height="304" rx="36" fill="url(#azureFace)"/>
-    <!-- Inner Specular Chamfer Rim -->
-    <rect x="272" y="123" width="146" height="294" rx="31" fill="none" stroke="#C4F9FC" stroke-width="3" stroke-opacity="0.55"/>
+    <rect x="268" y="138" width="152" height="300" rx="35" fill="#08484F"/>
+    <rect x="268" y="118" width="152" height="298" rx="35" fill="url(#jadeFace)"/>
+    <rect x="274" y="123" width="140" height="288" rx="30" fill="none" stroke="#C8FFF9" stroke-width="3" stroke-opacity="0.6"/>
     <!-- Top 3D Circular Stud -->
-    <circle cx="345" cy="196" r="36" fill="#0F4EB0"/>
-    <circle cx="345" cy="189" r="36" fill="url(#azureStud)" stroke="#E0FCFF" stroke-width="2.5" stroke-opacity="0.68"/>
+    <circle cx="344" cy="195" r="35" fill="#0B5F66"/>
+    <circle cx="344" cy="188" r="35" fill="url(#jadeStud)" stroke="#E6FFFC" stroke-width="2.5" stroke-opacity="0.74"/>
     <!-- Bottom 3D Circular Stud -->
-    <circle cx="345" cy="350" r="36" fill="#0F4EB0"/>
-    <circle cx="345" cy="343" r="36" fill="url(#azureStud)" stroke="#E0FCFF" stroke-width="2.5" stroke-opacity="0.68"/>
+    <circle cx="344" cy="347" r="35" fill="#0B5F66"/>
+    <circle cx="344" cy="340" r="35" fill="url(#jadeStud)" stroke="#E6FFFC" stroke-width="2.5" stroke-opacity="0.74"/>
   </g>
 
   <!-- Outer Squircle Architectural Border Overlay -->

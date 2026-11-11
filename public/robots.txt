@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://shredblocks.skorupski.org/sitemap.xml

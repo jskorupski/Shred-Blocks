@@ -399,6 +399,43 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     const swJs = fs.readFileSync(path.join(repoRoot, 'public/sw.js'), 'utf8');
     expect(swJs).toContain("'/fonts/fraunces-latin-var.woff2'");
     expect(swJs).toContain("'/fonts/plus-jakarta-sans-latin-var.woff2'");
+    expect(swJs).toContain("'/favicon.ico'");
+
+    // SEO-OG-FAVICON-01: Verify SEO/OpenGraph/Twitter/JSON-LD metadata, multi-size ICO favicon, 1200x630 OG card, and Cloudflare Pages _headers
+    expect(indexHtml).toContain(
+      'property="og:image" content="https://shredblocks.skorupski.org/og-image.png"'
+    );
+    expect(indexHtml).toContain('property="og:image:width" content="1200"');
+    expect(indexHtml).toContain('property="og:image:height" content="630"');
+    expect(indexHtml).toContain('name="twitter:card" content="summary_large_image"');
+    expect(indexHtml).toContain(
+      'name="twitter:image" content="https://shredblocks.skorupski.org/og-image.png"'
+    );
+    expect(indexHtml).toContain('href="/favicon.ico" sizes="48x48 32x32 16x16"');
+    const jsonLdMatch = indexHtml.match(/<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/);
+    expect(jsonLdMatch).not.toBeNull();
+    const jsonLd = JSON.parse(jsonLdMatch?.[1] ?? '{}') as {
+      '@type': string[];
+      isAccessibleForFree: boolean;
+    };
+    expect(jsonLd['@type']).toContain('VideoGame');
+    expect(jsonLd.isAccessibleForFree).toBe(true);
+
+    const icoBuf = fs.readFileSync(path.join(repoRoot, 'public/favicon.ico'));
+    expect(icoBuf.readUInt16LE(0)).toBe(0);
+    expect(icoBuf.readUInt16LE(2)).toBe(1); // ICO type
+    expect(icoBuf.readUInt16LE(4)).toBe(3); // 16x16, 32x32, 48x48
+
+    const ogBuf = fs.readFileSync(path.join(repoRoot, 'public/og-image.png'));
+    expect(ogBuf.readUInt32BE(16)).toBe(1200);
+    expect(ogBuf.readUInt32BE(20)).toBe(630);
+
+    const cfHeaders = fs.readFileSync(path.join(repoRoot, 'public/_headers'), 'utf8');
+    expect(cfHeaders).toContain('/favicon.ico');
+    expect(cfHeaders).toContain('Content-Type: image/x-icon');
+    expect(cfHeaders).toContain('/og-image.png');
+    expect(fs.existsSync(path.join(repoRoot, 'public/robots.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'public/sitemap.xml'))).toBe(true);
 
     const tokensCss = fs.readFileSync(path.join(repoRoot, 'src/styles/tokens-and-shell.css'), 'utf8');
     expect(tokensCss).toContain('--app-height');
@@ -484,11 +521,20 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(renderTypesTs).toContain('export const STONE_SURFACE_STYLE = 5');
     expect(renderTypesTs).toContain('export const TRAY_WALL_STYLE = 7');
 
-    // ARCH-ERGONOMICS-01 extracted modules stay wired into the orchestrator
+    // ARCH-ERGONOMICS-01 extracted modules & on-demand skill-style agent reference docs stay wired
     const mainTs = fs.readFileSync(path.join(repoRoot, 'src/main.ts'), 'utf8');
     expect(mainTs).toContain("from './ui/boosters-controller'");
     expect(mainTs).toContain("from './ui/outcome-modals-view'");
     expect(fs.existsSync(path.join(repoRoot, 'src/render/shaders-particles.ts'))).toBe(true);
+    for (const refDoc of [
+      'docs/ARCHITECTURE_AND_RULES.md',
+      'docs/PHYSICS_AND_MECHANICS.md',
+      'docs/RENDERING_AND_SHADERS.md',
+      'docs/PROGRESSION_AND_ECONOMY.md',
+      'docs/UI_PWA_STORAGE_AND_SEO.md',
+    ]) {
+      expect(fs.existsSync(path.join(repoRoot, refDoc))).toBe(true);
+    }
 
     const pass1Gates = fs.readFileSync(path.join(repoRoot, 'src/render/pass1-gates-barriers.ts'), 'utf8');
     const pass2Barriers = fs.readFileSync(

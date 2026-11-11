@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/icon.svg" width="136" height="136" alt="ShredBlocks: Color Jam Logo" />
+  <img src="public/icon.svg" width="144" height="144" alt="ShredBlocks: Color Jam — Zen Mystic Sanctuary App Icon" />
 </p>
 
 <h1 align="center">ShredBlocks: Color Jam</h1>
@@ -81,11 +81,14 @@ npm run test:unit
 # Run Playwright E2E interactive browser playtest suite (24 tests across Desktop & Mobile)
 npm run test:e2e
 
-# Golden screenshot regression: pixel-diff 17 deterministic captures (update intended changes with test:visual:update)
+# Golden screenshot regression: pixel-diff 18 deterministic captures (update intended changes with test:visual:update)
 npm run test:visual
 
 # Capture 45 multi-viewport visual verification screenshots (Mobile, Tablet & Desktop)
 npm run verify:visual
+
+# Regenerate Zen Mystic app icons, multi-size favicon.ico & 1200x630 og-image.png
+./node_modules/.bin/tsx scripts/generate-icons.ts
 ```
 </details>
 
@@ -132,8 +135,8 @@ The campaign spans **6 architectural chapters**, introducing **18 distinct puzzl
   - **Hammer (`RARE`, Lvl 8)**: Smashes or peels one layer from any unlocked block, Neutral Stone Slider, Crate, Portcullis Barrier (`⛩`), Sealed Mystery Vault Lid (`🔒`), or Frozen/Locked Shutter Gate.
   - **Row / Col Rocket (`EPIC`, Lvl 18)**: Blasts one layer across an entire row (`↔`) or column (`↕`) in any unlocked chamber (while leaving Sealed Mystery Vaults intact until unsealed).
   - **Color Vacuum (`LEGENDARY`, Lvl 30)**: Sweeps every unlocked block of a chosen color off the board at once.
-- **Themes Studio (`15 Tiered Unlockable Cosmetics`)**: Spend earned Coins (`250 / 450 / 750 / 1,200 Coins` across 4 prestige tiers beyond default starters) on **5 Block Skins** (default *Relic Stone*, *Classic Studs*, *Gummy Jelly*, *Carved Wood*, *Neon Cyber*), **5 Board Trays** (*Industrial Slate*, *Warm Birch*, *Midnight Arcade*, *Frosted Quartz*, *Mint Studio*), and **5 Shred Particle Styles** (*Micro-Cubes*, *Star Confetti*, *Pixel Sparks*, *Soap Bubbles*, *Lightning Bolts*)—all 100% compatible with High-Contrast and Colorblind Symbol modes.
-- **Levitating Mystic Stone Relic Title Backdrop & Grouped Linked Sanctuary Map**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a weathered, cracked ancient stone relic subtly mineral-tinted to match your active Board Tray & Block Skin (`getStoneThemeMineralTint` — cool slate-gray, warm sandstone, smoky basalt, pale quartzite, or celadon-slate, never punchy) with warm amethyst-orchid & sanctuary-gold fissure bloom, subtle volumetric god rays, and gentle floating/twisting levitation (`u_blueprintMix = 1.0`, `MYSTIC-RELIC-01`) devoid of HUD clutter or labels—bursting apart with a sustained tectonic stone-break rumble into tumbling theme-tinted stone shards, billowing ancient dust, and a warm amethyst-gold glow as it transforms into vibrant, living 3D reality when you click Play (`RELIC-AWAKEN-01`, disabled under Reduced Motion). Opening the Sanctuary Map (`#screen-home`, `MAP-LINKED-PATH-01`) organizes progression into 5-stage flights (`Stages 1–5`, `Stages 6–10`, ...) along a continuous linked path that auto-scrolls to your active stage, clearly distinguishes **Gold-Star Completed (`✓ Cleared`)**, **Zen-Cleared (`🌿 Zen`)**, and neutral faded **Skipped (`Skipped`)** stages, previews your next upcoming Power-Up or Mechanic Awakening, and windows **Infinite Endless Mode (`Level 301+`)** stages with `Lvl #` replay jumping across all unlocked stages (`1 .. highestLevelUnlocked`).
+- **Themes Studio (`15 Tiered Unlockable Cosmetics`)**: Spend earned Coins (`250 / 450 / 750 / 1,200 Coins` across 4 prestige tiers beyond default starters) on **5 Block Skins** (default *Classic Studs*, *Relic Stone*, *Gummy Jelly*, *Carved Wood*, *Neon Cyber*), **5 Board Trays** (*Industrial Slate*, *Warm Birch*, *Midnight Arcade*, *Frosted Quartz*, *Mint Studio*), and **5 Shred Particle Styles** (*Micro-Cubes*, *Star Confetti*, *Pixel Sparks*, *Soap Bubbles*, *Lightning Bolts*)—all 100% compatible with High-Contrast and Colorblind Symbol modes.
+- **Levitating Satin Astrolabe Title Backdrop & Grouped Linked Sanctuary Map**: On the Title Screen, a monumental humanist splash logo frames the live 3D puzzle courtyard rendered as a levitating Satin Astrolabe Slate artifact subtly mineral-tinted to match your active Board Tray & Block Skin (`getStoneThemeMineralTint`) with warm amethyst-orchid & champagne-gold Voronoi fissure bloom, `.astrolabe-backlight-halo` radial backlighting, volumetric god rays, and gentle floating/twisting levitation (`u_blueprintMix = 1.0`, `MYSTIC-RELIC-01`) devoid of HUD clutter or labels—bursting apart with a prewarmed tectonic stone-break rumble into tumbling theme-tinted stone shards, billowing ancient dust, and a warm amethyst-gold bloom across a `0.58s` zero-shift transition when you click Play (`RELIC-AWAKEN-01`, disabled under Reduced Motion). Opening the Sanctuary Map (`#screen-home`, `MAP-LINKED-PATH-01`) organizes progression into 5-stage flights (`Stages 1–5`, `Stages 6–10`, ...) along a continuous linked path that auto-scrolls to your active stage, clearly distinguishes **Gold-Star Completed (`✓ Cleared`)**, **Zen-Cleared (`🌿 Zen`)**, and neutral faded **Skipped (`Skipped`)** stages, previews your next upcoming Power-Up or Mechanic Awakening, and windows **Infinite Endless Mode (`Level 301+`)** stages with `Lvl #` replay jumping across all unlocked stages (`1 .. highestLevelUnlocked`).
 
 ---
 
@@ -193,8 +196,8 @@ flowchart TD
 ```
 
 For full technical specifications of the coordinate systems, shader passes, and solver invariants, see:
-- [`docs/ARCHITECTURE_AND_RULES.md`](docs/ARCHITECTURE_AND_RULES.md) — Engine, physics, and 18-mechanic reference.
-- [`AGENTS.md`](AGENTS.md) — Contributor & autonomous agent engineering handbook.
+- [`AGENTS.md`](AGENTS.md) — Contributor & autonomous agent engineering entrypoint.
+- [`docs/ARCHITECTURE_AND_RULES.md`](docs/ARCHITECTURE_AND_RULES.md) — On-demand reference index routing to [`PHYSICS_AND_MECHANICS.md`](docs/PHYSICS_AND_MECHANICS.md), [`RENDERING_AND_SHADERS.md`](docs/RENDERING_AND_SHADERS.md), [`PROGRESSION_AND_ECONOMY.md`](docs/PROGRESSION_AND_ECONOMY.md), and [`UI_PWA_STORAGE_AND_SEO.md`](docs/UI_PWA_STORAGE_AND_SEO.md).
 
 </details>
 
@@ -207,7 +210,7 @@ Running `npm run build` outputs a 100% self-contained static bundle into `dist/`
 <details>
 <summary><strong>☁️ Optional Upstream Deployment Notes (Cloudflare Workers / Pages)</strong></summary>
 
-This repository includes an optional [`wrangler.jsonc`](wrangler.jsonc) and [`public/_headers`](public/_headers) configuration used for the upstream deployment at `https://shredblocks.skorupski.org`. If you fork this repository for a different host, you can safely delete `wrangler.jsonc` and update the canonical URL in [`index.html`](index.html) and [`src/storage/save-manager.ts`](src/storage/save-manager.ts).
+This repository includes an optional [`wrangler.jsonc`](wrangler.jsonc) and [`public/_headers`](public/_headers) configuration (with security headers, Cloudflare Pages multi-size `/favicon.ico` MIME/cache headers, `/robots.txt`, `/sitemap.xml`, and `1200×630` `/og-image.png` social preview delivery) used for the upstream deployment at `https://shredblocks.skorupski.org`. If you fork this repository for a different host, you can safely delete `wrangler.jsonc` and update the canonical URL in [`index.html`](index.html), [`public/robots.txt`](public/robots.txt), [`public/sitemap.xml`](public/sitemap.xml), and [`src/storage/save-manager.ts`](src/storage/save-manager.ts).
 
 1. In the **Cloudflare Dashboard**, go to **Workers & Pages** $\rightarrow$ **Create** $\rightarrow$ **Connect to Git**.
 2. Set **Build command** to `npm run build` and **Deploy command** to `npx wrangler deploy` (or set **Build output directory** to `dist` for classic Pages).

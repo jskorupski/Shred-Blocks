@@ -48,6 +48,13 @@ function pwaAutoVersionPlugin(): Plugin {
         }
       }
 
+      for (const iconFile of ['favicon.ico', 'icon.svg', 'icon-maskable.svg', 'og-image.png']) {
+        const iconPath = resolve(distDir, iconFile);
+        if (existsSync(iconPath)) {
+          hash.update(readFileSync(iconPath));
+        }
+      }
+
       const shortHash = hash.digest('hex').slice(0, 8);
       let pkgVersion = '1.2.0';
       if (existsSync(pkgPath)) {

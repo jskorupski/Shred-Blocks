@@ -374,7 +374,9 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
       const state = await page.evaluate(() => ({
         save: JSON.stringify(window.__SHREDBLOCKS_DEBUG__.getSave()),
         diffVisible: !(document.getElementById('import-diff-panel')?.hidden ?? true),
-        injectedImg: document.querySelectorAll('img[src="x"], script:not([src])').length,
+        injectedImg: document.querySelectorAll(
+          'img[src="x"], script:not([src]):not([type="application/ld+json"])'
+        ).length,
         csp: (window as unknown as { __cspViolations: string[] }).__cspViolations,
       }));
       expect(state.diffVisible).toBe(false);

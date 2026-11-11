@@ -2,7 +2,7 @@
   "id": "shredblocks-color-jam",
   "name": "ShredBlocks: Color Jam",
   "short_name": "ShredBlocks",
-  "description": "100% Free, Offline-First 3D Polyomino Color-Sort & Shredder Puzzle Game.",
+  "description": "Slide tactile 3D blocks across mystic sanctuary courtyards into matching shredder gates. 300+ puzzles, Challenge & Zen modes—100% free, zero ads, offline play.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -17,6 +17,12 @@
     }
   ],
   "icons": [
+    {
+      "src": "/favicon-48x48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
