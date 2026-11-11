@@ -714,17 +714,45 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
       [0.004733, 0.691367, 0.3039],
     ];
 
-    for (const pick of [
-      (e: (typeof COLOR_PALETTE)[ColorId]) => e.cbRgb,
-      (e: (typeof COLOR_PALETTE)[ColorId]) => e.cbHcRgb,
-    ]) {
+    const relLum = (rgb: [number, number, number]) =>
+      0.2126 * srgbToLin(rgb[0]) + 0.7152 * srgbToLin(rgb[1]) + 0.0722 * srgbToLin(rgb[2]);
+    const contrast = (a: [number, number, number], b: [number, number, number]) => {
+      const la = relLum(a);
+      const lb = relLum(b);
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    };
+    const simDanom = (rgb: [number, number, number]): [number, number, number] => {
+      const d = simCvd(rgb, mDeut);
+      return [rgb[0] * 0.35 + d[0] * 0.65, rgb[1] * 0.35 + d[1] * 0.65, rgb[2] * 0.35 + d[2] * 0.65];
+    };
+
+    for (const [pick, pickGlyph] of [
+      [(e: (typeof COLOR_PALETTE)[ColorId]) => e.cbRgb, (e: (typeof COLOR_PALETTE)[ColorId]) => e.cbGlyphRgb],
+      [
+        (e: (typeof COLOR_PALETTE)[ColorId]) => e.cbHcRgb,
+        (e: (typeof COLOR_PALETTE)[ColorId]) => e.cbHcGlyphRgb,
+      ],
+    ] as const) {
+      for (let i = 0 as ColorId; i <= 9; i = (i + 1) as ColorId) {
+        const base = pick(COLOR_PALETTE[i]);
+        const glyph = pickGlyph(COLOR_PALETTE[i]);
+        // Simulates top-face 3D standard lighting (`litFactor = 1.16, spec = 0.09`) for WCAG 1.4.11 >= 3.0:1 non-text contrast
+        const litSurface: [number, number, number] = [
+          Math.min(1, base[0] * 1.16 + 0.09),
+          Math.min(1, base[1] * 1.16 + 0.09),
+          Math.min(1, base[2] * 1.16 + 0.09),
+        ];
+        expect(contrast(litSurface, glyph)).toBeGreaterThanOrEqual(4.2);
+      }
       for (let i = 1 as ColorId; i <= 9; i = (i + 1) as ColorId) {
         for (let j = (i + 1) as ColorId; j <= 9; j = (j + 1) as ColorId) {
           const ci = pick(COLOR_PALETTE[i]);
           const cj = pick(COLOR_PALETTE[j]);
-          expect(deltaE(simCvd(ci, mDeut), simCvd(cj, mDeut))).toBeGreaterThanOrEqual(12.5);
-          expect(deltaE(simCvd(ci, mProt), simCvd(cj, mProt))).toBeGreaterThanOrEqual(12.5);
-          expect(deltaE(simCvd(ci, mTrit), simCvd(cj, mTrit))).toBeGreaterThanOrEqual(9.5);
+          expect(deltaE(ci, cj)).toBeGreaterThanOrEqual(20.0);
+          expect(deltaE(simDanom(ci), simDanom(cj))).toBeGreaterThanOrEqual(17.0);
+          expect(deltaE(simCvd(ci, mDeut), simCvd(cj, mDeut))).toBeGreaterThanOrEqual(14.5);
+          expect(deltaE(simCvd(ci, mProt), simCvd(cj, mProt))).toBeGreaterThanOrEqual(14.5);
+          expect(deltaE(simCvd(ci, mTrit), simCvd(cj, mTrit))).toBeGreaterThanOrEqual(14.5);
         }
       }
     }

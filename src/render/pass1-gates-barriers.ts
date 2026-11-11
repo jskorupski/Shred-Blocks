@@ -1,7 +1,13 @@
 import { getGateActiveColor } from '../core/gate-clearance';
 import type { BoardState, GateState } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
-import { type RenderPassContext, TRAY_WALL_STYLE, type TrayPalette } from './render-types';
+import {
+  drawToneOnToneSigil3D,
+  getToneOnToneGlyphRgb,
+  type RenderPassContext,
+  TRAY_WALL_STYLE,
+  type TrayPalette,
+} from './render-types';
 
 export function renderPass1WallsAndGates(
   rctx: RenderPassContext,
@@ -538,30 +544,44 @@ export function renderPass1WallsAndGates(
         0.95
       );
       if (gate.shutterLockColor > 0) {
-        rctx.drawAtlasBadge(
-          gl,
-          'BADGE_GEM',
-          rollerX,
-          rollerY,
-          zOff + 0.72,
-          0.32,
-          lockRgb[0] * lum,
-          lockRgb[1] * lum,
-          lockRgb[2] * lum,
-          1.0
-        );
         if (colorblind) {
+          const [lfgR, lfgG, lfgB] = getToneOnToneGlyphRgb(gate.shutterLockColor, highContrast, false);
           rctx.drawAtlasBadge(
             gl,
-            `CB_${gate.shutterLockColor}`,
-            rollerX + spanAxisX * 0.22,
-            rollerY + spanAxisY * 0.22,
+            'BADGE_GEM',
+            rollerX - spanAxisX * 0.16,
+            rollerY - spanAxisY * 0.16,
+            zOff + 0.72,
+            0.3,
+            lfgR * lum,
+            lfgG * lum,
+            lfgB * lum,
+            1.0
+          );
+          drawToneOnToneSigil3D(
+            rctx,
+            gl,
+            gate.shutterLockColor,
+            rollerX + spanAxisX * 0.17,
+            rollerY + spanAxisY * 0.17,
             zOff + 0.725,
-            0.27,
+            0.3,
             lum,
-            lum,
-            lum,
-            1
+            highContrast,
+            false
+          );
+        } else {
+          rctx.drawAtlasBadge(
+            gl,
+            'BADGE_GEM',
+            rollerX,
+            rollerY,
+            zOff + 0.72,
+            0.32,
+            lockRgb[0] * lum,
+            lockRgb[1] * lum,
+            lockRgb[2] * lum,
+            1.0
           );
         }
       }
@@ -651,7 +671,7 @@ export function renderPass1WallsAndGates(
       );
     }
 
-    // Sculpted 3D Cloisonne Sigil Medallion on gate housing (`AX-01`, `R3D-04`: pairs visually with block crest)
+    // Borderless Gate-Colored Saddle Cap + Tone-on-Tone Silhouette (`AX-01`, `R3D-04`)
     if (colorblind) {
       const hasCenterGateBadge = gate.iceCount > 0 || gate.shutterLockColor > 0 || gate.isStar;
       const symSpanOffset =
@@ -660,36 +680,39 @@ export function renderPass1WallsAndGates(
           : hasCenterGateBadge
             ? -Math.max(0.38, Math.min(0.48, gate.spanLength * 0.5 - 0.22))
             : 0.0;
-      const inwardX = gate.edge === 'LEFT' ? 0.05 : gate.edge === 'RIGHT' ? -0.05 : 0;
-      const inwardY = gate.edge === 'TOP' ? 0.05 : gate.edge === 'BOTTOM' ? -0.05 : 0;
+      const inwardX = gate.edge === 'LEFT' ? 0.03 : gate.edge === 'RIGHT' ? -0.03 : 0;
+      const inwardY = gate.edge === 'TOP' ? 0.03 : gate.edge === 'BOTTOM' ? -0.03 : 0;
       const gSymX = rollerX + spanAxisX * symSpanOffset + inwardX;
       const gSymY = rollerY + spanAxisY * symSpanOffset + inwardY;
-      const medSize = hasCenterGateBadge ? 0.33 : 0.36;
-      const gateSigilZ = rctx.drawBadgeMedallion3D(
+      const capSize = hasCenterGateBadge ? 0.36 : 0.4;
+      rctx.drawMesh(
         gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
         gSymX,
         gSymY,
-        zOff + 0.652,
-        medSize,
-        medSize,
-        (rawGr * 0.26 + 0.04) * lum,
-        (rawGg * 0.26 + 0.04) * lum,
-        (rawGb * 0.26 + 0.06) * lum,
-        0.94 * lum,
-        0.83 * lum,
-        0.56 * lum
+        zOff + 0.65,
+        capSize,
+        capSize,
+        0.088,
+        gr,
+        gg,
+        gb,
+        1.0,
+        0,
+        0,
+        0
       );
-      rctx.drawAtlasBadge(
+      drawToneOnToneSigil3D(
+        rctx,
         gl,
-        `CB_${activeColor}`,
+        activeColor,
         gSymX,
         gSymY,
-        Math.max(gateSigilZ, zOff + 0.755),
-        hasCenterGateBadge ? 0.33 : 0.36,
+        zOff + 0.755,
+        hasCenterGateBadge ? 0.34 : 0.38,
         lum,
-        lum,
-        lum,
-        1.0
+        highContrast,
+        false
       );
     }
 
@@ -707,7 +730,7 @@ export function renderPass1WallsAndGates(
       const py = !isHorizEdge
         ? rollerY + pipOffset
         : rollerY + (gate.edge === 'TOP' ? -outwardShift : outwardShift);
-      const barThick = colorblind ? 0.22 : 0.16;
+      const barThick = colorblind ? 0.24 : 0.16;
       const barW = isHorizEdge ? 0.5 : barThick;
       const barH = !isHorizEdge ? 0.5 : barThick;
       const pipBobZ =
@@ -744,7 +767,18 @@ export function renderPass1WallsAndGates(
         1.0
       );
       if (colorblind) {
-        rctx.drawAtlasBadge(gl, `CB_${nextCol}`, px, py, zOff + 0.725 + pipBobZ, 0.23, lum, lum, lum, 0.98);
+        drawToneOnToneSigil3D(
+          rctx,
+          gl,
+          nextCol,
+          px,
+          py,
+          zOff + 0.725 + pipBobZ,
+          0.22,
+          lum,
+          highContrast,
+          false
+        );
       }
     }
   }

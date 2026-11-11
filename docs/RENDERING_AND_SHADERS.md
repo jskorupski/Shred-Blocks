@@ -31,7 +31,7 @@ On-demand reference for **WebGL2 / Canvas2D rendering**, **Z-layer depth orderin
 | **Multi-Layer Inner Core Top Face** | `0.602` | Exposed through the outer shell's central cutout window. |
 | **3D Beveled Obstacle Medallions** | `0.562 .. 0.648` | Two-tier plinths (`drawBadgeMedallion3D`); glyphs sit at `0.651`. Never use flat dark 2D `overlayQuad` stickers. |
 | **Outer / Inner 3D Circular Studs** | `0.660` / `0.677` | Present on `classic_studs`, `gummy_jelly`, and `neon_cyber` skins. |
-| **Colorblind Sigil Medallions (`AX-01`)** | `0.680 .. 0.692` | Universal 9-color CVD-safe jewel palette (`cbRgb` / `cbHcRgb`) + single focal 3D champagne-rimmed cloisonné sigil medallion per block & active gate (`CB_0..9`: `▨ ◯ ▲ ■ ═ ◆ ✚ ✖ ☾ ∴`, zero `★` Star collision, zero per-cell polka-dot clutter). |
+| **Colorblind Tone-on-Tone Sigils (`AX-01`)** | `0.680 .. 0.692` | Jointly-optimized Universal 9-color CVD-safe palette (`cbRgb` / `cbHcRgb`) + borderless hue-matched tone-on-tone 3D silhouettes (`drawToneOnToneSigil3D`, `>= 3:1` WCAG 1.4.11 contrast without square/circular box borders; `CB_0..9`: `▨ ◯ ▲ ║ ═ ◆ ✚ ✖ ☾ ∴`, zero `★` Star collision, zero per-cell polka-dot clutter). |
 
 ---
 

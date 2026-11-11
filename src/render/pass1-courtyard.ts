@@ -2,6 +2,7 @@ import { getShape } from '../core/polyomino';
 import type { BoardState, ColorId } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
 import {
+  drawToneOnToneSigil3D,
   type RenderPassContext,
   STONE_SURFACE_STYLE,
   TRAY_WALL_STYLE,
@@ -169,6 +170,11 @@ export function renderPass1Courtyard(
 
       if (pathColorId > 0) {
         const [pr, pg, pb] = rctx.getColorRgb(pathColorId, highContrast);
+        const pMix = colorblind ? 0.76 : 0.62;
+        const cMix = 1 - pMix;
+        const tileR = Math.min(1, (pr * pMix + checker[0] * cMix + sheen) * lum);
+        const tileG = Math.min(1, (pg * pMix + checker[1] * cMix + sheen) * lum);
+        const tileB = Math.min(1, (pb * pMix + checker[2] * cMix + sheen * 0.7) * lum);
         rctx.drawMesh(
           gl,
           ENVIRONMENT_MESHES.trayFloorTile,
@@ -178,26 +184,27 @@ export function renderPass1Courtyard(
           1.0,
           1.0,
           1.0,
-          Math.min(1, (pr * 0.62 + checker[0] * 0.38 + sheen) * lum),
-          Math.min(1, (pg * 0.62 + checker[1] * 0.38 + sheen) * lum),
-          Math.min(1, (pb * 0.62 + checker[2] * 0.38 + sheen * 0.7) * lum),
+          tileR,
+          tileG,
+          tileB,
           1.0,
           0,
           0,
           STONE_SURFACE_STYLE
         );
         if (colorblind) {
-          rctx.drawAtlasBadge(
+          const tileLum = tileR * 0.2126 + tileG * 0.7152 + tileB * 0.0722;
+          drawToneOnToneSigil3D(
+            rctx,
             gl,
-            `CB_${pathColorId}`,
+            pathColorId,
             c + 0.5,
             r + 0.5,
             zOff + 0.008,
             0.46,
             lum,
-            lum,
-            lum,
-            0.92
+            highContrast,
+            tileLum < 0.18
           );
         }
       } else {
@@ -551,17 +558,17 @@ export function renderPass1Courtyard(
           0
         );
         if (colorblind) {
-          rctx.drawAtlasBadge(
+          drawToneOnToneSigil3D(
+            rctx,
             gl,
-            `CB_${nextColor}`,
+            nextColor,
             gen.col + 0.5,
             gen.row + 0.34,
             zOff + 0.774 + previewBobZ,
-            0.3,
+            0.29,
             lum,
-            lum,
-            lum,
-            0.98
+            highContrast,
+            false
           );
         }
       }

@@ -9,7 +9,7 @@ import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino'
 import type { BoardState, ColorId, SkinId } from '../core/types';
 import { ENVIRONMENT_MESHES, getPolyominoMeshPair, POLYOMINO_MESH_CATALOG } from './mesh-generator';
 import { renderBlockSurfaceOverlays3D, renderGhostAndWeldClamps3D } from './pass3-block-overlays';
-import type { RenderPassContext, RenderSceneOptions } from './render-types';
+import { drawToneOnToneSigil3D, type RenderPassContext, type RenderSceneOptions } from './render-types';
 
 export function renderPass3BlocksImpl(
   rctx: RenderPassContext,
@@ -422,17 +422,44 @@ export function renderPass3BlocksImpl(
         0
       );
       if (colorblind) {
-        rctx.drawAtlasBadge(
+        const anchorBusy =
+          block.iceCount > 0 ||
+          block.chained ||
+          (block.bombMax > 0 && block.bombCount > 0) ||
+          block.hasKey > 0 ||
+          block.scissorColor > 0 ||
+          block.shutterGemColor > 0 ||
+          block.isStar;
+        const knotX = anchorBusy ? drawX + anchorCell[1] + 0.8 : rCx;
+        const knotSize = anchorBusy ? 0.34 : 0.44;
+        rctx.drawMesh(
           gl,
-          `CB_${block.ropeColor}`,
-          drawX + anchorCell[1] + 0.78,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          knotX,
+          rCy,
+          zStrapCenter + 0.012,
+          knotSize,
+          knotSize,
+          0.072 * scaleZ,
+          rr,
+          rg,
+          rb,
+          1.0,
+          0,
+          0,
+          0
+        );
+        drawToneOnToneSigil3D(
+          rctx,
+          gl,
+          block.ropeColor,
+          knotX,
           rCy,
           zCbSymbol + 0.006,
-          0.31,
+          anchorBusy ? 0.28 : 0.36,
           roomLum,
-          roomLum,
-          roomLum,
-          1
+          highContrast,
+          false
         );
       }
     }

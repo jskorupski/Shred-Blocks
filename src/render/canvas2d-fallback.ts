@@ -97,29 +97,39 @@ export function renderCanvas2DFallbackImpl(
     by: number,
     bz: number,
     color = '#FFFFFF',
-    font = 'bold 12px sans-serif'
+    font = 'bold 12px sans-serif',
+    borderless = false
   ) => {
     const pt = project(bx, by, bz);
     ctx.save();
     ctx.font = font;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.strokeStyle = '#0F172A';
-    ctx.lineWidth = 3;
-    ctx.strokeText(text, pt.x, pt.y);
+    if (!borderless) {
+      ctx.strokeStyle = '#0F172A';
+      ctx.lineWidth = 3;
+      ctx.strokeText(text, pt.x, pt.y);
+    }
     ctx.fillStyle = color;
     ctx.fillText(text, pt.x, pt.y);
     ctx.restore();
   };
 
+  const fillCellPad = (
+    c: number,
+    r: number,
+    pad: number,
+    z: number,
+    fillStyle: string,
+    strokeStyle?: string,
+    lineWidth = 1.5
+  ) => fillProjectedQuad(c + pad, r + pad, c + 1 - pad, r + 1 - pad, z, fillStyle, strokeStyle, lineWidth);
   // 1. Draw Floor Tiles, Cutouts, Colorful Floor Paths & Stone Pillars (`occ === -2`)
   for (let r = 0; r < board.rows; r++) {
     for (let c = 0; c < board.cols; c++) {
       const idx = r * board.cols + c;
       const occ = board.occupancy[idx];
-      if (occ === -1) {
-        continue;
-      }
+      if (occ === -1) continue;
       const roomId = board.roomMap[idx] ?? 0;
       const roomVis = rctx.getRoomVisualState(board, roomId);
       const zOff = roomVis.zOffset;
@@ -130,21 +140,21 @@ export function renderCanvas2DFallbackImpl(
           : (r + c) % 2 === 0
             ? toCssRgb(palette.floorTileA, roomVis.luminanceMul)
             : toCssRgb(palette.floorTileB, roomVis.luminanceMul);
-      fillProjectedQuad(c + 0.04, r + 0.04, c + 0.96, r + 0.96, zOff, fill);
+      fillCellPad(c, r, 0.04, zOff, fill);
       if (fc > 0 && colorblind) {
-        drawCenteredText(COLOR_PALETTE[fc].symbol, c + 0.5, r + 0.5, zOff + 0.02, '#FFFFFF');
+        const fE = COLOR_PALETTE[fc];
+        drawCenteredText(
+          fE.symbol,
+          c + 0.5,
+          r + 0.5,
+          zOff + 0.02,
+          fE.cbGlyphHex,
+          'bold 13px sans-serif',
+          true
+        );
       }
       if (occ === -2) {
-        fillProjectedQuad(
-          c + 0.08,
-          r + 0.08,
-          c + 0.92,
-          r + 0.92,
-          zOff + 0.62,
-          COLOR_PALETTE[0].primaryHex,
-          COLOR_PALETTE[0].lipHex,
-          2
-        );
+        fillCellPad(c, r, 0.08, zOff + 0.62, COLOR_PALETTE[0].primaryHex, COLOR_PALETTE[0].lipHex, 2);
         drawCenteredText('▨', c + 0.5, r + 0.5, zOff + 0.65, '#E2E8F0', 'bold 14px sans-serif');
       }
     }
@@ -180,29 +190,13 @@ export function renderCanvas2DFallbackImpl(
       2
     );
     const arrow = Math.abs(elev.deltaCol) >= Math.abs(elev.deltaRow) ? '↔' : '↕';
-    drawCenteredText(
-      arrow,
-      elev.col + elev.width * 0.5,
-      elev.row + elev.height * 0.5,
-      0.08,
-      '#FFFFFF',
-      'bold 14px sans-serif'
-    );
+    drawCenteredText(arrow, elev.col + elev.width * 0.5, elev.row + elev.height * 0.5, 0.08, '#FFFFFF');
   }
 
   // 3. Draw Wooden Crates (`board.crates`)
   for (const crate of board.crates) {
     if (crate.destroyed || crate.hp <= 0) continue;
-    fillProjectedQuad(
-      crate.col + 0.06,
-      crate.row + 0.06,
-      crate.col + 0.94,
-      crate.row + 0.94,
-      0.58,
-      '#B45309',
-      '#78350F',
-      2
-    );
+    fillCellPad(crate.col, crate.row, 0.06, 0.58, '#B45309', '#78350F', 2);
     drawCenteredText(
       String(crate.hp),
       crate.col + 0.5,
@@ -216,16 +210,7 @@ export function renderCanvas2DFallbackImpl(
   // 4. Draw Block Generators & Spawn Pads (`board.generators`)
   for (const gen of board.generators) {
     const depleted = gen.state === 'DEPLETED' || gen.queueCursor >= gen.queue.length;
-    fillProjectedQuad(
-      gen.col + 0.05,
-      gen.row + 0.05,
-      gen.col + 0.95,
-      gen.row + 0.95,
-      0.68,
-      depleted ? '#334155' : '#475569',
-      '#1E293B',
-      2
-    );
+    fillCellPad(gen.col, gen.row, 0.05, 0.68, depleted ? '#334155' : '#475569', '#1E293B', 2);
     if (!depleted) {
       const nextSpec = gen.queue[gen.queueCursor];
       if (nextSpec && nextSpec.colorStack.length > 0) {
@@ -236,16 +221,7 @@ export function renderCanvas2DFallbackImpl(
           const sc = gen.spawnCol + dc;
           const sr = gen.spawnRow + dr;
           if (sc >= 0 && sc < board.cols && sr >= 0 && sr < board.rows) {
-            fillProjectedQuad(
-              sc + 0.08,
-              sr + 0.08,
-              sc + 0.92,
-              sr + 0.92,
-              0.02,
-              'rgba(250, 204, 21, 0.24)',
-              pickPrimaryHex(nextEntry),
-              1.5
-            );
+            fillCellPad(sc, sr, 0.08, 0.02, 'rgba(250, 204, 21, 0.24)', pickPrimaryHex(nextEntry), 1.5);
           }
         }
         fillProjectedQuad(
@@ -257,7 +233,15 @@ export function renderCanvas2DFallbackImpl(
           pickPrimaryHex(nextEntry)
         );
         if (colorblind) {
-          drawCenteredText(nextEntry.symbol, gen.col + 0.5, gen.row + 0.34, 0.72, '#FFFFFF');
+          drawCenteredText(
+            nextEntry.symbol,
+            gen.col + 0.5,
+            gen.row + 0.34,
+            0.72,
+            nextEntry.cbGlyphHex,
+            'bold 12px sans-serif',
+            true
+          );
         }
       }
       drawCenteredText(
@@ -298,16 +282,7 @@ export function renderCanvas2DFallbackImpl(
         const snapRow = b.row + dRow;
         const snapCol = b.col + dCol;
         for (const [dr, dc] of shape.cells) {
-          fillProjectedQuad(
-            snapCol + dc + 0.06,
-            snapRow + dr + 0.06,
-            snapCol + dc + 0.94,
-            snapRow + dr + 0.94,
-            0.015,
-            'rgba(255, 255, 255, 0.25)',
-            '#FFFFFF',
-            1.5
-          );
+          fillCellPad(snapCol + dc, snapRow + dr, 0.06, 0.015, 'rgba(255, 255, 255, 0.25)', '#FFFFFF');
         }
       }
     }
@@ -318,11 +293,10 @@ export function renderCanvas2DFallbackImpl(
     if (hintBlock) {
       const shape = getShape(hintBlock.shapeId);
       for (const [dr, dc] of shape.cells) {
-        fillProjectedQuad(
-          fallbackGuideMove.targetCol + dc + 0.06,
-          fallbackGuideMove.targetRow + dr + 0.06,
-          fallbackGuideMove.targetCol + dc + 0.94,
-          fallbackGuideMove.targetRow + dr + 0.94,
+        fillCellPad(
+          fallbackGuideMove.targetCol + dc,
+          fallbackGuideMove.targetRow + dr,
+          0.06,
           0.02,
           'rgba(250, 204, 21, 0.35)',
           '#FACC15',
@@ -389,7 +363,15 @@ export function renderCanvas2DFallbackImpl(
     }
 
     if (colorblind) {
-      drawCenteredText(entry.symbol, gcx - spanAxisX * 0.28, gcy - spanAxisY * 0.28, 0.6, '#FFFFFF');
+      drawCenteredText(
+        entry.symbol,
+        gcx - spanAxisX * 0.28,
+        gcy - spanAxisY * 0.28,
+        0.6,
+        entry.cbGlyphHex,
+        'bold 12px sans-serif',
+        true
+      );
     }
 
     const remainingQueue = gate.colorQueue.length - (gate.colorCursor + 1);
@@ -410,7 +392,7 @@ export function renderCanvas2DFallbackImpl(
         1
       );
       if (colorblind) {
-        drawCenteredText(qEntry.symbol, px, py, 0.68, '#FFFFFF', 'bold 9px sans-serif');
+        drawCenteredText(qEntry.symbol, px, py, 0.68, qEntry.cbGlyphHex, 'bold 9px sans-serif', true);
       }
     }
   }
@@ -489,16 +471,7 @@ export function renderCanvas2DFallbackImpl(
       if (gate.edge === 'LEFT' && cx < gate.edgeLine - 0.25) continue;
       if (gate.edge === 'RIGHT' && cx > gate.edgeLine + 0.25) continue;
       if (cx < -0.25 || cx > board.cols - 0.75 || cy < -0.25 || cy > board.rows - 0.75) continue;
-      fillProjectedQuad(
-        cx + 0.05,
-        cy + 0.05,
-        cx + 0.95,
-        cy + 0.95,
-        BLOCK_TOP_Z,
-        pickPrimaryHex(entry),
-        pickLipHex(entry),
-        1.5
-      );
+      fillCellPad(cx, cy, 0.05, BLOCK_TOP_Z, pickPrimaryHex(entry), pickLipHex(entry));
     }
   }
 
@@ -549,43 +522,20 @@ export function renderCanvas2DFallbackImpl(
     }
 
     for (const [dr, dc] of shape.cells) {
-      fillProjectedQuad(
-        drawX + dc + 0.04,
-        drawY + dr + 0.04,
-        drawX + dc + 0.96,
-        drawY + dr + 0.96,
-        z,
-        pickPrimaryHex(entry),
-        pickLipHex(entry),
-        2
-      );
-
+      fillCellPad(drawX + dc, drawY + dr, 0.04, z, pickPrimaryHex(entry), pickLipHex(entry), 2);
       if (layersLeft > 1) {
-        const innerId = block.colorStack[block.colorCursor + 1] ?? cId;
-        const innerEntry = COLOR_PALETTE[innerId] ?? entry;
-        fillProjectedQuad(
-          drawX + dc + 0.18,
-          drawY + dr + 0.18,
-          drawX + dc + 0.82,
-          drawY + dr + 0.82,
+        const innerEntry = COLOR_PALETTE[block.colorStack[block.colorCursor + 1] ?? cId] ?? entry;
+        fillCellPad(
+          drawX + dc,
+          drawY + dr,
+          0.18,
           z + 0.02,
           pickPrimaryHex(innerEntry),
-          pickLipHex(innerEntry),
-          1.5
+          pickLipHex(innerEntry)
         );
       }
-
       if (block.iceCount > 0) {
-        fillProjectedQuad(
-          drawX + dc + 0.03,
-          drawY + dr + 0.03,
-          drawX + dc + 0.97,
-          drawY + dr + 0.97,
-          z + 0.025,
-          'rgba(125, 211, 252, 0.45)',
-          '#E0F2FE',
-          1.5
-        );
+        fillCellPad(drawX + dc, drawY + dr, 0.03, z + 0.025, 'rgba(125, 211, 252, 0.45)', '#E0F2FE');
       }
     }
 
@@ -620,8 +570,21 @@ export function renderCanvas2DFallbackImpl(
       }
     }
 
+    const drawCap2D = (cx: number, cy: number, half: number, colEntry: typeof entry, zCap: number): void => {
+      fillProjectedQuad(
+        cx - half,
+        cy - half,
+        cx + half,
+        cy + half,
+        zCap,
+        pickPrimaryHex(colEntry),
+        pickLipHex(colEntry),
+        1
+      );
+    };
+
     if (colorblind) {
-      const freeCell = shape.cells.find(([cr, cc], ci) => {
+      const freeCells = shape.cells.filter(([cr, cc], ci) => {
         const cx = drawX + cc + 0.5;
         const cy = drawY + cr + 0.5;
         return (
@@ -631,14 +594,31 @@ export function renderCanvas2DFallbackImpl(
           !(block.ropeColor > 0 && ci === shape.anchorCellIndex)
         );
       });
-      const sx = freeCell ? drawX + freeCell[1] + 0.5 : drawX + first[1] + 0.22;
-      const sy = freeCell ? drawY + freeCell[0] + 0.5 : drawY + first[0] + 0.22;
-      drawCenteredText(entry.symbol, sx, sy, z + 0.03, '#FFFDF5', 'bold 13px sans-serif');
+      const outerCell = freeCells[0];
+      const sx = outerCell ? drawX + outerCell[1] + 0.5 : drawX + first[1] + 0.24;
+      const sy = outerCell ? drawY + outerCell[0] + 0.5 : drawY + first[0] + 0.24;
+      if (layersLeft > 1 || block.iceCount > 0 || !outerCell) {
+        drawCap2D(sx, sy, outerCell ? 0.26 : 0.17, entry, z + 0.028);
+      }
+      drawCenteredText(entry.symbol, sx, sy, z + 0.032, entry.cbGlyphHex, 'bold 13px sans-serif', true);
       if (layersLeft > 1) {
         const innerId = block.colorStack[block.colorCursor + 1] ?? cId;
-        const ix = drawX + first[1] + 0.78;
-        const iy = drawY + first[0] + 0.78;
-        drawCenteredText(COLOR_PALETTE[innerId].symbol, ix, iy, z + 0.03, '#FFFDF5', 'bold 10px sans-serif');
+        const innerEntry = COLOR_PALETTE[innerId] ?? entry;
+        const innerCell = freeCells[1];
+        const ix = innerCell ? drawX + innerCell[1] + 0.5 : drawX + first[1] + 0.76;
+        const iy = innerCell ? drawY + innerCell[0] + 0.5 : drawY + first[0] + 0.76;
+        if (!innerCell || block.iceCount > 0) {
+          drawCap2D(ix, iy, innerCell ? 0.24 : 0.17, innerEntry, z + 0.028);
+        }
+        drawCenteredText(
+          innerEntry.symbol,
+          ix,
+          iy,
+          z + 0.032,
+          innerEntry.cbGlyphHex,
+          'bold 11px sans-serif',
+          true
+        );
       }
     } else if (cId === 0) {
       drawCenteredText(entry.symbol, drawX + first[1] + 0.22, drawY + first[0] + 0.22, z + 0.03, '#FFFFFF');
@@ -650,7 +630,15 @@ export function renderCanvas2DFallbackImpl(
       const ry0 = drawY + anchor[0] + 0.36;
       fillProjectedQuad(rx0, ry0, rx0 + 0.88, ry0 + 0.28, z + 0.028, pickPrimaryHex(rE), pickLipHex(rE), 1.5);
       if (colorblind) {
-        drawCenteredText(rE.symbol, anchorCx, anchorCy, z + 0.034, '#FFFDF5', 'bold 11px sans-serif');
+        drawCenteredText(
+          rE.symbol,
+          anchorCx,
+          anchorCy,
+          z + 0.034,
+          rE.cbGlyphHex,
+          'bold 11px sans-serif',
+          true
+        );
       }
     }
     if (block.chained) {
@@ -691,12 +679,32 @@ export function renderCanvas2DFallbackImpl(
       drawCenteredText(`💣${block.bombCount}`, payCx, payCy, z + 0.04, '#FCA5A5');
     } else if (block.hasKey > 0) {
       drawCenteredText('🔑', payCx, payCy, z + 0.04, '#FDE047');
-    } else if (block.scissorColor > 0) {
-      const scE = COLOR_PALETTE[block.scissorColor];
-      drawCenteredText(colorblind ? `✂${scE.symbol}` : '✂', payCx, payCy, z + 0.04, pickPrimaryHex(scE));
-    } else if (block.shutterGemColor > 0) {
-      const gmE = COLOR_PALETTE[block.shutterGemColor];
-      drawCenteredText(colorblind ? `💎${gmE.symbol}` : '💎', payCx, payCy, z + 0.04, pickPrimaryHex(gmE));
+    } else if (block.scissorColor > 0 || block.shutterGemColor > 0) {
+      const pE = COLOR_PALETTE[block.scissorColor > 0 ? block.scissorColor : block.shutterGemColor];
+      const pIcon = block.scissorColor > 0 ? '✂' : '💎';
+      if (colorblind) {
+        fillProjectedQuad(
+          payCx - 0.31,
+          payCy - 0.21,
+          payCx + 0.31,
+          payCy + 0.21,
+          z + 0.036,
+          pickPrimaryHex(pE),
+          pickLipHex(pE),
+          1.5
+        );
+        drawCenteredText(
+          `${pIcon}${pE.symbol}`,
+          payCx,
+          payCy,
+          z + 0.042,
+          pE.cbGlyphHex,
+          'bold 11px sans-serif',
+          true
+        );
+      } else {
+        drawCenteredText(pIcon, payCx, payCy, z + 0.04, pickPrimaryHex(pE));
+      }
     } else if (block.isStar) {
       drawCenteredText('★', payCx, payCy, z + 0.04, '#FDE047');
     }

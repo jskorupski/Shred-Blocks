@@ -1,14 +1,15 @@
-import type {
-  Benchmark120HzResult,
-  BoardState,
-  ColorId,
-  InputMode,
-  ParticleStyleId,
-  PerfTelemetry,
-  QualityTier,
-  RocketAxis,
-  SkinId,
-  TrayId,
+import {
+  type Benchmark120HzResult,
+  type BoardState,
+  COLOR_PALETTE,
+  type ColorId,
+  type InputMode,
+  type ParticleStyleId,
+  type PerfTelemetry,
+  type QualityTier,
+  type RocketAxis,
+  type SkinId,
+  type TrayId,
 } from '../core/types';
 import type { AtlasTextureData, AtlasUVRegion } from './atlas-3d';
 import type { Camera3D } from './camera-3d';
@@ -552,6 +553,73 @@ export interface RenderPassContext {
     rimG?: number,
     rimB?: number
   ): number;
+}
+
+export function getToneOnToneGlyphRgb(
+  colorId: ColorId,
+  highContrast: boolean,
+  isNeonCyber = false
+): [number, number, number] {
+  const entry = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[0];
+  if (isNeonCyber && colorId >= 1) {
+    if (!highContrast || colorId === 1 || colorId === 2 || colorId === 5 || colorId === 8 || colorId === 9) {
+      return entry.cbNeonGlyphRgb;
+    }
+    return entry.cbHcGlyphRgb;
+  }
+  return highContrast ? entry.cbHcGlyphRgb : entry.cbGlyphRgb;
+}
+
+/**
+ * Renders a borderless, hue-harmonized tone-on-tone colorblind silhouette (`AX-01`) with a directional
+ * 3D sculpted bevel lip so the glyph's outer silhouette reads directly against the block/gate surface.
+ */
+export function drawToneOnToneSigil3D(
+  rctx: RenderPassContext,
+  gl: WebGL2RenderingContext,
+  colorId: ColorId,
+  cx: number,
+  cy: number,
+  z: number,
+  size: number,
+  roomLum = 1.0,
+  highContrast = false,
+  isNeonCyber = false
+): void {
+  const entry = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[0];
+  const [fgR, fgG, fgB] = getToneOnToneGlyphRgb(colorId, highContrast, isNeonCyber);
+  const [baseR, baseG, baseB] = highContrast ? entry.cbHcRgb : entry.cbRgb;
+  const isDarkShade = fgR * 0.2126 + fgG * 0.7152 + fgB * 0.0722 < 0.35;
+  const lipDx = size * 0.026;
+  const lipDy = size * 0.032;
+  if (isDarkShade) {
+    rctx.drawAtlasBadge(
+      gl,
+      `CB_${colorId}`,
+      cx + lipDx,
+      cy + lipDy,
+      z - 0.0012,
+      size,
+      Math.min(1, baseR * 0.65 + 0.35) * roomLum,
+      Math.min(1, baseG * 0.65 + 0.35) * roomLum,
+      Math.min(1, baseB * 0.65 + 0.35) * roomLum,
+      0.56
+    );
+  } else {
+    rctx.drawAtlasBadge(
+      gl,
+      `CB_${colorId}`,
+      cx + lipDx,
+      cy + lipDy,
+      z - 0.0012,
+      size,
+      baseR * 0.16 * roomLum,
+      baseG * 0.16 * roomLum,
+      baseB * 0.18 * roomLum,
+      0.66
+    );
+  }
+  rctx.drawAtlasBadge(gl, `CB_${colorId}`, cx, cy, z, size, fgR * roomLum, fgG * roomLum, fgB * roomLum, 1.0);
 }
 
 export function drawAtlasBadgeImpl(

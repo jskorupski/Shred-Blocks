@@ -292,9 +292,12 @@ void main() {
   vec3 lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim) + emissive;
 
   if (u_highContrast == 1) {
-    // Crisp high-contrast 3D bevel edge contour so every block and wall edge has razor-sharp definition
+    // Crisp high-contrast 3D bevel edge contour (dark bevel on bright pieces, luminous rim on deep jewel pieces)
     float edgeBevel = smoothstep(0.58, 0.16, abs(N.z));
-    lit = mix(min(vec3(1.0), lit * 1.08), lit * 0.34, edgeBevel * 0.58);
+    float pieceLinLum = dot(lit * lit, vec3(0.2126, 0.7152, 0.0722));
+    bool isDarkPiece = u_materialStyle != 5 && u_materialStyle != 7 && pieceLinLum < 0.09;
+    vec3 bevelTarget = isDarkPiece ? min(vec3(1.0), base * 0.75 + vec3(0.62)) : lit * 0.34;
+    lit = mix(min(vec3(1.0), lit * 1.08), bevelTarget, edgeBevel * (isDarkPiece ? 0.78 : 0.58));
   }
 
   float blueprintAlpha = 1.0;

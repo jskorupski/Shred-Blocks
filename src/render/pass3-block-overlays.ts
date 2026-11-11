@@ -3,7 +3,12 @@ import { getActiveColor, getShape, type PolyominoShape } from '../core/polyomino
 import type { BlockState, BoardState, ColorId, SkinId } from '../core/types';
 import { BLOCK_LIFT_DELTA_Z } from './camera-3d';
 import { ENVIRONMENT_MESHES, getPolyominoMeshPair } from './mesh-generator';
-import type { RenderPassContext, RenderSceneOptions } from './render-types';
+import {
+  drawToneOnToneSigil3D,
+  getToneOnToneGlyphRgb,
+  type RenderPassContext,
+  type RenderSceneOptions,
+} from './render-types';
 
 export function renderBlockSurfaceOverlays3D(
   rctx: RenderPassContext,
@@ -273,19 +278,41 @@ export function renderBlockSurfaceOverlays3D(
     }
   }
 
-  // AX-01 Colorblind Sigils: single sculpted 3D cloisonne crest per block (zero polka-dot cell spam!)
+  // AX-01 Colorblind Sigils: borderless, hue-harmonized tone-on-tone sculpted silhouette per block
   if (colorblind) {
-    // Rank cells so the primary sigil lands on an unobstructed cell (preferring anchor, then closest to centroid)
+    const isNeonCyber = rctx.lastOptions.equippedSkin === 'neon_cyber';
+    const matStyle =
+      activeColor === 0 ? 6 : rctx.getMaterialStyleCode(rctx.lastOptions.equippedSkin ?? 'classic_studs');
+    const hasCenterBadgeOnCell = (cellR: number, cellC: number, ci: number): boolean => {
+      const cellCx = drawX + cellC + 0.5;
+      const cellCy = drawY + cellR + 0.5;
+      return (
+        (hasImmobilizer && Math.hypot(cellCx - immCx, cellCy - immCy) < 0.42) ||
+        (hasPayload && Math.hypot(cellCx - payCx, cellCy - payCy) < 0.42) ||
+        (block.axisLock === 'H' &&
+          Math.abs(cellCx - lockBadgeCx) < 0.58 &&
+          Math.abs(cellCy - lockBadgeCy) < 0.42) ||
+        (block.axisLock === 'V' &&
+          Math.abs(cellCx - lockBadgeCx) < 0.42 &&
+          Math.abs(cellCy - lockBadgeCy) < 0.58) ||
+        (block.ropeColor > 0 && ci === shape.anchorCellIndex)
+      );
+    };
+
     const freeCellIndices: number[] = [];
+    const strapOnlyCellIndices: number[] = [];
     for (let ci = 0; ci < shape.cells.length; ci++) {
       const cell = shape.cells[ci];
-      if (!isCellCenterBusy(cell[0], cell[1], ci)) {
+      if (hasCenterBadgeOnCell(cell[0], cell[1], ci)) continue;
+      if (block.chained && (cell[0] === anchor[0] || cell[1] === anchor[1])) {
+        strapOnlyCellIndices.push(ci);
+      } else {
         freeCellIndices.push(ci);
       }
     }
     const centroidR = (shape.rows - 1) * 0.5;
     const centroidC = (shape.cols - 1) * 0.5;
-    freeCellIndices.sort((ia, ib) => {
+    const byAnchorThenCenter = (ia: number, ib: number): number => {
       if (ia === shape.anchorCellIndex) return -1;
       if (ib === shape.anchorCellIndex) return 1;
       const ca = shape.cells[ia];
@@ -293,134 +320,116 @@ export function renderBlockSurfaceOverlays3D(
       return (
         Math.hypot(ca[0] - centroidR, ca[1] - centroidC) - Math.hypot(cb[0] - centroidR, cb[1] - centroidC)
       );
-    });
+    };
+    freeCellIndices.sort(byAnchorThenCenter);
+    strapOnlyCellIndices.sort(byAnchorThenCenter);
 
-    // Deep hue-matched enamel face + warm champagne bezel so #FFFDF9 sigil achieves >= 9.5:1 contrast
-    const enamelR = (r * 0.26 + 0.04) * roomLum;
-    const enamelG = (g * 0.26 + 0.04) * roomLum;
-    const enamelB = (b * 0.26 + 0.06) * roomLum;
-    const zCrestBase = zLift + (0.678 * scaleZ - 0.076);
+    const drawCapPad = (
+      px: number,
+      py: number,
+      sz: number,
+      h = 0.064,
+      cr = r,
+      cg = g,
+      cb = b,
+      mStyle = matStyle
+    ): void => {
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        px,
+        py,
+        zLift + 0.608 * scaleZ,
+        sz,
+        sz,
+        h * scaleZ,
+        cr,
+        cg,
+        cb,
+        1.0,
+        0,
+        0,
+        mStyle
+      );
+    };
+    const drawSigil = (col: ColorId, sx: number, sy: number, z: number, sz: number): void => {
+      drawToneOnToneSigil3D(rctx, gl, col, sx, sy, z, sz, roomLum, highContrast, isNeonCyber);
+    };
 
     if (layersLeft === 1) {
       if (freeCellIndices.length > 0) {
         const primaryCell = shape.cells[freeCellIndices[0]];
         const px = drawX + primaryCell[1] + 0.5;
         const py = drawY + primaryCell[0] + 0.5;
-        const crestZ = rctx.drawBadgeMedallion3D(
-          gl,
-          px,
-          py,
-          zCrestBase,
-          0.42,
-          0.42,
-          enamelR,
-          enamelG,
-          enamelB,
-          0.94 * roomLum,
-          0.83 * roomLum,
-          0.56 * roomLum
-        );
-        rctx.drawAtlasBadge(
-          gl,
-          `CB_${activeColor}`,
-          px,
-          py,
-          Math.max(crestZ, zCbSymbol),
-          0.41,
-          roomLum,
-          roomLum,
-          roomLum,
-          1.0
-        );
+        if (block.iceCount > 0) drawCapPad(px, py, 0.52);
+        drawSigil(activeColor, px, py, zCbSymbol, block.iceCount > 0 ? 0.46 : 0.5);
+      } else if (strapOnlyCellIndices.length > 0) {
+        const strapCell = shape.cells[strapOnlyCellIndices[0]];
+        const sx = drawX + strapCell[1] + 0.5;
+        const sy = drawY + strapCell[0] + 0.5;
+        drawCapPad(sx, sy, 0.52);
+        drawSigil(activeColor, sx, sy, zCbSymbol, 0.46);
+      } else if (shape.cells.length >= 2 && block.axisLock !== 'NONE') {
+        const endCell =
+          shape.cells.find((c, ci) => {
+            const cx = drawX + c[1] + 0.5;
+            const cy = drawY + c[0] + 0.5;
+            return (
+              !(hasImmobilizer && Math.hypot(cx - immCx, cy - immCy) < 0.42) &&
+              !(hasPayload && Math.hypot(cx - payCx, cy - payCy) < 0.42) &&
+              !(block.ropeColor > 0 && ci === shape.anchorCellIndex)
+            );
+          }) ?? shape.cells[0];
+        const ex =
+          drawX +
+          endCell[1] +
+          0.5 +
+          (block.axisLock === 'H' ? (drawX + endCell[1] + 0.5 <= lockBadgeCx ? -0.14 : 0.14) : 0);
+        const ey =
+          drawY +
+          endCell[0] +
+          0.5 +
+          (block.axisLock === 'V' ? (drawY + endCell[0] + 0.5 <= lockBadgeCy ? -0.14 : 0.14) : 0);
+        if (block.iceCount > 0) drawCapPad(ex, ey, 0.44);
+        drawSigil(activeColor, ex, ey, zCbSymbol, 0.4);
       } else {
         const fallbackCell = shape.cells[0];
-        rctx.drawAtlasBadge(
-          gl,
-          `CB_${activeColor}`,
-          drawX + fallbackCell[1] + 0.2,
-          drawY + fallbackCell[0] + 0.2,
-          zCbSymbol + 0.004,
-          0.32,
-          roomLum,
-          roomLum,
-          roomLum,
-          1.0
-        );
+        const fx = drawX + fallbackCell[1] + 0.24;
+        const fy = drawY + fallbackCell[0] + 0.24;
+        drawCapPad(fx, fy, 0.34, 0.062);
+        drawSigil(activeColor, fx, fy, zCbSymbol + 0.004, 0.28);
       }
     } else {
-      // Multi-layer block: gold-rimmed 3D crest for active outer color + compact core seal for next inner layer
+      // Multi-layer block: seamless outer-color bridge pad + tone-on-tone outer & inner silhouettes
       const innerColor = block.colorStack[block.colorCursor + 1] ?? activeColor;
-      if (shape.cells.length >= 2 && freeCellIndices.length >= 2) {
-        const outerCell = shape.cells[freeCellIndices[0]];
-        const innerCell = shape.cells[freeCellIndices[1]];
+      const [ir, ig, ib] = rctx.getColorRgb(innerColor, highContrast);
+      const innerMatStyle =
+        innerColor === 0 ? 6 : rctx.getMaterialStyleCode(rctx.lastOptions.equippedSkin ?? 'classic_studs');
+      const usableCells = [...freeCellIndices, ...strapOnlyCellIndices];
+      if (shape.cells.length >= 2 && usableCells.length >= 2) {
+        const outerCell = shape.cells[usableCells[0]];
+        const innerCell = shape.cells[usableCells[1]];
         const ox = drawX + outerCell[1] + 0.5;
         const oy = drawY + outerCell[0] + 0.5;
-        const crestZ = rctx.drawBadgeMedallion3D(
-          gl,
-          ox,
-          oy,
-          zCrestBase,
-          0.42,
-          0.42,
-          enamelR,
-          enamelG,
-          enamelB,
-          0.94 * roomLum,
-          0.83 * roomLum,
-          0.56 * roomLum
-        );
-        rctx.drawAtlasBadge(
-          gl,
-          `CB_${activeColor}`,
-          ox,
-          oy,
-          Math.max(crestZ, zCbSymbol),
-          0.41,
-          roomLum,
-          roomLum,
-          roomLum,
-          1.0
-        );
-        rctx.drawAtlasBadge(
-          gl,
-          `CB_${innerColor}`,
-          drawX + innerCell[1] + 0.5,
-          drawY + innerCell[0] + 0.5,
-          zCbSymbol + 0.002,
-          0.34,
-          roomLum,
-          roomLum,
-          roomLum,
-          0.98
-        );
+        const ix = drawX + innerCell[1] + 0.5;
+        const iy = drawY + innerCell[0] + 0.5;
+        drawCapPad(ox, oy, 0.58, 0.068);
+        drawSigil(activeColor, ox, oy, zCbSymbol, 0.46);
+        if (block.iceCount > 0) {
+          drawCapPad(ix, iy, 0.5, 0.064, ir * roomLum, ig * roomLum, ib * roomLum, innerMatStyle);
+        }
+        drawSigil(innerColor, ix, iy, zCbSymbol + 0.002, 0.44);
       } else {
-        const targetIdx = freeCellIndices[0] ?? 0;
-        const targetCell = shape.cells[targetIdx];
-        const cellBusy = freeCellIndices.length === 0;
-        rctx.drawAtlasBadge(
-          gl,
-          `CB_${activeColor}`,
-          drawX + targetCell[1] + 0.21,
-          drawY + targetCell[0] + 0.21,
-          zCbSymbol + 0.002,
-          0.33,
-          roomLum,
-          roomLum,
-          roomLum,
-          1.0
-        );
-        rctx.drawAtlasBadge(
-          gl,
-          `CB_${innerColor}`,
-          drawX + targetCell[1] + (cellBusy ? 0.79 : 0.54),
-          drawY + targetCell[0] + (cellBusy ? 0.79 : 0.54),
-          zCbSymbol + 0.005,
-          cellBusy ? 0.29 : 0.34,
-          roomLum,
-          roomLum,
-          roomLum,
-          0.98
-        );
+        const targetCell = shape.cells[usableCells[0] ?? 0];
+        const cellBusy = usableCells.length === 0;
+        const tx = drawX + targetCell[1] + 0.24;
+        const ty = drawY + targetCell[0] + 0.24;
+        const ix = drawX + targetCell[1] + (cellBusy ? 0.76 : 0.58);
+        const iy = drawY + targetCell[0] + (cellBusy ? 0.76 : 0.58);
+        drawCapPad(tx, ty, 0.34, 0.068);
+        drawSigil(activeColor, tx, ty, zCbSymbol + 0.002, 0.31);
+        drawCapPad(ix, iy, 0.34, 0.068, ir * roomLum, ig * roomLum, ib * roomLum, innerMatStyle);
+        drawSigil(innerColor, ix, iy, zCbSymbol + 0.005, cellBusy ? 0.29 : 0.33);
       }
     }
   }
@@ -558,82 +567,71 @@ export function renderBlockSurfaceOverlays3D(
       0.32 * roomLum,
       1.0
     );
-  } else if (block.scissorColor > 0) {
-    const [sr, sg, sb] = rctx.getColorRgb(block.scissorColor, highContrast);
-    const scisBadgeZ = rctx.drawBadgeMedallion3D(
-      gl,
-      payCx,
-      payCy,
-      zMedallionBase + payBobZ,
-      0.52 * payPulseScale,
-      0.52 * payPulseScale,
-      r,
-      g,
-      b
-    );
-    rctx.drawAtlasBadge(
-      gl,
-      'BADGE_SCISSORS',
-      payCx,
-      payCy,
-      scisBadgeZ,
-      0.48 * payPulseScale,
-      sr * roomLum,
-      sg * roomLum,
-      sb * roomLum,
-      1.0
-    );
+  } else if (block.scissorColor > 0 || block.shutterGemColor > 0) {
+    const isScissor = block.scissorColor > 0;
+    const payloadColor = isScissor ? block.scissorColor : block.shutterGemColor;
+    const payloadKey = isScissor ? 'BADGE_SCISSORS' : 'BADGE_GEM';
+    const [pr, pg, pb] = rctx.getColorRgb(payloadColor, highContrast);
     if (colorblind) {
-      rctx.drawAtlasBadge(
+      const [pfgR, pfgG, pfgB] = getToneOnToneGlyphRgb(payloadColor, highContrast, false);
+      const payBadgeZ = rctx.drawBadgeMedallion3D(
         gl,
-        `CB_${block.scissorColor}`,
-        payCx + 0.21 * payPulseScale,
-        payCy + 0.19 * payPulseScale,
-        scisBadgeZ + 0.003,
-        0.28 * payPulseScale,
-        roomLum,
-        roomLum,
-        roomLum,
-        1
+        payCx,
+        payCy,
+        zMedallionBase + payBobZ,
+        0.68 * payPulseScale,
+        0.46 * payPulseScale,
+        pr * roomLum,
+        pg * roomLum,
+        pb * roomLum
       );
-    }
-  } else if (block.shutterGemColor > 0) {
-    const [gr, gg, gb] = rctx.getColorRgb(block.shutterGemColor, highContrast);
-    const gemBadgeZ = rctx.drawBadgeMedallion3D(
-      gl,
-      payCx,
-      payCy,
-      zMedallionBase + payBobZ,
-      0.52 * payPulseScale,
-      0.52 * payPulseScale,
-      r,
-      g,
-      b
-    );
-    rctx.drawAtlasBadge(
-      gl,
-      'BADGE_GEM',
-      payCx,
-      payCy,
-      gemBadgeZ,
-      0.48 * payPulseScale,
-      gr * roomLum,
-      gg * roomLum,
-      gb * roomLum,
-      1.0
-    );
-    if (colorblind) {
       rctx.drawAtlasBadge(
         gl,
-        `CB_${block.shutterGemColor}`,
-        payCx + 0.21 * payPulseScale,
-        payCy + 0.19 * payPulseScale,
-        gemBadgeZ + 0.003,
-        0.28 * payPulseScale,
+        payloadKey,
+        payCx - 0.14 * payPulseScale,
+        payCy,
+        payBadgeZ,
+        0.34 * payPulseScale,
+        pfgR * roomLum,
+        pfgG * roomLum,
+        pfgB * roomLum,
+        1.0
+      );
+      drawToneOnToneSigil3D(
+        rctx,
+        gl,
+        payloadColor,
+        payCx + 0.15 * payPulseScale,
+        payCy,
+        payBadgeZ + 0.002,
+        0.33 * payPulseScale,
         roomLum,
-        roomLum,
-        roomLum,
-        1
+        highContrast,
+        false
+      );
+    } else {
+      const payBadgeZ = rctx.drawBadgeMedallion3D(
+        gl,
+        payCx,
+        payCy,
+        zMedallionBase + payBobZ,
+        0.52 * payPulseScale,
+        0.52 * payPulseScale,
+        r,
+        g,
+        b
+      );
+      rctx.drawAtlasBadge(
+        gl,
+        payloadKey,
+        payCx,
+        payCy,
+        payBadgeZ,
+        0.48 * payPulseScale,
+        pr * roomLum,
+        pg * roomLum,
+        pb * roomLum,
+        1.0
       );
     }
   } else if (block.isStar) {
