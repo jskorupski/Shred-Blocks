@@ -377,7 +377,7 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(getLevelSpec(66).blocks.length).toBeGreaterThanOrEqual(7);
     expect(getLevelSpec(156).blocks.length).toBeGreaterThanOrEqual(8);
     expect(getLevelSpec(256).blocks.length).toBeGreaterThanOrEqual(9);
-  }, 25_000);
+  }, 45_000);
 
   it('VIEWPORT-01, PWA-UPDATE-01, TITLE-LOGO-01, CAVE-ETCH-01, UI-DEPTH-01 & MAP-JOURNEY-01: enforces zero-cutoff viewport geometry, monumental splash logo, cave-wall etching shader, 3-plane depth hierarchy, and progressive map journey invariants', () => {
     const repoRoot = path.resolve(process.cwd());

@@ -119,17 +119,13 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     void app.handleInstallAction();
   });
 
-  // Roadmap Filter Chips
-  document.querySelectorAll<HTMLButtonElement>('.chip-filter[data-range]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      app.sound.playButtonTap();
-      document.querySelectorAll('.chip-filter[data-range]').forEach((c) => {
-        c.classList.remove('active');
-      });
-      chip.classList.add('active');
-      app.activeRoadmapRange = chip.dataset.range ?? 'all';
-      app.renderRoadmap();
-    });
+  // Roadmap Filter Chips (delegated for static Campaign + dynamic Endless 50-stage tier chips)
+  document.querySelector<HTMLElement>('.filter-pills')?.addEventListener('click', (e) => {
+    const chip = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>('.chip-filter[data-range]');
+    if (!chip) return;
+    app.sound.playButtonTap();
+    app.activeRoadmapRange = chip.dataset.range ?? 'all';
+    app.renderRoadmap();
   });
 
   // Themes Studio Category Filter Tabs
@@ -173,13 +169,22 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     }
   });
 
-  // In-Game HUD Top Bar & Direct Map Return
-  document.getElementById('btn-hud-home')?.addEventListener('click', () => {
+  // In-Game HUD Top Bar & Direct Map Return (including whole Title + Difficulty Crest region)
+  const returnHudToMap = (syncBoardStage: boolean) => {
     app.sound.playButtonTap();
+    if (syncBoardStage) {
+      const save = app.saveManager.getPayload();
+      const ladder = save.modeState[save.settings.playMode];
+      if (app.board.levelId <= ladder.highestUnlocked && ladder.currentLevelId !== app.board.levelId) {
+        app.saveManager.setCurrentLevel(app.board.levelId);
+      }
+    }
     app.inputController.cancelTargeting();
     app.closeAllModals();
     app.switchScreen('home');
-  });
+  };
+  document.getElementById('btn-hud-home')?.addEventListener('click', () => returnHudToMap(false));
+  document.getElementById('btn-hud-title-map')?.addEventListener('click', () => returnHudToMap(true));
 
   document.getElementById('btn-themes-home')?.addEventListener('click', () => {
     app.sound.playButtonTap();
@@ -431,11 +436,12 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     const restored = app.saveManager.restorePreImportBackup();
     if (restored) {
       app.sound.playBooster('UNDO');
+      app.activeRoadmapRange = 'all';
+      app.expandedEndlessRanges = [];
       const ladder = restored.modeState[restored.settings.playMode];
       const frontierId = Math.max(1, Math.min(ladder.highestUnlocked, ladder.currentLevelId || 1));
       app.loadLevel(frontierId, false, false);
       refreshSaveTransferModalImpl(app);
-      app.syncAllUiFromSave();
       app.renderRoadmap();
       app.renderThemesStudio();
       const statusEl = document.getElementById('save-transfer-status');

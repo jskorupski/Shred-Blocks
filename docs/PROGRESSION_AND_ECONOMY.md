@@ -4,17 +4,19 @@ On-demand reference for **campaign & endless generation (`RAMP-01`–`05`)**, **
 
 ---
 
-## 1. 6 Architectural Epochs & Spatial Challenge Ramp (`1..300`, Endless `301+`)
+## 1. 6 Architectural Epochs, Canonical Determinism & Unified Spatial Ramp (`1..300`, Endless `301+`, `LEVEL-CANON-01`, `SOLVABILITY-01`)
 
-Every curated level (`1..300` in [`src/levels/catalog.ts`](../src/levels/catalog.ts)) and seeded `Mulberry32` Endless level (`301+` in [`src/levels/generator.ts`](../src/levels/generator.ts)) must be **100% solvable without boosters** (`solveBoard()` in [`src/levels/solver.ts`](../src/levels/solver.ts)) with zero overlapping initial cells.
+Every curated showcase level (`L1–29` + architectural/mechanic debuts `31..181` in [`src/levels/catalog.ts`](../src/levels/catalog.ts)) and unified `mulberry32`-seeded procedural level (`L30..300` non-debuts, milestone finales `200/250/300`, and Endless `301+` in [`src/levels/generator.ts`](../src/levels/generator.ts)) must be **100% solvable without boosters** (`solveBoard()` + live `'CHALLENGE'` move-by-move replay in [`tests/unit/level-ramp-and-canon.test.ts`](../tests/unit/level-ramp-and-canon.test.ts)) with zero cell overlaps and zero `fallbackSpec` collapses (`SOLVABILITY-01`).
 
-- **6 Courtyard Epochs**:
+- **Canonical Cross-Build Determinism (`LEVEL-CANON-01`)**:
+  - `generateProceduralLevel(levelId)` computes `baseSeed = (levelId * 2654435761 + 0x9e3779b9) >>> 0` and seeds each candidate retry `mulberry32((baseSeed + attempt * 1013904223) >>> 0)` purely from `levelId` (never `Math.random()`, `Date.now()`, viewport size, or player save state), guaranteeing **every player's Level `X` (`1..∞`) is identical**. Canonical FNV-1a layout hashes across `1..1000` are locked in [`tests/unit/level-ramp-and-canon.test.ts`](../tests/unit/level-ramp-and-canon.test.ts); future generator changes must gate on new `levelId` ranges or isolated RNG streams unless intentionally updating the canonical fingerprint table.
+- **6 Courtyard Epochs & Occupancy-Driven Packing (`54%–64%` Playable Floor Fill)**:
   - **Epoch I (`L1–15`, `5×5`)**: Onboarding Sanctuary (`3–6` blocks, `5` on breathers, `2–3` colors, Axis-Lock `L11`, Sculpted `CROSS_ATRIUM` `L14`).
   - **Epoch II (`L16–40`, `6×6` & `8×6` Tall Portrait)**: Courtyard Expansion (`6–13` blocks, Stepped-Edge Gates `L18`, Cutouts & Pillars `L21`, Multi-Room Portcullis `L25`, **Sealed Mystery Vaults** `L28`, Multi-Layer `L31`, Hourglass Vault Island `L38`).
   - **Epoch III (`L41–80`, `6×7`, `8×6` & `9×7` Tall Portrait)**: Tactical Chambers (`7–16` blocks via High-Density Packing `DENSITY-01`, Ice `L41`, Stars `L51`, Keys `L61`, Neutral Stone `L71`, Quad Vault `L74`).
-  - **Epoch IV (`L81–140`, `7×7` & `9×7` Tall Portrait)**: Grand Plaza (`7–11` blocks, Crates `L81`, Bombs `L91`, Glued Groups `L101`, Ropes `L111`, Color Queue Gates `L121`, Frozen Gates `L131`).
-  - **Epoch V (`L141–220`, `7×8`, `8×8` & `9×7` Tall Portrait)**: Kinetic Machinery (`8–12` blocks, Shutters `L141/145`, Sliding/Resizing Gates `L151/155`, Generators `L161`, Floor Paths `L171`, Elevators `L181`, Milestone `L200`).
-  - **Epoch VI (`L221–300`, `8×8`, `9×9` & `10×8` Tall Portrait)**: Monumental Mastery (`9–14` blocks, `4–6` colors, Milestone `L250`, `14`-block `9×9` Grand Citadel Finale at `L300`, Endless Mastery `L301+`).
+  - **Epoch IV (`L81–140`, `7×7` & `8×7` Tall Portrait)**: Clockwork Crucible (`8–11` blocks, Crates `L81`, Bombs `L91`, Glued Groups `L101`, Ropes `L111`, Color Queue Gates `L121`, Frozen Gates `L131`).
+  - **Epoch V (`L141–220`, `8×7`, `8×8` & `9×7` Tall Portrait)**: Astral Observatory (`9–12` blocks, Shutters `L141/145`, Sliding/Resizing Gates `L151/155`, Generators `L161`, Floor Paths `L171`, Elevators `L181`, Unified Boss `L200: Omega Shredder`).
+  - **Epoch VI (`L221–300`, `8×8`, `9×8` & `9×9` Boss Citadel) + Endless (`L301+`)**: Monumental Mastery (`10–14` blocks targeting `54%–64%` playable-cell occupancy with interlocking `MID_SHAPES` tetrominoes, forced-parking blocker cascades, and causal lock chains `Scissor -> Rope -> Key -> Chain` / `Glued Key-carrier`; Unified Bosses `L250: Citadel Sovereign` & `L300: Sacred Astrolabe`; Endless Mastery `L301+` ramping staging moves `2 -> 3..5`).
 - **3-Tier Onboarding vs. Gridlock Ramp**:
   - **`L1–12` (`UX-03` First-Move Safety)**: Every legal first move leads to a solvable board (`verifyFirstMoveSafety()`).
   - **`L13–25` (Guided Blocker Parking)**: Introduces `2–3` move cross-corridor blocker parking (`populateCandidateBlocks`) with `ONBOARDING_RESCUE_MAX_LEVEL = 25` dynamic-gate/queue rescues active.
@@ -34,7 +36,7 @@ Every curated level (`1..300` in [`src/levels/catalog.ts`](../src/levels/catalog
   - **Milestone Chests (`10` Unique Clears)**: Trigger strictly when `floor(countUniqueClearedLevels / 10)` crosses a new `10`-stage bucket above `milestoneChestLevel` (e.g., `10, 20, 30, ...`), preserving debut booster guarantees (`L10 -> HAMMER`, `L20 -> ROCKET`, `L30 -> VACUUM`) even if an honest player skipped stage 10 and achieved their 10th genuine clear on stage 11.
   - `totalStars` sums per-stage `challengeStars` (`1–3★`) + `timedStars` (`1–3★`) + `zenStarsEarned`, feeding 25-Star Reliquary Chests (`+90c + 1 Power-Up`, gated on `getEffectiveBoosterUnlockLevel`).
 - **`'CHALLENGE'` (Default — Tactical Move Budget)**:
-  - `moveLimit = computeDefaultMoveLimit(parMoves, difficulty, levelId)`: `par + 6` (`L1–12`) $\rightarrow$ `+5 / +4` (`L13–25`) $\rightarrow$ `+5` breathers or `+4 / +3 / +2` for `NORMAL / HARD / SUPER_HARD` (`L26+`). Buzzer-beater wins (`movesRemaining === 0 && isBoardWon`) succeed before `OUT_OF_MOVES`.
+  - `moveLimit = computeDefaultMoveLimit(parMoves, difficulty, levelId)`: `par + 6` (`L1–12`) $\rightarrow$ `+5 / +4` (`L13–25`) $\rightarrow$ `+5` breathers (`decPos === 6`), `+4 / +3 / +2` for `NORMAL / HARD / SUPER_HARD` (`L26–180`), tapering to `+3 / +3 / +2` (`L181–240`) and `+3 / +2 / +2` (`L241+`). Buzzer-beater wins (`movesRemaining === 0 && isBoardWon`) succeed before `OUT_OF_MOVES`.
   - **Touch-Move Coalescing & Final-Touch Grace (`FINAL-TOUCH-01`)**: Consecutive drags of `lastMovedBlockId === block.id && !lastMoveDidShred` count as **`1` move tick**. At `0` moves remaining, if that last-moved unshredded block can still reach an eligible gate (`hasFinalTouchGrace`), finishing it is a free coalesced touch while any other block move is rejected.
 - **`'ZEN'` (Sanctuary Flow — `ZEN-CALM-01`, `ZEN-STARS-01`, `ZEN-SKIP-GUARD-01`)**:
   - Unlimited moves, untimed, advances `modeState.ZEN.highestUnlocked`, sets `zenCleared: true` (`🌿 Zen` badge, pauses rather than resets `winStreak`), and marks `board.bombsInert = true` (fuses never tick or detonate).

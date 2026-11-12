@@ -4,6 +4,8 @@ import { CURATED_EARLY_LEVELS } from './curated-early';
 import {
   generateProceduralLevel,
   getDifficultyForLevel,
+  getInitialCourtyardDimsForLevel,
+  getMilestoneLevelName,
   getUnlockNoteForLevel,
   LEVEL_ADJECTIVES,
   LEVEL_NOUNS,
@@ -407,126 +409,6 @@ const CURATED_LEVELS: Record<number, LevelSpec> = {
     parMoves: 7,
     timeLimitSec: 95,
   },
-
-  200: {
-    id: 200,
-    name: 'Omega Shredder',
-    difficulty: 'SUPER_HARD',
-    unlockNote: 'Epoch IV Complete: Enter the Grand Citadel Masterworks (Levels 201–300)!',
-    rows: 7,
-    cols: 7,
-    cutouts: [[0, 0]],
-    elevators: [
-      {
-        id: 1,
-        row: 3,
-        col: 2,
-        width: 2,
-        height: 1,
-        deltaRow: 0,
-        deltaCol: 1,
-      },
-    ],
-    blocks: [
-      { id: 1, shapeId: '1x2', row: 1, col: 2, colorStack: [1], hasKey: 1 },
-      { id: 2, shapeId: '2x1', row: 2, col: 5, colorStack: [2, 3] },
-      { id: 3, shapeId: '1x2', row: 5, col: 2, colorStack: [3], chained: true, lockId: 1 },
-      { id: 4, shapeId: '2x1', row: 2, col: 1, colorStack: [4], isStar: true },
-      { id: 5, shapeId: '1x1', row: 3, col: 2, colorStack: [1], iceCount: 2 },
-      { id: 6, shapeId: '1x1', row: 4, col: 4, colorStack: [2], bombCount: 16 },
-      { id: 7, shapeId: '1x2', row: 0, col: 2, colorStack: [2] },
-      { id: 8, shapeId: '2x1', row: 2, col: 6, colorStack: [3] },
-      { id: 9, shapeId: '1x3', row: 6, col: 2, colorStack: [1] },
-      { id: 10, shapeId: '2x1', row: 4, col: 0, colorStack: [4], isStar: true },
-    ],
-    gates: [
-      { edge: 'TOP', spanStart: 2, spanLength: 3, colorQueue: [1, 1, 1] },
-      { edge: 'RIGHT', spanStart: 2, spanLength: 3, colorQueue: [2, 2, 2] },
-      { edge: 'BOTTOM', spanStart: 2, spanLength: 3, colorQueue: [3, 3, 3] },
-      { edge: 'LEFT', spanStart: 2, spanLength: 3, colorQueue: [4, 4], isStar: true },
-    ],
-    parMoves: 14,
-    timeLimitSec: 65,
-  },
-
-  250: {
-    id: 250,
-    name: 'Citadel Sovereign',
-    difficulty: 'SUPER_HARD',
-    layoutId: 'CITADEL_OCTAGON',
-    unlockNote: 'Epoch V Finale: Master the 8×8 Grand Citadel Courtyard!',
-    rows: 8,
-    cols: 8,
-    cutouts: [
-      [0, 0],
-      [0, 7],
-      [7, 0],
-      [7, 7],
-    ],
-    blocks: [
-      { id: 1, shapeId: '1x3', row: 1, col: 2, colorStack: [1], axisLock: 'V', hasKey: 1 },
-      { id: 2, shapeId: '2x1', row: 3, col: 5, colorStack: [2, 3] },
-      { id: 3, shapeId: '1x2', row: 5, col: 3, colorStack: [3], chained: true, lockId: 1 },
-      { id: 4, shapeId: '2x2', row: 3, col: 2, colorStack: [4], isStar: true },
-      { id: 5, shapeId: '1x2', row: 6, col: 2, colorStack: [1], iceCount: 2 },
-      { id: 6, shapeId: '2x1', row: 2, col: 1, colorStack: [2] },
-      { id: 7, shapeId: '1x1', row: 5, col: 5, colorStack: [4], isStar: true },
-      { id: 8, shapeId: '1x2', row: 0, col: 2, colorStack: [2] },
-      { id: 9, shapeId: '2x1', row: 2, col: 7, colorStack: [3] },
-      { id: 10, shapeId: '2x1', row: 4, col: 7, colorStack: [2] },
-      { id: 11, shapeId: '2x1', row: 4, col: 0, colorStack: [4], isStar: true },
-      { id: 12, shapeId: '1x3', row: 7, col: 2, colorStack: [1] },
-    ],
-    gates: [
-      { edge: 'TOP', spanStart: 2, spanLength: 3, colorQueue: [1, 1, 1] },
-      { edge: 'RIGHT', spanStart: 2, spanLength: 3, colorQueue: [2, 2, 2, 2] },
-      { edge: 'BOTTOM', spanStart: 2, spanLength: 3, colorQueue: [3, 3, 3] },
-      { edge: 'LEFT', spanStart: 2, spanLength: 3, colorQueue: [4, 4, 4], isStar: true },
-    ],
-    parMoves: 16,
-    timeLimitSec: 72,
-  },
-
-  300: {
-    id: 300,
-    name: 'Sacred Astrolabe',
-    difficulty: 'SUPER_HARD',
-    layoutId: 'CITADEL_OCTAGON',
-    unlockNote: 'Campaign Finale (Level 300): Conquer the 9×9 Sacred Astrolabe Sanctuary!',
-    rows: 9,
-    cols: 9,
-    cutouts: [
-      [0, 0],
-      [0, 8],
-      [8, 0],
-      [8, 8],
-    ],
-    pillars: [[4, 4]],
-    blocks: [
-      { id: 1, shapeId: '1x3', row: 1, col: 3, colorStack: [1], hasKey: 1 },
-      { id: 2, shapeId: '2x1', row: 2, col: 6, colorStack: [2], scissorColor: 3 },
-      { id: 3, shapeId: '1x3', row: 6, col: 3, colorStack: [3], chained: true, lockId: 1 },
-      { id: 4, shapeId: '2x2', row: 3, col: 1, colorStack: [4], ropeColor: 3, isStar: true },
-      { id: 5, shapeId: '1x2', row: 2, col: 3, colorStack: [1, 2], iceCount: 2 },
-      { id: 6, shapeId: '2x1', row: 5, col: 6, colorStack: [2], shutterGemColor: 3 },
-      { id: 7, shapeId: '1x2', row: 7, col: 3, colorStack: [3], iceCount: 3 },
-      { id: 8, shapeId: '1x1', row: 5, col: 2, colorStack: [4], isStar: true },
-      { id: 9, shapeId: '1x2', row: 0, col: 3, colorStack: [2] },
-      { id: 10, shapeId: '2x1', row: 3, col: 8, colorStack: [3] },
-      { id: 11, shapeId: '2x1', row: 5, col: 8, colorStack: [2] },
-      { id: 12, shapeId: '2x1', row: 1, col: 0, colorStack: [4], isStar: true },
-      { id: 13, shapeId: '2x1', row: 6, col: 0, colorStack: [4], isStar: true },
-      { id: 14, shapeId: '1x3', row: 8, col: 3, colorStack: [1], bombCount: 19 },
-    ],
-    gates: [
-      { edge: 'TOP', spanStart: 3, spanLength: 3, colorQueue: [1, 1, 1] },
-      { edge: 'RIGHT', spanStart: 3, spanLength: 3, colorQueue: [2, 2, 2, 2, 2] },
-      { edge: 'BOTTOM', spanStart: 3, spanLength: 3, colorQueue: [3, 3, 3, 3], shutterLockColor: 3 },
-      { edge: 'LEFT', spanStart: 3, spanLength: 3, colorQueue: [4, 4, 4, 4], isStar: true },
-    ],
-    parMoves: 18,
-    timeLimitSec: 80,
-  },
 };
 
 const levelCache = new Map<number, LevelSpec>();
@@ -619,13 +501,13 @@ export function getLevelRoadmapMeta(levelId: number): LevelRoadmapMeta {
 
   const difficulty = getDifficultyForLevel(normalizedId);
   const rawMechanics = selectFocusedMechanicsForLevel(normalizedId);
-  const approxDim = normalizedId >= 180 ? 8 : normalizedId >= 41 ? 7 : 6;
-  const layoutId = selectCourtyardTopologyForLevel(normalizedId, approxDim, approxDim, 0, rawMechanics);
+  const { rows, cols } = getInitialCourtyardDimsForLevel(normalizedId, 0);
+  const layoutId = selectCourtyardTopologyForLevel(normalizedId, rows, cols, 0, rawMechanics);
   const adj = LEVEL_ADJECTIVES[(normalizedId * 7) % LEVEL_ADJECTIVES.length];
   const noun = LEVEL_NOUNS[(normalizedId * 13) % LEVEL_NOUNS.length];
   return {
     id: normalizedId,
-    name: `${adj} ${noun}`,
+    name: getMilestoneLevelName(normalizedId) ?? `${adj} ${noun}`,
     difficulty,
     unlockNote: getUnlockNoteForLevel(normalizedId),
     hasBarriers: layoutId === 'TWIN_SANCTUM' || layoutId === 'MYSTERY_VAULT',

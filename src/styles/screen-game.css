@@ -44,11 +44,44 @@
 }
 
 .hud-title-block {
+  appearance: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  align-self: stretch;
   min-width: 0;
   flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+@media (hover: hover) {
+  .hud-title-block:hover {
+    background: var(--surface-subtle);
+  }
+}
+
+.hud-title-block:active {
+  background: rgba(255, 248, 236, 0.1);
+}
+
+.hud-title-block:focus-visible {
+  outline: 1.5px solid var(--accent-gold);
+  outline-offset: 1px;
+  background: var(--surface-subtle);
+}
+
+@media (forced-colors: active) {
+  .hud-title-block:focus-visible {
+    outline: 2px solid Highlight;
+  }
 }
 
 .hud-title-row {
@@ -466,104 +499,6 @@
   }
 }
 
-/* Dual-Metric Speed Rush & Bonus-Moves Safeguard on Mobile (0px truncation) */
-@media (max-width: 480px) {
-  .moves-pill.moves-bonus {
-    font-size: 0.56rem;
-    padding: 0.08rem 0.26rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] {
-    padding: 0.16rem 0.34rem;
-    gap: 0.22rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] .mode-badge {
-    font-size: 0.61rem;
-    gap: 0.18rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] .mode-metric-group {
-    gap: 0.18rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] .tabular-metric,
-  .btn-mode-pill[data-mode="TIMED"] .timer-pill {
-    font-size: 0.57rem;
-    padding: 0.08rem 0.24rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] .mode-swap-svg {
-    display: none;
-  }
-}
-
-/* Compact Mobile Portrait (<= 384px — 360x640 Small Android / 375x667 iPhone SE) */
-@media (max-width: 384px) {
-  .hud-top-bar {
-    padding: 0.32rem 0.38rem 0.34rem;
-  }
-  .hud-arch-subbar,
-  .hud-mode-carousel {
-    gap: 0.2rem;
-  }
-  .btn-mode-wing {
-    min-height: 32px;
-    min-width: 44px;
-    padding: 0.16rem 0.36rem;
-    font-size: 0.72rem;
-    gap: 0.18rem;
-  }
-  .btn-mode-pill {
-    min-height: 32px;
-    padding: 0.16rem 0.38rem;
-    gap: 0.26rem;
-  }
-  .mode-badge {
-    font-size: 0.64rem;
-    gap: 0.2rem;
-  }
-  .tabular-metric,
-  .timer-pill {
-    font-size: 0.6rem;
-    padding: 0.08rem 0.28rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] {
-    padding: 0.14rem 0.26rem;
-    gap: 0.16rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] .mode-badge {
-    font-size: 0.57rem;
-    gap: 0.14rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] .mode-metric-group {
-    gap: 0.14rem;
-  }
-  .btn-mode-pill[data-mode="TIMED"] .tabular-metric,
-  .btn-mode-pill[data-mode="TIMED"] .timer-pill {
-    font-size: 0.54rem;
-    padding: 0.06rem 0.18rem;
-  }
-  .mode-swap-svg {
-    width: 12px;
-    height: 12px;
-  }
-  .hud-stat-plaque {
-    min-height: 32px;
-    padding: 0.16rem 0.3rem;
-    font-size: 0.62rem;
-    gap: 0.18rem;
-  }
-}
-
-/* Short Landscape Mobile — preserve generous 30px+ touch targets without crowding the 3D stage */
-@media (max-height: 520px) and (orientation: landscape) {
-  .hud-top-bar {
-    padding: 0.26rem 0.56rem 0.28rem;
-    gap: 0.2rem;
-  }
-  .btn-mode-wing,
-  .btn-mode-pill,
-  .hud-stat-plaque {
-    min-height: 30px;
-  }
-}
-
 /* Center 3D Board Stage — transparent so #app-shell::before & .mode-ambience-backdrop cross-fade smoothly */
 .board-stage {
   position: relative;
@@ -580,6 +515,86 @@
   background: transparent;
 }
 
+.sacred-geometry-ornament {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(98dvw, 66dvh, 660px);
+  height: min(98dvw, 66dvh, 660px);
+  color: rgba(246, 202, 128, 0.44);
+  pointer-events: none;
+  z-index: 1;
+}
+
+@supports (width: 100cqw) {
+  .sacred-geometry-ornament {
+    width: min(96cqw, 82cqh, 550px);
+    height: min(96cqw, 82cqh, 550px);
+  }
+}
+
+.sacred-geometry-ornament .ornament-outer-wheel {
+  transform-origin: 300px 300px;
+  animation: astrolabeSpin 34s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+.sacred-geometry-ornament .ornament-inner-star {
+  transform-origin: 300px 300px;
+  animation: astrolabeSpinReverse 46s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes astrolabeSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes astrolabeSpinReverse {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+#game-canvas {
+  --board-aspect: 1;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  z-index: 2;
+  width: min(100%, 100dvw, calc(82dvh * var(--board-aspect)), calc(748px * var(--board-aspect)));
+  height: min(100%, calc(100dvw / var(--board-aspect)), 82dvh, 748px);
+  border-radius: var(--radius-lg);
+  border: none;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: block;
+}
+
+@supports (width: 100cqw) {
+  #game-canvas {
+    --board-box-w: min(96cqw, calc(82cqh * var(--board-aspect)), calc(550px * var(--board-aspect)));
+    --board-box-h: min(calc(96cqw / var(--board-aspect)), 82cqh, 550px);
+    width: min(100%, calc(var(--board-box-w) * 1.36));
+    height: min(100%, calc(var(--board-box-h) * 1.36));
+  }
+}
+
+/* Title-Screen Relic Volumetric God Rays (`MYSTIC-RELIC-01`, `PERF-TRANSITION-01`) */
 @keyframes mysticGodRays {
   from {
     rotate: 0deg;
@@ -598,9 +613,6 @@
   }
 }
 
-/* Subtle volumetric god rays radiating from the Title Screen relic (MYSTIC-RELIC-01), fading smoothly on Play.
-   Uses soft angular conic stops + radial mask with zero CSS blur filter (PERF-TRANSITION-01) so mobile GPUs
-   composite rotation & fade purely on the compositor thread. */
 #screen-game .board-stage::before,
 #screen-game .board-stage::after {
   content: "";
@@ -707,84 +719,5 @@ body.high-contrast #screen-game.title-backdrop-mode .board-stage::after {
   #screen-game.title-backdrop-mode .board-stage::before,
   #screen-game.title-backdrop-mode .board-stage::after {
     display: none;
-  }
-}
-
-.sacred-geometry-ornament {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  translate: -50% -50%;
-  width: min(98dvw, 66dvh, 660px);
-  height: min(98dvw, 66dvh, 660px);
-  color: rgba(246, 202, 128, 0.44);
-  pointer-events: none;
-  z-index: 1;
-}
-
-@supports (width: 100cqw) {
-  .sacred-geometry-ornament {
-    width: min(96cqw, 82cqh, 550px);
-    height: min(96cqw, 82cqh, 550px);
-  }
-}
-
-.sacred-geometry-ornament .ornament-outer-wheel {
-  transform-origin: 300px 300px;
-  animation: astrolabeSpin 34s linear infinite;
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-  }
-}
-
-.sacred-geometry-ornament .ornament-inner-star {
-  transform-origin: 300px 300px;
-  animation: astrolabeSpinReverse 46s linear infinite;
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-  }
-}
-
-@keyframes astrolabeSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes astrolabeSpinReverse {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
-#game-canvas {
-  --board-aspect: 1;
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  z-index: 2;
-  width: min(100%, 100dvw, calc(82dvh * var(--board-aspect)), calc(748px * var(--board-aspect)));
-  height: min(100%, calc(100dvw / var(--board-aspect)), 82dvh, 748px);
-  border-radius: var(--radius-lg);
-  border: none;
-  background: transparent;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  display: block;
-}
-
-@supports (width: 100cqw) {
-  #game-canvas {
-    --board-box-w: min(96cqw, calc(82cqh * var(--board-aspect)), calc(550px * var(--board-aspect)));
-    --board-box-h: min(calc(96cqw / var(--board-aspect)), 82cqh, 550px);
-    width: min(100%, calc(var(--board-box-w) * 1.36));
-    height: min(100%, calc(var(--board-box-h) * 1.36));
   }
 }

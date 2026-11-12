@@ -15,9 +15,129 @@ import {
   TRAY_CATALOG,
 } from './catalog-meta';
 
-export function renderRoadmapImpl(app: AppViewContext): void {
+export function computeEndlessTierChips(
+  unlockedMax: number,
+  activeCurrentId: number
+): Array<[number, number]> {
+  if (unlockedMax <= TOTAL_CAMPAIGN_LEVELS) return [];
+  const endlessStart = TOTAL_CAMPAIGN_LEVELS + 1;
+  const totalBuckets = Math.max(1, Math.ceil((unlockedMax - TOTAL_CAMPAIGN_LEVELS) / 50));
+  const selectedIndices = new Set<number>();
+
+  if (totalBuckets <= 12) {
+    for (let b = 0; b < totalBuckets; b++) selectedIndices.add(b);
+  } else {
+    selectedIndices.add(0);
+    if (activeCurrentId >= endlessStart) {
+      const curBucket = Math.floor((activeCurrentId - endlessStart) / 50);
+      for (let b = Math.max(0, curBucket - 1); b <= Math.min(totalBuckets - 1, curBucket + 1); b++) {
+        selectedIndices.add(b);
+      }
+    }
+    for (let b = Math.max(0, totalBuckets - 6); b < totalBuckets; b++) {
+      selectedIndices.add(b);
+    }
+  }
+
+  return Array.from(selectedIndices)
+    .sort((a, b) => a - b)
+    .map((b) => [endlessStart + b * 50, endlessStart + b * 50 + 49]);
+}
+
+function syncRoadmapFilterChips(app: AppViewContext, unlockedMax: number, activeCurrentId: number): void {
+  const pillsContainer = document.querySelector<HTMLElement>('.filter-pills');
+  if (!pillsContainer) return;
+
+  const hadFocusInPills = pillsContainer.contains(document.activeElement);
+  const existingDynamic = new Map<string, HTMLButtonElement>();
+  for (const el of pillsContainer.querySelectorAll<HTMLButtonElement>('[data-endless-tier-chip="true"]')) {
+    if (el.dataset.range) existingDynamic.set(el.dataset.range, el);
+    else el.remove();
+  }
+
+  const desiredRanges = computeEndlessTierChips(unlockedMax, activeCurrentId);
+  const desiredKeys = new Set<string>();
+  for (const [tStart, tEnd] of desiredRanges) {
+    const key = `${tStart}-${tEnd}`;
+    desiredKeys.add(key);
+    let chip = existingDynamic.get(key);
+    if (!chip) {
+      chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip-filter';
+      chip.dataset.range = key;
+      chip.dataset.endlessTierChip = 'true';
+      chip.textContent = `${tStart}–${tEnd}`;
+    }
+    pillsContainer.appendChild(chip);
+  }
+  for (const [key, staleChip] of existingDynamic) {
+    if (!desiredKeys.has(key)) staleChip.remove();
+  }
+
+  const allChips = Array.from(pillsContainer.querySelectorAll<HTMLButtonElement>('.chip-filter[data-range]'));
+  if (!allChips.some((c) => c.dataset.range === app.activeRoadmapRange)) {
+    app.activeRoadmapRange = 'all';
+  }
+  let activeChipEl: HTMLButtonElement | null = null;
+  for (const chip of allChips) {
+    const isActive = chip.dataset.range === app.activeRoadmapRange;
+    chip.classList.toggle('active', isActive);
+    chip.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    if (isActive) activeChipEl = chip;
+  }
+  if (app.activeRoadmapRange === 'all') {
+    pillsContainer.scrollLeft = 0;
+  }
+  if (hadFocusInPills && !pillsContainer.contains(document.activeElement) && activeChipEl) {
+    activeChipEl.focus({ preventScroll: true });
+  }
+}
+
+let pendingRoadmapScrollRaf1 = 0;
+let pendingRoadmapScrollRaf2 = 0;
+
+export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): void {
   const container = document.getElementById('roadmap-list');
   if (!container) return;
+  if (pendingRoadmapScrollRaf1) cancelAnimationFrame(pendingRoadmapScrollRaf1);
+  if (pendingRoadmapScrollRaf2) cancelAnimationFrame(pendingRoadmapScrollRaf2);
+  pendingRoadmapScrollRaf1 = 0;
+  pendingRoadmapScrollRaf2 = 0;
+
+  if (!container.dataset.delegatedBound) {
+    container.dataset.delegatedBound = 'true';
+    container.addEventListener('click', (e) => {
+      const targetEl = e.target as HTMLElement | null;
+      const archiveBtn = targetEl?.closest<HTMLButtonElement>('.roadmap-archive-btn[data-archive-start]');
+      if (archiveBtn) {
+        const expStart = Number(archiveBtn.dataset.archiveStart);
+        const expEnd = Number(archiveBtn.dataset.archiveEnd);
+        if (Number.isFinite(expStart) && Number.isFinite(expEnd)) {
+          app.sound.playButtonTap();
+          app.expandedEndlessRanges.push([expStart, expEnd]);
+          app.renderRoadmap(expStart);
+        }
+        return;
+      }
+      const nodeBtn = targetEl?.closest<HTMLButtonElement>('.level-node-card[data-level-id]');
+      if (!nodeBtn) return;
+      const levelId = Number(nodeBtn.dataset.levelId);
+      if (!Number.isFinite(levelId) || levelId < 1) return;
+      if (nodeBtn.dataset.unlocked !== 'true') {
+        const curMode = app.saveManager.getPayload().settings.playMode;
+        app.sound.playWallClack();
+        app.showGameToast(
+          curMode === 'ZEN'
+            ? `🔒 Clear or Skip up to Level ${levelId} in Zen Mode to unlock!`
+            : `🔒 Clear up to Level ${levelId} in ${curMode === 'TIMED' ? 'Speed Rush' : 'Challenge Mode'} to unlock!`
+        );
+        return;
+      }
+      app.sound.playButtonTap();
+      app.loadLevel(levelId, true);
+    });
+  }
 
   const save = app.saveManager.getPayload();
   const playMode = save.settings.playMode;
@@ -26,6 +146,8 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   const activeCurrentId = Math.max(1, modeLadder.currentLevelId || 1);
   const allCampaign = getCampaignRoadmapMeta();
   const unlockedMax = Math.max(1, modeLadder.highestUnlocked, activeCurrentId);
+
+  syncRoadmapFilterChips(app, unlockedMax, activeCurrentId);
 
   const getModeStars = (levelId: number): number => {
     const r = save.levelRecords[levelId];
@@ -36,18 +158,17 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   };
 
   let levelsToShow = allCampaign;
-  if (app.activeRoadmapRange === '1-50') {
-    levelsToShow = allCampaign.filter((l) => l.id >= 1 && l.id <= 50);
-  } else if (app.activeRoadmapRange === '51-100') {
-    levelsToShow = allCampaign.filter((l) => l.id >= 51 && l.id <= 100);
-  } else if (app.activeRoadmapRange === '101-150') {
-    levelsToShow = allCampaign.filter((l) => l.id >= 101 && l.id <= 150);
-  } else if (app.activeRoadmapRange === '151-200') {
-    levelsToShow = allCampaign.filter((l) => l.id >= 151 && l.id <= 200);
-  } else if (app.activeRoadmapRange === '201-250') {
-    levelsToShow = allCampaign.filter((l) => l.id >= 201 && l.id <= 250);
-  } else if (app.activeRoadmapRange === '251-300') {
-    levelsToShow = allCampaign.filter((l) => l.id >= 251 && l.id <= 300);
+  let explicitEndlessTier: [number, number] | null = null;
+  const rangeMatch = /^(\d+)-(\d+)$/.exec(app.activeRoadmapRange);
+  if (rangeMatch) {
+    const rStart = Number(rangeMatch[1]);
+    const rEnd = Number(rangeMatch[2]);
+    if (rEnd <= TOTAL_CAMPAIGN_LEVELS) {
+      levelsToShow = allCampaign.filter((l) => l.id >= rStart && l.id <= rEnd);
+    } else {
+      levelsToShow = [];
+      explicitEndlessTier = [rStart, rEnd];
+    }
   } else if (app.activeRoadmapRange === 'endless') {
     levelsToShow = [];
   }
@@ -95,6 +216,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     isZenCleared: boolean;
     isSkipped: boolean;
     isUnlocked: boolean;
+    isMilestone: boolean;
     earnedStars: number;
   }
 
@@ -117,6 +239,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       btn.setAttribute('aria-current', 'step');
     }
     btn.dataset.levelId = String(spec.id);
+    btn.dataset.unlocked = isUnlocked ? 'true' : 'false';
     btn.className = [
       'level-node-card',
       `tier-${spec.difficulty.toLowerCase()}`,
@@ -227,20 +350,6 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
     btn.append(markerSpan, contentDiv);
 
-    btn.addEventListener('click', () => {
-      if (!isUnlocked) {
-        app.sound.playWallClack();
-        app.showGameToast(
-          playMode === 'ZEN'
-            ? `🔒 Clear or Skip up to Level ${spec.id} in Zen Mode to unlock!`
-            : `🔒 Clear up to Level ${spec.id} in ${playMode === 'TIMED' ? 'Speed Rush' : 'Challenge Mode'} to unlock!`
-        );
-        return;
-      }
-      app.sound.playButtonTap();
-      app.loadLevel(spec.id, true);
-    });
-
     return {
       btn,
       isCurrent,
@@ -248,9 +357,20 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       isZenCleared,
       isSkipped,
       isUnlocked,
+      isMilestone,
       earnedStars,
     };
   };
+
+  const anchorStageId = focusStageId ?? activeCurrentId;
+  const anchorBucket = Math.floor((anchorStageId - 1) / 5);
+  const topVisibleStartBucket = explicitEndlessTier
+    ? Math.floor((explicitEndlessTier[0] - 1) / 5)
+    : rangeMatch
+      ? Math.floor((Number(rangeMatch[1]) - 1) / 5)
+      : app.activeRoadmapRange === 'endless'
+        ? Math.floor(TOTAL_CAMPAIGN_LEVELS / 5)
+        : 0;
 
   const appendStageGroups = (specs: LevelRoadmapMeta[], isEndlessGroup: boolean) => {
     let idx = 0;
@@ -271,7 +391,12 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const zenCount = builtNodes.filter((n) => n.isZenCleared).length;
       const skippedCount = builtNodes.filter((n) => n.isSkipped).length;
       const unlockedCount = builtNodes.filter((n) => n.isUnlocked).length;
+      const milestoneCount = builtNodes.filter((n) => n.isMilestone).length;
       const hasCurrent = builtNodes.some((n) => n.isCurrent);
+      const isNearViewport =
+        hasCurrent ||
+        Math.abs(bucketKey - anchorBucket) <= 3 ||
+        (bucketKey >= topVisibleStartBucket && bucketKey < topVisibleStartBucket + 3);
       const groupStars = builtNodes.reduce((sum, n) => sum + n.earnedStars, 0);
       const maxGroupStars = builtNodes.length * 3;
       const allCleared =
@@ -284,6 +409,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
         allCleared ? 'stage-group-cleared' : '',
         hasCurrent ? 'stage-group-active' : '',
         allLocked ? 'stage-group-locked' : '',
+        !isNearViewport ? 'stage-group-deferred' : '',
       ]
         .filter(Boolean)
         .join(' ');
@@ -334,6 +460,12 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const trackEl = document.createElement('div');
       trackEl.className = 'stage-group-track';
       trackEl.setAttribute('role', 'presentation');
+      if (!isNearViewport) {
+        trackEl.style.setProperty('--flight-count', String(builtNodes.length));
+        if (milestoneCount > 0) {
+          trackEl.style.setProperty('--milestone-count', String(milestoneCount));
+        }
+      }
       for (const node of builtNodes) {
         trackEl.appendChild(node.btn);
       }
@@ -341,6 +473,22 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       groupEl.append(headerEl, trackEl);
       fragment.appendChild(groupEl);
     }
+  };
+
+  const formatBoundedRangeMetric = (startId: number, endId: number): string => {
+    const count = endId - startId + 1;
+    if (playMode === 'ZEN') {
+      let zenClears = 0;
+      for (let lid = startId; lid <= endId; lid++) {
+        if (save.levelRecords[lid]?.zenCleared) zenClears++;
+      }
+      return `🌿 ${zenClears} / ${count}`;
+    }
+    let stars = 0;
+    for (let lid = startId; lid <= endId; lid++) {
+      stars += getModeStars(lid);
+    }
+    return `★ ${stars} / ${count * 3}`;
   };
 
   let chapterBatch: LevelRoadmapMeta[] = [];
@@ -358,27 +506,12 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     if (ch.chapterNum !== lastChapterNum) {
       flushChapterBatch();
       lastChapterNum = ch.chapterNum;
-      let chMetricLabel = '';
-      const stageCount = ch.endLevel - ch.startLevel + 1;
-      if (playMode === 'ZEN') {
-        let chZenClears = 0;
-        for (let lid = ch.startLevel; lid <= ch.endLevel; lid++) {
-          if (save.levelRecords[lid]?.zenCleared) chZenClears++;
-        }
-        chMetricLabel = `🌿 ${chZenClears} / ${stageCount}`;
-      } else {
-        let chStars = 0;
-        for (let lid = ch.startLevel; lid <= ch.endLevel; lid++) {
-          chStars += getModeStars(lid);
-        }
-        chMetricLabel = `★ ${chStars} / ${stageCount * 3}`;
-      }
       fragment.appendChild(
         createChapterBanner(
           `${ch.chapterNum} · LEVELS ${ch.startLevel}–${ch.endLevel}`,
           ch.title,
           ch.subtitle,
-          chMetricLabel
+          formatBoundedRangeMetric(ch.startLevel, ch.endLevel)
         )
       );
     }
@@ -386,30 +519,71 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   }
   flushChapterBatch();
 
-  // Append Procedural Endless Mastery Nodes (Windowed so 50,000+ levels render in < 5ms)
-  if (app.activeRoadmapRange === 'all' || app.activeRoadmapRange === 'endless') {
-    const endlessStart = TOTAL_CAMPAIGN_LEVELS + 1;
+  // Append Procedural Endless Mastery Nodes (O(1) metadata + interactive archive expansion)
+  const endlessStart = TOTAL_CAMPAIGN_LEVELS + 1;
+  if (explicitEndlessTier) {
+    const [tStart, tEnd] = explicitEndlessTier;
+    const endlessCh = getChapterMetaForLevel(tStart);
+    fragment.appendChild(
+      createChapterBanner(
+        `${endlessCh.chapterNum} · LEVELS ${tStart}–${tEnd}`,
+        endlessCh.title,
+        endlessCh.subtitle,
+        formatBoundedRangeMetric(tStart, tEnd)
+      )
+    );
+    const tierSpecs: LevelRoadmapMeta[] = [];
+    for (let eid = tStart; eid <= tEnd; eid++) {
+      tierSpecs.push(getLevelRoadmapMeta(eid));
+    }
+    appendStageGroups(tierSpecs, true);
+  } else if (app.activeRoadmapRange === 'all' || app.activeRoadmapRange === 'endless') {
     const endlessCh = getChapterMetaForLevel(endlessStart);
+    let endlessMetric = '∞ Procedural';
+    if (unlockedMax > TOTAL_CAMPAIGN_LEVELS) {
+      if (playMode === 'ZEN') {
+        let endlessZen = 0;
+        for (const [k, rec] of Object.entries(save.levelRecords)) {
+          if (Number(k) >= endlessStart && rec?.zenCleared) endlessZen++;
+        }
+        endlessMetric = `🌿 ${endlessZen} · #${unlockedMax}`;
+      } else {
+        let endlessStars = 0;
+        for (const k of Object.keys(save.levelRecords)) {
+          const lid = Number(k);
+          if (lid >= endlessStart) endlessStars += getModeStars(lid);
+        }
+        endlessMetric = `★ ${endlessStars} · #${unlockedMax}`;
+      }
+    }
     fragment.appendChild(
       createChapterBanner(
         `${endlessCh.chapterNum} · LEVEL ${endlessStart}+`,
         endlessCh.title,
         endlessCh.subtitle,
-        '∞ Procedural'
+        endlessMetric
       )
     );
 
+    const alignFlightStart = (id: number) => Math.max(endlessStart, Math.floor((id - 1) / 5) * 5 + 1);
+    const alignFlightEnd = (id: number) => Math.floor((id - 1) / 5) * 5 + 5;
+    const directCap =
+      app.activeRoadmapRange === 'endless' ? TOTAL_CAMPAIGN_LEVELS + 150 : TOTAL_CAMPAIGN_LEVELS + 24;
+
     const rawWindows: Array<[number, number]> = [];
-    if (unlockedMax <= TOTAL_CAMPAIGN_LEVELS + 24) {
+    if (unlockedMax <= directCap) {
       rawWindows.push([endlessStart, Math.max(TOTAL_CAMPAIGN_LEVELS + 6, unlockedMax + 3)]);
     } else {
-      rawWindows.push([endlessStart, endlessStart + 5]);
+      rawWindows.push([endlessStart, endlessStart + 9]);
       const focusLevel = activeCurrentId >= endlessStart ? activeCurrentId : unlockedMax;
       rawWindows.push([
-        Math.max(endlessStart + 6, focusLevel - 8),
-        Math.min(unlockedMax + 3, focusLevel + 8),
+        Math.max(endlessStart + 10, alignFlightStart(focusLevel - 10)),
+        Math.min(unlockedMax + 3, alignFlightEnd(focusLevel + 10)),
       ]);
-      rawWindows.push([Math.max(endlessStart + 6, unlockedMax - 8), unlockedMax + 3]);
+      rawWindows.push([Math.max(endlessStart + 10, alignFlightStart(unlockedMax - 10)), unlockedMax + 3]);
+      for (const [exStart, exEnd] of app.expandedEndlessRanges) {
+        rawWindows.push([Math.max(endlessStart, exStart), Math.min(unlockedMax + 3, exEnd)]);
+      }
     }
     rawWindows.sort((a, b) => a[0] - b[0]);
     const windows: Array<[number, number]> = [];
@@ -426,15 +600,54 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     let prevEnd = endlessStart - 1;
     for (const [wStart, wEnd] of windows) {
       if (wStart > prevEnd + 1) {
-        const archivedCount = wStart - prevEnd - 1;
-        fragment.appendChild(
-          createChapterBanner(
-            `ENDLESS ARCHIVE · STAGES #${prevEnd + 1}–#${wStart - 1}`,
-            `${archivedCount} Cleared Stages Archived`,
-            'Enter any stage number in the Lvl # jump box above to replay.',
-            `✓ ${archivedCount}`
-          )
-        );
+        const gapStart = prevEnd + 1;
+        const gapEnd = wStart - 1;
+        const archivedCount = gapEnd - gapStart + 1;
+        const expandStart =
+          archivedCount <= 60 ? gapStart : Math.max(gapStart, alignFlightStart(gapEnd - 49));
+        let gapProgress = '';
+        if (playMode === 'ZEN') {
+          let gZen = 0;
+          for (let lid = gapStart; lid <= gapEnd; lid++) {
+            if (save.levelRecords[lid]?.zenCleared) gZen++;
+          }
+          gapProgress = `🌿 ${gZen}/${archivedCount}`;
+        } else {
+          let gStars = 0;
+          for (let lid = gapStart; lid <= gapEnd; lid++) {
+            gStars += getModeStars(lid);
+          }
+          gapProgress = `★ ${gStars}`;
+        }
+
+        const archiveBtn = document.createElement('button');
+        archiveBtn.type = 'button';
+        archiveBtn.className = 'roadmap-archive-btn';
+        archiveBtn.dataset.archiveStart = String(expandStart);
+        archiveBtn.dataset.archiveEnd = String(gapEnd);
+
+        const leftMeta = document.createElement('div');
+        leftMeta.className = 'chapter-banner-meta';
+        const kicker = document.createElement('span');
+        kicker.className = 'chapter-banner-kicker';
+        kicker.textContent = `ENDLESS ARCHIVE · STAGES #${gapStart}–#${gapEnd}`;
+        const title = document.createElement('span');
+        title.className = 'chapter-banner-title';
+        title.textContent = `${archivedCount} Earlier Stages (${gapProgress})`;
+        const sub = document.createElement('span');
+        sub.className = 'chapter-banner-sub';
+        sub.textContent =
+          expandStart === gapStart
+            ? `Tap to reveal all ${archivedCount} stages (#${gapStart}–#${gapEnd}) on the map.`
+            : `Tap to reveal 50 stages (#${expandStart}–#${gapEnd}) on the map.`;
+        leftMeta.append(kicker, title, sub);
+
+        const ctaSpan = document.createElement('span');
+        ctaSpan.className = 'archive-expand-pill';
+        ctaSpan.textContent = `▾ Show #${expandStart}–#${gapEnd}`;
+
+        archiveBtn.append(leftMeta, ctaSpan);
+        fragment.appendChild(archiveBtn);
       }
       const endlessSpecs: LevelRoadmapMeta[] = [];
       for (let eid = wStart; eid <= wEnd; eid++) {
@@ -447,22 +660,38 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
   container.replaceChildren(fragment);
 
-  // Auto-focus the player's Current Sanctuary Stage in the scrollable linked path
-  // (or reset to top when viewing Level 1 or a filter range without the active stage).
-  const currentNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
-  if (currentNode && activeCurrentId > 1) {
-    const scrollCurrentStageIntoView = () => {
-      const activeNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
-      if (activeNode && container.clientHeight > 0) {
+  const scrollSelectorIntoView = (selector: string, moveFocus: boolean): boolean => {
+    const targetNode = container.querySelector<HTMLElement>(selector);
+    if (!targetNode) return false;
+    const syncScroll = () => {
+      const liveNode = container.querySelector<HTMLElement>(selector);
+      if (liveNode && container.clientHeight > 0) {
         const containerRect = container.getBoundingClientRect();
-        const nodeRect = activeNode.getBoundingClientRect();
+        const nodeRect = liveNode.getBoundingClientRect();
         const relativeTop = nodeRect.top - containerRect.top + container.scrollTop;
         container.scrollTop = Math.max(0, Math.round(relativeTop - container.clientHeight * 0.16));
       }
     };
-    scrollCurrentStageIntoView();
-    requestAnimationFrame(scrollCurrentStageIntoView);
-  } else {
+    syncScroll();
+    if (moveFocus) targetNode.focus({ preventScroll: true });
+    pendingRoadmapScrollRaf1 = requestAnimationFrame(() => {
+      syncScroll();
+      pendingRoadmapScrollRaf2 = requestAnimationFrame(syncScroll);
+    });
+    return true;
+  };
+
+  if (
+    focusStageId !== undefined &&
+    scrollSelectorIntoView(`.level-node-card[data-level-id="${focusStageId}"]`, true)
+  ) {
+    return;
+  }
+  if (activeCurrentId === 1 && container.clientHeight >= 160) {
+    container.scrollTop = 0;
+    return;
+  }
+  if (!scrollSelectorIntoView('.level-node-card.current-level', false)) {
     container.scrollTop = 0;
   }
 }
@@ -530,57 +759,32 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
     container.replaceChildren(frag);
   };
 
-  buildCategoryGrid(
-    'themes-skins-grid',
-    SKIN_CATALOG,
-    save.unlockedSkins,
-    save.equippedSkin,
-    (skinId, price) => {
-      if (app.saveManager.unlockOrEquipSkin(skinId, price)) {
-        app.syncAllUiFromSave();
-        app.sound.playButtonTap();
-        app.renderThemesStudio();
-        app.renderNow();
-      } else {
-        app.sound.playWallClack();
-        app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
-      }
+  const applyThemeSelection = (ok: boolean, price: number, onSuccessSound: () => void) => {
+    if (ok) {
+      app.syncAllUiFromSave();
+      onSuccessSound();
+      app.renderThemesStudio();
+      app.renderNow();
+    } else {
+      app.sound.playWallClack();
+      app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
     }
-  );
+  };
 
-  buildCategoryGrid(
-    'themes-trays-grid',
-    TRAY_CATALOG,
-    save.unlockedTrays,
-    save.equippedTray,
-    (trayId, price) => {
-      if (app.saveManager.unlockOrEquipTray(trayId, price)) {
-        app.syncAllUiFromSave();
-        app.sound.playButtonTap();
-        app.renderThemesStudio();
-        app.renderNow();
-      } else {
-        app.sound.playWallClack();
-        app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
-      }
-    }
+  buildCategoryGrid('themes-skins-grid', SKIN_CATALOG, save.unlockedSkins, save.equippedSkin, (id, price) =>
+    applyThemeSelection(app.saveManager.unlockOrEquipSkin(id, price), price, () => app.sound.playButtonTap())
   );
-
+  buildCategoryGrid('themes-trays-grid', TRAY_CATALOG, save.unlockedTrays, save.equippedTray, (id, price) =>
+    applyThemeSelection(app.saveManager.unlockOrEquipTray(id, price), price, () => app.sound.playButtonTap())
+  );
   buildCategoryGrid(
     'themes-particles-grid',
     PARTICLE_CATALOG,
     save.unlockedParticles,
     save.equippedParticle,
-    (particleId, price) => {
-      if (app.saveManager.unlockOrEquipParticle(particleId, price)) {
-        app.syncAllUiFromSave();
-        app.sound.playParticlePreview(particleId);
-        app.renderThemesStudio();
-        app.renderNow();
-      } else {
-        app.sound.playWallClack();
-        app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
-      }
-    }
+    (id, price) =>
+      applyThemeSelection(app.saveManager.unlockOrEquipParticle(id, price), price, () =>
+        app.sound.playParticlePreview(id)
+      )
   );
 }

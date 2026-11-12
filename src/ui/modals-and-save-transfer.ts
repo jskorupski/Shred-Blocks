@@ -20,6 +20,7 @@ import {
   type AppViewContext,
   BOOSTER_DEBUT_NOTES,
   type ModalId,
+  renderStructuredBannerText,
   type ShredBlocksDebugBridge,
 } from './catalog-meta';
 
@@ -240,12 +241,13 @@ export function confirmPendingSaveImportImpl(app: AppViewContext): void {
     }
 
     refreshSaveTransferModalImpl(app);
-    app.syncAllUiFromSave();
-    app.renderRoadmap();
-    app.renderThemesStudio();
+    app.activeRoadmapRange = 'all';
+    app.expandedEndlessRanges = [];
     const ladder = updated.modeState[updated.settings.playMode];
     const frontierId = Math.max(1, Math.min(ladder.highestUnlocked, ladder.currentLevelId || 1));
     app.loadLevel(frontierId, false, false);
+    app.renderRoadmap();
+    app.renderThemesStudio();
     if (typeof history !== 'undefined' && isAppHistoryState(history.state) && history.state.view === 'game') {
       history.replaceState(
         { __shredblocksNav: true, view: 'game', levelId: app.board.levelId } satisfies AppHistoryState,
@@ -277,6 +279,11 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
   const fromOutcomeModal = Boolean(getModalElement('failure')?.open || getModalElement('victory')?.open);
 
   if (prevMode === nextMode && !fromOutcomeModal && app.boardPlayMode === nextMode) {
+    if (app.activeScreen === 'home' && !app.titleOverlayOpen) {
+      app.activeRoadmapRange = 'all';
+      app.expandedEndlessRanges = [];
+      app.renderRoadmap();
+    }
     return;
   }
 
@@ -295,6 +302,8 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
   }
 
   app.inputController.cancelTargeting();
+  app.activeRoadmapRange = 'all';
+  app.expandedEndlessRanges = [];
   app.saveManager.updateSettings({ playMode: nextMode });
 
   const nextSave = app.saveManager.getPayload();
@@ -378,6 +387,8 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
       }
       const next = validateSavePayloadV1(merged);
       if (next) {
+        app.activeRoadmapRange = 'all';
+        app.expandedEndlessRanges = [];
         app.saveManager.importSaveJson(JSON.stringify(next));
         app.syncAllUiFromSave();
         app.renderRoadmap();
@@ -671,9 +682,8 @@ export function switchScreenImpl(
 
   if (screen === 'home') {
     app.activeRoadmapRange = 'all';
-    document.querySelectorAll<HTMLElement>('.chip-filter[data-range]').forEach((c) => {
-      c.classList.toggle('active', c.dataset.range === 'all');
-    });
+    app.expandedEndlessRanges = [];
+    app.syncAllUiFromSave();
     app.renderRoadmap();
     app.checkForPwaUpdate(false);
   } else if (screen === 'themes') {
@@ -713,10 +723,10 @@ export function switchScreenImpl(
   }
 }
 
-export function showGameToastImpl(app: AppViewContext, message: string, durationMs = 2600): void {
+export function showGameToastImpl(app: AppViewContext, message: string, durationMs = 3000): void {
   const toast = document.getElementById('game-toast');
   if (!toast) return;
-  toast.textContent = message;
+  renderStructuredBannerText(toast, message);
   toast.hidden = false;
   if (app.toastTimerId !== null) {
     clearTimeout(app.toastTimerId);
@@ -741,11 +751,11 @@ export function showUnlockNoteIfPresentImpl(app: AppViewContext, note?: string):
     return;
   }
 
-  textEl.textContent = note;
+  renderStructuredBannerText(textEl, note);
   banner.hidden = false;
   app.unlockToastTimerId = setTimeout(() => {
     banner.hidden = true;
-  }, 5500);
+  }, 6400);
 }
 
 export function autoSolveCurrentLevelImpl(app: AppViewContext): boolean {

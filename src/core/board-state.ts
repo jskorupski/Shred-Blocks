@@ -322,7 +322,10 @@ export function createBoardState(spec: LevelSpec): BoardState {
  * Computes the calibrated Tactical Move Budget (`moveLimit`) for `CHALLENGE` mode:
  * - `L1..12` (FTUE): `parMoves + 6`
  * - `L13..25` (Early Ramp): `parMoves + 5` (`+4` on Hard/Super Hard)
- * - `L26+`: `+5` on breathers, `+4` on `NORMAL`, `+3` on `HARD`, `+2` on `SUPER_HARD`
+ * - Breathers (`decPos === 6`, `L11+`): `parMoves + 5`
+ * - `L26..180`: `+4` on `NORMAL`, `+3` on `HARD`, `+2` on `SUPER_HARD`
+ * - `L181..240`: `+3` on `NORMAL`, `+3` on `HARD`, `+2` on `SUPER_HARD`
+ * - `L241+` (Mastery & Endless): `+3` on `NORMAL`, `+2` on `HARD`, `+2` on `SUPER_HARD`
  */
 export function computeDefaultMoveLimit(
   parMoves: number,
@@ -332,11 +335,11 @@ export function computeDefaultMoveLimit(
   const par = Math.max(1, Math.floor(parMoves));
   if (levelId <= 12) return par + 6;
   if (levelId <= 25) return difficulty === 'NORMAL' ? par + 5 : par + 4;
-  const isBreather = (levelId % 5 === 0 && levelId % 10 !== 0) || levelId % 10 === 6;
+  const isBreather = levelId >= 11 && levelId % 10 === 6;
   if (isBreather && difficulty === 'NORMAL') return par + 5;
   if (difficulty === 'SUPER_HARD') return par + 2;
-  if (difficulty === 'HARD') return par + 3;
-  return par + 4;
+  if (difficulty === 'HARD') return levelId >= 241 ? par + 2 : par + 3;
+  return levelId >= 181 ? par + 3 : par + 4;
 }
 
 /**

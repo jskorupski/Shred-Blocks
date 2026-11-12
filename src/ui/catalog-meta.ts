@@ -306,6 +306,7 @@ export interface AppViewContext {
   titleOverlayOpen: boolean;
   blueprintMix: number;
   activeRoadmapRange: string;
+  expandedEndlessRanges: Array<[number, number]>;
   freeUndosRemaining: number;
   runTouchedZen: boolean;
   levelOutcomeHandled: boolean;
@@ -352,7 +353,7 @@ export interface AppViewContext {
   syncViewportGeometry(): void;
   syncPwaUpdateBanner(): void;
   checkForPwaUpdate(force?: boolean): void;
-  renderRoadmap(): void;
+  renderRoadmap(focusStageId?: number): void;
   renderThemesStudio(): void;
   renderNow(dtSec?: number, timeSec?: number): void;
   freezeTime(timeSec: number | null): void;
@@ -383,4 +384,33 @@ export function getPlayModeMeta(mode: PlayMode): {
     return { icon: '⏱', shortLabel: 'Speed Rush', badgeLabel: '⏱ SPEED RUSH' };
   }
   return { icon: '⚔️', shortLabel: 'Challenge', badgeLabel: '⚔️ CHALLENGE' };
+}
+
+/**
+ * Formats onboarding unlock notes and contextual helper toasts with a highlighted semantic lead
+ * (`<strong class="banner-kicker">`) using pure DOM nodes (`SAVE-SEC-01`, zero `innerHTML`) while
+ * preserving `el.textContent === text` verbatim.
+ */
+export function renderStructuredBannerText(el: HTMLElement, text: string): void {
+  let splitEnd = -1;
+  const exclIdx = text.indexOf('! ');
+  const colonIdx = text.indexOf(': ');
+  const dashIdx = text.indexOf(' — ');
+
+  if (exclIdx > 0 && exclIdx <= 48 && (colonIdx === -1 || exclIdx - colonIdx <= 28)) {
+    splitEnd = exclIdx + 1;
+  } else if (colonIdx > 0 && colonIdx <= 48) {
+    splitEnd = colonIdx + 1;
+  } else if (dashIdx > 0 && dashIdx <= 46) {
+    splitEnd = dashIdx + 2;
+  }
+
+  if (splitEnd > 0 && splitEnd < text.length - 2) {
+    const lead = document.createElement('strong');
+    lead.className = 'banner-kicker';
+    lead.textContent = text.slice(0, splitEnd);
+    el.replaceChildren(lead, document.createTextNode(text.slice(splitEnd)));
+  } else {
+    el.textContent = text;
+  }
 }

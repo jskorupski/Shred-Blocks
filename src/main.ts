@@ -104,6 +104,7 @@ export class ShredBlocksApp implements AppViewContext {
   public titleOverlayOpen = true;
   public blueprintMix = 1.0;
   public activeRoadmapRange = 'all';
+  public expandedEndlessRanges: Array<[number, number]> = [];
   public undoStack: BoardState[] = [];
   public preRestartSnapshot: BoardState | null = null;
   public preRestartUndoStack: BoardState[] = [];
@@ -249,12 +250,17 @@ export class ShredBlocksApp implements AppViewContext {
         1,
         Math.min(reconciledLadder.highestUnlocked, reconciledLadder.currentLevelId || 1)
       );
-      if (
-        reconciled.writeSeq > bootWriteSeq &&
-        (this.activeScreen === 'home' || this.titleOverlayOpen) &&
-        (reconciledLevelId !== this.board.levelId || reconciled.settings.playMode !== this.boardPlayMode)
-      ) {
-        this.loadLevel(reconciledLevelId, false, false);
+      if (reconciled.writeSeq > bootWriteSeq) {
+        this.activeRoadmapRange = 'all';
+        this.expandedEndlessRanges = [];
+        if (
+          (this.activeScreen === 'home' || this.titleOverlayOpen) &&
+          (reconciledLevelId !== this.board.levelId || reconciled.settings.playMode !== this.boardPlayMode)
+        ) {
+          this.loadLevel(reconciledLevelId, false, false);
+        }
+        this.renderRoadmap();
+        this.renderThemesStudio();
       }
       this.syncAllUiFromSave();
       this.syncTitleOverlayDom();
@@ -295,7 +301,8 @@ export class ShredBlocksApp implements AppViewContext {
     if (gameToast) gameToast.hidden = true;
     this.refreshAutoGuideMove();
 
-    if (persistLevel && cleanId !== save.currentLevelId) {
+    const activeLadder = save.modeState[save.settings.playMode];
+    if (persistLevel && (cleanId !== save.currentLevelId || cleanId !== activeLadder.currentLevelId)) {
       this.saveManager.setCurrentLevel(cleanId);
     }
 
@@ -636,8 +643,8 @@ export class ShredBlocksApp implements AppViewContext {
   public syncTimerPillOnly(): void {
     syncTimerPillOnlyImpl(this);
   }
-  public renderRoadmap(): void {
-    renderRoadmapImpl(this);
+  public renderRoadmap(focusStageId?: number): void {
+    renderRoadmapImpl(this, focusStageId);
   }
   public renderThemesStudio(): void {
     renderThemesStudioImpl(this);

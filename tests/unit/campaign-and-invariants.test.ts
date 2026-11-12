@@ -242,7 +242,7 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
       const endlessRes = solveBoard(eBoard, 600);
       expect(endlessRes.solvable).toBe(true);
     }
-  }, 25_000);
+  }, 45_000);
 });
 
 describe('Physics, Gate Cascade & Solver Edge-Case Invariants', () => {

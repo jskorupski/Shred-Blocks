@@ -266,14 +266,14 @@
 
               <div class="roadmap-toolbar">
                 <div class="filter-pills" role="group" aria-label="Filter Levels by Tier">
-                  <button type="button" class="chip-filter active" data-range="all">All</button>
-                  <button type="button" class="chip-filter" data-range="1-50">1–50</button>
-                  <button type="button" class="chip-filter" data-range="51-100">51–100</button>
-                  <button type="button" class="chip-filter" data-range="101-150">101–150</button>
-                  <button type="button" class="chip-filter" data-range="151-200">151–200</button>
-                  <button type="button" class="chip-filter" data-range="201-250">201–250</button>
-                  <button type="button" class="chip-filter" data-range="251-300">251–300</button>
-                  <button type="button" class="chip-filter" data-range="endless">∞ 301+</button>
+                  <button type="button" class="chip-filter active" data-range="all" aria-pressed="true">All</button>
+                  <button type="button" class="chip-filter" data-range="1-50" aria-pressed="false">1–50</button>
+                  <button type="button" class="chip-filter" data-range="51-100" aria-pressed="false">51–100</button>
+                  <button type="button" class="chip-filter" data-range="101-150" aria-pressed="false">101–150</button>
+                  <button type="button" class="chip-filter" data-range="151-200" aria-pressed="false">151–200</button>
+                  <button type="button" class="chip-filter" data-range="201-250" aria-pressed="false">201–250</button>
+                  <button type="button" class="chip-filter" data-range="251-300" aria-pressed="false">251–300</button>
+                  <button type="button" class="chip-filter" data-range="endless" aria-pressed="false">∞ 301+</button>
                 </div>
                 <div class="level-jump-box">
                   <label for="level-jump-input" class="sr-only">Jump to Level</label>
@@ -310,12 +310,13 @@
               </button>
             </div>
 
-            <div class="hud-title-block">
-              <div class="hud-title-row">
+            <button type="button" id="btn-hud-title-map" class="hud-title-block" title="View stage on Sanctuary Map">
+              <span class="hud-title-row">
                 <span id="hud-level-title" class="hud-level-name">Level 1 — First Shred</span>
                 <span id="hud-difficulty-badge" class="badge-difficulty diff-normal">NORMAL</span>
-              </div>
-            </div>
+                <span class="sr-only"> — View on Sanctuary Map</span>
+              </span>
+            </button>
 
             <div class="hud-right">
               <button type="button" id="btn-restart" class="btn-tactile btn-icon" aria-label="Restart Level" title="Restart Level (R)">
@@ -670,14 +671,11 @@
           </div>
         </header>
 
-        <!-- Bottom Sanctuary Launch Pedestal (Leaves Center 3D Board 100% Unobstructed) -->
         <div class="title-crest-card">
-          <!-- Brand-New Player Tagline (A2: Straight into Level 1) -->
           <p id="title-new-player-tagline" class="title-new-player-tagline">
             Slide tactile 3D blocks across the floating courtyard into matching perimeter shredder gates.
           </p>
 
-          <!-- Returning Player Progress Plaque (A3: Compact Single-Bar Chapter + Stars/Coins/Streak) -->
           <div id="title-returning-summary" class="title-returning-plaque" hidden>
             <span id="title-chapter-badge" class="title-chapter-badge">
               CHAPTER I · SANCTUARY COURTYARD
@@ -705,14 +703,12 @@
             </div>
           </div>
 
-          <!-- Primary Hero CTA ('▶ BEGIN JOURNEY' for new; '▶ CONTINUE · LEVEL N' for returning) -->
           <div class="title-primary-cta-wrap">
             <button type="button" id="btn-title-play" class="btn-tactile btn-primary btn-title-hero">
               ▶ BEGIN JOURNEY
             </button>
           </div>
 
-          <!-- Unified Single-Row Quick-Action & Utility Dock -->
           <div class="title-dock-bar">
             <div id="title-returning-nav" class="title-nav-grid" hidden>
               <button type="button" id="btn-title-map" class="title-utility-pill title-map-pill" title="Open 300-Level Sanctuary Map">

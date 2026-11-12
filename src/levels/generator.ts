@@ -4,6 +4,8 @@ import { applyProgressiveMechanicsToCandidate } from './generator-mechanics';
 import { populateCandidateBlocks } from './generator-placement';
 import {
   getDifficultyForLevel,
+  getInitialCourtyardDimsForLevel,
+  getMilestoneLevelName,
   getUnlockNoteForLevel,
   LEVEL_ADJECTIVES,
   LEVEL_NOUNS,
@@ -36,48 +38,17 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
   const decPos = levelId % 10;
   const isBreatherWave = levelId >= 11 && decPos === 6;
 
-  const usePortraitTall =
-    attempt <= 5 &&
-    levelId >= 28 &&
-    (levelId % 7 === 0 || levelId % 10 === 4 || levelId % 10 === 8 || levelId % 3 === 0);
-  let rows = 6;
-  let cols = 6;
-  if (levelId <= 4) {
-    rows = 5;
-    cols = 5;
-  } else if (levelId <= 8) {
-    rows = 6;
-    cols = 5;
-  } else if (levelId <= 40) {
-    rows = usePortraitTall ? 8 : levelId >= 30 && difficulty === 'SUPER_HARD' ? 7 : 6;
-    cols = 6;
-  } else if (levelId <= 80) {
-    rows = usePortraitTall ? 8 : 7;
-    cols = levelId >= 70 && difficulty === 'SUPER_HARD' ? 7 : 6;
-  } else if (levelId <= 130) {
-    rows = usePortraitTall ? 9 : levelId >= 110 && difficulty === 'SUPER_HARD' ? 8 : 7;
-    cols = 7;
-  } else if (levelId <= 180) {
-    rows = usePortraitTall ? 9 : 8;
-    cols = levelId >= 160 && difficulty === 'SUPER_HARD' ? 8 : 7;
-  } else if (levelId <= 240) {
-    rows = usePortraitTall ? 9 : levelId >= 220 && difficulty === 'SUPER_HARD' ? 9 : 8;
-    cols = usePortraitTall ? 7 : 8;
-  } else if (levelId <= 280) {
-    rows = usePortraitTall ? 10 : 9;
-    cols = usePortraitTall ? 8 : levelId >= 270 && difficulty === 'SUPER_HARD' ? 9 : 8;
-  } else {
-    rows = usePortraitTall ? 10 : 9;
-    cols = usePortraitTall ? 8 : isBreatherWave ? 8 : 9;
-  }
+  const isMilestoneBoss = levelId === 200 || levelId === 250 || levelId === 300;
+  let { rows, cols } = getInitialCourtyardDimsForLevel(levelId, attempt);
 
-  // Only step down large courtyards on late fallback attempts (`attempt >= 6`)
-  if (attempt >= 6) {
-    rows = Math.min(rows, 6);
-    cols = Math.min(cols, 6);
-  } else if (attempt >= 4) {
-    rows = Math.min(rows, 7);
-    cols = Math.min(cols, 7);
+  // Graduated step-down on late retry attempts (preserving milestone courtyard scale)
+  if (!isMilestoneBoss && attempt >= 7) {
+    const cleanDim = levelId <= 40 ? 6 : 7;
+    rows = Math.min(rows, cleanDim);
+    cols = Math.min(cols, cleanDim);
+  } else if (!isMilestoneBoss && attempt >= 5) {
+    rows = Math.min(rows, levelId >= 141 ? 8 : 7);
+    cols = Math.min(cols, levelId >= 221 ? 8 : 7);
   }
 
   const maxPalette = levelId <= 10 ? 4 : levelId <= 60 ? 6 : levelId <= 140 ? 8 : 9;
@@ -92,13 +63,19 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   const rawMechanics = selectFocusedMechanicsForLevel(levelId);
   const activeMechanics =
-    attempt >= 6 && rawMechanics.size > 1 ? new Set([[...rawMechanics][0]]) : rawMechanics;
+    attempt >= 9
+      ? new Set<typeof rawMechanics extends Set<infer T> ? T : never>()
+      : attempt >= 7 && rawMechanics.size > 1
+        ? new Set([[...rawMechanics][0]])
+        : attempt >= 5 && rawMechanics.size > 2
+          ? new Set([...rawMechanics].slice(0, 2))
+          : rawMechanics;
   const layoutId = selectCourtyardTopologyForLevel(
     levelId,
     rows,
     cols,
-    attempt >= 5 ? 2 : 0,
-    activeMechanics
+    !isMilestoneBoss && attempt >= 9 ? 2 : 0,
+    rawMechanics
   );
   const useCutoutsOrPillars = activeMechanics.has('CUTOUTS_PILLARS');
   const useElevators = activeMechanics.has('ELEVATORS');
@@ -150,11 +127,15 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
       ? 2
       : levelId <= 8
         ? 3
-        : isBreatherWave || layoutId === 'TWIN_SANCTUM' || attempt >= 4
+        : isBreatherWave || layoutId === 'TWIN_SANCTUM' || layoutId === 'MYSTERY_VAULT' || attempt >= 6
           ? 4
-          : levelId >= 120 && difficulty !== 'NORMAL' && cols >= 7 && canSplitTopEdge && canSplitRightEdge
+          : levelId >= 110 &&
+              (difficulty !== 'NORMAL' || levelId >= 220) &&
+              cols >= 7 &&
+              canSplitTopEdge &&
+              canSplitRightEdge
             ? 6
-            : levelId >= 45 && (difficulty !== 'NORMAL' || levelId >= 100) && cols >= 6 && canSplitTopEdge
+            : levelId >= 45 && (difficulty !== 'NORMAL' || levelId >= 95) && cols >= 6 && canSplitTopEdge
               ? 5
               : 4;
   const activeColors = availableColors.slice(0, numColors);
@@ -187,9 +168,12 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
       }
     } else {
       const desiredMax =
-        isBreatherWave || levelId <= 12 || attempt >= 5
+        isBreatherWave || levelId <= 12 || attempt >= 8
           ? 4
-          : difficulty === 'SUPER_HARD' && levelId >= 60 && availLen >= 4 && rng() < 0.3
+          : (difficulty === 'SUPER_HARD' || (difficulty === 'HARD' && levelId >= 160)) &&
+              levelId >= 60 &&
+              availLen >= 4 &&
+              rng() < 0.35
             ? 2
             : 3;
       const spanLength = Math.min(availLen, Math.max(2, desiredMax));
@@ -354,7 +338,7 @@ function tryBuildCandidateSpec(levelId: number, rng: () => number, attempt: numb
 
   return {
     id: levelId,
-    name: `${adj} ${noun}`,
+    name: getMilestoneLevelName(levelId) ?? `${adj} ${noun}`,
     difficulty,
     layoutId,
     unlockNote: getUnlockNoteForLevel(levelId),
@@ -399,16 +383,55 @@ export function generateProceduralLevel(levelId: number, seedOverride?: number):
   const isBreatherWave = levelId >= 11 && levelId % 10 === 6;
 
   const targetStaging =
-    levelId <= 4 ? 0 : levelId <= 12 || isBreatherWave ? 1 : levelId <= 40 || difficulty === 'NORMAL' ? 2 : 3;
+    levelId <= 4
+      ? 0
+      : levelId <= 12 || isBreatherWave
+        ? 1
+        : levelId <= 40
+          ? 2
+          : levelId <= 100
+            ? difficulty === 'NORMAL'
+              ? 2
+              : 3
+            : levelId <= 200
+              ? difficulty === 'NORMAL'
+                ? 2
+                : 4
+              : difficulty === 'SUPER_HARD'
+                ? 5
+                : difficulty === 'HARD'
+                  ? 4
+                  : 3;
+
+  const baseSolverBudget =
+    difficulty === 'NORMAL' ? (levelId <= 140 ? 150 : 185) : levelId <= 80 ? 220 : levelId <= 180 ? 300 : 360;
 
   let bestCandidate: LevelSpec | null = null;
   let bestScore = -Infinity;
+  let bestStaging = 0;
 
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < 11; attempt++) {
+    if (
+      attempt >= 2 &&
+      difficulty === 'NORMAL' &&
+      bestCandidate &&
+      bestStaging >= Math.max(1, targetStaging - 1)
+    ) {
+      return bestCandidate;
+    }
+    if (attempt >= 4 && bestCandidate && bestStaging >= Math.max(2, targetStaging - 1)) {
+      return bestCandidate;
+    }
+    if (attempt >= 6 && bestCandidate) {
+      return bestCandidate;
+    }
+
     const rng = mulberry32((baseSeed + attempt * 1013904223) >>> 0);
     const candidate = tryBuildCandidateSpec(levelId, rng, attempt);
     const board = createBoardState(candidate);
-    const sol = solveBoard(board, attempt >= 6 ? 260 : 175);
+    const solverBudget =
+      attempt >= 7 ? 420 : attempt >= 3 ? Math.min(440, baseSolverBudget + 60) : baseSolverBudget;
+    const sol = solveBoard(board, solverBudget);
 
     if (!sol.solvable || sol.minMoves <= 0) continue;
     if (levelId <= 12 && !verifyFirstMoveSafety(board, 160)) continue;
@@ -422,18 +445,32 @@ export function generateProceduralLevel(levelId: number, seedOverride?: number):
     const secPerMove = difficulty === 'SUPER_HARD' ? 3.5 : difficulty === 'HARD' ? 4.0 : 4.6;
     candidate.timeLimitSec = Math.max(35, Math.round(sol.minMoves * secPerMove + 12));
 
-    const score = stagingMoves * 10 - turn0Exits * 2;
+    const score = stagingMoves * 12 + Math.min(15, nonStoneCount) * 2 - turn0Exits * 3;
     if (score > bestScore) {
       bestScore = score;
       bestCandidate = candidate;
+      bestStaging = stagingMoves;
     }
 
-    const reqStaging = attempt >= 4 ? 1 : attempt >= 2 ? Math.max(1, targetStaging - 1) : targetStaging;
-    const maxTurn0 = Math.max(2, Math.floor(nonStoneCount * 0.3));
-    if (
-      stagingMoves >= reqStaging &&
-      (levelId <= 12 || isBreatherWave || attempt >= 2 || turn0Exits <= maxTurn0)
-    ) {
+    const reqStaging =
+      attempt >= 7
+        ? 1
+        : attempt >= 5
+          ? Math.max(1, targetStaging - 2)
+          : attempt >= 2
+            ? Math.max(1, targetStaging - 1)
+            : targetStaging;
+    const maxTurn0 =
+      levelId <= 12 || isBreatherWave
+        ? Math.max(2, Math.floor(nonStoneCount * 0.4))
+        : levelId <= 140
+          ? Math.max(2, Math.floor(nonStoneCount * 0.25))
+          : difficulty === 'NORMAL'
+            ? 2
+            : 1;
+    const allowedTurn0 = attempt >= 3 ? maxTurn0 + 1 : maxTurn0;
+
+    if (stagingMoves >= reqStaging && (attempt >= 5 || turn0Exits <= allowedTurn0)) {
       return candidate;
     }
   }

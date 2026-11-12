@@ -632,4 +632,97 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
     expect(multiTouchIsolation.movesAfterRelease).toBe(0);
     expect(multiTouchIsolation.shreddedAfterRelease).toBe(0);
   });
+
+  test('MAP-ENDLESS-NAV-01: navigates generated Endless stages (301..425+), expands archived flights inline, filters 50-stage Endless tiers, and launches Level 409', async ({
+    page,
+  }) => {
+    await bootWithSave(page, 12);
+    await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      const cur = dbg.getSave();
+      const records = { ...cur.levelRecords };
+      records[200] = { stars: 3, challengeStars: 3, bestMoves: 18, bestTimeSec: 40 };
+      records[300] = { stars: 3, challengeStars: 3, bestMoves: 20, bestTimeSec: 50 };
+      records[350] = { stars: 2, challengeStars: 2, bestMoves: 19, bestTimeSec: 45 };
+      records[409] = { stars: 3, challengeStars: 3, bestMoves: 21, bestTimeSec: 52 };
+      dbg.patchSave({
+        highestLevelUnlocked: 425,
+        currentLevelId: 425,
+        modeState: {
+          CHALLENGE: { highestUnlocked: 425, currentLevelId: 425 },
+          ZEN: { highestUnlocked: 12, currentLevelId: 12 },
+          TIMED: { highestUnlocked: 5, currentLevelId: 5 },
+        },
+        levelRecords: records,
+      });
+      dbg.dismissTitleScreen('home');
+    });
+
+    await expect(page.locator('#screen-home')).toBeVisible();
+    // Dynamic 50-stage Endless tier chips appear once unlockedMax > 300
+    await expect(page.locator('.chip-filter[data-range="301-350"]')).toBeVisible();
+    await expect(page.locator('.chip-filter[data-range="351-400"]')).toBeVisible();
+    await expect(page.locator('.chip-filter[data-range="401-450"]')).toBeVisible();
+
+    // Active neighborhood avoids above-the-fold content-visibility overhead, while distant flights use native CSS virtualization
+    const containmentCheck = await page.evaluate(() => {
+      const activeGroup = document.querySelector('.roadmap-stage-group.stage-group-active');
+      const distantTrack = document.querySelector(
+        '.roadmap-stage-group.stage-group-deferred .stage-group-track'
+      );
+      return {
+        activeDeferred: activeGroup?.classList.contains('stage-group-deferred') ?? true,
+        distantContentVis: distantTrack ? window.getComputedStyle(distantTrack).contentVisibility : '',
+      };
+    });
+    expect(containmentCheck.activeDeferred).toBe(false);
+    expect(containmentCheck.distantContentVis).toBe('auto');
+
+    // Sequential keyboard Tab navigation crosses cleanly into a `.stage-group-deferred` off-fold flight
+    await page.evaluate(() => {
+      const stage15 = document.querySelector<HTMLButtonElement>('.level-node-card[data-level-id="15"]');
+      stage15?.focus();
+    });
+    await page.keyboard.press('Tab');
+    const focusedAcrossDeferredBoundary = await page.evaluate(
+      () => (document.activeElement as HTMLElement | null)?.dataset.levelId
+    );
+    expect(focusedAcrossDeferredBoundary).toBe('16');
+
+    // In 'All' at L425, earlier Endless stages (#311..#410) are summarized in an interactive Archive button
+    const archiveBtn = page.locator('.roadmap-archive-btn').first();
+    await expect(archiveBtn).toBeVisible();
+    await archiveBtn.click();
+    // Expanding reveals Level 409 inline without snapping back away from the expanded flight
+    await expect(page.locator('.level-node-card[data-level-id="409"]')).toBeVisible();
+
+    // Keyboard Enter on 401–450 tier chip isolates stages 401..450 while keeping focus & aria-pressed
+    const chip401 = page.locator('.chip-filter[data-range="401-450"]');
+    await chip401.focus();
+    await page.keyboard.press('Enter');
+    await expect(chip401).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.chip-filter[data-range="all"]')).toHaveAttribute('aria-pressed', 'false');
+    const focusedChipAfterEnter = await page.evaluate(
+      () => (document.activeElement as HTMLElement | null)?.dataset.range
+    );
+    expect(focusedChipAfterEnter).toBe('401-450');
+    await expect(page.locator('.level-node-card[data-level-id="401"]')).toBeVisible();
+    await expect(page.locator('.level-node-card[data-level-id="409"]')).toBeVisible();
+    await expect(page.locator('.level-node-card[data-level-id="1"]')).toHaveCount(0);
+
+    // Switching to Zen Mode (unlockedMax = 12) cleans up dynamic Endless chips and resets range cleanly
+    await page.locator('#map-tab-zen').click();
+    await expect(page.locator('.chip-filter[data-endless-tier-chip="true"]')).toHaveCount(0);
+    await expect(page.locator('.chip-filter[data-range="all"]')).toHaveClass(/active/);
+
+    // Switch back to Challenge Mode, filter ∞ 301+, and tap Level 409 directly to play
+    await page.locator('#map-tab-challenge').click();
+    await page.locator('.chip-filter[data-range="endless"]').click();
+    const node409 = page.locator('.level-node-card[data-level-id="409"]');
+    await expect(node409).toBeVisible();
+    await node409.click();
+
+    await expect(page.locator('#screen-game')).toBeVisible();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 409 —');
+  });
 });

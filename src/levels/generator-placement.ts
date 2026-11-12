@@ -98,29 +98,22 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
                   : layoutId === 'MYSTERY_VAULT'
                     ? 11
                     : difficulty === 'SUPER_HARD'
-                      ? 10
-                      : 9
+                      ? 11
+                      : difficulty === 'HARD'
+                        ? 10
+                        : 9
                 : levelId <= 140
                   ? isBreatherWave
-                    ? 7
+                    ? 8
                     : layoutId === 'MYSTERY_VAULT'
                       ? 12
                       : difficulty === 'SUPER_HARD'
                         ? 12
                         : difficulty === 'HARD'
                           ? 11
-                          : 9
+                          : 10
                   : levelId <= 220
                     ? isBreatherWave
-                      ? 8
-                      : layoutId === 'MYSTERY_VAULT'
-                        ? 13
-                        : difficulty === 'SUPER_HARD'
-                          ? 13
-                          : difficulty === 'HARD'
-                            ? 12
-                            : 10
-                    : isBreatherWave
                       ? 9
                       : layoutId === 'MYSTERY_VAULT'
                         ? 14
@@ -128,40 +121,102 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
                           ? 14
                           : difficulty === 'HARD'
                             ? 13
-                            : 11;
+                            : 11
+                    : isBreatherWave
+                      ? 9
+                      : rows * cols >= 80
+                        ? 16
+                        : layoutId === 'MYSTERY_VAULT'
+                          ? 15
+                          : difficulty === 'SUPER_HARD'
+                            ? 15
+                            : difficulty === 'HARD'
+                              ? 14
+                              : levelId >= 281
+                                ? 13
+                                : 12;
 
   const baseTargetBlocks = isBreatherWave
     ? rawTargetBlocks
     : layoutId === 'TWIN_SANCTUM'
-      ? Math.max(6, rawTargetBlocks - (attempt >= 2 ? 2 : 1))
-      : attempt >= 6
-        ? Math.max(5, rawTargetBlocks - 3)
-        : attempt >= 4
-          ? Math.max(5, rawTargetBlocks - 2)
-          : attempt >= 2
-            ? Math.max(5, rawTargetBlocks - 1)
+      ? Math.max(6, rawTargetBlocks - (attempt >= 3 ? 2 : 1))
+      : attempt >= 9
+        ? Math.max(6, Math.min(9, rawTargetBlocks - 4))
+        : attempt >= 6
+          ? Math.max(6, rawTargetBlocks - 3)
+          : attempt >= 3
+            ? Math.max(6, rawTargetBlocks - 1)
             : rawTargetBlocks;
   const targetBlocks = Math.max(numColors, baseTargetBlocks);
 
-  const leadShapePool = isBreatherWave
-    ? EARLY_SHAPES
-    : levelId <= 35 || layoutId === 'TWIN_SANCTUM'
-      ? EARLY_SHAPES
-      : levelId <= 125
-        ? MID_SHAPES
-        : LATE_SHAPES;
+  const showcaseLeadPool =
+    isBreatherWave || levelId <= 35 || layoutId === 'TWIN_SANCTUM' ? EARLY_SHAPES : LATE_SHAPES;
+  const interlockingTetrominoPool =
+    isBreatherWave || levelId <= 35 || layoutId === 'TWIN_SANCTUM' ? EARLY_SHAPES : MID_SHAPES;
   const maxLargeBlocks =
-    attempt >= 5 || activeMechanics.has('SIZE_CHANGING_GATE') || layoutId === 'TWIN_SANCTUM'
-      ? 1
+    attempt >= 7 || activeMechanics.has('SIZE_CHANGING_GATE') || layoutId === 'TWIN_SANCTUM'
+      ? 2
       : isBreatherWave || levelId <= 35
         ? 2
-        : levelId <= 120
-          ? 3
-          : 4;
-  const dominoAndTriominoPool = ['1x2', '2x1', '1x3', '3x1', 'L3_BL', 'L3_TL', 'L3_TR', 'L3_BR', '2x2'];
+        : levelId <= 90
+          ? 4
+          : levelId <= 160
+            ? 5
+            : difficulty === 'SUPER_HARD'
+              ? 7
+              : 6;
+  const dominoAndTriominoPool =
+    levelId >= 110 && attempt <= 4
+      ? ['L3_BL', 'L3_TL', 'L3_TR', 'L3_BR', '2x2', '1x3', '3x1', '1x2', '2x1']
+      : ['1x2', '2x1', '1x3', '3x1', 'L3_BL', 'L3_TL', 'L3_TR', 'L3_BR', '2x2'];
 
   const blocks: LevelSpec['blocks'] = [];
   let nextId = 1;
+  let playableCells = layoutId === 'MYSTERY_VAULT' ? 4 : 0;
+  for (let i = 0; i < rows * cols; i++) {
+    if (grid[i] === 0) {
+      playableCells++;
+    }
+  }
+  const baseFillRatio =
+    levelId <= 4
+      ? 0.36
+      : levelId <= 12
+        ? 0.44
+        : isBreatherWave
+          ? levelId <= 60
+            ? 0.46
+            : 0.49
+          : levelId <= 40
+            ? difficulty === 'NORMAL'
+              ? 0.5
+              : 0.55
+            : levelId <= 100
+              ? difficulty === 'NORMAL'
+                ? 0.54
+                : 0.59
+              : levelId <= 180
+                ? difficulty === 'NORMAL'
+                  ? 0.57
+                  : 0.61
+                : difficulty === 'SUPER_HARD'
+                  ? 0.64
+                  : difficulty === 'HARD'
+                    ? 0.62
+                    : 0.58;
+  const effectiveFillRatio = Math.max(0.44, baseFillRatio - Math.floor(attempt / 2) * 0.04);
+  const maxOccupiedBlockCells = Math.max(numColors * 2, Math.round(playableCells * effectiveFillRatio));
+  const minFloorBlocks =
+    levelId === 300
+      ? 14
+      : levelId === 250
+        ? 12
+        : levelId === 200
+          ? 10
+          : isBreatherWave
+            ? rawTargetBlocks
+            : Math.max(numColors, Math.min(targetBlocks, rawTargetBlocks - 3));
+  let occupiedBlockCells = 0;
 
   // 3. Multi-Color Glued Assembly (L101+): two distinct-color blocks linked as groupId = 1
   if (useGlued && activeColors.length >= 2) {
@@ -188,6 +243,7 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
         groupId: 1,
       });
       grid[r * cols + c] = id1;
+      occupiedBlockCells += 1 + sh2.cells.length;
       for (const [dr, dc] of sh2.cells) {
         grid[(r + dr) * cols + (c + 1 + dc)] = id2;
       }
@@ -223,6 +279,7 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
       if (fits) {
         const id = nextId++;
         blocks.push({ id, shapeId: sShape, row: sr, col: sc, colorStack: [0] });
+        occupiedBlockCells += sh.cells.length;
         for (const [dr, dc] of sh.cells) {
           grid[(sr + dr) * cols + (sc + dc)] = id;
         }
@@ -233,19 +290,37 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
 
   // How many perimeter gate lanes should be deliberately cross-blocked by wrong-color blocks
   const crossBlockBudget =
-    attempt >= 6
+    attempt >= 7
       ? 0
-      : levelId <= 10 || isBreatherWave
+      : levelId <= 10 || isBreatherWave || attempt >= 5
         ? 1
-        : attempt >= 4
-          ? 1
-          : attempt >= 2
-            ? 2
-            : difficulty === 'SUPER_HARD'
+        : attempt >= 3
+          ? 2
+          : levelId <= 80
+            ? difficulty === 'SUPER_HARD'
               ? 3
-              : 2;
+              : 2
+            : difficulty === 'SUPER_HARD'
+              ? 4
+              : 3;
+
+  const forcedParkDepth =
+    isBreatherWave || levelId <= 40 || attempt >= 5
+      ? 0
+      : levelId <= 120
+        ? 1
+        : levelId <= 200
+          ? difficulty === 'NORMAL'
+            ? 1
+            : 2
+          : difficulty === 'NORMAL' && levelId <= 260
+            ? 2
+            : 3;
 
   for (let bIdx = 0; bIdx < targetBlocks; bIdx++) {
+    if (bIdx >= numColors && blocks.length >= minFloorBlocks && occupiedBlockCells >= maxOccupiedBlockCells) {
+      break;
+    }
     let colorIdx = bIdx % activeColors.length;
     if (layoutId === 'MYSTERY_VAULT' && activeColors.length >= 4) {
       if (bIdx === 0) colorIdx = 2;
@@ -259,6 +334,17 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
       else if (bIdx === 2) colorIdx = 1;
       else if (bIdx === 3) colorIdx = 2;
       else colorIdx = [2, 3, 1, 0][(bIdx - 4) % 4] % activeColors.length;
+    } else if (
+      forcedParkDepth > 0 &&
+      layoutId !== 'TWIN_SANCTUM' &&
+      layoutId !== 'MYSTERY_VAULT' &&
+      activeColors.length >= 4 &&
+      bIdx >= numColors &&
+      bIdx < numColors + forcedParkDepth
+    ) {
+      // Assign a gated-tail color (Color 0 or Color 1, whose own gate is blocked by bIdx 1..2)
+      // after every active color has at least 1 block, forcing +1..3 real parking moves!
+      colorIdx = (bIdx - numColors) % 2 === 1 ? 1 : 0;
     } else if (useColorQueueGates && bIdx >= activeColors.length && activeColors.length >= 2) {
       colorIdx = 1 + (bIdx % (activeColors.length - 1));
     }
@@ -266,16 +352,30 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
     const matchingGate = gates.find((g) => g.colorQueue[0] === color) ?? gates[colorIdx % gates.length];
 
     let chosenShape = bIdx % 2 === 0 ? '1x2' : '2x1';
-    const allowLargeShape = !activeMechanics.has('SIZE_CHANGING_GATE') && bIdx < maxLargeBlocks;
-    const activePool = allowLargeShape ? leadShapePool : attempt <= 4 ? dominoAndTriominoPool : NIMBLE_SHAPES;
+    const remainingCellBudget = maxOccupiedBlockCells - occupiedBlockCells;
+    const needCompactToMeetCount =
+      blocks.length < minFloorBlocks && remainingCellBudget <= (minFloorBlocks - blocks.length) * 2 + 1;
+    const allowLargeShape =
+      !needCompactToMeetCount && !activeMechanics.has('SIZE_CHANGING_GATE') && bIdx < maxLargeBlocks;
+    const allowPentomino =
+      allowLargeShape && levelId >= 135 && bIdx === 0 && attempt <= 2 && remainingCellBudget >= 10;
+    const activePool = needCompactToMeetCount
+      ? NIMBLE_SHAPES
+      : allowPentomino
+        ? showcaseLeadPool
+        : allowLargeShape
+          ? interlockingTetrominoPool
+          : attempt <= 6
+            ? dominoAndTriominoPool
+            : NIMBLE_SHAPES;
     for (let sTry = 0; sTry < 14; sTry++) {
       const candidate =
-        attempt >= 7 && !allowLargeShape
+        attempt >= 8 && !allowLargeShape
           ? bIdx % 2 === 0
             ? '1x2'
             : '2x1'
           : activePool[Math.floor(rng() * activePool.length)];
-      if (candidate === '1x1' && sTry < 10) continue;
+      if (candidate === '1x1' && sTry < 10 && !needCompactToMeetCount) continue;
       const sh = getShape(candidate);
       const reqSpan = matchingGate.edge === 'TOP' || matchingGate.edge === 'BOTTOM' ? sh.cols : sh.rows;
       const maxDim = allowLargeShape ? (rows >= 7 && cols >= 7 ? 4 : 3) : 3;
@@ -298,6 +398,7 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
       for (const [dr, dc] of sh.cells) {
         grid[(r + dr) * cols + (c + dc)] = id;
       }
+      occupiedBlockCells += sh.cells.length;
       blocks.push({
         id,
         shapeId: overrideShapeId ?? chosenShape,
@@ -372,35 +473,54 @@ export function populateCandidateBlocks(ctx: BlockPlacementContext): LevelSpec['
       }
     }
 
-    // C. Standard & Sculpted Courtyards: Cross-Corridor Blocker Ring!
-    // Block 0 sits in interior aligned with gates[0]; Blocks 1..crossBlockBudget sit directly in front of WRONG-COLOR gates!
+    // C. Standard & Sculpted Courtyards: Cross-Corridor Pinwheel + Forced-Parking Blocker Cascade!
+    // Block 0 sits in interior aligned with gates[0]; Blocks 1..3 form an unspooling gate cascade;
+    // Blocks 4..(3 + forcedParkDepth) carry gated-tail colors parked across the active exit lanes so they MUST slide aside first!
     if (!placed && layoutId !== 'TWIN_SANCTUM' && layoutId !== 'MYSTERY_VAULT') {
+      const placeInGateLane = (gate: LevelSpec['gates'][number], preferInnerLane: boolean): boolean => {
+        if (gate.edge === 'TOP') {
+          const pc = Math.max(0, Math.min(cols - shape.cols, gate.spanStart));
+          return preferInnerLane
+            ? tryPlaceBlockAt(1, pc) || tryPlaceBlockAt(2, pc) || tryPlaceBlockAt(0, pc)
+            : tryPlaceBlockAt(0, pc) || tryPlaceBlockAt(1, pc);
+        }
+        if (gate.edge === 'RIGHT') {
+          const pr = Math.max(0, Math.min(rows - shape.rows, gate.spanStart));
+          return preferInnerLane
+            ? tryPlaceBlockAt(pr, cols - shape.cols - 1) ||
+                tryPlaceBlockAt(pr, Math.max(0, cols - shape.cols - 2)) ||
+                tryPlaceBlockAt(pr, cols - shape.cols)
+            : tryPlaceBlockAt(pr, cols - shape.cols) || tryPlaceBlockAt(pr, cols - shape.cols - 1);
+        }
+        if (gate.edge === 'BOTTOM') {
+          const pc = Math.max(0, Math.min(cols - shape.cols, gate.spanStart));
+          return preferInnerLane
+            ? tryPlaceBlockAt(rows - shape.rows - 1, pc) ||
+                tryPlaceBlockAt(Math.max(0, rows - shape.rows - 2), pc) ||
+                tryPlaceBlockAt(rows - shape.rows, pc)
+            : tryPlaceBlockAt(rows - shape.rows, pc) || tryPlaceBlockAt(rows - shape.rows - 1, pc);
+        }
+        const pr = Math.max(0, Math.min(rows - shape.rows, gate.spanStart));
+        return preferInnerLane
+          ? tryPlaceBlockAt(pr, 1) || tryPlaceBlockAt(pr, 2) || tryPlaceBlockAt(pr, 0)
+          : tryPlaceBlockAt(pr, 0) || tryPlaceBlockAt(pr, 1);
+      };
+
       if (bIdx === 0 && matchingGate.edge === 'TOP' && rows >= 5) {
         const r0 = Math.min(rows - shape.rows - 1, 2 + (rows >= 8 ? 1 : 0));
         const c0 = Math.max(1, Math.min(cols - shape.cols - 1, matchingGate.spanStart));
         if (tryPlaceBlockAt(r0, c0)) placed = true;
-      } else if (bIdx >= 1 && bIdx <= crossBlockBudget) {
-        // Pick a gate that does NOT match `color` and park this block across its exit threshold!
+      } else if (bIdx >= numColors && bIdx < numColors + forcedParkDepth && gates.length >= 4) {
+        const parkTargetOrder = [gates[3], gates[2], gates[1]];
+        const parkGate = parkTargetOrder[(bIdx - numColors) % parkTargetOrder.length];
+        if (parkGate && !parkGate.colorQueue.includes(color)) {
+          if (placeInGateLane(parkGate, true)) placed = true;
+        }
+      } else if (bIdx >= 1 && bIdx <= Math.min(3, crossBlockBudget)) {
         const rivalGates = gates.filter((g) => !g.colorQueue.includes(color));
         const targetRival = rivalGates[(bIdx - 1) % Math.max(1, rivalGates.length)];
-        if (targetRival) {
-          if (targetRival.edge === 'TOP') {
-            const pc = Math.max(0, Math.min(cols - shape.cols, targetRival.spanStart));
-            if (tryPlaceBlockAt(1, pc) || tryPlaceBlockAt(0, pc)) placed = true;
-          } else if (targetRival.edge === 'RIGHT') {
-            const pr = Math.max(0, Math.min(rows - shape.rows, targetRival.spanStart));
-            if (tryPlaceBlockAt(pr, cols - shape.cols - 1) || tryPlaceBlockAt(pr, cols - shape.cols)) {
-              placed = true;
-            }
-          } else if (targetRival.edge === 'BOTTOM') {
-            const pc = Math.max(0, Math.min(cols - shape.cols, targetRival.spanStart));
-            if (tryPlaceBlockAt(rows - shape.rows - 1, pc) || tryPlaceBlockAt(rows - shape.rows, pc)) {
-              placed = true;
-            }
-          } else if (targetRival.edge === 'LEFT') {
-            const pr = Math.max(0, Math.min(rows - shape.rows, targetRival.spanStart));
-            if (tryPlaceBlockAt(pr, 1) || tryPlaceBlockAt(pr, 0)) placed = true;
-          }
+        if (targetRival && placeInGateLane(targetRival, false)) {
+          placed = true;
         }
       }
     }

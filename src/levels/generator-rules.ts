@@ -194,9 +194,11 @@ const HARMONIOUS_SECONDARY_POOL: MechanicId[] = [
   'KEY_LOCK',
   'STONE',
   'CRATES',
+  'GLUED',
   'ROPES',
   'COLOR_QUEUE_GATES',
   'FROZEN_GATES',
+  'SHUTTER_LOCK',
   'CUTOUTS_PILLARS',
 ];
 
@@ -276,10 +278,31 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
       if (m === 'KEY_LOCK') return levelId > 70;
       if (m === 'STONE') return levelId > 80 && primary !== 'ELEVATORS';
       if (m === 'CRATES') return levelId > 90 && primary !== 'ELEVATORS';
-      if (m === 'ROPES') return levelId > 120 && primary !== 'KEY_LOCK';
+      if (m === 'GLUED')
+        return (
+          levelId > 115 &&
+          primary !== 'ELEVATORS' &&
+          primary !== 'GENERATORS' &&
+          primary !== 'SLIDING_GATE' &&
+          primary !== 'SIZE_CHANGING_GATE'
+        );
+      if (m === 'ROPES') return levelId > 120;
       if (m === 'COLOR_QUEUE_GATES')
-        return levelId > 130 && primary !== 'SLIDING_GATE' && primary !== 'SIZE_CHANGING_GATE';
-      if (m === 'FROZEN_GATES') return levelId > 140 && primary !== 'TOGGLING_GATE';
+        return (
+          levelId > 130 &&
+          primary !== 'SLIDING_GATE' &&
+          primary !== 'SIZE_CHANGING_GATE' &&
+          primary !== 'SHUTTER_LOCK'
+        );
+      if (m === 'FROZEN_GATES')
+        return levelId > 140 && primary !== 'TOGGLING_GATE' && primary !== 'SHUTTER_LOCK';
+      if (m === 'SHUTTER_LOCK')
+        return (
+          levelId > 150 &&
+          primary !== 'TOGGLING_GATE' &&
+          primary !== 'FROZEN_GATES' &&
+          primary !== 'COLOR_QUEUE_GATES'
+        );
       return false;
     });
     if (unlockedSecondaries.length > 0) {
@@ -287,7 +310,7 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
       active.add(unlockedSecondaries[secIdx]);
       if (
         unlockedSecondaries.length >= 2 &&
-        ((levelId >= 141 && difficulty !== 'NORMAL') || levelId >= 185)
+        ((levelId >= 125 && difficulty !== 'NORMAL') || levelId >= 175)
       ) {
         const thirdIdx = (secIdx + 3) % unlockedSecondaries.length;
         active.add(unlockedSecondaries[thirdIdx]);
@@ -298,6 +321,55 @@ export function selectFocusedMechanicsForLevel(levelId: number): Set<MechanicId>
   return active;
 }
 
+export function getInitialCourtyardDimsForLevel(
+  levelId: number,
+  attempt = 0
+): { rows: number; cols: number } {
+  const difficulty = getDifficultyForLevel(levelId);
+  const decPos = levelId % 10;
+  const isBreatherWave = levelId >= 11 && decPos === 6;
+  const isMilestoneBoss = levelId === 200 || levelId === 250 || levelId === 300;
+  const usePortraitTall =
+    !isMilestoneBoss &&
+    attempt <= 6 &&
+    levelId >= 28 &&
+    (levelId % 7 === 0 || levelId % 10 === 4 || levelId % 10 === 8 || levelId % 3 === 0);
+
+  if (levelId <= 4) return { rows: 5, cols: 5 };
+  if (levelId <= 8) return { rows: 6, cols: 5 };
+  if (levelId <= 40) {
+    return {
+      rows: usePortraitTall ? 8 : levelId >= 30 && difficulty === 'SUPER_HARD' ? 7 : 6,
+      cols: 6,
+    };
+  }
+  if (levelId <= 80) {
+    return {
+      rows: usePortraitTall ? 8 : 7,
+      cols: !usePortraitTall && levelId >= 65 && difficulty !== 'NORMAL' ? 7 : 6,
+    };
+  }
+  if (levelId <= 140) {
+    return {
+      rows: usePortraitTall ? 8 : levelId >= 110 && difficulty === 'SUPER_HARD' ? 8 : 7,
+      cols: 7,
+    };
+  }
+  if (levelId <= 220) {
+    return {
+      rows: usePortraitTall ? 9 : 8,
+      cols: usePortraitTall ? 7 : levelId >= 170 && difficulty !== 'NORMAL' ? 8 : 7,
+    };
+  }
+  if (isBreatherWave) {
+    return { rows: 8, cols: levelId >= 286 ? 8 : 7 };
+  }
+  if (levelId === 300 || (!usePortraitTall && difficulty === 'SUPER_HARD' && levelId >= 260)) {
+    return { rows: 9, cols: 9 };
+  }
+  return { rows: usePortraitTall ? 9 : 8, cols: 8 };
+}
+
 export function selectCourtyardTopologyForLevel(
   levelId: number,
   rows: number,
@@ -306,6 +378,9 @@ export function selectCourtyardTopologyForLevel(
   activeMechanics: Set<MechanicId>
 ): CourtyardLayoutId {
   if (levelId < 14 || attempt >= 2) return 'RECTANGLE';
+  if ((levelId === 200 || levelId === 250) && rows >= 8 && cols >= 8) {
+    return 'CITADEL_OCTAGON';
+  }
 
   const canUseSanctumOrVault =
     !activeMechanics.has('ELEVATORS') &&
@@ -343,6 +418,19 @@ export function selectCourtyardTopologyForLevel(
   }
 
   return 'RECTANGLE';
+}
+
+export function getMilestoneLevelName(levelId: number): string | undefined {
+  switch (levelId) {
+    case 200:
+      return 'Omega Shredder';
+    case 250:
+      return 'Citadel Sovereign';
+    case 300:
+      return 'Sacred Astrolabe';
+    default:
+      return undefined;
+  }
 }
 
 export function getUnlockNoteForLevel(levelId: number): string | undefined {

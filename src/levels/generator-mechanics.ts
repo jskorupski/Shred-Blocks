@@ -74,14 +74,16 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
   const useFloorPaths = activeMechanics.has('FLOOR_PATHS');
   const useElevators = activeMechanics.has('ELEVATORS');
 
-  // 1. Axis Lock (L11+): lock 1..3 blocks whose locked rail aligns with a matching gate (even if movable blockers currently sit in that lane!)
+  // 1. Axis Lock (L11+): lock 1..2 slim rail blocks aligned with a matching gate (capped at 1 on dense >=11-block boards to prevent cross-rail deadlocks)
   if (useAxisLock && coloredBlocks.length > 0) {
-    const maxAxisLocks = isBreather || levelId <= 30 ? 1 : levelId >= 121 && difficulty !== 'NORMAL' ? 3 : 2;
+    const maxAxisLocks =
+      isBreather || levelId <= 30 || coloredBlocks.length >= 11 ? 1 : difficulty !== 'NORMAL' ? 2 : 1;
     let lockedCount = 0;
     for (const b of coloredBlocks) {
       if (lockedCount >= maxAxisLocks) break;
       if (!canAddBlockModifier(b, 'OTHER') || b.groupId) continue;
       const sh = getShape(b.shapeId);
+      if (coloredBlocks.length >= 10 && sh.rows >= 2 && sh.cols >= 2) continue;
       const gate = gates.find((g) => g.colorQueue[0] === b.colorStack[0]);
       if (!gate) continue;
       if (
@@ -191,26 +193,31 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     }
   }
 
-  // 5. Key & Lock (Chained) Blocks (L61+): 1..2 lock pairs
+  // 5. Key & Lock (Chained) Blocks (L61+): 1..2 lock pairs (preferring glued/interior carriers on late stages)
   if (useKeyLock && coloredBlocks.length >= 4) {
     const maxPairs =
       !isBreather && levelId >= 135 && difficulty !== 'NORMAL' && coloredBlocks.length >= 8 ? 2 : 1;
     for (let lockId = 1; lockId <= maxPairs; lockId++) {
-      const keyCarrier = coloredBlocks.find(
-        (b) =>
-          isInStartingRoom(b) &&
-          !b.iceCount &&
-          !b.chained &&
-          !b.ropeColor &&
-          !b.hasKey &&
-          canAddBlockModifier(b, 'PAYLOAD')
-      );
+      const isEligibleKeyCarrier = (b: LevelSpec['blocks'][number]): boolean =>
+        isInStartingRoom(b) &&
+        !b.axisLock &&
+        !b.iceCount &&
+        !b.chained &&
+        !b.ropeColor &&
+        !b.hasKey &&
+        canAddBlockModifier(b, 'PAYLOAD');
+      const gluedCarrier =
+        !isBreather && levelId >= 125 && attempt <= 5
+          ? coloredBlocks.find((b) => Boolean(b.groupId) && isEligibleKeyCarrier(b))
+          : undefined;
+      const keyCarrier = gluedCarrier ?? coloredBlocks.find(isEligibleKeyCarrier);
       const lockedTarget = [...coloredBlocks]
         .reverse()
         .find(
           (b) =>
             isInStartingRoom(b) &&
             b.id !== keyCarrier?.id &&
+            (!keyCarrier?.groupId || b.groupId !== keyCarrier.groupId) &&
             !b.hasKey &&
             canAddBlockModifier(b, 'IMMOBILIZER')
         );
@@ -242,30 +249,48 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     }
   }
 
-  // 7. Colored Ropes & Scissors (L111+): 1..2 pairs
+  // 7. Colored Ropes & Scissors (L111+): 1..2 pairs, wiring Scissor -> Rope -> Key -> Chain causal chains on L125+
   if (useRopes && coloredBlocks.length >= 4) {
     const maxPairs =
-      !isBreather && levelId >= 165 && difficulty !== 'NORMAL' && activeColors.length >= 2 ? 2 : 1;
+      !isBreather && levelId >= 155 && (difficulty !== 'NORMAL' || levelId >= 220) && activeColors.length >= 2
+        ? 2
+        : 1;
     for (let p = 0; p < maxPairs; p++) {
       const scissorHolder = coloredBlocks.find(
         (b) =>
           isInStartingRoom(b) &&
+          !b.axisLock &&
           !b.iceCount &&
           !b.chained &&
           !b.ropeColor &&
           !b.scissorColor &&
           canAddBlockModifier(b, 'PAYLOAD')
       );
-      const ropedTarget = [...coloredBlocks]
-        .reverse()
-        .find(
-          (b) =>
-            isInStartingRoom(b) &&
-            b.id !== scissorHolder?.id &&
-            !b.hasKey &&
-            !b.scissorColor &&
-            canAddBlockModifier(b, 'IMMOBILIZER')
-        );
+      const causalKeyTarget =
+        p === 0 && !isBreather && levelId >= 125 && attempt <= 5 && scissorHolder
+          ? coloredBlocks.find(
+              (b) =>
+                isInStartingRoom(b) &&
+                Boolean(b.hasKey) &&
+                b.id !== scissorHolder.id &&
+                (!scissorHolder.groupId || b.groupId !== scissorHolder.groupId) &&
+                !b.scissorColor &&
+                canAddBlockModifier(b, 'IMMOBILIZER')
+            )
+          : undefined;
+      const ropedTarget =
+        causalKeyTarget ??
+        [...coloredBlocks]
+          .reverse()
+          .find(
+            (b) =>
+              isInStartingRoom(b) &&
+              b.id !== scissorHolder?.id &&
+              (!scissorHolder?.groupId || b.groupId !== scissorHolder.groupId) &&
+              !b.hasKey &&
+              !b.scissorColor &&
+              canAddBlockModifier(b, 'IMMOBILIZER')
+          );
       if (scissorHolder && ropedTarget) {
         const ropeCol = activeColors[p % activeColors.length];
         scissorHolder.scissorColor = ropeCol;
@@ -274,41 +299,57 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     }
   }
 
+  const carrierNeededGateColors = new Set<ColorId>();
+  for (const b of coloredBlocks) {
+    if (b.hasKey || b.scissorColor || b.shutterGemColor) {
+      for (const c of b.colorStack) carrierNeededGateColors.add(c);
+    }
+  }
+
   // 8. Frozen Gates (L131+ or synchronized MYSTERY_VAULT gate countdowns `GATE-ICE-01`)
   if ((useFrozenGates || layoutId === 'MYSTERY_VAULT') && gates.length >= 3) {
     const freezeGateCount =
       !isBreather && useFrozenGates && levelId >= 155 && difficulty !== 'NORMAL' && gates.length >= 4 ? 2 : 1;
-    for (let fg = 0; fg < freezeGateCount; fg++) {
-      const gTarget = gates[gates.length - 1 - fg];
+    let frozenGatesApplied = 0;
+    for (let gi = gates.length - 1; gi >= 0 && frozenGatesApplied < freezeGateCount; gi--) {
+      const gTarget = gates[gi];
       const gColor = gTarget.colorQueue[0];
+      if (carrierNeededGateColors.has(gColor)) continue;
       const unlockedOtherBlocks = coloredBlocks.filter(
         (b) => isInStartingRoom(b) && b.colorStack[0] !== gColor && !b.iceCount && !b.chained && !b.ropeColor
       );
-      if (unlockedOtherBlocks.length >= 3 + fg) {
-        const desired = layoutId === 'MYSTERY_VAULT' ? 2 + fg : isBreather ? 1 : 2 + fg;
+      if (unlockedOtherBlocks.length >= 3 + frozenGatesApplied) {
+        const desired =
+          layoutId === 'MYSTERY_VAULT' ? 2 + frozenGatesApplied : isBreather ? 1 : 2 + frozenGatesApplied;
         gTarget.iceCount = Math.min(unlockedOtherBlocks.length - 1, desired);
+        frozenGatesApplied++;
       }
     }
   }
 
   // 9. Locked Shutter Gates & Shutter Gems (L141+)
   if (useShutterLock && gates.length >= 3 && coloredBlocks.length >= 3) {
-    const lockedGate = gates[gates.length - 1];
-    const lockedGateColor = lockedGate.colorQueue[0];
-    const gemCarrier = coloredBlocks.find(
-      (b) =>
-        isInStartingRoom(b) &&
-        b.colorStack[0] !== lockedGateColor &&
-        !b.iceCount &&
-        !b.chained &&
-        !b.ropeColor &&
-        canAddBlockModifier(b, 'PAYLOAD')
-    );
-    if (gemCarrier && !lockedGate.iceCount) {
-      const gemColor = gemCarrier.colorStack[0];
-      gemCarrier.shutterGemColor = gemColor;
-      lockedGate.shutterLockColor = gemColor;
-      lockedGate.shutterOpen = false;
+    const lockedGate = [...gates]
+      .reverse()
+      .find((g) => !g.iceCount && !carrierNeededGateColors.has(g.colorQueue[0]));
+    if (lockedGate) {
+      const lockedGateColor = lockedGate.colorQueue[0];
+      const gemCarrier = coloredBlocks.find(
+        (b) =>
+          isInStartingRoom(b) &&
+          b.colorStack[0] !== lockedGateColor &&
+          !b.axisLock &&
+          !b.iceCount &&
+          !b.chained &&
+          !b.ropeColor &&
+          canAddBlockModifier(b, 'PAYLOAD')
+      );
+      if (gemCarrier) {
+        const gemColor = gemCarrier.colorStack[0];
+        gemCarrier.shutterGemColor = gemColor;
+        lockedGate.shutterLockColor = gemColor;
+        lockedGate.shutterOpen = false;
+      }
     }
   }
 
