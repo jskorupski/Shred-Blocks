@@ -87,7 +87,7 @@
 }
 
 .sacred-geometry-ornament {
-  transition: color 0.58s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: color 1.05s cubic-bezier(0.37, 0, 0.22, 1);
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }

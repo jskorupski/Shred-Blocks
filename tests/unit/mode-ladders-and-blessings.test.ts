@@ -1,13 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { carryLiveResourcesIntoUndo, cloneBoardState, createBoardState } from '../../src/core/board-state';
+import {
+  carryLiveResourcesIntoUndo,
+  cloneBoardState,
+  createBoardState,
+  isBoardRunStarted,
+} from '../../src/core/board-state';
 import type { SavePayloadV1 } from '../../src/core/types';
 import { getLevelSpec } from '../../src/levels/catalog';
 import { decodeSaveCode, encodeSaveCode } from '../../src/storage/save-code';
 import {
+  canSkipZenLevel,
+  countUniqueClearedLevels,
   createDefaultSavePayload,
+  getEffectiveBoosterUnlockLevel,
   migrateLegacyEconomy,
   SAVE_STORAGE_KEY,
   SaveManager,
+  ZEN_MAX_CONSECUTIVE_SKIPS,
 } from '../../src/storage/save-manager';
 
 function createMemoryStorage(): Storage {
@@ -274,5 +283,81 @@ describe('MAP-MODE-SPLIT-01, ZEN-STARS-01 & SAVE-COMPAT-01: Per-Mode Ladders, Ze
     expect(preExplosionTimed.continuesUsed).toBe(1);
     expect(preExplosionTimed.timeRemainingSec).toBe(20);
     expect(preExplosionTimed.blocks[0].bombCount).toBe(5);
+  });
+
+  it('ZEN-SKIP-GUARD-01, STREAK-INTEGRITY-01 & MODE-ISOLATION-01: caps consecutive Zen skips at 3, gates chests & power-ups on genuine clears, blocks replay streak farming, and keeps TIMED clock running across Undo-to-Move-0', () => {
+    const mgr = new SaveManager();
+    mgr.updateSettings({ playMode: 'ZEN' });
+
+    // 1. Consecutive Zen Free Skips cap strictly at ZEN_MAX_CONSECUTIVE_SKIPS (3)
+    expect(ZEN_MAX_CONSECUTIVE_SKIPS).toBe(3);
+    expect(canSkipZenLevel(mgr.getPayload(), 1)).toBe(true);
+    mgr.recordLevelSkip(1);
+    mgr.recordLevelSkip(2);
+    mgr.recordLevelSkip(3);
+    expect(mgr.getPayload().modeState.ZEN).toEqual({ currentLevelId: 4, highestUnlocked: 4 });
+    // 4th consecutive un-cleared skip is rejected (strict no-op)
+    expect(canSkipZenLevel(mgr.getPayload(), 4)).toBe(false);
+    const seqBeforeBlockedSkip = mgr.getPayload().writeSeq;
+    mgr.recordLevelSkip(4);
+    expect(mgr.getPayload().writeSeq).toBe(seqBeforeBlockedSkip);
+    expect(mgr.getPayload().modeState.ZEN).toEqual({ currentLevelId: 4, highestUnlocked: 4 });
+
+    // 2. Zero genuine clears -> effective booster unlock level stays 1 (Hint L2 & Hammer L8 NOT unlocked by skips!)
+    expect(countUniqueClearedLevels(mgr.getPayload())).toBe(0);
+    expect(getEffectiveBoosterUnlockLevel(mgr.getPayload(), 4)).toBe(1);
+
+    // Beating Level 10 alone after skips (only 1 unique clear!) does NOT open the Level-10 Milestone Chest
+    const prematureTen = mgr.recordLevelWin(10, 6, 20, 4, 0, 5, 'SUPER_HARD', true);
+    expect(prematureTen.milestoneChestOpened).toBe(false);
+    expect(mgr.getPayload().milestoneChestLevel).toBe(0);
+
+    // Clearing stage 4 resets consecutive skip debt on `mgr` so Zen skips work again on stage 5!
+    mgr.recordLevelWin(4, 5, 15, 4, 0, 5, 'NORMAL', true);
+    expect(canSkipZenLevel(mgr.getPayload(), 5)).toBe(true);
+
+    // Skipping stage 10 and achieving the 10th genuine clear on stage 11 STILL awards the Level-10 Milestone Chest (HAMMER debut)!
+    localStorage.clear();
+    const honestMgr = new SaveManager();
+    honestMgr.updateSettings({ playMode: 'ZEN' });
+    for (let lvl = 1; lvl <= 9; lvl++) {
+      honestMgr.recordLevelWin(lvl, 5, 15, 4, 0, 5, 'NORMAL', true);
+    }
+    expect(getEffectiveBoosterUnlockLevel(honestMgr.getPayload(), 10)).toBe(10); // 9 clears + 1 = 10 -> Hammer unlocked!
+    honestMgr.recordLevelSkip(10); // Honest player skips Boss L10
+    const tenthUniqueOnEleven = honestMgr.recordLevelWin(11, 6, 18, 4, 0, 5, 'NORMAL', true);
+    expect(tenthUniqueOnEleven.milestoneChestOpened).toBe(true);
+    expect(tenthUniqueOnEleven.rewardedBoosters).toContain('HAMMER');
+    expect(honestMgr.getPayload().milestoneChestLevel).toBe(10);
+
+    // 3. STREAK-INTEGRITY-01: Replaying Level 1 in Challenge / Timed NEVER farms winStreak
+    localStorage.clear();
+    const streakMgr = new SaveManager();
+    streakMgr.recordLevelWin(1, 3, 10, 4, 2, 4, 'NORMAL', false);
+    expect(streakMgr.getPayload().winStreak).toBe(1);
+    streakMgr.recordLevelWin(1, 2, 8, 4, 3, 4, 'NORMAL', false); // Replay L1 improving 2★ -> 3★
+    expect(streakMgr.getPayload().winStreak).toBe(1);
+    streakMgr.recordLevelWin(1, 2, 8, 4, 3, 4, 'NORMAL', false); // Replay L1 again
+    expect(streakMgr.getPayload().winStreak).toBe(1);
+    streakMgr.recordLevelWin(2, 4, 12, 4, 3, 4, 'NORMAL', false); // Genuine first clear on L2
+    expect(streakMgr.getPayload().winStreak).toBe(2);
+
+    // 4. TIMED Undo-to-Move-0 keeps timerRunning = true; isBoardRunStarted detects Move-0 booster/Hint mutations
+    const move0Snap = createBoardState(getLevelSpec(1));
+    expect(isBoardRunStarted(move0Snap)).toBe(false);
+    const liveTimed = cloneBoardState(move0Snap);
+    liveTimed.timerRunning = true;
+    liveTimed.timeRemainingSec = 42;
+    expect(isBoardRunStarted(liveTimed)).toBe(true);
+    carryLiveResourcesIntoUndo(move0Snap, liveTimed, 'TIMED');
+    expect(move0Snap.timerRunning).toBe(true);
+    expect(move0Snap.timeRemainingSec).toBe(42);
+
+    const hintMutated = createBoardState(getLevelSpec(1));
+    hintMutated.freeMovesRemaining = 2;
+    expect(isBoardRunStarted(hintMutated)).toBe(true);
+    const boosterMutated = createBoardState(getLevelSpec(1));
+    boosterMutated.sessionBlocksShredded = 1;
+    expect(isBoardRunStarted(boosterMutated)).toBe(true);
   });
 });

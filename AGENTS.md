@@ -6,10 +6,11 @@ Authoritative engineering entrypoint for autonomous coding agents and contributo
 
 ## 1. Core Architectural & Product Invariants (NON-NEGOTIABLE)
 
-1. **100% Free-to-Play, Zero Ads, Zero IAP & Fair Economy v2 (`ECON-01`–`04`, `ECON-V2`, `MAP-MODE-SPLIT-01`, `ZEN-STARS-01`)**:
+1. **100% Free-to-Play, Closed-Loop Ludological Core & Fair Economy v2 (`LUDO-CORE-01`, `ECON-01`–`04`, `ECON-V2`, `MAP-MODE-SPLIT-01`, `MODE-ISOLATION-01`, `ZEN-SKIP-GUARD-01`, `STREAK-INTEGRITY-01`, `ZEN-STARS-01`)**:
    - Never add ad SDKs, paid currency, stamina bars, or paywalls. Keep **Unlimited Lives (`F-01`)**, **Free Zen Blessing Continues** (`1 / 4` unique Zen clears, cap `3`), **Zen-Only Free Level Skips (`0 Coins`, `F-04`)**, and **3 Free Undos (`F-08`)** + accidental-restart recovery (`preRestartSnapshot`) on every stage.
-   - **3 Independent Mode Ladders (`modeState[mode]`)**: `'CHALLENGE'` (default move budget + Touch-Move Coalescing + `FINAL-TOUCH-01` grace, `1–3★` via `STARS-SLACK-01`, Continue caps at `1★`), `'ZEN'` (untimed, `bombsInert` `ZEN-CALM-01`, Zen-only skips, `1★ / 3` unique clears + `1 🌿 Zen Blessing / 4` unique clears), and `'TIMED'` (`TIMED-BOMB-01` move-paced fuses, `1–3★`), with additive `totalStars` and global `highestLevelUnlocked = max(modeState.*.highestUnlocked)` for booster unlocks (`L2/8/18/30`) and Level-10 Milestone Chests.
-   - **Boosters & Undo Integrity (`UNDO-RES-01`)**: `UNDO (L1, 60c)`, `HINT (L2, 80c: hintMove + 2 Free Moves, or +10s in TIMED)`, `HAMMER (L8, 140c)`, `ROCKET (L18, 220c)`, `VACUUM (L30, 350c)`. Always use `carryLiveResourcesIntoUndo`, charge before applying, clear `undoStack` on `HAMMER`/`ROCKET`/`VACUUM`, and keep `#level-jump-input` locked to `1 .. modeState[activeMode].highestUnlocked`.
+   - **3 Independent Mode Ladders (`modeState[mode]`) & Clean-Reset Mode Isolation (`MODE-ISOLATION-01`)**: `'CHALLENGE'` (move budget + Touch-Move Coalescing + `FINAL-TOUCH-01` grace, `1–3★` via `STARS-SLACK-01`, Continue caps at `1★`), `'ZEN'` (untimed, `bombsInert` `ZEN-CALM-01`, `1★ / 3` unique clears + `1 🌿 Zen Blessing / 4` unique clears), and `'TIMED'` (`TIMED-BOMB-01` move-paced fuses, `1–3★`). Every mode switch loads a clean Move-0 board (`boardPlayMode = activeMode`, `undoStack = []`, `preRestartSnapshot = null`, active drags/targeting cancelled) without clobbering a higher `modeState[mode].currentLevelId` frontier bookmark.
+   - **Genuine-Clear Progression, 3-Skip Cap & Streak Integrity (`ZEN-SKIP-GUARD-01`, `STREAK-INTEGRITY-01`)**: Free skips exist strictly in `'ZEN'`, cap at `ZEN_MAX_CONSECUTIVE_SKIPS = 3` trailing un-cleared stages (`canSkipZenLevel`), and **never** advance global Power-Up unlocks (`getEffectiveBoosterUnlockLevel`, which ignores un-cleared Zen skip frontier inflation) or Milestone Chests (every `10` unique genuinely cleared stages via `countUniqueClearedLevels`). `winStreak` increments strictly on per-mode first clears (`!isZenRun && isFirstClear`), pauses across normal `'ZEN'` play, `Restart`, and `‹ Map` exits, and resets to `0` on failure or mid-run `CHALLENGE`/`TIMED` mode switch (`isBoardRunStarted(board)`).
+   - **Boosters & Undo Integrity (`UNDO-RES-01`)**: `UNDO (L1, 60c)`, `HINT (L2, 80c: hintMove + 2 Free Moves, or +10s in TIMED)`, `HAMMER (L8, 140c)`, `ROCKET (L18, 220c)`, `VACUUM (L30, 350c)`. Always use `carryLiveResourcesIntoUndo` (preserving live `timerRunning` across Move-0 undos in `TIMED`), charge before applying, clear `undoStack` on `HAMMER`/`ROCKET`/`VACUUM`, and keep `#level-jump-input` locked to `1 .. modeState[activeMode].highestUnlocked`.
 2. **Local Process, Port & Sandbox Execution SOP (`SANDBOX-SOP-01`)**:
    - **Never leak Vite or Chromium processes.** Spawn `./node_modules/.bin/vite` directly (never `npx vite`). Strict ports: Playwright `4178` ([`playwright.config.ts`](playwright.config.ts)), visual harness `4179` ([`scripts/visual-harness.ts`](scripts/visual-harness.ts)).
    - **Sandbox vs. `BypassSandbox: true` First-Try Matrix (DO NOT WASTE FAILED ATTEMPTS)**:
@@ -19,7 +20,7 @@ Authoritative engineering entrypoint for autonomous coding agents and contributo
 3. **100% Booster-Free Solvability & 3-Tier Challenge Ramp (`UX-03`, `RAMP-01`–`05`, `C1-03`)**:
    - Every campaign (`1..300`) and Endless (`301+`) stage must pass `solveBoard()` without boosters and with zero cell overlaps: `L1–12` enforce `verifyFirstMoveSafety()` (`UX-03`), `L13–25` keep onboarding gate/queue rescues, and `L26+` disable normal-move silent bailouts while preserving `C1-03` Zero-Softlock rescues on `createBoardState` and Booster strikes.
 4. **Sacred-Geometry Sanctuary Visuals, 120Hz Canvas & Anti-"Default-LLM-UI" Rules**:
-   - Preserve the 3-plane tactile stone UI (`UI-DEPTH-01`), self-hosted `Fraunces` + `Plus Jakarta Sans` variable `.woff2` fonts (`TYPOGRAPHY-01` — never use external font CDNs), full `8 Settings × 15 Cosmetics` compatibility (`AX-01`, `AX-02`, `zCbSymbol = 0.692`), sculpted 3D modifiers (never flat 2D dark sticker overlays), and opaque `blueprintAlpha = 1.0` Satin Astrolabe Title rendering (`MYSTIC-RELIC-01`, zero CSS `filter` on `#game-canvas`, `0px` canvas layout shift via `TITLE-TRANSITION-01`, `VIEWPORT-01` without `viewport-fit=cover`).
+   - Preserve the 3-plane tactile stone UI (`UI-DEPTH-01`), Sanctuary-Anchored Mode Lighting (`MODE-AMBIENCE-01`: ~65% Nocturnal Indigo-Obsidian Sanctuary / ~35% mode cues, `opacity: 0.28` Map whisper, `1.05s cubic-bezier(0.37, 0, 0.22, 1)` `#app-shell::before` / `.mode-ambience-backdrop` compositor cross-fade), self-hosted `Fraunces` + `Plus Jakarta Sans` variable `.woff2` fonts (`TYPOGRAPHY-01` — never use external font CDNs), full `8 Settings × 15 Cosmetics` compatibility (`AX-01`, `AX-02`, `zCbSymbol = 0.692`), sculpted 3D modifiers, and opaque `blueprintAlpha = 1.0` Satin Astrolabe Title rendering (`MYSTIC-RELIC-01`, zero CSS `filter` on `#game-canvas`, `0px` canvas layout shift via `TITLE-TRANSITION-01`, `VIEWPORT-01` without `viewport-fit=cover`).
    - Never use raw Tailwind `#0f172a` boxes, unstyled checkboxes, or the `🪙` emoji (use `.coin-emblem` or `Coins`). Keep `#game-toast` directly inside `#app-shell` and `closedby="none"` on `#dialog-victory` / `#dialog-failure` (`PLAY-02`).
    - **Self-Contained Comment Hygiene**: Code comments, tests, and docs must reference only self-contained domain concepts or invariant IDs—never transient review rounds or plan step numbers.
 5. **Live Player Save Backward-Compatibility & Append-Only Migration (`SAVE-COMPAT-01`)**:
@@ -60,14 +61,19 @@ Every repository text/SVG file (except `package-lock.json`) is enforced `<= 800 
 
 ---
 
-## 4. Mandatory Verification Workflow
+## 4. Mandatory Ludological Impact Gate & Verification Workflow
 
-Run this sequence before concluding code, level, shader, icon, or style changes:
-
+0. **Mandatory 5-Question Ludological Impact Gate (`LUDO-CORE-01`)**:
+   - Before editing any play mode, booster, skip, continue, undo, streak, chest, payout, price, or progression rule, load [`docs/PROGRESSION_AND_ECONOMY.md`](docs/PROGRESSION_AND_ECONOMY.md) and verify all 5 conservation invariants hold (`false` to exploits, `true` to balance):
+     1. *Zero Infinite Faucets*: Replaying, restarting, undoing, skipping, or switching modes can never farm unbounded Coins, Stars, Zen Blessings, Streaks, or Chests.
+     2. *Strict Mode State Isolation (`MODE-ISOLATION-01`)*: `undoStack`, `preRestartSnapshot`, `freeMovesRemaining`, `freezeRemainingSec`, `bombsInert`, `timerRunning`, and active drags never cross a mode boundary.
+     3. *Genuine-Clear Gating (`ZEN-SKIP-GUARD-01`)*: `0`-cost Zen skips (`<= 3` consecutive) never advance global Power-Up unlocks (`L2/8/18/30`), Milestone Chests (`every 10 unique clears`), or `winStreak`.
+     4. *100% Booster-Free Solvability & Faucet/Sink Equilibrium*: Every stage stays `solveBoard()`-solvable without boosters while booster sinks (`60..350c`), Continue (`150c` / `1 🌿`), and cosmetics (`250..1200c`) stay balanced against first-clear vs. `20%` replay rewards.
+     5. *Append-Only Save Conservation (`SAVE-COMPAT-01`)*: Existing `v1`, `0xa5`, and `[0xa6, 0x4d]` saves migrate losslessly without resetting earned currency, stars, or unlocks.
 1. **`npm run lint`** (`BypassSandbox: false`): Biome check across all files in `< 200ms` with `0` errors (`npm run lint:fix` to auto-format). No `biome-ignore` suppressions in `src/**/*.ts`.
-2. **`npm run test:unit`** (`BypassSandbox: false`): Passes all `63+` unit, 300-level solver, security, SEO/favicon, and `ARCH-ERGONOMICS-01` tests across 6 suites.
+2. **`npm run test:unit`** (`BypassSandbox: false`): Passes all `75+` unit, 300-level solver, ladder/anti-exploit, security, SEO/favicon, and `ARCH-ERGONOMICS-01` tests across 8 suites.
 3. **`npm run build`** (`BypassSandbox: false`): `tsc --noEmit && vite build` (`0` errors, stamps `dist/sw.js` & `dist/version.json`). **Always build immediately before Playwright E2E, visual goldens, or `visual-harness.ts`**, which serve `dist/` via `vite preview`.
-4. **`./node_modules/.bin/playwright test`** (`BypassSandbox: true`): Passes all `25` E2E playtests (Desktop Chrome + Mobile Portrait).
+4. **`./node_modules/.bin/playwright test`** (`BypassSandbox: true`): Passes all `29+` E2E playtests (Desktop Chrome + Mobile Portrait).
 5. **Visual Verification (when touching UI/CSS/3D/shaders/icons)**:
    - `./node_modules/.bin/playwright test -c playwright.visual.config.ts` (`BypassSandbox: true`, `18` deterministic snapshots; `--update-snapshots` after inspecting intentional changes).
    - `./node_modules/.bin/tsx scripts/generate-icons.ts` (`BypassSandbox: false`, regenerates icons, `favicon.ico`, `og-image.png`, and `29-launcher-icons-preview.png`).

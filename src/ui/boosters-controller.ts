@@ -10,7 +10,12 @@ import { getShape } from '../core/polyomino';
 import type { BoardState, BoosterType, InputMode } from '../core/types';
 import type { BoosterTargetPayload } from '../input/pointer-controller';
 import { findNextHintMove } from '../levels/solver';
-import { BOOSTER_RARITY, BOOSTER_UNLOCK_LEVEL, isBoosterUnlocked } from '../storage/save-manager';
+import {
+  BOOSTER_RARITY,
+  BOOSTER_UNLOCK_LEVEL,
+  getEffectiveBoosterUnlockLevel,
+  isBoosterUnlocked,
+} from '../storage/save-manager';
 import { type AppViewContext, BOOSTER_DISPLAY_NAMES, UI_BOOSTER_PRICES } from './catalog-meta';
 
 /**
@@ -50,7 +55,7 @@ function ensureBoosterAvailable(app: BoosterAppContext, type: BoosterType): bool
 
 export function activateBoosterImpl(app: BoosterAppContext, type: BoosterType): void {
   const save = app.saveManager.getPayload();
-  const effectiveLevel = Math.max(app.board.levelId, save.highestLevelUnlocked);
+  const effectiveLevel = getEffectiveBoosterUnlockLevel(save, app.board.levelId);
   if (!isBoosterUnlocked(type, effectiveLevel)) {
     app.sound.playWallClack();
     const displayName = BOOSTER_DISPLAY_NAMES[type];
@@ -98,6 +103,13 @@ function executeUndoBoosterImpl(app: BoosterAppContext): void {
     app.preRestartSnapshot = null;
     app.preRestartUndoStack = [];
     app.board.bombsInert = app.saveManager.getPayload().settings.playMode === 'ZEN';
+    if (app.board.bombsInert) {
+      for (const b of app.board.blocks) {
+        if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
+          b.bombCount = Math.max(4, b.bombMax);
+        }
+      }
+    }
     app.levelOutcomeHandled = false;
     app.renderer.clearPathTraces();
     app.sound.playBooster('UNDO');

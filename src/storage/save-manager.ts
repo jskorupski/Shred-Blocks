@@ -2,11 +2,26 @@ import type { BoosterType, LevelRecord, ParticleStyleId, SavePayloadV1, SkinId, 
 import { decodeSaveCode, encodeSaveCode, validateSavePayloadV1 } from './save-code';
 import {
   applyZenOnlySkip,
+  canSkipZenLevel,
   cloneModeState,
+  countTrailingUnclearedStages,
+  countUniqueClearedLevels,
   createDefaultModeState,
   evaluateModeLevelWin,
+  getEffectiveBoosterUnlockLevel,
+  isRecordGenuinelyCleared,
   migrateSavePayload,
+  ZEN_MAX_CONSECUTIVE_SKIPS,
 } from './save-mode-ladders';
+
+export {
+  canSkipZenLevel,
+  countTrailingUnclearedStages,
+  countUniqueClearedLevels,
+  getEffectiveBoosterUnlockLevel,
+  isRecordGenuinelyCleared,
+  ZEN_MAX_CONSECUTIVE_SKIPS,
+};
 
 export const SAVE_STORAGE_KEY = 'shredblocks.save.v1';
 export const PRE_IMPORT_BACKUP_KEY = 'shredblocks.save.pre_import_backup';
@@ -357,10 +372,13 @@ export class SaveManager {
               ? 2
               : 1));
 
+    const prevUniqueClears = countUniqueClearedLevels(this.payload);
+    const wasStageAlreadyCleared = isRecordGenuinelyCleared(this.payload.levelRecords[levelId]);
     const evalWin = evaluateModeLevelWin(this.payload, levelId, moves, timeSec, stars, isZenRun);
     const { isFirstClear, starsImproved, zenStarAwarded, zenBlessingAwarded } = evalWin;
 
-    if (!isZenRun) {
+    // STREAK-INTEGRITY-01: Only genuine first-clears in Challenge / Speed Rush advance Flow Streak
+    if (!isZenRun && isFirstClear) {
       this.payload.winStreak = (this.payload.winStreak || 0) + 1;
       if (this.payload.winStreak > this.payload.bestWinStreak) {
         this.payload.bestWinStreak = this.payload.winStreak;
@@ -383,7 +401,11 @@ export class SaveManager {
     let milestoneChestOpened = false;
     let starReliquaryChestsOpened = 0;
     const rewardedBoosters: BoosterType[] = [];
-    const effectiveMaxLevel = Math.max(levelId, this.payload.highestLevelUnlocked || 1);
+    const nextUniqueClears = wasStageAlreadyCleared ? prevUniqueClears : prevUniqueClears + 1;
+    const effectiveBoosterLevel = Math.max(
+      getEffectiveBoosterUnlockLevel(this.payload, isZenRun ? 1 : levelId),
+      nextUniqueClears + 1
+    );
 
     this.payload.totalBlocksShredded += Math.max(0, blocksShredded);
     this.payload.totalMovesCommitted += Math.max(0, moves);
@@ -395,18 +417,25 @@ export class SaveManager {
       chestCoins += 50;
       const bType = pickRarityWeightedBooster(
         this.payload.totalBlocksShredded + shredderChestsOpened * 37,
-        effectiveMaxLevel,
+        effectiveBoosterLevel,
         false
       );
       this.payload.boosters[bType] = (this.payload.boosters[bType] || 0) + 1;
       rewardedBoosters.push(bType);
     }
 
-    if (isFirstClear && levelId % 10 === 0 && levelId > this.payload.milestoneChestLevel) {
-      this.payload.milestoneChestLevel = levelId;
+    // ZEN-SKIP-GUARD-01: Milestone Chest opens strictly every 10 unique non-skipped stage clears
+    const prevBucket = Math.floor(prevUniqueClears / 10) * 10;
+    const nextBucket = Math.floor(nextUniqueClears / 10) * 10;
+    if (prevBucket < nextBucket && nextBucket > (this.payload.milestoneChestLevel || 0)) {
+      this.payload.milestoneChestLevel = nextBucket;
       milestoneChestOpened = true;
       chestCoins += 75;
-      const bType = pickRarityWeightedBooster(levelId * 97, effectiveMaxLevel, true);
+      const chestLvl =
+        nextBucket === 10 || nextBucket === 20 || nextBucket === 30
+          ? nextBucket
+          : Math.max(nextBucket, effectiveBoosterLevel);
+      const bType = pickRarityWeightedBooster(nextBucket * 97, chestLvl, true);
       this.payload.boosters[bType] = (this.payload.boosters[bType] || 0) + 1;
       rewardedBoosters.push(bType);
     }
@@ -416,7 +445,11 @@ export class SaveManager {
       this.payload.starReliquaryLevel = (this.payload.starReliquaryLevel || 0) + 25;
       starReliquaryChestsOpened++;
       chestCoins += 90;
-      const bType = pickRarityWeightedBooster(this.payload.starReliquaryLevel * 131, effectiveMaxLevel, true);
+      const bType = pickRarityWeightedBooster(
+        this.payload.starReliquaryLevel * 131,
+        effectiveBoosterLevel,
+        true
+      );
       this.payload.boosters[bType] = (this.payload.boosters[bType] || 0) + 1;
       rewardedBoosters.push(bType);
     }
@@ -624,9 +657,10 @@ export class SaveManager {
     const backup = this.readLocalStorage(PRE_IMPORT_BACKUP_KEY);
     if (!backup) return null;
 
-    const nextSeq = Math.max(this.payload.writeSeq || 0, backup.writeSeq || 0) + 1;
+    const migrated = migrateLegacyEconomy(backup);
+    const nextSeq = Math.max(this.payload.writeSeq || 0, migrated.writeSeq || 0) + 1;
     this.payload = clonePayload({
-      ...backup,
+      ...migrated,
       writeSeq: nextSeq,
       updatedAt: Date.now(),
     });

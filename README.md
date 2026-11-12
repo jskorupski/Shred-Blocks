@@ -26,10 +26,10 @@
 ## Features
 
 - **300 Campaign Levels + Infinite Endless Mode**: Progress across 6 architectural chapters—from approachable `5×5` courtyards to non-rectangular atriums, multi-room portcullis sanctums, sealed mystery vaults, and `9×9` citadels—followed by seeded procedural Endless boards (`Level 301+`). Every stage is verified 100% solvable without power-ups by a deterministic A\* solver.
-- **Three Independent Play Modes (`MAP-MODE-SPLIT-01`)**:
-  - **Challenge**: Clear the courtyard within a calibrated move budget to earn 1–3 Gold Stars, streak bonuses, and chest rewards on its own campaign ladder.
-  - **Zen**: Untimed, unlimited-move sanctuary flow with free skips—every 3 unique Zen clears awards `+1` Gold Star, and every 4 unique clears banks a **🌿 Zen Blessing** (up to 3) for a free `+5 Moves` / `+20s` Continue in Challenge or Rush.
-  - **Speed Rush**: An arcade countdown ladder for speedrunners, with additive Gold Stars and globally shared booster unlocks (`L2/8/18/30`) across all modes.
+- **Three Independent Play Modes (`MAP-MODE-SPLIT-01`, `MODE-ISOLATION-01`)**:
+  - **Challenge**: Clear the courtyard within a calibrated move budget to earn 1–3 Gold Stars, first-clear Flow Streak bonuses, and chest rewards on its own campaign ladder.
+  - **Zen**: Untimed, unlimited-move sanctuary flow with inert time-bombs and up to 3 consecutive breather skips—every 3 unique Zen clears awards `+1` Gold Star, and every 4 unique clears banks a **🌿 Zen Blessing** (up to 3) for a free `+5 Moves` / `+20s` Continue in Challenge or Speed Rush.
+  - **Speed Rush**: An arcade countdown ladder for speedrunners with move-paced bomb fuses and additive 1–3 Gold Stars. Switching modes live from the HUD or Sanctuary Map always starts a clean Move-0 attempt while keeping each mode's frontier independent, and global Power-Up unlocks (`L2/8/18/30`) plus 10-stage Level Chests advance through genuine clears across any mode.
 - **18 Gradual Mechanics**: Introduces new spatial twists across the campaign, including axis-locked rails, multi-layer blocks, ice blocks & frozen gates, star gates, keys & locks, wooden crates, time-bombs, glued block groups, ropes & scissors, dynamic shutters, block generators, colored floor paths, and moving elevators.
 - **Power-Ups & Themes Studio**: Earn coins through normal play and milestone chests to stock 5 optional boosters (*Undo*, *Hint*, *Hammer*, *Row/Col Rocket*, *Color Vacuum*) and unlock 15 cosmetic **Block Skins**, **Board Trays**, and **Shred Animations** (*Micro Cubes*, *Star Confetti*, *Pixel Sparks*, buoyant *Soap Bubbles*, and *Lightning Bolts* with electric gate arcs).
 - **Player-Friendly & Accessible**: Unlimited lives, 3 free undos per attempt, free Zen skips & Zen Blessing rescues, colorblind symbol badges, high-contrast palettes, full keyboard navigation, and reduced-motion mode.

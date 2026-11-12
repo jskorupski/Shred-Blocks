@@ -1,7 +1,12 @@
 import { isBoardDeadlocked, isBoardWon } from '../core/board';
 import { hasFinalTouchGrace } from '../core/board-state';
 import { solveBoard } from '../levels/solver';
-import { BOOSTER_RARITY, CONTINUE_COIN_COST, type LevelWinRewardSummary } from '../storage/save-manager';
+import {
+  BOOSTER_RARITY,
+  CONTINUE_COIN_COST,
+  countUniqueClearedLevels,
+  type LevelWinRewardSummary,
+} from '../storage/save-manager';
 import { type AppViewContext, BOOSTER_DISPLAY_NAMES, getPlayModeMeta } from './catalog-meta';
 
 /**
@@ -86,7 +91,7 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
     breakdownEl.textContent = parts.join(' • ');
   }
   const shredChestProg = Math.min(100, Math.max(0, save.shredderChestProgress % 100));
-  const milestoneStep = Math.max(0, save.highestLevelUnlocked - 1) % 10;
+  const milestoneStep = summary.milestoneChestOpened ? 10 : countUniqueClearedLevels(save) % 10;
   if (shredTextEl) {
     shredTextEl.textContent = `${shredChestProg} / 100`;
   }

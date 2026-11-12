@@ -359,6 +359,7 @@ export function carryLiveResourcesIntoUndo(restored: BoardState, live: BoardStat
   }
   if (playMode === 'TIMED') {
     restored.timeRemainingSec = live.timeRemainingSec;
+    restored.timerRunning = Boolean(restored.timerRunning || live.timerRunning);
   }
   if (continueAdded || playMode === 'TIMED') {
     for (const b of restored.blocks) {
@@ -408,6 +409,22 @@ export function cloneBoardState(board: BoardState): BoardState {
     })),
     hintMove: board.hintMove ? { ...board.hintMove } : null,
   };
+}
+
+/**
+ * Returns `true` when the player has mutated or started a board attempt (committed a move, shredded via booster,
+ * activated Hint Free Moves / Freeze, used a Continue, or started the Speed Rush clock — `MODE-ISOLATION-01`).
+ */
+export function isBoardRunStarted(board: BoardState): boolean {
+  return (
+    board.movesCommitted > 0 ||
+    board.sessionBlocksShredded > 0 ||
+    board.freeMovesRemaining > 0 ||
+    board.freezeRemainingSec > 0 ||
+    board.hintMove !== null ||
+    (board.continuesUsed ?? 0) > 0 ||
+    board.timerRunning
+  );
 }
 
 /**

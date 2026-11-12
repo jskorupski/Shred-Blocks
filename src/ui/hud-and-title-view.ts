@@ -17,7 +17,14 @@ import {
 import type { HoverState } from '../input/pointer-controller';
 import { getLevelSpec } from '../levels/catalog';
 import type { RenderSceneOptions } from '../render/renderer-3d';
-import { BOOSTER_RARITY, BOOSTER_UNLOCK_LEVEL, isBoosterUnlocked } from '../storage/save-manager';
+import {
+  BOOSTER_RARITY,
+  BOOSTER_UNLOCK_LEVEL,
+  canSkipZenLevel,
+  countUniqueClearedLevels,
+  getEffectiveBoosterUnlockLevel,
+  isBoosterUnlocked,
+} from '../storage/save-manager';
 import {
   type AppViewContext,
   getChapterMetaForLevel,
@@ -205,12 +212,11 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (shredText) shredText.textContent = `${shredChestProg}/100`;
   if (shredFill) shredFill.style.width = `${shredChestProg}%`;
 
-  const nextMilestone = Math.ceil(Math.max(1, save.highestLevelUnlocked) / 10) * 10;
-  const milestoneStep = ((save.highestLevelUnlocked - 1) % 10) * 10;
+  const milestoneStep = countUniqueClearedLevels(save) % 10;
   const mileText = document.getElementById('milestone-chest-text');
   const mileFill = document.getElementById('milestone-chest-fill');
-  if (mileText) mileText.textContent = `Lvl ${nextMilestone}`;
-  if (mileFill) mileFill.style.width = `${Math.max(10, milestoneStep)}%`;
+  if (mileText) mileText.textContent = `${milestoneStep}/10`;
+  if (mileFill) mileFill.style.width = `${Math.max(10, milestoneStep * 10)}%`;
 
   const blessCount = Math.min(3, Math.max(0, save.zenBlessings || 0));
   const starProg = Math.min(2, Math.max(0, save.zenStarProgress || 0));
@@ -381,17 +387,17 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   }
   document.body.setAttribute('data-play-mode', playMode);
 
-  // Skips exist strictly in Zen Mode (`MAP-MODE-SPLIT-01`)
-  const canSkipInMode = playMode === 'ZEN';
+  // Skips exist strictly in Zen Mode and cap at 3 consecutive un-cleared skips (`ZEN-SKIP-GUARD-01`)
+  const isZenMode = playMode === 'ZEN';
+  const skipAllowed = canSkipZenLevel(save, app.board.levelId);
   const skipHudBtn = document.getElementById('btn-skip-hud') as HTMLButtonElement | null;
   const pauseSkipBtn = document.getElementById('btn-pause-skip') as HTMLButtonElement | null;
-  if (skipHudBtn) {
-    skipHudBtn.hidden = !canSkipInMode;
-    skipHudBtn.disabled = !canSkipInMode;
-  }
-  if (pauseSkipBtn) {
-    pauseSkipBtn.hidden = !canSkipInMode;
-    pauseSkipBtn.disabled = !canSkipInMode;
+  for (const btn of [skipHudBtn, pauseSkipBtn]) {
+    if (!btn) continue;
+    btn.hidden = !isZenMode;
+    btn.disabled = !isZenMode;
+    btn.setAttribute('aria-disabled', isZenMode && !skipAllowed ? 'true' : 'false');
+    btn.classList.toggle('skip-cap-reached', isZenMode && !skipAllowed);
   }
 
   const titleEl = document.getElementById('hud-level-title');
@@ -464,8 +470,8 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   }
   app.syncTimerPillOnly();
 
-  // Boosters Dock Badges, Rarity Accents & Progressive Level Unlocking (ECON-01 / ECON-02)
-  const effectiveLevel = Math.max(app.board.levelId, save.highestLevelUnlocked);
+  // Boosters Dock Badges, Rarity Accents & Progressive Level Unlocking (ECON-01 / ECON-02 / ZEN-SKIP-GUARD-01)
+  const effectiveLevel = getEffectiveBoosterUnlockLevel(save, app.board.levelId);
 
   const syncBoosterSlot = (btnId: string, badgeId: string, type: BoosterType) => {
     const btnEl = document.getElementById(btnId);

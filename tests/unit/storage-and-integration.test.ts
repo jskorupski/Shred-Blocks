@@ -345,11 +345,13 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(manager.getPayload().totalStars).toBe(3);
     });
 
-    it('unlocks Shredder Chest at 100 shredded blocks and Milestone Chest every 10 levels', () => {
+    it('unlocks Shredder Chest at 100 shredded blocks and Milestone Chest every 10 unique clears', () => {
       const manager = new SaveManager();
-
-      // Clear Level 10 for the first time while shredding 105 blocks
-      const summary = manager.recordLevelWin(10, 8, 20, 105, 3, 8);
+      for (let lvl = 1; lvl <= 9; lvl++) {
+        manager.recordLevelWin(lvl, 5, 15, 9, 3, 6);
+      }
+      // 10th unique clear (81 + 24 = 105 shredded blocks) opens Shredder + Milestone chests
+      const summary = manager.recordLevelWin(10, 8, 20, 24, 3, 8);
       expect(summary.shredderChestsOpened).toBe(1);
       expect(summary.milestoneChestOpened).toBe(true);
       expect(summary.chestCoins).toBe(125); // 50 (Shredder) + 75 (Milestone)

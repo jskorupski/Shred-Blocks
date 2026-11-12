@@ -176,6 +176,17 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
       return backdrop ? window.getComputedStyle(backdrop).opacity : '';
     });
     expect(hcBackdropOpacity).toBe('0');
+
+    // Sanctuary Map whispers active mode at 0.28 opacity when High Contrast is off
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
+      window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home');
+    });
+    const mapWhisperOpacity = await page.evaluate(() => {
+      const backdrop = document.querySelector('.mode-ambience-backdrop');
+      return backdrop ? window.getComputedStyle(backdrop).opacity : '';
+    });
+    expect(Number(mapWhisperOpacity)).toBeCloseTo(0.28, 2);
   });
 
   test('renders distinct 5 Shred Animations, upward soap_bubbles, gate plasma arcs, and Reduced-Motion Gate Seals', async ({
@@ -326,7 +337,7 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
     await expect(page.locator('#map-tab-challenge')).toHaveAttribute('aria-selected', 'true');
 
     // 2. Advance Zen ladder across 4 unique non-skipped clears (awards +1 Zen Star at 3 clears & +1 Zen Blessing at 4 clears)
-    //    plus 3 Zen skips to reach Level 8 globally (unlocking Hammer globally!)
+    //    plus 3 Zen skips to reach Level 8 — verifying the 3-skip consecutive cap & genuine-clear Hammer gating (`ZEN-SKIP-GUARD-01`)
     await page.locator('#map-tab-zen').click();
     await page.locator('#btn-play-current').click();
     await expect(page.locator('#screen-game')).toBeVisible();
@@ -343,11 +354,16 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
       }
       await page.locator('#btn-next-level').click();
     }
-    // Now on Level 5 in Zen Mode; skip 5 -> 6 -> 7 -> 8 via Zen-only HUD Skip
+    // Now on Level 5 in Zen Mode; skip 5 -> 6 -> 7 -> 8 via Zen-only HUD Skip (3 consecutive skips)
     for (let s = 0; s < 3; s++) {
       await page.locator('#btn-skip-hud').click();
     }
     await expect(page.locator('#hud-level-title')).toContainText('Level 8');
+    await expect(page.locator('#btn-skip-hud')).toHaveAttribute('aria-disabled', 'true');
+    // 4th consecutive un-cleared skip is blocked with clear toast feedback!
+    await page.locator('#btn-skip-hud').click({ force: true });
+    await expect(page.locator('#hud-level-title')).toContainText('Level 8');
+    await expect(page.locator('#game-toast')).toContainText('max 3 skipped in a row');
 
     // Return to Sanctuary Map: verify Zen = Lvl 8, Challenge = Lvl 1, Rush = Lvl 1, +1 Zen Star, 1/3 Blessing
     await page.locator('#btn-hud-home').click();
@@ -357,16 +373,31 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
     await expect(page.locator('#stat-stars')).toHaveText('1');
     await expect(page.locator('#zen-progress-text')).toContainText('1/3');
 
-    // 3. Switch to Challenge folder tab (Lvl 1): Hammer (Lvl 8 global unlock!) is unlocked even on Challenge Lvl 1,
-    //    while HUD & Settings Skip buttons are strictly hidden in Challenge Mode
+    // 3. Switch to Challenge folder tab (Lvl 1): with only 4 genuine clears, Hammer (Lvl 8) stays locked against skip farming!
     await page.locator('#map-tab-challenge').click();
     await expect(page.locator('#btn-play-current')).toContainText('PLAY LEVEL 1');
     await page.locator('#btn-play-current').click();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
     await expect(page.locator('#btn-skip-hud')).toBeHidden();
+    await expect(page.locator('#btn-booster-hammer')).toHaveClass(/locked-booster/);
+
+    // Complete 3 more genuine Zen clears (stages 5, 6, 7 -> 7 total unique clears -> effective unlock Lvl 8!)
+    await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.setPlayMode('ZEN');
+      for (const id of [5, 6, 7]) {
+        dbg.loadLevel(id);
+        dbg.autoSolveCurrentLevel();
+      }
+      dbg.closeAllModals();
+      dbg.loadLevel(8); // Restore Zen frontier bookmark at Lvl 8
+      dbg.setPlayMode('CHALLENGE');
+    });
+    await expect(page.locator('#hud-level-title')).toContainText('Level 1');
     await expect(page.locator('#btn-booster-hammer')).not.toHaveClass(/locked-booster/);
 
     await page.locator('#btn-pause').click();
+    await expect(page.locator('#dialog-pause .pause-nav-section')).toBeVisible();
     await expect(page.locator('#btn-pause-skip')).toBeHidden();
     await page.locator('#btn-pause-close').click();
 
@@ -402,16 +433,203 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
     expect(postBlessingState.zenBlessings).toBe(0);
     expect(postBlessingState.continuesUsed).toBe(1);
 
-    // 5. Mid-board HUD switch to Zen while Zen frontier is ahead (Lvl 8 > Lvl 1) keeps Lvl 1 in-place!
+    // 5. MODE-ISOLATION-01: Mid-board HUD switch to Zen clean-resets Lvl 1 to Move 0 AND preserves Zen's Lvl 8 frontier bookmark!
     await page.locator('#btn-mode-toggle').click();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
-    const inPlaceZen = await page.evaluate(() => ({
+    const cleanResetZen = await page.evaluate(() => ({
       levelId: window.__SHREDBLOCKS_DEBUG__.getBoard().levelId,
       bombsInert: window.__SHREDBLOCKS_DEBUG__.getBoard().bombsInert,
       movesCommitted: window.__SHREDBLOCKS_DEBUG__.getBoard().movesCommitted,
+      continuesUsed: window.__SHREDBLOCKS_DEBUG__.getBoard().continuesUsed ?? 0,
+      zenBookmark: window.__SHREDBLOCKS_DEBUG__.getSave().modeState.ZEN.currentLevelId,
     }));
-    expect(inPlaceZen.levelId).toBe(1);
-    expect(inPlaceZen.bombsInert).toBe(true);
-    expect(inPlaceZen.movesCommitted).toBeGreaterThan(0);
+    expect(cleanResetZen.levelId).toBe(1);
+    expect(cleanResetZen.bombsInert).toBe(true);
+    expect(cleanResetZen.movesCommitted).toBe(0);
+    expect(cleanResetZen.continuesUsed).toBe(0);
+    expect(cleanResetZen.zenBookmark).toBe(8);
+  });
+
+  test('MODE-ISOLATION-01 & STREAK-INTEGRITY-01: blocks Restart+Switch+Undo smuggling, frontier collisions, Hint smuggling, Speed Rush undo clock-freeze, active drag leaks, off-game Settings nav, and Flow Streak bailouts', async ({
+    page,
+  }) => {
+    await bootWithSave(page, 12);
+
+    // 1. Settings modal opened from Title / Map hides in-game .pause-nav-section
+    await page.locator('#btn-title-settings').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+    await expect(page.locator('#dialog-pause .pause-nav-section')).toBeHidden();
+    await page.locator('#btn-pause-close').click();
+
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('game'));
+    await expect(page.locator('#hud-level-title')).toContainText('Level 12');
+
+    // 2. Restart -> Mode Switch -> Undo cross-mode snapshot smuggling is blocked (MODE-ISOLATION-01)
+    await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.loadLevel(1);
+      const b2 = dbg.getBoard().blocks.find((blk) => blk.col === 3 && blk.row === 2);
+      if (b2) dbg.commitMove(b2.id, 1, 3);
+    });
+    await page.locator('#btn-restart').click(); // Creates preRestartSnapshot in Challenge
+    await page.locator('#btn-mode-prev').click(); // Switch Challenge -> Timed (wipes preRestartSnapshot!)
+    await page.locator('#btn-booster-undo').click(); // Attempt to smuggle Challenge snapshot into Timed
+    const afterSmuggleAttempt = await page.evaluate(() => ({
+      movesCommitted: window.__SHREDBLOCKS_DEBUG__.getBoard().movesCommitted,
+      toast: document.getElementById('game-toast')?.textContent ?? '',
+    }));
+    expect(afterSmuggleAttempt.movesCommitted).toBe(0);
+    expect(afterSmuggleAttempt.toast).toContain('No moves to undo');
+
+    // 3. TIMED Move 1 + Undo back to Move 0 keeps Speed Rush clock running (UNDO-RES-01)
+    const timedUndoClock = await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.setPlayMode('TIMED');
+      dbg.loadLevel(1);
+      dbg.freezeTime(10.0);
+      const b2 = dbg.getBoard().blocks.find((blk) => blk.col === 3 && blk.row === 2);
+      if (b2) dbg.commitMove(b2.id, 1, 3);
+      dbg.advanceFrozenFrames(60); // 1.0s elapsed
+      const tBeforeUndo = dbg.getBoard().timeRemainingSec;
+      dbg.activateBooster('UNDO'); // Undo Move 1 back to Move 0
+      const runningAtMove0 = dbg.getBoard().timerRunning;
+      dbg.advanceFrozenFrames(60); // Another 1.0s must STILL tick!
+      const tAfterMoreTime = dbg.getBoard().timeRemainingSec;
+      dbg.freezeTime(null);
+      return {
+        movesCommitted: dbg.getBoard().movesCommitted,
+        runningAtMove0,
+        tBeforeUndo,
+        tAfterMoreTime,
+      };
+    });
+    expect(timedUndoClock.movesCommitted).toBe(0);
+    expect(timedUndoClock.runningAtMove0).toBe(true);
+    expect(timedUndoClock.tAfterMoreTime).toBeLessThan(timedUndoClock.tBeforeUndo - 0.8);
+
+    // 4. Move-0 Hint (+2 Free Moves) & Mid-Run Streak Bailout reset on mode switch, while Restart preserves streak (STREAK-INTEGRITY-01)
+    const streakAndHintCheck = await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.setPlayMode('CHALLENGE'); // Leaving running TIMED attempt resets winStreak to 0
+      const streakAfterLeavingRunningTimed = dbg.getSave().winStreak;
+      dbg.patchSave({ winStreak: 2 });
+      dbg.loadLevel(2);
+      dbg.autoSolveCurrentLevel(); // First clear on L2 -> winStreak advances 2 -> 3
+      dbg.closeAllModals();
+      const streakAfterFirstClear = dbg.getSave().winStreak;
+
+      // Replaying L2 does NOT increment winStreak
+      dbg.loadLevel(2);
+      dbg.autoSolveCurrentLevel();
+      dbg.closeAllModals();
+      const streakAfterReplay = dbg.getSave().winStreak;
+
+      // Normal Restart mid-run preserves winStreak
+      dbg.loadLevel(3);
+      dbg.activateBooster('HINT'); // +2 Free Moves at Move 0
+      const freeMovesBeforeSwitch = dbg.getBoard().freeMovesRemaining;
+      (document.getElementById('btn-restart') as HTMLButtonElement | null)?.click();
+      const streakAfterNormalRestart = dbg.getSave().winStreak;
+
+      // Mid-run mode switch in Challenge resets winStreak AND clears Hint Free Moves
+      dbg.activateBooster('HINT');
+      (document.getElementById('btn-mode-next') as HTMLButtonElement | null)?.click(); // Switch Challenge -> Zen
+      return {
+        streakAfterLeavingRunningTimed,
+        streakAfterFirstClear,
+        streakAfterReplay,
+        freeMovesBeforeSwitch,
+        streakAfterNormalRestart,
+        streakAfterMidRunSwitch: dbg.getSave().winStreak,
+        freeMovesAfterSwitch: dbg.getBoard().freeMovesRemaining,
+      };
+    });
+    expect(streakAndHintCheck.streakAfterLeavingRunningTimed).toBe(0);
+    expect(streakAndHintCheck.streakAfterFirstClear).toBe(3);
+    expect(streakAndHintCheck.streakAfterReplay).toBe(3);
+    expect(streakAndHintCheck.freeMovesBeforeSwitch).toBe(2);
+    expect(streakAndHintCheck.streakAfterNormalRestart).toBe(3);
+    expect(streakAndHintCheck.streakAfterMidRunSwitch).toBe(0);
+    expect(streakAndHintCheck.freeMovesAfterSwitch).toBe(0);
+
+    // 5. Off-screen frontier collision (Zen L12 -> Map -> Challenge Tab [also L12] -> Browser Back) never leaks bombsInert (MODE-ISOLATION-01)
+    await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.patchSave({
+        modeState: {
+          CHALLENGE: { currentLevelId: 12, highestUnlocked: 40 },
+          ZEN: { currentLevelId: 12, highestUnlocked: 40 },
+          TIMED: { currentLevelId: 1, highestUnlocked: 1 },
+        },
+      });
+      dbg.setPlayMode('ZEN');
+      dbg.loadLevel(12);
+    });
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().bombsInert)).toBe(true);
+    await page.locator('#btn-hud-home').click(); // Navigate to Map (pushes history)
+    await page.locator('#map-tab-challenge').click(); // Switch to Challenge tab (also frontier L12!)
+    await page.goBack(); // Popstate back to game L12
+    await expect(page.locator('#screen-game')).toBeVisible();
+    const afterCollisionBack = await page.evaluate(() => ({
+      mode: window.__SHREDBLOCKS_DEBUG__.getSave().settings.playMode,
+      levelId: window.__SHREDBLOCKS_DEBUG__.getBoard().levelId,
+      bombsInert: window.__SHREDBLOCKS_DEBUG__.getBoard().bombsInert,
+    }));
+    expect(afterCollisionBack).toEqual({ mode: 'CHALLENGE', levelId: 12, bombsInert: false });
+
+    // 6. Multi-touch active drag held across a mode switch cancels cleanly without mutating the new board (MODE-ISOLATION-01)
+    const multiTouchIsolation = await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.setPlayMode('CHALLENGE');
+      dbg.loadLevel(1);
+      const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+      const b0 = dbg.getBoard().blocks[0];
+      const startPt = dbg.boardToScreen(b0.col + 0.5, b0.row + 0.5);
+      const dragPt = dbg.boardToScreen(b0.col + 0.5, 0.2);
+
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          pointerId: 7,
+          pointerType: 'touch',
+          clientX: startPt.x,
+          clientY: startPt.y,
+          bubbles: true,
+        })
+      );
+      const activeDuringHold = dbg.getHoverState().activeBlockId;
+      // Second finger switches mode while finger #7 is still down!
+      (document.getElementById('btn-mode-next') as HTMLButtonElement | null)?.click();
+      const activeAfterSwitch = dbg.getHoverState().activeBlockId;
+
+      // Finger #7 moves and releases over the gate on the NEW board
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          pointerId: 7,
+          pointerType: 'touch',
+          clientX: dragPt.x,
+          clientY: dragPt.y,
+          bubbles: true,
+        })
+      );
+      canvas.dispatchEvent(
+        new PointerEvent('pointerup', {
+          pointerId: 7,
+          pointerType: 'touch',
+          clientX: dragPt.x,
+          clientY: dragPt.y,
+          bubbles: true,
+        })
+      );
+      return {
+        activeDuringHold,
+        activeAfterSwitch,
+        movesAfterRelease: dbg.getBoard().movesCommitted,
+        shreddedAfterRelease: dbg.getBoard().sessionBlocksShredded,
+      };
+    });
+    expect(multiTouchIsolation.activeDuringHold).not.toBeNull();
+    expect(multiTouchIsolation.activeAfterSwitch).toBeNull();
+    expect(multiTouchIsolation.movesAfterRelease).toBe(0);
+    expect(multiTouchIsolation.shreddedAfterRelease).toBe(0);
   });
 });

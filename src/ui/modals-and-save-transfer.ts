@@ -1,4 +1,4 @@
-import { isBoardWon } from '../core/board';
+import { isBoardRunStarted, isBoardWon } from '../core/board';
 import { setFxRandomSeed } from '../core/fx-random';
 import { getActiveColor } from '../core/polyomino';
 import type {
@@ -33,11 +33,16 @@ export function isAnyModalOpenImpl(): boolean {
 }
 
 export function openModalImpl(app: AppViewContext, id: ModalId): void {
+  app.inputController.cancelTargeting();
   app.closeAllModals();
   const dialog = getModalElement(id);
   if (!dialog) return;
 
   if (id === 'pause') {
+    const navSec = dialog.querySelector<HTMLElement>('.pause-nav-section');
+    if (navSec) {
+      navSec.hidden = app.activeScreen !== 'game' || app.titleOverlayOpen;
+    }
     updateTelemetryReadoutImpl(app);
   } else if (id === 'save-transfer') {
     refreshSaveTransferModalImpl(app);
@@ -238,7 +243,9 @@ export function confirmPendingSaveImportImpl(app: AppViewContext): void {
     app.syncAllUiFromSave();
     app.renderRoadmap();
     app.renderThemesStudio();
-    app.loadLevel(updated.currentLevelId || updated.highestLevelUnlocked || 1, false);
+    const ladder = updated.modeState[updated.settings.playMode];
+    const frontierId = Math.max(1, Math.min(ladder.highestUnlocked, ladder.currentLevelId || 1));
+    app.loadLevel(frontierId, false, false);
     if (typeof history !== 'undefined' && isAppHistoryState(history.state) && history.state.view === 'game') {
       history.replaceState(
         { __shredblocksNav: true, view: 'game', levelId: app.board.levelId } satisfies AppHistoryState,
@@ -267,98 +274,78 @@ export function checkUrlHashForSaveImportImpl(app: AppViewContext): void {
 export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, silent = false): void {
   const prevSave = app.saveManager.getPayload();
   const prevMode = prevSave.settings.playMode;
-  const failDlg = getModalElement('failure');
-  const fromFailureModal = Boolean(failDlg?.open);
+  const fromOutcomeModal = Boolean(getModalElement('failure')?.open || getModalElement('victory')?.open);
 
-  if (prevMode === nextMode && !fromFailureModal) {
+  if (prevMode === nextMode && !fromOutcomeModal && app.boardPlayMode === nextMode) {
     return;
   }
 
-  app.saveManager.updateSettings({ playMode: nextMode });
-  if (prevMode === 'TIMED') {
-    app.board.freezeRemainingSec = 0;
+  const wasRunStarted = isBoardRunStarted(app.board);
+  // STREAK-INTEGRITY-01: Switching modes mid-run in Challenge / Speed Rush forfeits Flow Streak
+  if (
+    app.activeScreen === 'game' &&
+    !app.titleOverlayOpen &&
+    !fromOutcomeModal &&
+    !app.levelOutcomeHandled &&
+    prevMode !== 'ZEN' &&
+    wasRunStarted &&
+    (prevSave.winStreak || 0) > 0
+  ) {
+    app.saveManager.recordLevelLoss();
   }
+
+  app.inputController.cancelTargeting();
+  app.saveManager.updateSettings({ playMode: nextMode });
 
   const nextSave = app.saveManager.getPayload();
   const nextLadder = nextSave.modeState[nextMode];
   const frontierId = Math.max(1, Math.min(nextLadder.highestUnlocked, nextLadder.currentLevelId || 1));
 
-  // 1. On Sanctuary Map / Themes / Title: switch mode ladder & refresh Hero + Roadmap without entering game
+  // 1. Off-screen (Map / Themes / Title): unconditionally reload target mode's frontier at Move 0 (`MODE-ISOLATION-01`)
   if (app.activeScreen !== 'game' || app.titleOverlayOpen) {
-    if (app.board.levelId !== frontierId) {
-      app.loadLevel(frontierId, false, false);
-    }
+    app.loadLevel(frontierId, false, false);
     app.syncAllUiFromSave();
     app.renderRoadmap();
     app.renderNow();
     return;
   }
 
-  // 2. From Failure Modal (`#btn-failure-zen`) or when current stage is locked / behind frontier in `nextMode`:
-  //    load `nextMode`'s frontier cleanly at Move 0 so ladders stay 100% independent.
-  if (
-    fromFailureModal ||
+  // 2. In-game HUD or Outcome Modal (`MODE-ISOLATION-01`): ALWAYS load a clean Move-0 board for `nextMode`
+  const useFrontier =
+    fromOutcomeModal ||
     app.board.levelId > nextLadder.highestUnlocked ||
-    (app.board.movesCommitted === 0 && !app.runTouchedZen && nextLadder.currentLevelId > app.board.levelId)
-  ) {
-    app.closeAllModals();
-    app.loadLevel(frontierId, true, true);
-    if (!silent) {
+    (!wasRunStarted && nextLadder.currentLevelId > app.board.levelId);
+  const targetId = useFrontier ? frontierId : app.board.levelId;
+  const persistBookmark = useFrontier || app.board.levelId >= nextLadder.currentLevelId;
+
+  app.closeAllModals();
+  app.loadLevel(targetId, true, persistBookmark);
+  app.renderRoadmap();
+
+  if (!silent) {
+    if (useFrontier) {
       app.showGameToast(
         nextMode === 'ZEN'
-          ? `🌿 Zen Mode · Level ${frontierId} — clear stages to earn ★ & Zen Blessings!`
+          ? `🌿 Zen Mode · Level ${targetId} — clear stages to earn ★ & Zen Blessings!`
           : nextMode === 'CHALLENGE'
-            ? `⚔️ Challenge Mode · Level ${frontierId}`
-            : `⏱ Speed Rush · Level ${frontierId}`
+            ? `⚔️ Challenge Mode · Level ${targetId}`
+            : `⏱ Speed Rush · Level ${targetId}`
       );
-    }
-    return;
-  }
-
-  app.saveManager.setCurrentLevel(app.board.levelId);
-
-  if (nextMode === 'ZEN') {
-    app.runTouchedZen = true;
-    app.board.bombsInert = true; // ZEN-CALM-01: fuses freeze for the rest of this Zen run
-    if (!isBoardWon(app.board)) {
-      app.levelOutcomeHandled = false;
-    }
-    for (const b of app.board.blocks) {
-      if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
-        b.bombCount = Math.max(4, b.bombMax);
-      }
-    }
-    app.syncAllUiFromSave();
-    app.renderRoadmap();
-    app.renderNow();
-    if (!silent) {
-      app.showGameToast('🌿 Switched to Zen Mode — finish this board freely!');
-    }
-    return;
-  }
-
-  const mustRestart = app.board.movesCommitted > 0 || app.runTouchedZen;
-  if (mustRestart) {
-    app.closeAllModals();
-    app.loadLevel(app.board.levelId, true, false);
-    if (!silent) {
+    } else if (wasRunStarted) {
       app.showGameToast(
-        nextMode === 'CHALLENGE'
-          ? '⚔️ Challenge Mode — stage restarted for Gold Stars!'
-          : '⏱ Speed Rush — stage restarted for Gold Stars!'
+        nextMode === 'ZEN'
+          ? `🌿 Zen Mode — Level ${targetId} restarted with inert bombs!`
+          : nextMode === 'CHALLENGE'
+            ? `⚔️ Challenge Mode — Level ${targetId} restarted for Gold Stars!`
+            : `⏱ Speed Rush — Level ${targetId} restarted for Gold Stars!`
       );
-    }
-  } else {
-    app.runTouchedZen = false;
-    app.levelOutcomeHandled = false;
-    app.syncAllUiFromSave();
-    app.renderRoadmap();
-    app.renderNow();
-    if (!silent) {
+    } else {
       app.showGameToast(
-        nextMode === 'CHALLENGE'
-          ? '⚔️ Switched to Challenge Mode (Move Budget)'
-          : '⏱ Switched to Speed Rush (Timed)'
+        nextMode === 'ZEN'
+          ? '🌿 Switched to Zen Mode (Untimed · Inert Bombs)'
+          : nextMode === 'CHALLENGE'
+            ? '⚔️ Switched to Challenge Mode (Move Budget)'
+            : '⏱ Switched to Speed Rush (Timed)'
       );
     }
   }
@@ -560,7 +547,12 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
         maxAllowed,
         Math.max(1, Math.floor(st.levelId || ladder.currentLevelId || 1))
       );
-      if (app.board.levelId !== targetId) {
+      if (
+        app.board.levelId !== targetId ||
+        app.boardPlayMode !== save.settings.playMode ||
+        isBoardRunStarted(app.board) ||
+        app.levelOutcomeHandled
+      ) {
         app.loadLevel(targetId, true, true);
       } else {
         app.switchScreen('game');
@@ -585,8 +577,16 @@ export function openTitleScreenImpl(app: AppViewContext): void {
   if (gameToast) gameToast.hidden = true;
   const save = app.saveManager.getPayload();
   const ladder = save.modeState[save.settings.playMode];
-  const targetLevelId = Math.max(1, ladder.currentLevelId || ladder.highestUnlocked || 1);
-  if (app.board.levelId !== targetLevelId) {
+  const targetLevelId = Math.max(
+    1,
+    Math.min(ladder.highestUnlocked, ladder.currentLevelId || ladder.highestUnlocked || 1)
+  );
+  if (
+    app.board.levelId !== targetLevelId ||
+    app.boardPlayMode !== save.settings.playMode ||
+    isBoardRunStarted(app.board) ||
+    app.levelOutcomeHandled
+  ) {
     app.loadLevel(targetLevelId, false, false);
   }
   app.syncAllUiFromSave();
@@ -659,6 +659,7 @@ export function switchScreenImpl(
     gameEl?.classList.remove('relic-awakening-burst');
   }
   if (screen !== 'game') {
+    app.inputController.cancelTargeting();
     app.blueprintMix = 0;
     app.renderer.resetTransientFx();
   }

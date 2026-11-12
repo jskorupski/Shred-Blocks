@@ -95,6 +95,11 @@
   white-space: nowrap;
 }
 
+#btn-skip-hud.skip-cap-reached,
+#btn-pause-skip.skip-cap-reached {
+  opacity: 0.56;
+}
+
 .hud-arch-subbar {
   display: flex;
   align-items: center;
@@ -559,7 +564,7 @@
   }
 }
 
-/* Center 3D Board Stage */
+/* Center 3D Board Stage — transparent so #app-shell::before & .mode-ambience-backdrop cross-fade smoothly */
 .board-stage {
   position: relative;
   isolation: isolate;
@@ -572,12 +577,7 @@
   justify-content: center;
   overflow: hidden;
   padding: 0.35rem;
-  background: radial-gradient(
-    ellipse 88% 64% at 50% 48%,
-    rgba(246, 189, 96, 0.28) 0%,
-    rgba(196, 114, 52, 0.15) 58%,
-    rgba(115, 70, 99, 0) 100%
-  );
+  background: transparent;
 }
 
 @keyframes mysticGodRays {
@@ -608,7 +608,7 @@
   pointer-events: none;
   mix-blend-mode: screen;
   opacity: 0;
-  transition: opacity 0.58s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.95s cubic-bezier(0.37, 0, 0.22, 1);
 }
 
 #screen-game .board-stage::before {

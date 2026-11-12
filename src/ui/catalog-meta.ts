@@ -301,6 +301,7 @@ export interface AppViewContext {
   readonly renderer: Renderer3D;
   readonly inputController: BoardInputController;
   board: BoardState;
+  boardPlayMode: PlayMode;
   activeScreen: 'home' | 'game' | 'themes';
   titleOverlayOpen: boolean;
   blueprintMix: number;

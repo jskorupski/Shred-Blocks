@@ -1,3 +1,4 @@
+import { isBoardRunStarted } from '../core/board';
 import type { PlayMode, QualityTier, SavePayloadV1 } from '../core/types';
 import {
   type AppViewContext,
@@ -14,10 +15,16 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     if (save.settings.reducedMotion) {
       app.sound.playButtonTap();
     }
+    const ladder = save.modeState[save.settings.playMode];
     const targetId = app.isNewPlayerSave(save)
       ? 1
-      : Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
-    if (app.board.levelId !== targetId) {
+      : Math.max(1, Math.min(ladder.highestUnlocked, ladder.currentLevelId || ladder.highestUnlocked || 1));
+    if (
+      app.board.levelId !== targetId ||
+      app.boardPlayMode !== save.settings.playMode ||
+      isBoardRunStarted(app.board) ||
+      app.levelOutcomeHandled
+    ) {
       app.loadLevel(targetId, false, true);
     }
     app.dismissTitleScreen('game', true);
@@ -266,7 +273,10 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   });
   document.getElementById('btn-next-level')?.addEventListener('click', () => {
     app.sound.playButtonTap();
-    app.loadLevel(app.board.levelId + 1, true);
+    const save = app.saveManager.getPayload();
+    const ladder = save.modeState[save.settings.playMode];
+    const nextId = Math.max(1, Math.min(MAX_ENDLESS_LEVEL, ladder.highestUnlocked, app.board.levelId + 1));
+    app.loadLevel(nextId, true);
   });
 
   // Failure Modal Buttons
@@ -421,6 +431,9 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     const restored = app.saveManager.restorePreImportBackup();
     if (restored) {
       app.sound.playBooster('UNDO');
+      const ladder = restored.modeState[restored.settings.playMode];
+      const frontierId = Math.max(1, Math.min(ladder.highestUnlocked, ladder.currentLevelId || 1));
+      app.loadLevel(frontierId, false, false);
       refreshSaveTransferModalImpl(app);
       app.syncAllUiFromSave();
       app.renderRoadmap();

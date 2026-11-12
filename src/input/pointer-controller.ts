@@ -36,6 +36,7 @@ export class BoardInputController {
   private targetingPointerId: number | null = null;
   private activeBlockId: number | null = null;
   private selectedBlockId: number | null = null;
+  private dragBoardRef: BoardState | null = null;
 
   private inputMode: InputMode = 'DRAG';
   private rocketAxis: RocketAxis = 'ROW';
@@ -139,6 +140,9 @@ export class BoardInputController {
   }
 
   public cancelTargeting(): void {
+    if (this.activePointerId !== null || this.activeBlockId !== null || this.targetingPointerId !== null) {
+      this.cancelActiveDrag();
+    }
     this.setInputMode('DRAG');
   }
 
@@ -225,6 +229,7 @@ export class BoardInputController {
 
   private handlePointerDown(e: PointerEvent): void {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (this.callbacks.isBoardInteractive && !this.callbacks.isBoardInteractive()) return;
 
     // UX-08 Single-Pointer Lock: ignore secondary pointers while a drag or Rocket press-aim is active
     if (this.activePointerId !== null || this.targetingPointerId !== null) return;
@@ -287,6 +292,7 @@ export class BoardInputController {
     this.activePointerId = e.pointerId;
     this.activeBlockId = picked.id;
     this.selectedBlockId = picked.id;
+    this.dragBoardRef = board;
 
     try {
       this.canvas.setPointerCapture?.(e.pointerId);
@@ -357,8 +363,10 @@ export class BoardInputController {
       return;
     }
 
-    // UX-08: Ignore secondary fingers
-    if (e.pointerId !== this.activePointerId || this.activeBlockId === null) {
+    // UX-08: Ignore secondary fingers; abort if board instance changed mid-drag (MODE-ISOLATION-01)
+    if (e.pointerId !== this.activePointerId || this.activeBlockId === null) return;
+    if (this.dragBoardRef !== board) {
+      this.cancelActiveDrag();
       return;
     }
 
@@ -520,6 +528,10 @@ export class BoardInputController {
     if (this.activePointerId === null || e.pointerId !== this.activePointerId) return;
 
     const board = this.callbacks.getBoard();
+    if (this.dragBoardRef !== board) {
+      this.cancelActiveDrag();
+      return;
+    }
     const blockId = this.activeBlockId;
     this.activePointerId = null;
 
@@ -593,6 +605,7 @@ export class BoardInputController {
 
     this.activePointerId = null;
     this.activeBlockId = null;
+    this.dragBoardRef = null;
     this.dragLeftOrigin = false;
     this.dragWaypoints.length = 0;
     this.hoverRow = -1;
@@ -699,28 +712,39 @@ export class BoardInputController {
   }
 
   public cancelActiveDrag(): void {
+    const ptrToRelease = this.activePointerId ?? this.targetingPointerId;
+    if (ptrToRelease !== null) {
+      try {
+        this.canvas.releasePointerCapture?.(ptrToRelease);
+      } catch {
+        // Ignore synthetic pointer events
+      }
+    }
     if (this.activeBlockId !== null) {
       const board = this.callbacks.getBoard();
-      const group = getMovedGroupBlocks(board, this.activeBlockId);
-      for (const b of group) {
-        const start = this.groupStartCoords.get(b.id);
-        if (start) {
-          b.row = start.row;
-          b.col = start.col;
-          b.x = start.col;
-          b.y = start.row;
-        } else {
-          b.x = b.col;
-          b.y = b.row;
+      if (board === this.dragBoardRef) {
+        const group = getMovedGroupBlocks(board, this.activeBlockId);
+        for (const b of group) {
+          const start = this.groupStartCoords.get(b.id);
+          if (start) {
+            b.row = start.row;
+            b.col = start.col;
+            b.x = start.col;
+            b.y = start.row;
+          } else {
+            b.x = b.col;
+            b.y = b.row;
+          }
+          b.liftAlpha = 0;
         }
-        b.liftAlpha = 0;
+        rebuildOccupancyGrid(board);
       }
-      rebuildOccupancyGrid(board);
     }
 
     this.activePointerId = null;
     this.targetingPointerId = null;
     this.activeBlockId = null;
+    this.dragBoardRef = null;
     this.dragLeftOrigin = false;
     this.dragWaypoints.length = 0;
     this.hoverRow = -1;

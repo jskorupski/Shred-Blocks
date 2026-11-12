@@ -567,9 +567,12 @@ export function evaluateModeLevelWin(
       if (levelId + 1 > ladder.highestUnlocked) {
         ladder.highestUnlocked = levelId + 1;
       }
-      ladder.currentLevelId = levelId + 1;
+      ladder.currentLevelId = Math.min(
+        ladder.highestUnlocked,
+        Math.max(ladder.currentLevelId || 1, levelId + 1)
+      );
       if (payload.settings.playMode === targetMode) {
-        payload.currentLevelId = levelId + 1;
+        payload.currentLevelId = ladder.currentLevelId;
       }
       payload.highestLevelUnlocked = computeGlobalHighestUnlocked(
         payload.modeState,
@@ -579,11 +582,86 @@ export function evaluateModeLevelWin(
   };
 }
 
+export const ZEN_MAX_CONSECUTIVE_SKIPS = 3;
+
 /**
- * Applies a Zen-only Free Skip (`0 Coins`). Returns `false` (strict no-op) if `playMode !== 'ZEN'`.
+ * Returns `true` iff `rec` represents a genuine non-skipped clear in at least one mode (`ZEN-SKIP-GUARD-01`).
+ */
+export function isRecordGenuinelyCleared(rec: LevelRecord | undefined): boolean {
+  if (!rec) return false;
+  return (
+    (rec.challengeStars ?? 0) > 0 ||
+    (rec.timedStars ?? 0) > 0 ||
+    rec.zenCleared === true ||
+    (!rec.skipped && (rec.stars ?? 0) > 0)
+  );
+}
+
+/**
+ * Counts unique stage IDs genuinely cleared (non-skipped) across Challenge, Zen, and Speed Rush.
+ */
+export function countUniqueClearedLevels(payload: SavePayloadV1): number {
+  let count = 0;
+  for (const [key, rec] of Object.entries(payload.levelRecords)) {
+    const id = Number(key);
+    if (Number.isInteger(id) && id >= 1 && isRecordGenuinelyCleared(rec)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Counts consecutive un-cleared stages immediately preceding `levelId` (`levelId - 1, levelId - 2, ... >= 1`).
+ */
+export function countTrailingUnclearedStages(payload: SavePayloadV1, levelId: number): number {
+  const cleanId = Math.max(1, Math.floor(levelId));
+  let trailing = 0;
+  for (let id = cleanId - 1; id >= 1; id--) {
+    if (isRecordGenuinelyCleared(payload.levelRecords[id])) {
+      break;
+    }
+    trailing++;
+    if (trailing >= ZEN_MAX_CONSECUTIVE_SKIPS) {
+      break;
+    }
+  }
+  return trailing;
+}
+
+/**
+ * Enforces `ZEN-SKIP-GUARD-01`: Zen Free Skips are only permitted in `'ZEN'` mode and can never advance
+ * more than `ZEN_MAX_CONSECUTIVE_SKIPS` (`3`) consecutive un-cleared stages ahead of a genuinely cleared stage.
+ */
+export function canSkipZenLevel(payload: SavePayloadV1, levelId: number): boolean {
+  if (payload.settings.playMode !== 'ZEN') return false;
+  const cleanId = Math.max(1, Math.floor(levelId));
+  if (isRecordGenuinelyCleared(payload.levelRecords[cleanId])) return true;
+  return countTrailingUnclearedStages(payload, cleanId) < ZEN_MAX_CONSECUTIVE_SKIPS;
+}
+
+/**
+ * Computes the effective progression level for global Power-Up unlocks (`L2/8/18/30`) and chest drop pools
+ * (`ZEN-SKIP-GUARD-01`): ignores un-cleared Zen skip inflation so Power-Ups unlock strictly via genuine clears.
+ */
+export function getEffectiveBoosterUnlockLevel(payload: SavePayloadV1, activeBoardLevelId = 1): number {
+  const nonZenBoardLvl =
+    payload.settings.playMode === 'ZEN' ? 1 : Math.max(1, Math.floor(activeBoardLevelId || 1));
+  return Math.max(
+    1,
+    nonZenBoardLvl,
+    payload.modeState.CHALLENGE.highestUnlocked,
+    payload.modeState.TIMED.highestUnlocked,
+    countUniqueClearedLevels(payload) + 1
+  );
+}
+
+/**
+ * Applies a Zen-only Free Skip (`0 Coins`). Returns `false` (strict no-op) if `playMode !== 'ZEN'`
+ * or if `ZEN_MAX_CONSECUTIVE_SKIPS` (`3`) consecutive un-cleared stages have already been skipped.
  */
 export function applyZenOnlySkip(payload: SavePayloadV1, levelId: number): boolean {
-  if (payload.settings.playMode !== 'ZEN') return false;
+  if (!canSkipZenLevel(payload, levelId)) return false;
   const existing = payload.levelRecords[levelId];
   if (!existing) {
     payload.levelRecords[levelId] = {

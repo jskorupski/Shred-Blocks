@@ -20,7 +20,7 @@ import {
 import { getLevelSpec } from './levels/catalog';
 import { findNextHintMove } from './levels/solver';
 import { Renderer3D } from './render/renderer-3d';
-import { SaveManager } from './storage/save-manager';
+import { canSkipZenLevel, SaveManager } from './storage/save-manager';
 import { activateBoosterImpl, executeTargetedBoosterImpl } from './ui/boosters-controller';
 import {
   type AppViewContext,
@@ -99,6 +99,7 @@ export class ShredBlocksApp implements AppViewContext {
   public readonly inputController: BoardInputController;
 
   public board: BoardState;
+  public boardPlayMode: PlayMode = 'CHALLENGE';
   public activeScreen: 'home' | 'game' | 'themes' = 'home';
   public titleOverlayOpen = true;
   public blueprintMix = 1.0;
@@ -148,6 +149,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.renderer.setQualityPreference(initialSave.settings.qualityTier);
 
     const startLevelId = Math.max(1, initialSave.currentLevelId || 1);
+    this.boardPlayMode = initialSave.settings.playMode;
     this.board = createBoardState(getLevelSpec(startLevelId));
 
     this.inputController = new BoardInputController(canvas, {
@@ -242,12 +244,17 @@ export class ShredBlocksApp implements AppViewContext {
     this.openTitleScreen();
 
     void this.saveManager.init().then((reconciled) => {
+      const reconciledLadder = reconciled.modeState[reconciled.settings.playMode];
+      const reconciledLevelId = Math.max(
+        1,
+        Math.min(reconciledLadder.highestUnlocked, reconciledLadder.currentLevelId || 1)
+      );
       if (
         reconciled.writeSeq > bootWriteSeq &&
         (this.activeScreen === 'home' || this.titleOverlayOpen) &&
-        reconciled.currentLevelId !== this.board.levelId
+        (reconciledLevelId !== this.board.levelId || reconciled.settings.playMode !== this.boardPlayMode)
       ) {
-        this.loadLevel(reconciled.currentLevelId, false, false);
+        this.loadLevel(reconciledLevelId, false, false);
       }
       this.syncAllUiFromSave();
       this.syncTitleOverlayDom();
@@ -263,8 +270,11 @@ export class ShredBlocksApp implements AppViewContext {
 
   public loadLevel(levelId: number, switchToGameScreen = true, persistLevel = true): void {
     const cleanId = Math.max(1, Math.floor(levelId));
+    this.inputController.cancelTargeting();
     const spec = getLevelSpec(cleanId);
+    const save = this.saveManager.getPayload();
     this.board = createBoardState(spec);
+    this.boardPlayMode = save.settings.playMode;
     this.currentLevelHasUnlockNote = Boolean(spec.unlockNote);
     this.lastPointerActivityMs = performance.now();
     this.undoStack = [];
@@ -273,11 +283,10 @@ export class ShredBlocksApp implements AppViewContext {
     this.preRestartFreeUndos = 3;
     this.freeUndosRemaining = 3;
     this.levelOutcomeHandled = false;
-    this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
+    this.runTouchedZen = this.boardPlayMode === 'ZEN';
     this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
     this.bombTickAccumulatorSec = 0;
 
-    this.inputController.cancelTargeting();
     if (this.toastTimerId !== null) {
       clearTimeout(this.toastTimerId);
       this.toastTimerId = null;
@@ -286,7 +295,6 @@ export class ShredBlocksApp implements AppViewContext {
     if (gameToast) gameToast.hidden = true;
     this.refreshAutoGuideMove();
 
-    const save = this.saveManager.getPayload();
     if (persistLevel && cleanId !== save.currentLevelId) {
       this.saveManager.setCurrentLevel(cleanId);
     }
@@ -316,7 +324,9 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   public restartCurrentLevel(): void {
+    if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
     this.sound.playButtonTap();
+    this.inputController.cancelTargeting();
     if (this.board.movesCommitted > 0 || this.undoStack.length > 0) {
       this.preRestartSnapshot = cloneBoardState(this.board);
       this.preRestartUndoStack = this.undoStack.slice();
@@ -324,28 +334,36 @@ export class ShredBlocksApp implements AppViewContext {
       this.showGameToast('🔄 Level restarted — tap Undo to restore!');
     }
     const spec = getLevelSpec(this.board.levelId);
+    const activeMode = this.saveManager.getPayload().settings.playMode;
     this.board = createBoardState(spec);
+    this.boardPlayMode = activeMode;
     this.currentLevelHasUnlockNote = Boolean(spec.unlockNote);
     this.lastPointerActivityMs = performance.now();
     this.undoStack = [];
     this.freeUndosRemaining = 3;
     this.levelOutcomeHandled = false;
-    this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
+    this.runTouchedZen = activeMode === 'ZEN';
     this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
     this.bombTickAccumulatorSec = 0;
     this.renderer.clearPathTraces();
-    this.inputController.cancelTargeting();
     this.refreshAutoGuideMove();
     this.syncInGameHud();
     this.renderNow();
   }
 
   public skipCurrentLevel(): void {
-    if (this.saveManager.getPayload().settings.playMode !== 'ZEN') {
+    if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
+    const save = this.saveManager.getPayload();
+    if (save.settings.playMode !== 'ZEN') {
+      return;
+    }
+    const currentId = this.board.levelId;
+    if (!canSkipZenLevel(save, currentId)) {
+      this.sound.playWallClack();
+      this.showGameToast('🌿 Clear a stage first to unlock more free skips (max 3 skipped in a row)!');
       return;
     }
     this.sound.playButtonTap();
-    const currentId = this.board.levelId;
     this.saveManager.recordLevelSkip(currentId);
     this.closeAllModals();
     this.loadLevel(currentId + 1, true);
