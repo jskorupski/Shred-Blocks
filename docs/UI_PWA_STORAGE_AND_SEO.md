@@ -15,8 +15,8 @@ On-demand reference for **UI layout & depth hierarchy**, **self-hosted typograph
   - `.title-dock-bar` items use `flex: 1 1 0; min-width: 0` (groups `display: contents`) and stack icon-over-label at `<= 440px` when Install is visible. All Settings buttons use the gear icon.
 - **3-Plane Depth Hierarchy (`UI-DEPTH-01`) & Semantic Button Colors (`UI-BTN-COLOR-01`)**:
   - *Plane 0 (Recessed Wells)*: `.economy-pills`, `.hud-stat-plaque`, `.chest-card`, `.title-returning-plaque`, `.stat-box`, `.theme-card`, `.booster-btn.locked-booster` (`inset 0 1px 2px rgba(0,0,0,0.48)`).
-  - *Plane 1 (Chiseled Stone Keys)*: `.btn-tactile`, `.chip-filter`, `.booster-btn`, `.title-utility-pill`, `.setting-row` (directional `oklab` fill + `inset 0 1px 0` specular + `0 2px 0` bottom ledge).
-  - *Plane 2 (Luminous Beacons)*: `.btn-primary`, `.tab-play-cta`, `.btn-warning`, `.level-node-card.current-level`.
+  - *Plane 1 (Chiseled Stone Keys)*: `.btn-tactile`, `.btn-mode-wing`, `.chip-filter`, `.booster-btn`, `.title-utility-pill`, `.setting-row` (directional `oklab` fill + `inset 0 1px 0` specular + `0 2px 0` bottom ledge).
+  - *Plane 2 (Luminous Beacons)*: `.btn-primary`, `.btn-mode-pill`, `.tab-play-cta`, `.btn-warning`, `.level-node-card.current-level` (`.hud-mode-carousel` pairs a mode-tinted `#btn-mode-toggle` hero crest + inset `.moves-pill` + `⇄` swap glyph with chiseled `#btn-mode-prev` / `#btn-mode-next` side keycaps at `+0px` header height).
   - Semantic color families stay identical across all screens: **Map** = Terracotta-Amber (`.btn-sanctuary` / `.title-map-pill`), **Install** = Seafoam-Teal (`.btn-install` / `.title-install-pill`), **Play/Resume/Next** = Jade-Teal (`.btn-primary` / `.tab-play-cta`), **Secondary/Utility** = Amethyst-Slate (`.btn-secondary` / `.title-utility-pill`). Gate `:hover` inside `@media (hover: hover)`.
 
 ---

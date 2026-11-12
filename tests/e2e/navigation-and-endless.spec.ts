@@ -679,9 +679,13 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await page.locator('#btn-mode-toggle').click(); // ZEN -> TIMED -> restarts at Move 0
     await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
     await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 0 / Par');
-    await page.locator('#btn-mode-toggle').click(); // TIMED -> CHALLENGE
+    await page.locator('#btn-mode-next').click(); // TIMED -> CHALLENGE via right wing keycap
     await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
     await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
+    await page.locator('#btn-mode-prev').click(); // CHALLENGE -> TIMED via left wing keycap
+    await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
+    await page.locator('#btn-mode-toggle').click(); // TIMED -> CHALLENGE via center toggle
+    await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
 
     expect(errors).toEqual([]);
   });

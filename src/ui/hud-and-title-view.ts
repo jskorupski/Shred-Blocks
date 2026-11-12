@@ -317,8 +317,15 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   const titleEl = document.getElementById('hud-level-title');
   const diffEl = document.getElementById('hud-difficulty-badge');
   const coinsInline = document.getElementById('hud-coins-inline');
-  const shredInline = document.getElementById('hud-shred-inline');
-  const modeLabel = document.getElementById('hud-mode-label');
+  const modeBtn = document.getElementById('btn-mode-toggle');
+  const modeIcon = document.getElementById('hud-mode-icon');
+  const modeText = document.getElementById('hud-mode-text');
+  const prevBtn = document.getElementById('btn-mode-prev');
+  const prevIcon = document.getElementById('hud-mode-prev-icon');
+  const prevLabel = document.getElementById('hud-mode-prev-label');
+  const nextBtn = document.getElementById('btn-mode-next');
+  const nextIcon = document.getElementById('hud-mode-next-icon');
+  const nextLabel = document.getElementById('hud-mode-next-label');
   const movesPill = document.getElementById('hud-moves-pill');
   const timerPill = document.getElementById('hud-timer-pill');
 
@@ -332,14 +339,27 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   if (coinsInline) {
     coinsInline.textContent = `${save.coins}`;
   }
-  if (shredInline) {
-    const prog = (save.shredderChestProgress + app.board.sessionBlocksShredded) % 100;
-    shredInline.textContent = `${prog}/100`;
+  const modeMeta = {
+    CHALLENGE: { icon: '⚔️', hero: 'Challenge', wing: 'Challenge', full: 'Challenge Mode' },
+    ZEN: { icon: '🌿', hero: 'Zen', wing: 'Zen', full: 'Zen Mode' },
+    TIMED: { icon: '⏱', hero: 'Speed Rush', wing: 'Rush', full: 'Speed Rush Mode' },
+  } as const;
+  if (modeBtn) {
+    modeBtn.setAttribute('data-mode', playMode);
   }
-  if (modeLabel) {
-    modeLabel.textContent =
-      playMode === 'CHALLENGE' ? '⚔️ Challenge' : playMode === 'ZEN' ? '🌿 Zen Mode' : '⏱ Speed Rush';
-  }
+  if (modeIcon) modeIcon.textContent = modeMeta[playMode].icon;
+  if (modeText) modeText.textContent = modeMeta[playMode].hero;
+  const modeOrder = ['CHALLENGE', 'ZEN', 'TIMED'] as const;
+  const modeIdx = modeOrder.indexOf(playMode);
+  const prevMode = modeOrder[(modeIdx + 2) % 3];
+  const nextMode = modeOrder[(modeIdx + 1) % 3];
+  if (prevIcon) prevIcon.textContent = modeMeta[prevMode].icon;
+  if (prevLabel) prevLabel.textContent = modeMeta[prevMode].wing;
+  if (prevBtn) prevBtn.title = `Switch to ${modeMeta[prevMode].full}`;
+  if (nextIcon) nextIcon.textContent = modeMeta[nextMode].icon;
+  if (nextLabel) nextLabel.textContent = modeMeta[nextMode].wing;
+  if (nextBtn) nextBtn.title = `Switch to ${modeMeta[nextMode].full}`;
+
   if (movesPill) {
     if (playMode === 'CHALLENGE') {
       if (app.board.freeMovesRemaining > 0) {
@@ -356,7 +376,7 @@ export function syncInGameHudImpl(app: AppViewContext): void {
       }
     } else {
       movesPill.textContent = `Moves: ${app.board.movesCommitted} / Par ${app.board.parMoves}`;
-      movesPill.className = 'tabular-metric';
+      movesPill.className = 'tabular-metric moves-pill';
     }
   }
   if (timerPill) {

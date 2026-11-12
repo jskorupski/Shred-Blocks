@@ -295,30 +295,46 @@
             </div>
           </div>
 
-          <!-- Tier 2: Recessed Sundial Mode Plaque & Courtyard Economy Ribbon -->
+          <!-- Tier 2: Revolving Play Mode Carousel & Courtyard Coin Plaque (UI-DEPTH-01) -->
           <div class="hud-arch-subbar">
-            <div class="hud-center">
-              <button type="button" id="btn-mode-toggle" class="btn-tactile btn-mode-pill" title="Tap to switch Play Mode: Challenge · Zen · Speed Rush">
-                <svg class="mode-sundial-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-                  <polygon points="12,2 22,12 12,22 2,12" />
-                  <circle cx="12" cy="12" r="3" fill="currentColor" />
+            <div class="hud-mode-carousel" role="group" aria-label="Play Mode">
+              <button type="button" id="btn-mode-prev" class="btn-tactile btn-mode-wing" title="Switch to Speed Rush Mode">
+                <span class="wing-chevron" aria-hidden="true">‹</span>
+                <span id="hud-mode-prev-icon" class="mode-glyph" aria-hidden="true">⏱</span>
+                <span id="hud-mode-prev-label" class="wing-label">Rush</span>
+                <span class="sr-only"> Mode</span>
+              </button>
+
+              <button type="button" id="btn-mode-toggle" class="btn-tactile btn-mode-pill" data-mode="CHALLENGE" title="Tap to cycle Play Mode: Challenge · Zen · Speed Rush">
+                <span id="hud-mode-label" class="mode-badge">
+                  <span id="hud-mode-icon" class="mode-glyph" aria-hidden="true">⚔️</span>
+                  <span id="hud-mode-text">Challenge</span>
+                </span>
+                <span class="mode-metric-group">
+                  <span id="hud-moves-pill" class="tabular-metric moves-pill">Moves Left: 8</span>
+                  <span id="hud-timer-pill" class="tabular-metric timer-pill" hidden>⏱ 01:30</span>
+                </span>
+                <svg class="mode-swap-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m17 2 4 4-4 4" />
+                  <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+                  <path d="m7 22-4-4 4-4" />
+                  <path d="M21 13v1a4 4 0 0 1-4 4H3" />
                 </svg>
-                <span id="hud-mode-label" class="mode-badge">⚔️ Challenge</span>
-                <span class="hud-plaque-divider" aria-hidden="true">·</span>
-                <span id="hud-moves-pill" class="tabular-metric">Moves Left: 8</span>
-                <span id="hud-timer-pill" class="tabular-metric timer-pill" hidden>⏱ 01:30</span>
+              </button>
+
+              <button type="button" id="btn-mode-next" class="btn-tactile btn-mode-wing" title="Switch to Zen Mode">
+                <span id="hud-mode-next-icon" class="mode-glyph" aria-hidden="true">🌿</span>
+                <span id="hud-mode-next-label" class="wing-label">Zen</span>
+                <span class="sr-only"> Mode</span>
+                <span class="wing-chevron" aria-hidden="true">›</span>
               </button>
             </div>
 
             <div class="hud-sub-stats">
-              <span class="hud-stat-plaque">
+              <span class="hud-stat-plaque" title="Sanctuary Coins">
                 <span class="coin-emblem" aria-hidden="true"></span>
                 <span id="hud-coins-inline" class="hud-coin-tag">120</span>
-                <span class="hud-stat-sep" aria-hidden="true">·</span>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <polygon points="12,2 21,12 12,22 3,12" />
-                </svg>
-                <span id="hud-shred-inline" class="hud-shred-tag">0/100</span>
+                <span class="sr-only"> Coins</span>
               </span>
             </div>
           </div>

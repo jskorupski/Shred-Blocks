@@ -755,6 +755,10 @@ body.high-contrast .pwa-update-toast {
   .setting-row input[type="checkbox"],
   .dialog-card,
   .economy-pills,
+  .hud-stat-plaque,
+  .moves-pill,
+  .timer-pill,
+  .coin-emblem,
   .title-crest-banner,
   .title-crest-card,
   .title-returning-plaque,
@@ -779,7 +783,8 @@ body.high-contrast .pwa-update-toast {
   .level-node-card.current-level,
   .theme-card.equipped,
   .chip-filter.active,
-  .tab-item.active {
+  .tab-item.active,
+  .btn-mode-pill {
     outline: 2px solid Highlight;
   }
 }

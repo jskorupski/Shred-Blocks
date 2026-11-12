@@ -49,7 +49,7 @@ Every repository text/SVG file (except `package-lock.json`) is enforced `<= 800 
 | :--- | :--- |
 | [`index.html`](index.html) & [`src/ui/dialogs-template.ts`](src/ui/dialogs-template.ts) | SPA shell (`#screen-home`, `#screen-game`, `#screen-themes`, `#title-overlay`), CSP, SEO/OG/Twitter/JSON-LD head tags + lazy `<dialog>` modals. |
 | [`src/main.ts`](src/main.ts) & [`src/ui/*.ts`](src/ui/) | `ShredBlocksApp` orchestrator + modular views (`catalog-meta`, `boosters-controller`, `hud-and-title-view`, `outcome-modals-view`, `roadmap-and-themes-view`, `modals-and-save-transfer`, `dom-events-and-pwa`). |
-| [`src/styles/main.css`](src/styles/main.css) & [`src/styles/*.css`](src/styles/) | Ordered CSS barrel: `tokens-and-shell`, `screen-home`, `roadmap-path`, `screen-game`, `themes-and-nav`, `dialogs`, `title-and-a11y`. |
+| [`src/styles/main.css`](src/styles/main.css) & [`src/styles/*.css`](src/styles/) | Ordered CSS barrel: `tokens-and-shell`, `screen-home`, `roadmap-path`, `screen-game`, `booster-dock`, `themes-and-nav`, `dialogs`, `title-and-a11y`. |
 | [`src/core/*.ts`](src/core/) | `types`, `polyomino` (19 shapes), `physics` & `room-and-occupancy`, `gate-clearance` & `shred-side-effects`, `board` & `board-state`, `fx-random`. |
 | [`src/levels/*.ts`](src/levels/) | `catalog` & `curated-early` (`1..300` + O(1) `getCampaignRoadmapMeta`), `generator*` (`82..300` & Endless `301+`), `solver` (Zobrist A\* `solveBoard` & hints). |
 | [`src/render/*.ts`](src/render/) | `camera-3d`, `atlas-3d`, `mesh-generator` & `mesh-primitives`, `renderer-3d`, `render-types`, `shaders-*`, `pass1..3*`, `particle-fx`, `relic-awakening-fx`, `canvas2d-fallback`. |

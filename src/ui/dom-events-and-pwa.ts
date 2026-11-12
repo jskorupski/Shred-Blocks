@@ -151,7 +151,21 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     app.openModal('pause');
   });
 
+  document.getElementById('btn-mode-prev')?.addEventListener('click', () => {
+    app.sound.playButtonTap();
+    const cur = app.saveManager.getPayload().settings.playMode;
+    const prev: PlayMode = cur === 'CHALLENGE' ? 'TIMED' : cur === 'ZEN' ? 'CHALLENGE' : 'ZEN';
+    app.switchPlayMode(prev);
+  });
+
   document.getElementById('btn-mode-toggle')?.addEventListener('click', () => {
+    app.sound.playButtonTap();
+    const cur = app.saveManager.getPayload().settings.playMode;
+    const next: PlayMode = cur === 'CHALLENGE' ? 'ZEN' : cur === 'ZEN' ? 'TIMED' : 'CHALLENGE';
+    app.switchPlayMode(next);
+  });
+
+  document.getElementById('btn-mode-next')?.addEventListener('click', () => {
     app.sound.playButtonTap();
     const cur = app.saveManager.getPayload().settings.playMode;
     const next: PlayMode = cur === 'CHALLENGE' ? 'ZEN' : cur === 'ZEN' ? 'TIMED' : 'CHALLENGE';

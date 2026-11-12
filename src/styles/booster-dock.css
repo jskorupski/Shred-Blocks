@@ -1,0 +1,238 @@
+/* Bottom Booster Dock — Plane 1 Chiseled Stone Keys for Unlocked Boosters */
+.booster-dock {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.38rem;
+  padding: 0.44rem 0.65rem calc(0.5rem + var(--safe-bottom));
+  background: rgba(18, 14, 34, 0.88);
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+  flex-shrink: 0;
+  transition:
+    opacity 0.28s ease,
+    visibility 0.28s ease;
+}
+
+.booster-btn {
+  appearance: none;
+  background: linear-gradient(
+    180deg var(--in-oklab),
+    rgba(64, 50, 102, 0.84) 0%,
+    rgba(38, 29, 68, 0.92) 100%
+  );
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  min-height: 58px;
+  min-width: 48px;
+  padding: 0.3rem 0.18rem;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.14rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 236, 0.18),
+    0 2px 0 rgba(8, 5, 18, 0.65);
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    transform 0.08s ease;
+}
+
+@media (hover: hover) {
+  .booster-btn:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(82, 64, 128, 0.92) 0%,
+      rgba(50, 38, 86, 0.96) 100%
+    );
+  }
+}
+
+.booster-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 236, 0.12),
+    0 1px 0 rgba(8, 5, 18, 0.65);
+}
+
+/* Rare, Specific Border: Only when a Booster is Actively Targeting */
+.booster-btn.active-targeting {
+  border-color: var(--accent-gold);
+  background: linear-gradient(180deg var(--in-oklab), rgba(116, 86, 42, 0.9) 0%, rgba(78, 54, 24, 0.94) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 214, 0.35),
+    0 2px 0 rgba(12, 8, 22, 0.7),
+    0 0 14px rgba(229, 178, 93, 0.28);
+}
+
+.booster-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #f2e4cf;
+}
+
+/* Subtle Rarity Icon Accents (Zero Button Border Clutter) */
+.booster-btn.rarity-common .booster-icon {
+  color: #e8e0f5;
+}
+
+.booster-btn.rarity-uncommon .booster-icon {
+  color: #7de8dd;
+}
+
+.booster-btn.rarity-rare .booster-icon {
+  color: #f3d27a;
+}
+
+.booster-btn.rarity-epic .booster-icon {
+  color: #f5a69b;
+}
+
+.booster-btn.rarity-legendary .booster-icon {
+  color: #ebd098;
+}
+
+/* Plane 0 Recessed Dark Well for Locked Boosters */
+.booster-btn.locked-booster {
+  background: rgba(14, 10, 28, 0.56);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.46);
+  opacity: 0.48;
+  filter: saturate(0.35);
+}
+
+.booster-name {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.booster-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.06rem 0.34rem;
+  border-radius: var(--radius-xs);
+  background: rgba(10, 7, 22, 0.54);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.booster-badge.badge-free {
+  background: rgba(40, 181, 167, 0.24);
+  color: #8cf0e6;
+}
+
+.booster-badge.badge-coin {
+  background: rgba(229, 178, 93, 0.22);
+  color: #f7d58b;
+}
+
+.booster-badge.badge-locked {
+  background: rgba(255, 248, 238, 0.05);
+  border: none;
+  color: var(--text-muted);
+}
+
+@media (max-width: 520px), (max-height: 740px) {
+  .booster-dock {
+    gap: 0.3rem;
+    padding: 0.36rem 0.48rem calc(0.42rem + var(--safe-bottom));
+  }
+  .booster-btn {
+    min-height: 52px;
+    min-width: 0;
+    padding: 0.22rem 0.12rem;
+  }
+  .booster-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Floating Stage Banners, Booster Targeting & Toast */
+.unlock-banner {
+  position: absolute;
+  top: 0.45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 15, 38, 0.92);
+  border: 1px solid rgba(246, 213, 168, 0.24);
+  border-radius: var(--radius-md);
+  padding: 0.3rem 0.68rem;
+  font-family: var(--font-ui);
+  font-size: clamp(0.72rem, 0.9dvw + 0.36rem, 0.82rem);
+  line-height: 1.28;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  max-width: min(92%, 460px);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.booster-target-banner {
+  position: absolute;
+  top: 0.65rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 15, 38, 0.95);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-md);
+  padding: 0.46rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  width: min(94%, 540px);
+  z-index: 10;
+}
+
+.target-instruction {
+  font-family: var(--font-ui);
+  font-size: clamp(0.76rem, 1dvw + 0.4rem, 0.88rem);
+  font-weight: 600;
+  color: #f3d27a;
+}
+
+.target-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  flex-shrink: 0;
+}
+
+.game-toast {
+  position: fixed;
+  bottom: calc(4.8rem + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 15, 38, 0.94);
+  border: 1px solid rgba(246, 213, 168, 0.22);
+  border-radius: var(--radius-md);
+  padding: 0.42rem 0.88rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  max-width: min(92dvw, 520px);
+  text-align: center;
+  pointer-events: none;
+  z-index: 60;
+}
