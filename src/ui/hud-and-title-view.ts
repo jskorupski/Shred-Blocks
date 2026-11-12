@@ -115,11 +115,17 @@ export function isNewPlayerSaveImpl(
 }
 
 export function syncTitleOverlayDomImpl(app: AppViewContext): void {
+  const appShell = document.getElementById('app-shell');
   const titleEl = document.getElementById('title-overlay');
   const homeEl = document.getElementById('screen-home');
   const gameEl = document.getElementById('screen-game');
   const themesEl = document.getElementById('screen-themes');
   const tabBarEl = document.getElementById('menu-tab-bar');
+
+  if (appShell) {
+    appShell.setAttribute('data-title-open', app.titleOverlayOpen ? 'true' : 'false');
+    appShell.setAttribute('data-active-screen', app.activeScreen);
+  }
 
   if (app.titleOverlayOpen) {
     if (titleEl) titleEl.hidden = false;
@@ -285,11 +291,6 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   setChecked('toggle-high-contrast', save.settings.highContrast);
   setChecked('toggle-reduced-motion', save.settings.reducedMotion);
 
-  const modeSelect = document.getElementById('select-play-mode') as HTMLSelectElement | null;
-  if (modeSelect) {
-    modeSelect.value = save.settings.playMode;
-  }
-
   const tierSelect = document.getElementById('select-quality-tier') as HTMLSelectElement | null;
   if (tierSelect) {
     tierSelect.value = save.settings.qualityTier;
@@ -313,6 +314,11 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
 export function syncInGameHudImpl(app: AppViewContext): void {
   const save = app.saveManager.getPayload();
   const playMode = save.settings.playMode;
+
+  const appShell = document.getElementById('app-shell');
+  if (appShell) {
+    appShell.setAttribute('data-play-mode', playMode);
+  }
 
   const titleEl = document.getElementById('hud-level-title');
   const diffEl = document.getElementById('hud-difficulty-badge');

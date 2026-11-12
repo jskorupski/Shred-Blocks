@@ -236,3 +236,191 @@
   pointer-events: none;
   z-index: 60;
 }
+
+/* ==========================================================================
+   SUBTLE GAME-MODE AMBIENT FRAMING (`MODE-AMBIENCE-01`)
+   Compositor-only opacity layers + rotating astrolabe ring & 1px rim hairlines
+   ========================================================================== */
+
+#app-shell > .screen,
+#app-shell > .bottom-tab-bar {
+  position: relative;
+  z-index: 1;
+}
+
+.mode-ambience-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 1;
+  transition: opacity 0.58s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#app-shell[data-title-open="true"] .mode-ambience-backdrop,
+#app-shell[data-active-screen="themes"] .mode-ambience-backdrop,
+body.high-contrast #app-shell .mode-ambience-backdrop {
+  opacity: 0;
+}
+
+.mode-ambience-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ambience-challenge {
+  background:
+    radial-gradient(
+      96% 54% at 50% 0% var(--in-oklab),
+      rgba(243, 190, 92, 0.115) 0%,
+      rgba(192, 128, 52, 0.048) 54%,
+      transparent 84%
+    ),
+    radial-gradient(88% 46% at 50% 100% var(--in-oklab), rgba(243, 190, 92, 0.08) 0%, transparent 76%);
+}
+
+.ambience-zen {
+  background:
+    radial-gradient(
+      96% 54% at 50% 0% var(--in-oklab),
+      rgba(56, 212, 184, 0.125) 0%,
+      rgba(28, 122, 106, 0.055) 54%,
+      transparent 84%
+    ),
+    radial-gradient(88% 46% at 50% 100% var(--in-oklab), rgba(56, 212, 184, 0.088) 0%, transparent 76%);
+}
+
+.ambience-timed {
+  background:
+    radial-gradient(
+      96% 54% at 50% 0% var(--in-oklab),
+      rgba(88, 174, 255, 0.135) 0%,
+      rgba(44, 102, 172, 0.06) 54%,
+      transparent 84%
+    ),
+    radial-gradient(88% 46% at 50% 100% var(--in-oklab), rgba(88, 174, 255, 0.092) 0%, transparent 76%);
+}
+
+#app-shell[data-play-mode="CHALLENGE"] .ambience-challenge,
+#app-shell[data-play-mode="ZEN"] .ambience-zen,
+#app-shell[data-play-mode="TIMED"] .ambience-timed {
+  opacity: 1;
+}
+
+/* Astrolabe ring & stage center aura framing when active in-game (Title Screen keeps pure MYSTIC-RELIC-01) */
+body:not(.high-contrast)
+  #app-shell[data-play-mode="CHALLENGE"]
+  #screen-game:not(.title-backdrop-mode)
+  .sacred-geometry-ornament {
+  color: rgba(246, 202, 128, 0.46);
+}
+
+body:not(.high-contrast)
+  #app-shell[data-play-mode="ZEN"]
+  #screen-game:not(.title-backdrop-mode)
+  .sacred-geometry-ornament {
+  color: rgba(110, 234, 206, 0.44);
+}
+
+body:not(.high-contrast)
+  #app-shell[data-play-mode="TIMED"]
+  #screen-game:not(.title-backdrop-mode)
+  .sacred-geometry-ornament {
+  color: rgba(132, 196, 255, 0.46);
+}
+
+body:not(.high-contrast)
+  #app-shell[data-play-mode="ZEN"]
+  #screen-game:not(.title-backdrop-mode)
+  .board-stage {
+  background: radial-gradient(
+    closest-side at 50% 48%,
+    rgba(56, 212, 184, 0.16) 0%,
+    rgba(36, 108, 106, 0.1) 56%,
+    rgba(24, 62, 68, 0) 100%
+  );
+}
+
+body:not(.high-contrast)
+  #app-shell[data-play-mode="TIMED"]
+  #screen-game:not(.title-backdrop-mode)
+  .board-stage {
+  background: radial-gradient(
+    closest-side at 50% 48%,
+    rgba(88, 174, 255, 0.17) 0%,
+    rgba(46, 88, 152, 0.11) 56%,
+    rgba(24, 46, 88, 0) 100%
+  );
+}
+
+/* 1px Mode-Tinted Sanctuary Rim Hairlines on HUD, Booster Dock & Map Chrome */
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"]
+  #screen-game
+  .hud-top-bar,
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"]
+  #screen-home
+  .top-economy-bar {
+  border-bottom-color: rgba(245, 196, 112, 0.24);
+}
+
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"]
+  #screen-game
+  .booster-dock,
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"][data-active-screen="home"]
+  .bottom-tab-bar {
+  border-top-color: rgba(245, 196, 112, 0.22);
+}
+
+body:not(.high-contrast) #app-shell[data-title-open="false"][data-play-mode="ZEN"] #screen-game .hud-top-bar,
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="ZEN"]
+  #screen-home
+  .top-economy-bar {
+  border-bottom-color: rgba(88, 228, 200, 0.28);
+}
+
+body:not(.high-contrast) #app-shell[data-title-open="false"][data-play-mode="ZEN"] #screen-game .booster-dock,
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="ZEN"][data-active-screen="home"]
+  .bottom-tab-bar {
+  border-top-color: rgba(88, 228, 200, 0.25);
+}
+
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="TIMED"]
+  #screen-game
+  .hud-top-bar,
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="TIMED"]
+  #screen-home
+  .top-economy-bar {
+  border-bottom-color: rgba(114, 188, 255, 0.3);
+}
+
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="TIMED"]
+  #screen-game
+  .booster-dock,
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="TIMED"][data-active-screen="home"]
+  .bottom-tab-bar {
+  border-top-color: rgba(114, 188, 255, 0.27);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-ambience-backdrop,
+  .mode-ambience-layer {
+    transition: none;
+  }
+}
+
+body.reduced-motion #app-shell .mode-ambience-backdrop,
+body.reduced-motion #app-shell .mode-ambience-layer {
+  transition: none;
+}

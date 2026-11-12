@@ -117,16 +117,16 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
       </div>
     </dialog>
 
-    <!-- 3. Pause & Settings Modal (#dialog-pause) -->
+    <!-- 3. Settings Modal (#dialog-pause) -->
     <dialog id="dialog-pause" class="game-dialog" closedby="any" aria-labelledby="pause-title">
       <div class="dialog-card dialog-card-wide pause-dialog-card">
         <div class="dialog-header-row">
-          <h2 id="pause-title" class="dialog-title">✦ Sanctuary &amp; Settings</h2>
+          <h2 id="pause-title" class="dialog-title">Settings</h2>
           <button
             type="button"
             id="btn-pause-close"
             class="btn-tactile btn-icon"
-            aria-label="Close Pause Menu"
+            aria-label="Close Settings"
           >
             ✕
           </button>
@@ -175,14 +175,6 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           <label class="setting-row">
             <span>Low Motion</span>
             <input type="checkbox" id="toggle-reduced-motion" />
-          </label>
-          <label class="setting-row setting-row-wide">
-            <span>Play Mode</span>
-            <select id="select-play-mode" class="select-tactile">
-              <option value="CHALLENGE">⚔️ Challenge (Move Budget)</option>
-              <option value="ZEN">🌿 Zen (Relaxed · No Limit)</option>
-              <option value="TIMED">⏱ Speed Rush (Timed)</option>
-            </select>
           </label>
           <label class="setting-row setting-row-wide">
             <span>Frame Rate</span>

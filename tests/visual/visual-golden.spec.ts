@@ -194,7 +194,7 @@ test('game-l74-hc-colorblind — High Contrast + Colorblind Symbols accessibilit
   await freezeAndCapture(page, 'game-l74-hc-colorblind', 1.0);
 });
 
-test('pause-settings — Sanctuary & Settings modal', async ({ page }) => {
+test('pause-settings — Settings modal', async ({ page }) => {
   await boot(page, buildSave(25, 'industrial_slate', 'classic_studs'));
   await enterLevel(page, 25);
   await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openModal('pause'));

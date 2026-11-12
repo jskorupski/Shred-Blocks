@@ -307,12 +307,6 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   bindToggle('toggle-high-contrast', 'highContrast');
   bindToggle('toggle-reduced-motion', 'reducedMotion');
 
-  const modeSelect = document.getElementById('select-play-mode') as HTMLSelectElement | null;
-  modeSelect?.addEventListener('change', () => {
-    app.sound.playButtonTap();
-    app.switchPlayMode(modeSelect.value as PlayMode);
-  });
-
   const qualitySelect = document.getElementById('select-quality-tier') as HTMLSelectElement | null;
   qualitySelect?.addEventListener('change', () => {
     const tier = qualitySelect.value as QualityTier;
