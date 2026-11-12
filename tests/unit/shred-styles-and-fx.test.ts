@@ -124,15 +124,27 @@ function createMockParticleContext(reducedMotion = false): RenderPassContext {
 }
 
 describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion Gate Seals', () => {
-  it('floats soap_bubbles upward with late-life pop swell while micro_cubes fall and bounce once', () => {
+  it('floats abundant multi-size soap_bubbles on meandering air currents with pop swell while micro_cubes fall and bounce once', () => {
     setFxRandomSeed(1337);
     const bubbleCtx = createMockParticleContext(false);
     spawnStyledParticlesImpl(bubbleCtx, 2.5, 2.5, 0.42, 2, 24, 0, -1, 'soap_bubbles');
-    expect(bubbleCtx.particlePoolCount).toBeGreaterThan(10);
+    // 1.48x bubble abundance (>34 bubbles for baseCount = 24) across 3 distinct radius tiers
+    expect(bubbleCtx.particlePoolCount).toBeGreaterThanOrEqual(35);
     expect(bubbleCtx.particlePool[14]).toBe(getStyleTagForParticle('soap_bubbles'));
+    const distinctTierRadii = new Set<string>();
+    for (let i = 0; i < bubbleCtx.particlePoolCount; i++) {
+      const rScale = bubbleCtx.particlePool[i * PARTICLE_STRIDE + 9];
+      distinctTierRadii.add(rScale < 0.1 ? 'micro' : rScale < 0.15 ? 'med' : 'jumbo');
+    }
+    expect(distinctTierRadii.size).toBe(3);
 
     const initialZ = bubbleCtx.particlePool[2];
     const maxAge = bubbleCtx.particlePool[11];
+    expect(maxAge).toBeGreaterThanOrEqual(1.48);
+    // Zero initial horizontal velocity so any horizontal travel proves swirling air-current eddies
+    bubbleCtx.particlePool[3] = 0;
+    const startX = bubbleCtx.particlePool[0];
+    let maxLateralMeander = 0;
     let earlyScaleMul = 1;
     let popScaleMul = 1;
     const steps = 28;
@@ -141,9 +153,11 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
     for (let s = 0; s < steps; s++) {
       age += dt;
       const mul = stepStyledParticleSlot(bubbleCtx.particlePool, 0, dt, age, maxAge);
+      maxLateralMeander = Math.max(maxLateralMeander, Math.abs(bubbleCtx.particlePool[0] - startX));
       if (s === 4) earlyScaleMul = mul;
       if (age / maxAge > 0.86) popScaleMul = Math.max(popScaleMul, mul);
     }
+    expect(maxLateralMeander).toBeGreaterThan(0.18);
     expect(bubbleCtx.particlePool[2]).toBeGreaterThan(initialZ + 0.65);
     expect(popScaleMul).toBeGreaterThan(earlyScaleMul);
     expect(popScaleMul).toBeGreaterThan(1.1);
@@ -194,7 +208,7 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
     setFxRandomSeed(null);
   });
 
-  it('spawns Pass 2 Gate Plasma Arcs for lightning_bolts and enforces 0 projectiles + stationary Gate Seals in Reduced Motion', () => {
+  it('spawns outward-branching Pass 3 Gate Plasma Arcs + velocity-aligned stepped-leader sparks for lightning_bolts and enforces stationary Gate Seals in Reduced Motion', () => {
     setFxRandomSeed(99);
     const sampleGate: GateState = {
       index: 0,
@@ -225,6 +239,20 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
     expect(boltCtx.activeShockwaves.length).toBe(2);
     expect(boltCtx.activeGateBursts).toHaveLength(1);
     expect(boltCtx.activeGateBursts[0].mode).toBe('PLASMA_ARCS');
+    expect(boltCtx.activeGateBursts[0].z).toBeGreaterThanOrEqual(0.7);
+    expect(boltCtx.activeGateBursts[0].ny).toBe(-1);
+
+    spawnStyledParticlesImpl(boltCtx, 2, -0.08, 0.42, 2, 20, 0, -1, 'lightning_bolts');
+    expect(boltCtx.particlePool[14]).toBe(4);
+    const maxBoltAge = boltCtx.particlePool[11];
+    for (let s = 1; s <= 12; s++) {
+      stepStyledParticleSlot(boltCtx.particlePool, 0, maxBoltAge / 20, (s * maxBoltAge) / 20, maxBoltAge);
+      expect(boltCtx.particlePool[12]).toBeCloseTo(
+        Math.atan2(boltCtx.particlePool[4], boltCtx.particlePool[3]),
+        5
+      );
+    }
+    expect(boltCtx.particlePool[14]).toBe(14); // stepped-leader jolt deflection triggered once
 
     const styles: ParticleStyleId[] = [
       'micro_cubes',

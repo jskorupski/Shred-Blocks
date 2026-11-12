@@ -10,6 +10,7 @@ import type { BoardState, ColorId, SkinId } from '../core/types';
 import { ENVIRONMENT_MESHES, getPolyominoMeshPair, POLYOMINO_MESH_CATALOG } from './mesh-generator';
 import { renderBlockSurfaceOverlays3D, renderGhostAndWeldClamps3D } from './pass3-block-overlays';
 import { drawToneOnToneSigil3D, type RenderPassContext, type RenderSceneOptions } from './render-types';
+import { renderGateBursts3D } from './shred-style-fx';
 
 export function renderPass3BlocksImpl(
   rctx: RenderPassContext,
@@ -572,5 +573,6 @@ export function renderPass3BlocksImpl(
       anyDragActive,
       reducedMotion
     );
+    renderGateBursts3D(rctx, gl);
   }
 }

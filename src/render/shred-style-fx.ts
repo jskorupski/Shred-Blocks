@@ -1,31 +1,28 @@
 import { fxRandom } from '../core/fx-random';
 import { getGateOutwardNormal } from '../core/gate-clearance';
 import type { ColorId, GateState, ParticleStyleId } from '../core/types';
-import { ENVIRONMENT_MESHES } from './mesh-generator';
 import { allocParticleSlot, type RenderPassContext } from './render-types';
+import {
+  renderGateBursts3D,
+  renderGateBurstsCanvas2D,
+  spawnGateBurst,
+  stepGateBurstsImpl,
+  type VisualGateBurst,
+} from './shred-gate-bursts';
+
+export {
+  renderGateBursts3D,
+  renderGateBurstsCanvas2D,
+  spawnGateBurst,
+  stepGateBurstsImpl,
+  type VisualGateBurst,
+};
 
 /**
- * Distinct 5-Style Shredder Particle Physics, Pass 2 Gate Plasma Arcs & WCAG 2.3.3 Reduced-Motion
- * Gate Seals (`SHRED-STYLE-01`). All cosmetic randomness routes strictly through `fxRandom()`.
+ * Distinct 5-Style Shredder Particle Physics & Shockwave Dispatch (`SHRED-STYLE-01`).
+ * Outward-branching gate plasma arcs and WCAG 2.3.3 Reduced-Motion Gate Seals live in
+ * `shred-gate-bursts.ts`. All cosmetic randomness routes strictly through `fxRandom()`.
  */
-
-export interface VisualGateBurst {
-  cx: number;
-  cy: number;
-  z: number;
-  r: number;
-  g: number;
-  b: number;
-  age: number;
-  maxAge: number;
-  spanLength: number;
-  isHoriz: boolean;
-  nx: number;
-  ny: number;
-  style: ParticleStyleId;
-  mode: 'PLASMA_ARCS' | 'REDUCED_MOTION_SEAL';
-  seed: number;
-}
 
 export function getStyleTagForParticle(style: ParticleStyleId = 'micro_cubes'): number {
   switch (style) {
@@ -65,13 +62,6 @@ export function computeGateShredContactPoint(
   const emitY = oy1 > oy0 ? (oy0 + oy1) * 0.5 : gate.spanStart + gate.spanLength * 0.5;
   const emitX = gate.edge === 'LEFT' ? gate.edgeLine - 0.08 : gate.edgeLine + 1 + 0.08;
   return { emitX, emitY, nx, ny };
-}
-
-export function spawnGateBurst(rctx: RenderPassContext, burst: VisualGateBurst): void {
-  if (rctx.activeGateBursts.length >= 16) {
-    rctx.activeGateBursts.shift();
-  }
-  rctx.activeGateBursts.push(burst);
 }
 
 export function spawnStyledShredShockwavesAndGateFx(
@@ -149,22 +139,23 @@ export function spawnStyledShredShockwavesAndGateFx(
       Math.min(1, cg * 0.55 + 0.48),
       Math.min(1, cb * 0.55 + 0.52),
       0.24,
-      1.68,
-      0.56
+      1.86,
+      0.64
     );
+    rctx.spawnShockwave(sx, sy, 0.5, 0.84, 0.98, 1.0, 0.14, 1.18, 0.48);
   } else if (particleStyle === 'lightning_bolts') {
-    rctx.spawnShockwave(sx, sy, 0.47, 0.42, 0.95, 1.0, 0.2, 2.1, 0.3);
-    rctx.spawnShockwave(sx, sy, 0.44, cr, cg, cb, 0.32, 1.65, 0.38);
+    rctx.spawnShockwave(sx, sy, 0.49, 0.48, 0.97, 1.0, 0.2, 1.78, 0.24);
+    rctx.spawnShockwave(sx, sy, 0.45, cr, cg, cb, 0.24, 1.28, 0.22);
     spawnGateBurst(rctx, {
-      cx: gate ? gx - nx * 0.08 : sx,
-      cy: gate ? gy - ny * 0.08 : sy,
-      z: 0.52,
+      cx: gate ? cx : sx,
+      cy: gate ? cy : sy,
+      z: 0.72,
       r: cr,
       g: cg,
       b: cb,
       age: 0.001,
-      maxAge: 0.3,
-      spanLength: gate ? spanLength : 1.35,
+      maxAge: 0.64,
+      spanLength: gate ? spanLength : 1.5,
       isHoriz,
       nx,
       ny,
@@ -202,13 +193,13 @@ export function spawnStyledParticlesImpl(
 
   const countMul =
     particleStyle === 'soap_bubbles'
-      ? 0.68
+      ? 1.85
       : particleStyle === 'lightning_bolts'
-        ? 0.85
+        ? 1.12
         : particleStyle === 'pixel_sparks'
           ? 1.12
           : 1.0;
-  const burstCount = Math.max(6, Math.round(baseCount * countMul));
+  const burstCount = Math.max(8, Math.round(baseCount * countMul));
 
   const hasDir = Math.hypot(dirX, dirY) > 0.1;
   const tanX = hasDir ? -dirY : 1;
@@ -280,36 +271,43 @@ export function spawnStyledParticlesImpl(
       rotAngle = Math.atan2(vy, vx);
       rotSpeed = 0;
     } else if (particleStyle === 'soap_bubbles') {
-      const rad = 0.3 + ((i * 7) % 11) * 0.085;
-      const fwd = 1.05 + ((i * 13) % 9) * 0.16;
-      vx = dirX * fwd + (hasDir ? tanX * lateralOffset * 1.05 : 0) + Math.cos(angle) * rad;
-      vy = dirY * fwd + (hasDir ? tanY * lateralOffset * 1.05 : 0) + Math.sin(angle) * rad;
-      vz = 0.78 + ((i * 5) % 9) * 0.13;
-      pr = Math.min(1, r * 0.78 + 0.24);
-      pg = Math.min(1, g * 0.78 + 0.26);
-      pb = Math.min(1, b * 0.78 + 0.28);
-      scale = 0.115 + ((i * 5) % 6) * 0.016;
-      maxAge = 0.98 + ((i * 9) % 7) * 0.075;
-      rotSpeed = (i % 2 === 0 ? 1 : -1) * 1.4;
+      // Abundant multi-size effervescent bubbles: soft initial puff that lingers on swirling air currents
+      const rad = 0.32 + ((i * 7) % 11) * 0.075;
+      const fwd = 0.44 + ((i * 13) % 9) * 0.065;
+      vx = dirX * fwd + (hasDir ? tanX * lateralOffset * 0.96 : 0) + Math.cos(angle) * rad;
+      vy = dirY * fwd + (hasDir ? tanY * lateralOffset * 0.96 : 0) + Math.sin(angle) * rad;
+      vz = 0.52 + ((i * 5) % 9) * 0.09;
+      pr = Math.min(1, r * 0.76 + 0.24);
+      pg = Math.min(1, g * 0.76 + 0.26);
+      pb = Math.min(1, b * 0.76 + 0.3);
+      const tier = i % 5;
+      scale =
+        tier <= 1
+          ? 0.068 + ((i * 3) % 4) * 0.007
+          : tier <= 3
+            ? 0.114 + ((i * 5) % 4) * 0.01
+            : 0.168 + ((i * 7) % 3) * 0.016;
+      maxAge = 1.85 + ((i * 9) % 10) * 0.105;
+      rotSpeed = (i % 2 === 0 ? 1 : -1) * (1.25 + (i % 7) * 0.28);
     } else if (particleStyle === 'lightning_bolts') {
-      const rad = 0.88 + ((i * 7) % 13) * 0.24;
-      const fwd = 2.65 + ((i * 13) % 11) * 0.38;
-      vx = dirX * fwd + (hasDir ? tanX * lateralOffset * 1.95 : 0) + Math.cos(angle) * rad;
-      vy = dirY * fwd + (hasDir ? tanY * lateralOffset * 1.95 : 0) + Math.sin(angle) * rad;
-      vz = 1.45 + ((i * 5) % 9) * 0.22;
+      const rad = 0.95 + ((i * 7) % 13) * 0.28;
+      const fwd = 2.95 + ((i * 13) % 11) * 0.44;
+      vx = dirX * fwd + (hasDir ? tanX * lateralOffset * 2.15 : 0) + Math.cos(angle) * rad;
+      vy = dirY * fwd + (hasDir ? tanY * lateralOffset * 2.15 : 0) + Math.sin(angle) * rad;
+      vz = 1.55 + ((i * 5) % 9) * 0.24;
       if (i % 3 === 0) {
-        pr = 0.42;
-        pg = 0.94;
+        pr = 0.38;
+        pg = 0.95;
         pb = 1.0;
       } else {
-        pr = Math.min(1, r * 0.85 + 0.22);
-        pg = Math.min(1, g * 0.85 + 0.26);
-        pb = Math.min(1, b * 0.85 + 0.3);
+        pr = Math.min(1, r * 0.82 + 0.24);
+        pg = Math.min(1, g * 0.82 + 0.28);
+        pb = Math.min(1, b * 0.82 + 0.34);
       }
-      scale = 0.088 + ((i * 3) % 5) * 0.015;
-      maxAge = 0.38 + ((i * 7) % 5) * 0.046;
+      scale = 0.105 + ((i * 3) % 5) * 0.022;
+      maxAge = 0.44 + ((i * 7) % 5) * 0.052;
       rotAngle = Math.atan2(vy, vx);
-      rotSpeed = (i % 2 === 0 ? 1 : -1) * 14.0;
+      rotSpeed = i % 2 === 0 ? 1 : -1;
     } else {
       // micro_cubes: tactile beveled 3D voxel cubes with courtyard bounce & outward glide
       const rad = 0.54 + ((i * 7) % 13) * 0.16;
@@ -373,17 +371,22 @@ export function stepStyledParticleSlot(
 
   const clampedLife = Math.max(0, Math.min(1, lifeRatio));
   if (baseTag === 3) {
-    // soap_bubbles: buoyant upward anti-gravity lift + gentle spiral breeze + late-life pop swell
-    const drag = Math.max(0, 1 - 0.82 * dt);
-    const phase = nextAge * 5.2 + idx * 0.07;
-    pool[idx + 3] = pool[idx + 3] * drag + Math.sin(phase) * 1.1 * dt;
-    pool[idx + 4] = pool[idx + 4] * drag + Math.cos(phase * 0.92) * 1.1 * dt;
-    pool[idx + 5] = pool[idx + 5] * Math.max(0, 1 - 0.85 * dt) + 1.95 * dt;
+    // soap_bubbles: air-cushion damping + looping figure-8 thermal eddies + gentle buoyancy + pop swell
+    const drag = Math.max(0, 1 - 2.35 * dt);
+    const chirality = pool[idx + 13] >= 0 ? 1 : -1;
+    const seedPhase = idx * 0.27 + pool[idx + 13] * 1.65;
+    const swirlA = nextAge * 2.25 * chirality + seedPhase;
+    const swirlB = nextAge * 1.18 - seedPhase * 0.83;
+    const breezeX = Math.sin(swirlA) * 4.25 + Math.cos(swirlB) * 2.65;
+    const breezeY = Math.cos(swirlA * 0.94) * 3.95 - Math.sin(swirlB * 1.08) * 2.35;
+    pool[idx + 3] = pool[idx + 3] * drag + breezeX * dt;
+    pool[idx + 4] = pool[idx + 4] * drag + breezeY * dt;
+    pool[idx + 5] = pool[idx + 5] * Math.max(0, 1 - 1.32 * dt) + (1.22 + Math.sin(swirlA * 1.35) * 0.62) * dt;
     pool[idx + 12] += pool[idx + 13] * dt;
     const progress = nextAge / maxAge;
     if (progress > 0.84) {
       const popT = (progress - 0.84) / 0.16;
-      return 1.0 + Math.sin(popT * Math.PI * 0.72) * 0.34;
+      return 1.0 + Math.sin(popT * Math.PI * 0.72) * 0.38;
     }
     return 0.72 + 0.28 * Math.min(1, progress * 3.5);
   }
@@ -414,13 +417,23 @@ export function stepStyledParticleSlot(
   }
 
   if (baseTag === 4) {
-    // lightning_bolts: crackling electric surge with high-frequency angular snap
-    const drag = Math.max(0, 1 - 2.25 * dt);
+    // lightning_bolts: crisp velocity-aligned high-voltage dart with one stepped-leader jolt deflection
+    const drag = Math.max(0, 1 - 1.95 * dt);
     pool[idx + 3] *= drag;
     pool[idx + 4] *= drag;
-    pool[idx + 5] -= 1.55 * dt;
-    pool[idx + 12] = Math.atan2(pool[idx + 4], pool[idx + 3]) + Math.sin(nextAge * 38.0 + idx * 0.13) * 0.28;
-    return 0.22 + 0.78 * clampedLife;
+    pool[idx + 5] -= 1.25 * dt;
+    if (styleTag === 4 && nextAge > maxAge * 0.34) {
+      const turn = (pool[idx + 13] >= 0 ? 1 : -1) * 0.42;
+      const ct = Math.cos(turn);
+      const st = Math.sin(turn);
+      const vx0 = pool[idx + 3];
+      const vy0 = pool[idx + 4];
+      pool[idx + 3] = vx0 * ct - vy0 * st;
+      pool[idx + 4] = vx0 * st + vy0 * ct;
+      pool[idx + 14] = 14;
+    }
+    pool[idx + 12] = Math.atan2(pool[idx + 4], pool[idx + 3]);
+    return 0.26 + 0.74 * clampedLife;
   }
 
   // micro_cubes (0) or ambient motes (-1): gravity + single courtyard bounce for cubes
@@ -434,255 +447,4 @@ export function stepStyledParticleSlot(
   }
   pool[idx + 12] += pool[idx + 13] * dt;
   return 0.18 + 0.82 * Math.sqrt(clampedLife);
-}
-
-export function stepGateBurstsImpl(rctx: RenderPassContext, dt: number): void {
-  for (let i = rctx.activeGateBursts.length - 1; i >= 0; i--) {
-    const gb = rctx.activeGateBursts[i];
-    gb.age += dt;
-    if (gb.age >= gb.maxAge) {
-      rctx.activeGateBursts.splice(i, 1);
-    }
-  }
-}
-
-export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingContext): void {
-  if (rctx.activeGateBursts.length === 0) return;
-
-  gl.depthMask(false);
-  gl.disable(gl.CULL_FACE);
-
-  for (const gb of rctx.activeGateBursts) {
-    const t = Math.min(1, gb.age / gb.maxAge);
-    const alpha = Math.sin(Math.min(1, t * 3.2) * Math.PI * 0.5) * (1 - t);
-    if (alpha <= 0.01) continue;
-
-    if (gb.mode === 'PLASMA_ARCS') {
-      // 3 crackling zig-zag plasma arc filaments across the gate threshold
-      const segs = 4;
-      const span = Math.max(0.9, gb.spanLength * 0.88);
-      for (let arc = 0; arc < 3; arc++) {
-        const isCyan = arc !== 1;
-        const ar = isCyan ? 0.45 : Math.min(1, gb.r * 0.6 + 0.4);
-        const ag = isCyan ? 0.96 : Math.min(1, gb.g * 0.6 + 0.4);
-        const ab = isCyan ? 1.0 : Math.min(1, gb.b * 0.6 + 0.4);
-        for (let s = 0; s < segs; s++) {
-          const frac = (s + 0.5) / segs - 0.5;
-          const along = frac * span;
-          const jag = ((s + arc) % 2 === 0 ? 1 : -1) * (0.09 + 0.04 * arc);
-          const bx = gb.cx + (gb.isHoriz ? along : jag);
-          const by = gb.cy + (gb.isHoriz ? jag : along);
-          const rotZ = (gb.isHoriz ? 0 : Math.PI * 0.5) + ((s + arc) % 2 === 0 ? 0.36 : -0.36);
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            bx,
-            by,
-            gb.z + arc * 0.025,
-            (span / segs) * 1.18,
-            0.068,
-            0.045,
-            ar,
-            ag,
-            ab,
-            alpha * 0.94,
-            0,
-            rotZ,
-            0
-          );
-        }
-      }
-      continue;
-    }
-
-    // Stationary WCAG 2.3.3 Reduced-Motion Gate Seals (distinct per equipped Shred Animation)
-    const sealAlpha = (1 - t * t) * 0.86;
-    const halfSpan = Math.min(0.75, gb.spanLength * 0.36);
-    if (gb.style === 'soap_bubbles') {
-      rctx.drawMesh(
-        gl,
-        ENVIRONMENT_MESHES.shockwaveRingMesh,
-        gb.cx,
-        gb.cy,
-        gb.z,
-        1.15,
-        1.15,
-        1,
-        Math.min(1, gb.r * 0.6 + 0.4),
-        Math.min(1, gb.g * 0.6 + 0.45),
-        Math.min(1, gb.b * 0.6 + 0.5),
-        sealAlpha,
-        0,
-        0,
-        4
-      );
-      rctx.drawMesh(
-        gl,
-        ENVIRONMENT_MESHES.shockwaveRingMesh,
-        gb.cx,
-        gb.cy,
-        gb.z + 0.02,
-        0.64,
-        0.64,
-        1,
-        0.82,
-        0.97,
-        1.0,
-        sealAlpha * 0.9,
-        0,
-        0,
-        4
-      );
-    } else if (gb.style === 'star_confetti') {
-      rctx.drawAtlasBadge(gl, 'BADGE_STAR', gb.cx, gb.cy, gb.z + 0.03, 0.62, 1.0, 0.88, 0.38, sealAlpha);
-      for (const sgn of [-1, 1]) {
-        const ox = gb.isHoriz ? sgn * halfSpan : 0;
-        const oy = gb.isHoriz ? 0 : sgn * halfSpan;
-        rctx.drawAtlasBadge(
-          gl,
-          'BADGE_STAR',
-          gb.cx + ox,
-          gb.cy + oy,
-          gb.z + 0.02,
-          0.42,
-          gb.r,
-          gb.g,
-          gb.b,
-          sealAlpha * 0.92
-        );
-      }
-    } else if (gb.style === 'pixel_sparks') {
-      for (let k = 0; k < 4; k++) {
-        const ang = (k * Math.PI) / 2 + Math.PI * 0.25;
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.unitParticleCube,
-          gb.cx + Math.cos(ang) * 0.32,
-          gb.cy + Math.sin(ang) * 0.32,
-          gb.z,
-          0.34,
-          0.085,
-          0.05,
-          k % 2 === 0 ? 1.0 : gb.r,
-          k % 2 === 0 ? 0.96 : gb.g,
-          k % 2 === 0 ? 0.78 : gb.b,
-          sealAlpha,
-          0,
-          ang,
-          0
-        );
-      }
-    } else if (gb.style === 'lightning_bolts') {
-      for (const sgn of [-1, 1]) {
-        const bx = gb.cx + (gb.isHoriz ? sgn * halfSpan * 0.55 : 0);
-        const by = gb.cy + (gb.isHoriz ? 0 : sgn * halfSpan * 0.55);
-        const rot = (gb.isHoriz ? 0 : Math.PI * 0.5) + sgn * 0.34;
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.unitParticleCube,
-          bx,
-          by,
-          gb.z,
-          0.56,
-          0.09,
-          0.055,
-          0.44,
-          0.95,
-          1.0,
-          sealAlpha,
-          0,
-          rot,
-          0
-        );
-      }
-    } else {
-      // micro_cubes: 4 stationary beveled voxel studs framing the threshold
-      const offsets: ReadonlyArray<[number, number]> = [
-        [-0.24, -0.24],
-        [0.24, -0.24],
-        [-0.24, 0.24],
-        [0.24, 0.24],
-      ];
-      for (const [ox, oy] of offsets) {
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.unitParticleCube,
-          gb.cx + ox,
-          gb.cy + oy,
-          gb.z,
-          0.16,
-          0.16,
-          0.12,
-          gb.r,
-          gb.g,
-          gb.b,
-          sealAlpha,
-          0,
-          0,
-          0
-        );
-      }
-    }
-  }
-
-  gl.enable(gl.CULL_FACE);
-  gl.depthMask(true);
-}
-
-export function renderGateBurstsCanvas2D(
-  rctx: RenderPassContext,
-  ctx: CanvasRenderingContext2D,
-  project: (wx: number, wy: number, wz: number) => { x: number; y: number }
-): void {
-  if (rctx.activeGateBursts.length === 0) return;
-  ctx.save();
-  for (const gb of rctx.activeGateBursts) {
-    const t = Math.min(1, gb.age / gb.maxAge);
-    const alpha = Math.max(0, (1 - t * t) * 0.85);
-    const pt = project(gb.cx, gb.cy, gb.z);
-    const rr = Math.round(gb.r * 255);
-    const gg = Math.round(gb.g * 255);
-    const bb = Math.round(gb.b * 255);
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = gb.style === 'lightning_bolts' ? 'rgb(108, 242, 255)' : `rgb(${rr}, ${gg}, ${bb})`;
-    ctx.fillStyle = `rgb(${rr}, ${gg}, ${bb})`;
-    ctx.lineWidth = 2.5;
-    if (gb.style === 'soap_bubbles') {
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 16, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (gb.style === 'lightning_bolts') {
-      ctx.beginPath();
-      ctx.moveTo(pt.x - 16, pt.y - 5);
-      ctx.lineTo(pt.x - 4, pt.y + 5);
-      ctx.lineTo(pt.x + 5, pt.y - 5);
-      ctx.lineTo(pt.x + 16, pt.y + 5);
-      ctx.stroke();
-    } else if (gb.style === 'star_confetti') {
-      ctx.beginPath();
-      ctx.moveTo(pt.x, pt.y - 14);
-      ctx.lineTo(pt.x + 4, pt.y - 4);
-      ctx.lineTo(pt.x + 14, pt.y);
-      ctx.lineTo(pt.x + 4, pt.y + 4);
-      ctx.lineTo(pt.x, pt.y + 14);
-      ctx.lineTo(pt.x - 4, pt.y + 4);
-      ctx.lineTo(pt.x - 14, pt.y);
-      ctx.lineTo(pt.x - 4, pt.y - 4);
-      ctx.closePath();
-      ctx.fill();
-    } else if (gb.style === 'pixel_sparks') {
-      ctx.beginPath();
-      ctx.moveTo(pt.x - 14, pt.y - 10);
-      ctx.lineTo(pt.x + 14, pt.y + 10);
-      ctx.moveTo(pt.x - 14, pt.y + 10);
-      ctx.lineTo(pt.x + 14, pt.y - 10);
-      ctx.stroke();
-    } else {
-      ctx.fillRect(pt.x - 11, pt.y - 11, 9, 9);
-      ctx.fillRect(pt.x + 2, pt.y - 11, 9, 9);
-      ctx.fillRect(pt.x - 11, pt.y + 2, 9, 9);
-      ctx.fillRect(pt.x + 2, pt.y + 2, 9, 9);
-    }
-  }
-  ctx.restore();
 }

@@ -4,7 +4,6 @@ import type { BoardState, ColorId } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
 import { renderActiveDragReticleAndOriginFootprint, renderMysticPathTraces3D } from './pass2-drag-fx';
 import type { RenderPassContext, RenderSceneOptions, TrayPalette } from './render-types';
-import { renderGateBursts3D } from './shred-style-fx';
 
 export function renderPass1PortcullisBarriers(
   rctx: RenderPassContext,
@@ -669,9 +668,8 @@ export function renderPass2ReticleAndPromptsImpl(
   // 2D. Post-Move / Post-Shred Mystic Fissure Path-Tracing Flourish (`MYSTIC-TRACE-01`)
   renderMysticPathTraces3D(rctx, gl, options, highContrast);
 
-  // 2E. Expanding 3D Knock-On & Shredding Shockwave Rings (`rctx.activeShockwaves`, `R3D-08`) + Gate Bursts (`SHRED-STYLE-01`)
+  // 2E. Expanding 3D Knock-On & Shredding Shockwave Rings (`rctx.activeShockwaves`, `R3D-08`)
   renderShockwaveRings(rctx, gl);
-  renderGateBursts3D(rctx, gl);
 }
 
 function renderShockwaveRings(rctx: RenderPassContext, gl: WebGL2RenderingContext): void {

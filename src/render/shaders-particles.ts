@@ -94,16 +94,21 @@ void main() {
     worldOffset = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
     v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
   } else if (u_particleStyle == 3) {
-    // soap_bubbles: inflated iridescent spherical droplet
-    vec3 sphereDir = normalize(a_position);
-    worldOffset = sphereDir * (0.68 * w);
-    v_normal = sphereDir;
+    // soap_bubbles: camera-facing right-handed billboard housing an analytic ray-traced 3D thin-film sphere
+    float wob = 0.068 * sin(angle * 2.4 + lifeRatio * 6.283);
+    float rx = (1.0 + wob) * w * 2.24;
+    float ry = (1.0 - wob) * w * 2.24;
+    worldOffset =
+      vec3(1.0, 0.0, 0.0) * (a_position.x * rx) +
+      vec3(0.0, 0.978, -0.208) * (a_position.y * ry) +
+      vec3(0.0, 0.208, 0.978) * (a_position.z * 0.02 * w);
+    v_normal = vec3(0.0, 0.208, 0.978);
   } else if (u_particleStyle == 4) {
-    // lightning_bolts: jagged zig-zag electric arc streak
-    float zig = (abs(fract(p.x * 2.5) * 2.0 - 1.0) - 0.5) * 0.42;
-    p = vec3(p.x * 2.75, p.y * 0.26 + zig, p.z * 0.26) * w;
+    // lightning_bolts: crisp velocity-aligned plasma ribbon tapering cleanly as charge dissipates
+    float boltTaper = mix(0.32, 1.0, smoothstep(0.0, 0.42, lifeRatio));
+    p = vec3(p.x * 2.85, p.y * 0.68 * boltTaper, p.z * 0.02) * w;
     worldOffset = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
-    v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
+    v_normal = vec3(0.0, 0.208, 0.978);
   } else {
     // micro_cubes (0): full 3-axis tumbling beveled voxel cube
     p = p * w;
@@ -118,10 +123,14 @@ void main() {
 
   vec4 clipPos = u_viewProj * vec4(worldOffset + a_instPosScale.xyz, 1.0);
   vec2 ndc = clipPos.xy / max(0.0001, abs(clipPos.w));
-  float edgeFade = smoothstep(0.992, 0.80, max(abs(ndc.x), abs(ndc.y)));
+  float edgeFade = u_particleStyle == 3
+    ? smoothstep(0.996, 0.86, max(abs(ndc.x), abs(ndc.y)))
+    : smoothstep(0.992, 0.80, max(abs(ndc.x), abs(ndc.y)));
   float lifeFade = u_particleStyle == 3
-    ? smoothstep(0.0, 0.22, lifeRatio)
-    : smoothstep(0.0, 0.42, lifeRatio);
+    ? smoothstep(0.0, 0.16, lifeRatio)
+    : u_particleStyle == 4
+      ? smoothstep(0.0, 0.14, lifeRatio)
+      : smoothstep(0.0, 0.42, lifeRatio);
   v_fade = lifeFade * edgeFade;
   gl_Position = clipPos;
 }
@@ -197,22 +206,41 @@ void main() {
     outColor = vec4(clamp(col, 0.0, 1.0), clamp(0.68 + core * 0.32, 0.0, 0.99) * v_fade);
     return;
   } else if (u_particleStyle == 3) {
-    // soap_bubbles: airy thin-film rainbow Fresnel sphere + crisp upper-left window glint
-    float ndv = max(dot(N, V), 0.0);
-    float fresnel = pow(1.0 - ndv, 2.25);
-    vec3 rainbow = 0.5 + 0.5 * cos(6.283 * (fresnel * 1.55 + v_localPos.x * 0.85 + vec3(0.0, 0.33, 0.67)));
-    vec3 film = mix(v_color, mix(rainbow, vec3(0.84, 0.97, 1.0), 0.42), 0.65 * fresnel + 0.18);
-    vec3 specDir = normalize(vec3(-0.38, -0.42, 0.82));
-    float windowGlint = smoothstep(0.86, 0.97, max(dot(N, specDir), 0.0));
-    vec3 col = film + vec3(fresnel * 0.32 + windowGlint * 0.78);
-    float alpha = clamp(0.16 + fresnel * 0.7 + windowGlint * 0.55, 0.14, 0.92) * v_fade;
-    outColor = vec4(clamp(col, 0.0, 1.0), alpha);
+    // soap_bubbles: analytic ray-sphere 3D curvature + rainbow thin-film Fresnel rim + window glints (zero discard)
+    vec2 uv = v_localPos.xy * 2.0;
+    float r2 = dot(uv, uv);
+    float r = sqrt(r2);
+    float circleMask = smoothstep(1.0, 0.89, r);
+    float sz = sqrt(max(0.0, 1.0 - min(1.0, r2)));
+    vec3 sN = vec3(uv.x, uv.y, sz);
+    float fresnel = pow(1.0 - sz, 2.25);
+    float filmPhase = fresnel * 1.85 + uv.x * 0.54 - uv.y * 0.38 + fract(v_life * 0.17);
+    vec3 rainbow = 0.56 + 0.44 * cos(6.28318 * (filmPhase + vec3(0.0, 0.33, 0.67)));
+    vec3 tintRim = mix(v_color * 1.08 + vec3(0.14), rainbow, 0.58);
+    float keySpec = smoothstep(0.83, 0.975, max(dot(sN, normalize(vec3(-0.42, -0.48, 0.77))), 0.0));
+    float bounceSpec = smoothstep(0.88, 0.985, max(dot(sN, normalize(vec3(0.46, 0.44, 0.77))), 0.0)) * 0.58;
+    float rimRing = smoothstep(0.54, 0.93, r) * circleMask;
+    vec3 col = mix(tintRim, vec3(0.98, 0.995, 1.0), clamp(keySpec + bounceSpec + rimRing * 0.34, 0.0, 1.0));
+    float bubbleAlpha = clamp(0.18 + rimRing * 0.72 + (keySpec + bounceSpec) * 0.84, 0.0, 0.96);
+    outColor = vec4(clamp(col, 0.0, 1.0), bubbleAlpha * circleMask * v_fade);
     return;
   } else if (u_particleStyle == 4) {
-    // lightning_bolts: jagged high-voltage electric cyan/white plasma arc
-    float arc = clamp(1.0 - abs(v_localPos.y) * 1.75, 0.0, 1.0);
-    vec3 col = mix(mix(v_color, vec3(0.36, 0.94, 1.0), 0.58), vec3(1.0), arc * 0.82);
-    outColor = vec4(clamp(col, 0.0, 1.0), clamp(0.72 + arc * 0.27, 0.0, 0.99) * v_fade);
+    // lightning_bolts: crisp forked incandescent plasma filament with high-luminance core (zero dark halo)
+    float lx = v_localPos.x;
+    float ly = v_localPos.y;
+    float endMask = smoothstep(0.5, 0.26, abs(lx));
+    float jagWave = (abs(fract(lx * 2.6 + 0.18) * 2.0 - 1.0) - 0.5) * 0.30 * endMask;
+    float mainDist = abs(ly - jagWave);
+    float forkActive = smoothstep(-0.08, 0.06, lx) * smoothstep(0.48, 0.28, lx);
+    float forkY = jagWave + (lx + 0.05) * 0.56;
+    float forkDist = mix(1.0, abs(ly - forkY), forkActive);
+    float d = min(mainDist, forkDist * 1.12);
+    float core = smoothstep(0.095, 0.022, d) * endMask;
+    float sheath = smoothstep(0.19, 0.03, d) * endMask;
+    vec3 baseArc = mix(v_color * 0.75 + vec3(0.25), vec3(0.42, 0.96, 1.0), 0.68);
+    vec3 col = mix(baseArc, vec3(0.97, 0.995, 1.0), core * 0.92);
+    float alpha = clamp(sheath * 0.72 + core * 0.88, 0.0, 0.99) * v_fade;
+    outColor = vec4(clamp(col, 0.0, 1.0), alpha);
     return;
   }
 

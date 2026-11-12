@@ -578,36 +578,42 @@ export function playShredStyleOvertoneVoice(
     osc.start(t);
     osc.stop(t + 0.052);
   } else if (style === 'soap_bubbles') {
-    // Buoyant liquid-glass upward droplet bloop + pop
-    const t = startTime + (previewOnly ? 0 : 0.04);
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(380 * pitchScale, t);
-    osc.frequency.exponentialRampToValueAtTime(790 * pitchScale, t + 0.085);
-    gain.gain.setValueAtTime(amp * 1.1, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.095);
-    osc.connect(gain);
-    gain.connect(sfxGain);
-    osc.start(t);
-    osc.stop(t + 0.105);
-  } else if (style === 'lightning_bolts') {
-    // Arcane electric snap fifth + high crackle burst
-    const t = startTime + (previewOnly ? 0 : 0.02);
-    for (const ratio of [1.0, 1.498]) {
+    // Buoyant liquid-glass upward droplet cluster bloop + effervescent pop
+    for (const [delay, f0, f1, peak] of [
+      [0, 380, 790, 1.05],
+      [0.058, 540, 1080, 0.72],
+    ]) {
+      const t = startTime + (previewOnly ? 0 : 0.035) + delay;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(620 * ratio * pitchScale, t);
-      osc.frequency.exponentialRampToValueAtTime(310 * ratio * pitchScale, t + 0.055);
-      gain.gain.setValueAtTime(amp * 0.58, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f0 * pitchScale, t);
+      osc.frequency.exponentialRampToValueAtTime(f1 * pitchScale, t + 0.08);
+      gain.gain.setValueAtTime(amp * peak, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.092);
       osc.connect(gain);
       gain.connect(sfxGain);
       osc.start(t);
-      osc.stop(t + 0.065);
+      osc.stop(t + 0.1);
     }
-    playFilteredNoiseBurstVoice(ctx, sfxGain, t, 0.055, 2600 * pitchScale, amp * 0.65);
+  } else if (style === 'lightning_bolts') {
+    // Arcane electric snap fifth + primary & re-strike crackle bursts
+    const t = startTime + (previewOnly ? 0 : 0.015);
+    for (const ratio of [1.0, 1.498, 2.0]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(640 * ratio * pitchScale, t);
+      osc.frequency.exponentialRampToValueAtTime(280 * ratio * pitchScale, t + 0.068);
+      gain.gain.setValueAtTime(amp * 0.54, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.074);
+      osc.connect(gain);
+      gain.connect(sfxGain);
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }
+    playFilteredNoiseBurstVoice(ctx, sfxGain, t, 0.065, 2750 * pitchScale, amp * 0.75);
+    playFilteredNoiseBurstVoice(ctx, sfxGain, t + 0.075, 0.05, 3400 * pitchScale, amp * 0.48);
   } else if (previewOnly) {
     // micro_cubes preview: crisp tactile wooden marimba double tap
     for (let i = 0; i < 2; i++) {
