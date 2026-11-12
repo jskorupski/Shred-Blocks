@@ -44,139 +44,238 @@ export function stepGateBurstsImpl(rctx: RenderPassContext, dt: number): void {
   }
 }
 
-function drawPlasmaSegment3D(
+const BOLT_TRACE_BUF = new Float32Array(64);
+
+function drawJawCoronaFlash3D(
   rctx: RenderPassContext,
   gl: WebGL2RenderingContext,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
+  cx: number,
+  cy: number,
   z: number,
-  width: number,
-  r: number,
-  g: number,
-  b: number,
-  alpha: number
+  halfLen: number,
+  coronaRadius: number,
+  rotZ: number,
+  cyanR: number,
+  cyanG: number,
+  cyanB: number,
+  tintR: number,
+  tintG: number,
+  tintB: number,
+  coreBoost: number,
+  alpha: number,
+  seed: number
 ): void {
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  const len = Math.hypot(dx, dy);
-  if (len < 0.015 || alpha <= 0.01) return;
-  const mx = (x0 + x1) * 0.5;
-  const my = (y0 + y1) * 0.5;
-  const rotZ = Math.atan2(dy, dx);
-  // Outer additive ionized plasma sheath + overlapping joint pad
+  if (alpha <= 0.008) return;
+  const scaleX = halfLen * 2 + coronaRadius * 2;
+  const scaleY = coronaRadius * 2;
+  const ux = Math.cos(rotZ);
+  const uy = Math.sin(rotZ);
+  const px = -uy;
+  const py = ux;
+  const qx = cx - ux * scaleX * 0.5 - px * scaleY * 0.5;
+  const qy = cy - uy * scaleX * 0.5 - py * scaleY * 0.5;
+  gl.uniform1i(rctx.uTraceCount, 0);
+  gl.uniform3f(rctx.uCapColor, tintR, tintG, tintB);
+  gl.uniform4f(rctx.uClipPlane, halfLen, coronaRadius, coreBoost, seed);
   rctx.drawMesh(
     gl,
-    ENVIRONMENT_MESHES.unitParticleCube,
-    mx,
-    my,
+    ENVIRONMENT_MESHES.overlayQuad,
+    qx,
+    qy,
     z,
-    len + width * 0.75,
-    width * 2.85,
-    0.024,
-    r,
-    g,
-    b,
-    alpha * 0.48,
+    scaleX,
+    scaleY,
+    1,
+    cyanR,
+    cyanG,
+    cyanB,
+    alpha,
     0,
     rotZ,
-    0
+    9
   );
-  // Inner incandescent white-cyan arc filament
-  rctx.drawMesh(
-    gl,
-    ENVIRONMENT_MESHES.unitParticleCube,
-    mx,
-    my,
-    z + 0.016,
-    len + width * 0.36,
-    width * 0.82,
-    0.03,
-    0.92,
-    0.99,
-    1.0,
-    Math.min(1, alpha * 0.98),
-    0,
-    rotZ,
-    0
-  );
+}
+
+interface BoltTreeParams {
+  rootX: number;
+  rootY: number;
+  z: number;
+  dirAngle: number;
+  totalLen: number;
+  reach: number;
+  rootGlowR: number;
+  cyanR: number;
+  cyanG: number;
+  cyanB: number;
+  tintR: number;
+  tintG: number;
+  tintB: number;
+  alpha: number;
+  strikeSeed: number;
+  timeAge: number;
+  channelPhase: number;
+  pulsePos: number;
+  pulseStrength: number;
+  erodeRootFrac: number;
+  withForks: boolean;
 }
 
 function drawBranchingBoltTree3D(
   rctx: RenderPassContext,
   gl: WebGL2RenderingContext,
-  rootX: number,
-  rootY: number,
-  z: number,
-  dirAngle: number,
-  totalLen: number,
-  reach: number,
-  rootWidth: number,
-  r: number,
-  g: number,
-  b: number,
-  alpha: number,
-  seed: number,
-  withForks: boolean
+  p: BoltTreeParams
 ): void {
+  if (p.alpha <= 0.008 || p.reach <= 0.02) return;
+
+  let segIdx = 0;
+  let minX = p.rootX;
+  let maxX = p.rootX;
+  let minY = p.rootY;
+  let maxY = p.rootY;
+  let maxGlowR = p.rootGlowR;
+
+  const pushSeg = (
+    x0: number,
+    y0: number,
+    s0: number,
+    w0: number,
+    x1: number,
+    y1: number,
+    s1: number,
+    w1: number
+  ): void => {
+    if (segIdx >= 8) return;
+    if (Math.hypot(x1 - x0, y1 - y0) < 0.012) return;
+    const base = segIdx * 8;
+    BOLT_TRACE_BUF[base + 0] = x0;
+    BOLT_TRACE_BUF[base + 1] = y0;
+    BOLT_TRACE_BUF[base + 2] = s0;
+    BOLT_TRACE_BUF[base + 3] = w0;
+    BOLT_TRACE_BUF[base + 4] = x1;
+    BOLT_TRACE_BUF[base + 5] = y1;
+    BOLT_TRACE_BUF[base + 6] = s1;
+    BOLT_TRACE_BUF[base + 7] = w1;
+    segIdx++;
+    if (x0 < minX) minX = x0;
+    if (x0 > maxX) maxX = x0;
+    if (x1 < minX) minX = x1;
+    if (x1 > maxX) maxX = x1;
+    if (y0 < minY) minY = y0;
+    if (y0 > maxY) maxY = y0;
+    if (y1 < minY) minY = y1;
+    if (y1 > maxY) maxY = y1;
+    if (w0 > maxGlowR) maxGlowR = w0;
+    if (w1 > maxGlowR) maxGlowR = w1;
+  };
+
   const segCount = 4;
-  const ux = Math.cos(dirAngle);
-  const uy = Math.sin(dirAngle);
+  const ux = Math.cos(p.dirAngle);
+  const uy = Math.sin(p.dirAngle);
   const px = -uy;
   const py = ux;
-  let prevX = rootX;
-  let prevY = rootY;
+  let prevX = p.rootX;
+  let prevY = p.rootY;
+  let prevW = p.rootGlowR;
 
   for (let s = 1; s <= segCount; s++) {
     const segStartFrac = (s - 1) / segCount;
-    if (reach <= segStartFrac) break;
-    const localReach = Math.min(1, (reach - segStartFrac) * segCount);
+    if (p.reach <= segStartFrac) break;
+    const localReach = Math.min(1, (p.reach - segStartFrac) * segCount);
     const fullFrac = s / segCount;
-    const h = Math.sin(seed * 12.9898 + s * 78.233) * 43758.5453;
+    const h = Math.sin(p.strikeSeed * 12.9898 + s * 78.233) * 43758.5453;
     const jitter01 = h - Math.floor(h);
-    const kinkSign = (s + seed) % 2 === 0 ? 1 : -1;
-    const kinkMag = s === segCount ? 0.08 : 0.14 + jitter01 * 0.16;
-    const targetX = rootX + ux * (totalLen * fullFrac) + px * (kinkSign * kinkMag * totalLen * 0.42);
-    const targetY = rootY + uy * (totalLen * fullFrac) + py * (kinkSign * kinkMag * totalLen * 0.42);
+    const kinkSign = (s + p.strikeSeed) % 2 === 0 ? 1 : -1;
+    const baseKink = (s === segCount ? 0.08 : 0.13 + jitter01 * 0.15) * kinkSign;
+    const livePhase = p.timeAge * 34.0 + p.channelPhase + s * 1.95;
+    const liveWrithe = (Math.sin(livePhase) * 0.055 + Math.cos(livePhase * 1.73 - s) * 0.032) * fullFrac;
+    const latOffset = (baseKink * 0.38 + liveWrithe) * p.totalLen;
+
+    const targetX = p.rootX + ux * (p.totalLen * fullFrac) + px * latOffset;
+    const targetY = p.rootY + uy * (p.totalLen * fullFrac) + py * latOffset;
     const curX = prevX + (targetX - prevX) * localReach;
     const curY = prevY + (targetY - prevY) * localReach;
-    const segW = rootWidth * (1.0 - 0.56 * (segStartFrac + 0.12));
-    drawPlasmaSegment3D(rctx, gl, prevX, prevY, curX, curY, z, segW, r, g, b, alpha);
+    const endFrac = segStartFrac + (fullFrac - segStartFrac) * localReach;
+    const nextW = p.rootGlowR * (1.0 - 0.46 * fullFrac);
+    const curW = prevW + (nextW - prevW) * localReach;
 
-    // Outward forked daughter branches at joints s = 1, 2, and 3
-    if (withForks && localReach >= 0.99 && (s === 1 || s === 2 || s === 3)) {
+    pushSeg(prevX, prevY, segStartFrac, prevW, curX, curY, endFrac, curW);
+
+    if (p.withForks && localReach >= 0.98 && (s === 1 || s === 2)) {
       const forkSign = s === 2 ? -kinkSign : kinkSign;
-      const forkAng = dirAngle + forkSign * (0.52 + jitter01 * 0.28);
-      const forkLen = totalLen * (s === 1 ? 0.56 : s === 2 ? 0.46 : 0.34);
-      const forkReach = Math.min(1, (reach - fullFrac) * 2.4);
-      if (forkReach > 0.05) {
+      const forkFlutter = Math.sin(livePhase * 1.32 + 1.4) * 0.11;
+      const forkAng = p.dirAngle + forkSign * (0.5 + jitter01 * 0.28) + forkFlutter;
+      const forkLen = p.totalLen * (s === 1 ? 0.56 : 0.44);
+      const forkReach = Math.min(1, (p.reach - fullFrac) * 2.3);
+      if (forkReach > 0.06) {
         const fux = Math.cos(forkAng);
         const fuy = Math.sin(forkAng);
         const fpx = -fuy;
         const fpy = fux;
-        const midReach = Math.min(1, forkReach * 2.0);
-        const fx1 = curX + (fux * forkLen * 0.52 + fpx * (-forkSign * 0.11)) * midReach;
-        const fy1 = curY + (fuy * forkLen * 0.52 + fpy * (-forkSign * 0.11)) * midReach;
-        drawPlasmaSegment3D(rctx, gl, curX, curY, fx1, fy1, z, segW * 0.74, r, g, b, alpha * 0.94);
-        if (forkReach > 0.5) {
-          const tipReach = (forkReach - 0.5) * 2.0;
-          const fx2 = fx1 + (fux * forkLen * 0.48 + fpx * (forkSign * 0.14)) * tipReach;
-          const fy2 = fy1 + (fuy * forkLen * 0.48 + fpy * (forkSign * 0.14)) * tipReach;
-          drawPlasmaSegment3D(rctx, gl, fx1, fy1, fx2, fy2, z, segW * 0.5, r, g, b, alpha * 0.88);
-          if (s === 1 && tipReach > 0.4) {
-            const twigAng = forkAng - forkSign * 0.62;
-            const tx2 = fx1 + Math.cos(twigAng) * forkLen * 0.32 * tipReach;
-            const ty2 = fy1 + Math.sin(twigAng) * forkLen * 0.32 * tipReach;
-            drawPlasmaSegment3D(rctx, gl, fx1, fy1, tx2, ty2, z, segW * 0.38, r, g, b, alpha * 0.85);
+        if (s === 1) {
+          const midReach = Math.min(1, forkReach * 1.9);
+          const fx1 = curX + (fux * forkLen * 0.52 + fpx * (-forkSign * 0.1)) * midReach;
+          const fy1 = curY + (fuy * forkLen * 0.52 + fpy * (-forkSign * 0.1)) * midReach;
+          const fw1 = curW * 0.78;
+          const fs1 = Math.min(1, fullFrac + 0.24 * midReach);
+          pushSeg(curX, curY, fullFrac, curW * 0.88, fx1, fy1, fs1, fw1);
+          if (forkReach > 0.52) {
+            const tipReach = Math.min(1, (forkReach - 0.52) / 0.48);
+            const fx2 = fx1 + (fux * forkLen * 0.48 + fpx * (forkSign * 0.13)) * tipReach;
+            const fy2 = fy1 + (fuy * forkLen * 0.48 + fpy * (forkSign * 0.13)) * tipReach;
+            const fs2 = Math.min(1, fs1 + 0.26 * tipReach);
+            pushSeg(fx1, fy1, fs1, fw1, fx2, fy2, fs2, fw1 * 0.64);
+            if (tipReach > 0.35) {
+              const twigAng = forkAng - forkSign * 0.6 + forkFlutter * 0.8;
+              const tx2 = fx1 + Math.cos(twigAng) * forkLen * 0.34 * tipReach;
+              const ty2 = fy1 + Math.sin(twigAng) * forkLen * 0.34 * tipReach;
+              pushSeg(fx1, fy1, fs1, fw1 * 0.82, tx2, ty2, Math.min(1, fs1 + 0.22 * tipReach), fw1 * 0.54);
+            }
           }
+        } else {
+          const fx = curX + (fux * forkLen + fpx * (forkSign * 0.09)) * forkReach;
+          const fy = curY + (fuy * forkLen + fpy * (forkSign * 0.09)) * forkReach;
+          pushSeg(
+            curX,
+            curY,
+            fullFrac,
+            curW * 0.84,
+            fx,
+            fy,
+            Math.min(1, fullFrac + 0.36 * forkReach),
+            curW * 0.52
+          );
         }
       }
     }
 
     prevX = curX;
     prevY = curY;
+    prevW = curW;
   }
+
+  if (segIdx === 0) return;
+  const pad = maxGlowR * 1.42;
+  gl.uniform1i(rctx.uTraceCount, segIdx);
+  gl.uniform4fv(rctx.uTracePts, BOLT_TRACE_BUF, 0, segIdx * 8);
+  gl.uniform3f(rctx.uCapColor, p.tintR, p.tintG, p.tintB);
+  gl.uniform4f(rctx.uClipPlane, p.pulsePos, p.pulseStrength, p.erodeRootFrac, p.channelPhase);
+  rctx.drawMesh(
+    gl,
+    ENVIRONMENT_MESHES.overlayQuad,
+    minX - pad,
+    minY - pad,
+    p.z,
+    maxX - minX + pad * 2,
+    maxY - minY + pad * 2,
+    1,
+    p.cyanR,
+    p.cyanG,
+    p.cyanB,
+    p.alpha,
+    0,
+    0,
+    9
+  );
 }
 
 export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingContext): void {
@@ -188,107 +287,131 @@ export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingC
   for (const gb of rctx.activeGateBursts) {
     const t = Math.min(1, gb.age / gb.maxAge);
     if (gb.mode === 'PLASMA_ARCS') {
-      // Two crisp high-voltage discharges (primary 0..0.44 + secondary re-strike 0.28..1.0):
-      // branch width tapers to 0 while alpha stays >= 0.80 so bolts stay incandescent (zero grey fade)
-      const isRestrike = t > 0.32;
-      const surgePrimary = t < 0.46 ? Math.sin(Math.min(1, t / 0.08) * Math.PI * 0.5) * (1 - t / 0.46) : 0;
-      const surgeRestrike =
-        t > 0.28 ? Math.sin(Math.min(1, (t - 0.28) / 0.07) * Math.PI * 0.5) * (1 - (t - 0.28) / 0.72) : 0;
-      const surgePower = Math.max(surgePrimary, surgeRestrike * 0.92);
-      if (surgePower <= 0.04) continue;
-
       gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-      const reach = isRestrike ? Math.min(1, (t - 0.28) / 0.1) : Math.min(1, t / 0.11);
-      const widthScale = 0.28 + 0.78 * Math.sqrt(surgePower);
-      const boltAlpha = Math.min(1, 0.78 + 0.22 * surgePower);
-      const activeSeed = isRestrike ? gb.seed + 97 : gb.seed;
-      const cyanR = 0.38;
-      const cyanG = 0.96;
-      const cyanB = 1.0;
-      const mixR = Math.min(1, gb.r * 0.52 + 0.48);
-      const mixG = Math.min(1, gb.g * 0.48 + 0.52);
-      const mixB = Math.min(1, gb.b * 0.44 + 0.56);
 
-      // Subtle compact ionized flash at the gate contact point
-      const flareScale = 0.46 + 0.34 * reach;
-      rctx.drawMesh(
+      const cyanR = 0.08;
+      const cyanG = 0.78;
+      const cyanB = 1.0;
+      const tintR = Math.min(1, gb.r * 0.88 + 0.12);
+      const tintG = Math.min(1, gb.g * 0.85 + 0.15);
+      const tintB = Math.min(1, gb.b * 0.85 + 0.18);
+
+      const hasOutward = Math.hypot(gb.nx, gb.ny) > 0.1;
+      const jawSpan = Math.min(2.15, Math.max(0.95, gb.spanLength * 0.8));
+      const jawRot = hasOutward ? Math.atan2(gb.ny, gb.nx) + Math.PI * 0.5 : 0;
+
+      // 1. Gate-jaw arc-welder flash: explosive contact flare + secondary re-strike surges + smooth decay
+      const initialFlash = Math.exp(-t * 9.5);
+      const dA = (t - 0.24) * 11.0;
+      const dB = (t - 0.46) * 11.5;
+      const surgeFlashA = 0.52 * Math.exp(-(dA * dA));
+      const surgeFlashB = 0.32 * Math.exp(-(dB * dB));
+      const jawFlicker = 0.76 + 0.24 * Math.sin(gb.age * 74.0 + gb.seed);
+      const jawPower = Math.min(1, (initialFlash + surgeFlashA + surgeFlashB) * jawFlicker * (1 - t * 0.88));
+      drawJawCoronaFlash3D(
+        rctx,
         gl,
-        ENVIRONMENT_MESHES.shockwaveRingMesh,
         gb.cx,
         gb.cy,
-        gb.z - 0.02,
-        flareScale,
-        flareScale,
-        1,
+        gb.z - 0.015,
+        hasOutward ? jawSpan * 0.46 : 0.14,
+        0.44 + 0.22 * initialFlash,
+        jawRot,
         cyanR,
         cyanG,
         cyanB,
-        surgePower * 0.42,
-        0,
-        0,
-        4
+        tintR,
+        tintG,
+        tintB,
+        0.52 + 0.48 * initialFlash,
+        jawPower * 0.94,
+        gb.seed * 0.13
       );
 
-      const hasOutward = Math.hypot(gb.nx, gb.ny) > 0.1;
-      if (hasOutward) {
-        const baseAng = Math.atan2(gb.ny, gb.nx);
-        const tx = -gb.ny;
-        const ty = gb.nx;
-        const jawSpan = Math.min(2.15, Math.max(0.95, gb.spanLength * 0.8));
-        const outwardSpecs: ReadonlyArray<[number, number, number, number, boolean]> = [
-          [-0.44, -0.98, 1.66, 0.078, true],
-          [-0.22, -0.46, 1.82, 0.086, true],
-          [0.0, 0.03, 2.02, 0.096, true],
-          [0.22, 0.48, 1.8, 0.086, true],
-          [0.44, 0.98, 1.66, 0.078, true],
-          [-0.3, -2.24, 0.98, 0.064, false],
-          [0.3, 2.24, 0.98, 0.064, false],
-        ];
-        for (let k = 0; k < outwardSpecs.length; k++) {
-          const [latFrac, angOff, len, width, forks] = outwardSpecs[k];
-          const useTint = k % 2 === 1;
-          drawBranchingBoltTree3D(
-            rctx,
-            gl,
-            gb.cx + tx * (latFrac * jawSpan),
-            gb.cy + ty * (latFrac * jawSpan),
-            gb.z + (k % 3) * 0.012,
-            baseAng + angOff,
-            len * (isRestrike ? 1.06 : 1.0),
-            reach,
-            width * widthScale,
-            useTint ? mixR : cyanR,
-            useTint ? mixG : cyanG,
-            useTint ? mixB : cyanB,
-            boltAlpha,
-            activeSeed + k * 31,
-            forks
-          );
-        }
-      } else {
-        for (let k = 0; k < 6; k++) {
-          const ang = (k * Math.PI) / 3 + (gb.seed % 17) * 0.12;
-          const useTint = k % 2 === 1;
-          drawBranchingBoltTree3D(
-            rctx,
-            gl,
-            gb.cx,
-            gb.cy,
-            gb.z + (k % 2) * 0.012,
-            ang,
-            1.68,
-            reach,
-            0.086 * widthScale,
-            useTint ? mixR : cyanR,
-            useTint ? mixG : cyanG,
-            useTint ? mixB : cyanB,
-            boltAlpha,
-            activeSeed + k * 37,
-            true
-          );
-        }
+      // 2. Well-separated hero plasma leaders + corner snap arcs (staggered so silhouettes stay crisp, never stacked)
+      const outwardSpecs: ReadonlyArray<[number, number, number, number, number, number, boolean]> = [
+        // [latFrac, angOff, len, glowR, startDelaySec, durFrac, withForks]
+        [-0.38, -0.84, 1.78, 0.36, 0.055, 0.88, true],
+        [-0.12, -0.26, 2.08, 0.42, 0.0, 0.98, true],
+        [0.16, 0.32, 1.98, 0.4, 0.022, 0.95, true],
+        [0.4, 0.86, 1.74, 0.36, 0.078, 0.86, true],
+        [-0.44, -2.05, 0.92, 0.26, 0.018, 0.56, false],
+        [0.44, 2.05, 0.92, 0.26, 0.095, 0.56, false],
+      ];
+
+      const channelCount = hasOutward ? outwardSpecs.length : 4;
+      const baseAng = hasOutward ? Math.atan2(gb.ny, gb.nx) : 0;
+      const tx = -gb.ny;
+      const ty = gb.nx;
+
+      for (let k = 0; k < channelCount; k++) {
+        const latFrac = hasOutward ? outwardSpecs[k][0] : 0;
+        const angOff = hasOutward ? outwardSpecs[k][1] : (k * Math.PI) / 2 + (gb.seed % 17) * 0.14;
+        const baseLen = hasOutward ? outwardSpecs[k][2] : 1.82;
+        const baseGlowR = hasOutward ? outwardSpecs[k][3] : 0.38;
+        const delaySec = hasOutward ? outwardSpecs[k][4] : (k % 3) * 0.028;
+        const durSec = gb.maxAge * (hasOutward ? outwardSpecs[k][5] : 0.92);
+        const withForks = hasOutward ? outwardSpecs[k][6] : true;
+
+        const localAge = gb.age - delaySec;
+        if (localAge <= 0 || localAge >= durSec) continue;
+        const localT = localAge / durSec;
+
+        // Asynchronous stepped-leader re-pathing (5-6 brisk path snaps out of phase across channels)
+        const strikePeriod = 0.076 + (k % 3) * 0.016;
+        const strikePhase = localAge + (k * 0.029 + (gb.seed % 7) * 0.008);
+        const strikeEpoch = Math.floor(strikePhase / strikePeriod);
+        const epochFrac = (strikePhase % strikePeriod) / strikePeriod;
+        const strikeSeed = gb.seed + k * 41 + strikeEpoch * 137;
+
+        const reach =
+          strikeEpoch === 0 ? Math.min(1, localAge / 0.055) : Math.min(1, 0.46 + epochFrac * 0.95);
+
+        // High-contrast AC arc strobe + crisp re-strike flash + smooth nonlinear dissolve fade
+        const attack = Math.min(1, localT / 0.048);
+        const decay = localT < 0.34 ? 1.0 : Math.max(0, (1.0 - localT) / 0.66) ** 1.85;
+        const acWaveA = 0.5 + 0.5 * Math.sin(gb.age * 72.0 + k * 2.45 + gb.seed * 0.3);
+        const acWaveB = 0.5 + 0.5 * Math.cos(gb.age * 119.0 - k * 1.75);
+        const reStrikeBoost = Math.exp(-epochFrac * 3.6) * 0.42;
+        const acFlicker = Math.min(1.15, 0.52 + 0.34 * acWaveA * acWaveB + reStrikeBoost);
+        const boltAlpha = Math.min(1, attack * decay * acFlicker);
+        if (boltAlpha <= 0.012) continue;
+
+        // Traveling high-voltage surge wave racing from gate jaw (0.0) out to branch tips (1.0)
+        const pulsePos = ((localT * 3.15 + k * 0.24) % 1.36) - 0.12;
+        const pulseStrength = Math.min(1, (0.62 + 0.38 * acWaveA + reStrikeBoost) * decay);
+        const erodeRootFrac = localT > 0.55 ? ((localT - 0.55) / 0.45) * 0.48 : 0;
+        const glowScale = 0.48 + 0.56 * Math.sqrt(decay) + reStrikeBoost * 0.26;
+        const lenScale = 0.92 + ((strikeEpoch + k) % 3) * 0.07;
+        const useBlockAccent = k % 2 === 1;
+
+        drawBranchingBoltTree3D(rctx, gl, {
+          rootX: hasOutward ? gb.cx + tx * (latFrac * jawSpan) : gb.cx,
+          rootY: hasOutward ? gb.cy + ty * (latFrac * jawSpan) : gb.cy,
+          z: gb.z + (k % 3) * 0.01,
+          dirAngle: baseAng + angOff,
+          totalLen: baseLen * lenScale,
+          reach,
+          rootGlowR: baseGlowR * glowScale,
+          cyanR: useBlockAccent ? Math.min(1, cyanR * 0.52 + tintR * 0.58) : cyanR,
+          cyanG: useBlockAccent ? Math.min(1, cyanG * 0.52 + tintG * 0.58) : cyanG,
+          cyanB: useBlockAccent ? Math.min(1, cyanB * 0.52 + tintB * 0.58) : cyanB,
+          tintR,
+          tintG,
+          tintB,
+          alpha: boltAlpha,
+          strikeSeed,
+          timeAge: gb.age,
+          channelPhase: gb.seed * 0.29 + k * 2.17,
+          pulsePos,
+          pulseStrength,
+          erodeRootFrac,
+          withForks,
+        });
       }
 
+      gl.uniform1i(rctx.uTraceCount, 0);
+      gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
       gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       continue;
     }
@@ -455,20 +578,59 @@ export function renderGateBurstsCanvas2D(
       ctx.stroke();
     } else if (gb.style === 'lightning_bolts') {
       if (gb.mode === 'PLASMA_ARCS') {
+        const prevComp = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const decay = t < 0.38 ? 1.0 : Math.max(0, (1.0 - t) / 0.62) ** 1.75;
+        const flicker = 0.68 + 0.32 * (0.5 + 0.5 * Math.sin(gb.age * 68 + gb.seed));
+        const arcAlpha = Math.min(1, Math.min(1, t / 0.06) * decay * flicker);
         const base = Math.hypot(gb.nx, gb.ny) > 0.1 ? Math.atan2(gb.ny, gb.nx) : -Math.PI * 0.5;
-        for (const off of [-0.65, 0, 0.65]) {
-          const a = base + off;
-          const mid = project(gb.cx + Math.cos(a + 0.18) * 0.72, gb.cy + Math.sin(a + 0.18) * 0.72, gb.z);
-          const tip = project(gb.cx + Math.cos(a) * 1.48, gb.cy + Math.sin(a) * 1.48, gb.z);
-          const fork = project(gb.cx + Math.cos(a + 0.52) * 1.22, gb.cy + Math.sin(a + 0.52) * 1.22, gb.z);
+
+        // Soft jaw contact flash
+        ctx.globalAlpha = arcAlpha * Math.exp(-t * 6.5) * 0.55;
+        ctx.fillStyle = 'rgb(120, 244, 255)';
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        const offsets = [-0.88, -0.42, 0.02, 0.45, 0.88];
+        for (let k = 0; k < offsets.length; k++) {
+          const strikeEpoch = Math.floor((gb.age + k * 0.03) / 0.1);
+          const writhe = Math.sin(gb.age * 40 + k * 2.1 + strikeEpoch * 1.7) * 0.22;
+          const a = base + offsets[k];
+          const reach = Math.min(1, gb.age / 0.07);
+          const p1 = project(
+            gb.cx + Math.cos(a + writhe) * 0.78 * reach,
+            gb.cy + Math.sin(a + writhe) * 0.78 * reach,
+            gb.z
+          );
+          const p2 = project(
+            gb.cx + Math.cos(a - writhe * 0.7) * 1.62 * reach,
+            gb.cy + Math.sin(a - writhe * 0.7) * 1.62 * reach,
+            gb.z
+          );
+          const fk = project(
+            gb.cx + Math.cos(a + (k % 2 === 0 ? 0.48 : -0.48) + writhe) * 1.32 * reach,
+            gb.cy + Math.sin(a + (k % 2 === 0 ? 0.48 : -0.48) + writhe) * 1.32 * reach,
+            gb.z
+          );
           ctx.beginPath();
           ctx.moveTo(pt.x, pt.y);
-          ctx.lineTo(mid.x, mid.y);
-          ctx.lineTo(tip.x, tip.y);
-          ctx.moveTo(mid.x, mid.y);
-          ctx.lineTo(fork.x, fork.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(fk.x, fk.y);
+          ctx.strokeStyle = k % 2 === 1 ? `rgb(${rr}, ${gg}, ${bb})` : 'rgb(72, 232, 255)';
+          ctx.globalAlpha = arcAlpha * 0.52;
+          ctx.lineWidth = 6.5 * Math.sqrt(decay);
+          ctx.stroke();
+          ctx.strokeStyle = 'rgb(245, 253, 255)';
+          ctx.globalAlpha = arcAlpha * 0.92;
+          ctx.lineWidth = 2.0 * Math.sqrt(decay);
           ctx.stroke();
         }
+        ctx.globalCompositeOperation = prevComp;
       } else {
         ctx.beginPath();
         ctx.moveTo(pt.x - 16, pt.y - 5);

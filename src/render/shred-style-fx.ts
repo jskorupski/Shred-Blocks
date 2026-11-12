@@ -144,8 +144,8 @@ export function spawnStyledShredShockwavesAndGateFx(
     );
     rctx.spawnShockwave(sx, sy, 0.5, 0.84, 0.98, 1.0, 0.14, 1.18, 0.48);
   } else if (particleStyle === 'lightning_bolts') {
-    rctx.spawnShockwave(sx, sy, 0.49, 0.48, 0.97, 1.0, 0.2, 1.78, 0.24);
-    rctx.spawnShockwave(sx, sy, 0.45, cr, cg, cb, 0.24, 1.28, 0.22);
+    rctx.spawnShockwave(sx, sy, 0.49, 0.42, 0.96, 1.0, 0.16, 1.02, 0.17);
+    rctx.spawnShockwave(sx, sy, 0.45, cr, cg, cb, 0.18, 0.78, 0.14);
     spawnGateBurst(rctx, {
       cx: gate ? cx : sx,
       cy: gate ? cy : sy,
@@ -154,7 +154,7 @@ export function spawnStyledShredShockwavesAndGateFx(
       g: cg,
       b: cb,
       age: 0.001,
-      maxAge: 0.64,
+      maxAge: 0.68,
       spanLength: gate ? spanLength : 1.5,
       isHoriz,
       nx,
@@ -195,7 +195,7 @@ export function spawnStyledParticlesImpl(
     particleStyle === 'soap_bubbles'
       ? 1.85
       : particleStyle === 'lightning_bolts'
-        ? 1.12
+        ? 0.64
         : particleStyle === 'pixel_sparks'
           ? 1.12
           : 1.0;
@@ -290,22 +290,22 @@ export function spawnStyledParticlesImpl(
       maxAge = 1.85 + ((i * 9) % 10) * 0.105;
       rotSpeed = (i % 2 === 0 ? 1 : -1) * (1.25 + (i % 7) * 0.28);
     } else if (particleStyle === 'lightning_bolts') {
-      const rad = 0.95 + ((i * 7) % 13) * 0.28;
-      const fwd = 2.95 + ((i * 13) % 11) * 0.44;
-      vx = dirX * fwd + (hasDir ? tanX * lateralOffset * 2.15 : 0) + Math.cos(angle) * rad;
-      vy = dirY * fwd + (hasDir ? tanY * lateralOffset * 2.15 : 0) + Math.sin(angle) * rad;
-      vz = 1.55 + ((i * 5) % 9) * 0.24;
+      const rad = 1.25 + ((i * 7) % 13) * 0.34;
+      const fwd = 3.25 + ((i * 13) % 11) * 0.52;
+      vx = dirX * fwd + (hasDir ? tanX * lateralOffset * 2.85 : 0) + Math.cos(angle) * rad;
+      vy = dirY * fwd + (hasDir ? tanY * lateralOffset * 2.85 : 0) + Math.sin(angle) * rad;
+      vz = 1.45 + ((i * 5) % 9) * 0.24;
       if (i % 3 === 0) {
-        pr = 0.38;
-        pg = 0.95;
+        pr = 0.08;
+        pg = 0.82;
         pb = 1.0;
       } else {
-        pr = Math.min(1, r * 0.82 + 0.24);
-        pg = Math.min(1, g * 0.82 + 0.28);
-        pb = Math.min(1, b * 0.82 + 0.34);
+        pr = Math.min(1, r * 0.9 + 0.14);
+        pg = Math.min(1, g * 0.9 + 0.18);
+        pb = Math.min(1, b * 0.9 + 0.22);
       }
-      scale = 0.105 + ((i * 3) % 5) * 0.022;
-      maxAge = 0.44 + ((i * 7) % 5) * 0.052;
+      scale = 0.086 + ((i * 3) % 5) * 0.018;
+      maxAge = 0.38 + ((i * 7) % 5) * 0.048;
       rotAngle = Math.atan2(vy, vx);
       rotSpeed = i % 2 === 0 ? 1 : -1;
     } else {
@@ -417,13 +417,22 @@ export function stepStyledParticleSlot(
   }
 
   if (baseTag === 4) {
-    // lightning_bolts: crisp velocity-aligned high-voltage dart with one stepped-leader jolt deflection
-    const drag = Math.max(0, 1 - 1.95 * dt);
-    pool[idx + 3] *= drag;
-    pool[idx + 4] *= drag;
+    // lightning_bolts: live electromagnetic flutter + stepped-leader jolt deflection
+    const drag = Math.max(0, 1 - 1.85 * dt);
+    const speed = Math.hypot(pool[idx + 3], pool[idx + 4]);
+    if (speed > 0.08) {
+      const px = -pool[idx + 4] / speed;
+      const py = pool[idx + 3] / speed;
+      const whip = Math.sin(nextAge * 46.0 + idx * 0.37) * 5.4 * dt;
+      pool[idx + 3] = pool[idx + 3] * drag + px * whip;
+      pool[idx + 4] = pool[idx + 4] * drag + py * whip;
+    } else {
+      pool[idx + 3] *= drag;
+      pool[idx + 4] *= drag;
+    }
     pool[idx + 5] -= 1.25 * dt;
     if (styleTag === 4 && nextAge > maxAge * 0.34) {
-      const turn = (pool[idx + 13] >= 0 ? 1 : -1) * 0.42;
+      const turn = (pool[idx + 13] >= 0 ? 1 : -1) * 0.46;
       const ct = Math.cos(turn);
       const st = Math.sin(turn);
       const vx0 = pool[idx + 3];
@@ -433,7 +442,7 @@ export function stepStyledParticleSlot(
       pool[idx + 14] = 14;
     }
     pool[idx + 12] = Math.atan2(pool[idx + 4], pool[idx + 3]);
-    return 0.26 + 0.74 * clampedLife;
+    return 0.32 + 0.68 * Math.sqrt(clampedLife);
   }
 
   // micro_cubes (0) or ambient motes (-1): gravity + single courtyard bounce for cubes

@@ -245,13 +245,21 @@ export function renderPass4ParticlesImpl(
   if (solid > 0 && h.vao && h.instanceBuffer) {
     const translucentGameplay =
       (rctx.lastOptions.blueprintMix ?? 0) <= 0.01 || Boolean(rctx.hasGameplayParticles);
+    const additiveLightning =
+      styleCode === 4 && Boolean(rctx.hasGameplayParticles) && (rctx.lastOptions.blueprintMix ?? 0) <= 0.01;
     gl.bindVertexArray(h.vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, h.instanceBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, rctx.particleInstanceData.subarray(0, solid * INSTANCE_STRIDE));
     if (translucentGameplay) {
       gl.depthMask(false);
     }
+    if (additiveLightning) {
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    }
     gl.drawElementsInstanced(gl.TRIANGLES, h.indexCount, gl.UNSIGNED_SHORT, 0, solid);
+    if (additiveLightning) {
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    }
     if (translucentGameplay) {
       gl.depthMask(true);
     }
@@ -349,6 +357,12 @@ export function warmUpWebGLPipelinesImpl(
     0
   );
   gl.uniform1i(rctx.uUseClipPlane, 0);
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.uniform1i(rctx.uTraceCount, 0);
+  gl.uniform4f(rctx.uClipPlane, 0.2, 0.2, 1.0, 0.0);
+  rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 9);
+  gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.enable(gl.CULL_FACE);
 
   if (h.program && h.vao && h.instanceBuffer && h.smokeVao && h.smokeInstanceBuffer) {

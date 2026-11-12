@@ -23,6 +23,7 @@ out vec3 v_color;
 out vec3 v_localPos;
 flat out float v_archetype; // 0=style particle, 1=stone shard, 2=smoke puff, 3=relic ember (RELIC-AWAKEN-01)
 flat out float v_life;
+flat out float v_lifeRatio;
 out float v_fade;
 
 void main() {
@@ -35,6 +36,7 @@ void main() {
   float w = a_instPosScale.w;
   v_archetype = w <= -10.0 ? 2.0 : (w <= -5.0 ? 3.0 : (w < 0.0 ? 1.0 : 0.0));
   v_life = a_instColorRot.w;
+  v_lifeRatio = 1.0;
   v_fade = 1.0;
   v_color = a_instColorRot.rgb;
   v_localPos = a_position;
@@ -75,6 +77,7 @@ void main() {
 
   // Gameplay shred & ambient particles pack 10-bit lifeRatio in floor(w) and physical scale in fract(w)
   float lifeRatio = clamp(floor(w) / 1023.0, 0.0, 1.0);
+  v_lifeRatio = lifeRatio;
   w = fract(w);
   vec3 worldOffset;
 
@@ -104,9 +107,9 @@ void main() {
       vec3(0.0, 0.208, 0.978) * (a_position.z * 0.02 * w);
     v_normal = vec3(0.0, 0.208, 0.978);
   } else if (u_particleStyle == 4) {
-    // lightning_bolts: crisp velocity-aligned plasma ribbon tapering cleanly as charge dissipates
-    float boltTaper = mix(0.32, 1.0, smoothstep(0.0, 0.42, lifeRatio));
-    p = vec3(p.x * 2.85, p.y * 0.68 * boltTaper, p.z * 0.02) * w;
+    // lightning_bolts: compact velocity-aligned electric plasma spark streak
+    float boltTaper = mix(0.45, 1.0, smoothstep(0.0, 0.38, lifeRatio));
+    p = vec3(p.x * 1.95, p.y * 0.72 * boltTaper, p.z * 0.02) * w;
     worldOffset = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
     v_normal = vec3(0.0, 0.208, 0.978);
   } else {
@@ -129,7 +132,7 @@ void main() {
   float lifeFade = u_particleStyle == 3
     ? smoothstep(0.0, 0.16, lifeRatio)
     : u_particleStyle == 4
-      ? smoothstep(0.0, 0.14, lifeRatio)
+      ? smoothstep(0.0, 0.28, lifeRatio)
       : smoothstep(0.0, 0.42, lifeRatio);
   v_fade = lifeFade * edgeFade;
   gl_Position = clipPos;
@@ -145,6 +148,7 @@ in vec3 v_color;
 in vec3 v_localPos;
 flat in float v_archetype;
 flat in float v_life;
+flat in float v_lifeRatio;
 in float v_fade;
 
 uniform int u_particleStyle; // 0=micro_cubes, 1=star_confetti, 2=pixel_sparks, 3=soap_bubbles, 4=lightning_bolts
@@ -225,21 +229,22 @@ void main() {
     outColor = vec4(clamp(col, 0.0, 1.0), bubbleAlpha * circleMask * v_fade);
     return;
   } else if (u_particleStyle == 4) {
-    // lightning_bolts: crisp forked incandescent plasma filament with high-luminance core (zero dark halo)
+    // lightning_bolts: sleek glowing electric plasma spark with strobing ionized head & comet tail (zero discard)
     float lx = v_localPos.x;
     float ly = v_localPos.y;
-    float endMask = smoothstep(0.5, 0.26, abs(lx));
-    float jagWave = (abs(fract(lx * 2.6 + 0.18) * 2.0 - 1.0) - 0.5) * 0.30 * endMask;
-    float mainDist = abs(ly - jagWave);
-    float forkActive = smoothstep(-0.08, 0.06, lx) * smoothstep(0.48, 0.28, lx);
-    float forkY = jagWave + (lx + 0.05) * 0.56;
-    float forkDist = mix(1.0, abs(ly - forkY), forkActive);
-    float d = min(mainDist, forkDist * 1.12);
-    float core = smoothstep(0.095, 0.022, d) * endMask;
-    float sheath = smoothstep(0.19, 0.03, d) * endMask;
-    vec3 baseArc = mix(v_color * 0.75 + vec3(0.25), vec3(0.42, 0.96, 1.0), 0.68);
-    vec3 col = mix(baseArc, vec3(0.97, 0.995, 1.0), core * 0.92);
-    float alpha = clamp(sheath * 0.72 + core * 0.88, 0.0, 0.99) * v_fade;
+    float phase = (1.0 - v_lifeRatio) * 42.0 + v_life * 5.1;
+    float edgeMask = smoothstep(0.50, 0.32, max(abs(lx), abs(ly)));
+    float tailT = smoothstep(-0.42, 0.34, lx);
+    float clampedX = clamp(lx, -0.38, 0.34);
+    float d = length(vec2((lx - clampedX) * 1.4, ly));
+    vec2 headDelta = vec2((lx - 0.24) * 1.15, ly);
+    float headOrb = exp(-dot(headDelta, headDelta) * 34.0);
+    float corona = (exp(-d * d * 24.0) * (0.35 + 0.65 * tailT) + headOrb * 0.55) * edgeMask;
+    float core = (exp(-d * d * 180.0) * tailT + exp(-dot(headDelta, headDelta) * 110.0) * 0.95) * edgeMask;
+    float strobe = 0.56 + 0.44 * sin(phase * 2.1);
+    vec3 sparkHue = mix(v_color, vec3(0.10, 0.84, 1.0), 0.60);
+    vec3 col = mix(sparkHue, vec3(0.99, 0.998, 1.0), clamp(core * v_fade, 0.0, 1.0));
+    float alpha = clamp((corona * 0.66 + core * 0.86) * strobe, 0.0, 0.98) * v_fade;
     outColor = vec4(clamp(col, 0.0, 1.0), alpha);
     return;
   }

@@ -28,7 +28,7 @@ uniform vec3 u_capColor;
 uniform vec4 u_clipPlane;
 uniform int u_useClipPlane;
 uniform int u_useTexture;
-uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=tray_floor, 6=relic_stone, 7=tray_wall
+uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=tray_floor, 6=relic_stone, 7=tray_wall, 8=trace, 9=plasma_arc
 uniform sampler2D u_atlas;
 uniform float u_blueprintMix;
 uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
@@ -145,6 +145,72 @@ void main() {
     float alpha = u_color.a * crossProfile * tailRise * leadMask * mix(1.0, 0.52, u_blueprintMix);
     if (alpha < 0.003) { outColor = vec4(0.0); return; }
     outColor = vec4(smearRgb, alpha);
+    return;
+  }
+
+  if (u_materialStyle == 9) {
+    // SHRED-STYLE-01: Single-quad volumetric plasma bolt tree (u_traceCount >= 1) & gate-jaw corona flash (u_traceCount <= 0)
+    if (u_traceCount <= 0) {
+      float halfLen = u_clipPlane.x;
+      float rad = max(u_clipPlane.y, 0.02);
+      vec2 q = (v_uv - 0.5) * vec2(halfLen * 2.0 + rad * 2.0, rad * 2.0);
+      float dx = q.x - clamp(q.x, -halfLen, halfLen);
+      float d = length(vec2(dx, q.y)) / rad;
+      if (d >= 1.0) { outColor = vec4(0.0); return; }
+      float bloom = pow(1.0 - d, 2.2);
+      float sheath = exp(-d * d * 7.5) * (1.0 - d);
+      float core = exp(-d * d * 32.0) * (1.0 - d) * u_clipPlane.z;
+      vec3 glowCol = mix(u_color.rgb, u_capColor, 0.42);
+      vec3 col = mix(glowCol, vec3(0.98, 0.995, 1.0), clamp(core * 1.15, 0.0, 1.0));
+      float alpha = clamp(u_color.a * (bloom * 0.54 + sheath * 0.42 + core * 0.65), 0.0, 1.0) * mix(1.0, 0.45, u_blueprintMix);
+      outColor = vec4(clamp(col, 0.0, 1.0), alpha);
+      return;
+    }
+    vec2 p = v_worldPos.xy;
+    int segCount = min(u_traceCount, 8);
+    float tArc = u_boardInfo.z >= 0.0 ? (u_boardInfo.z * 28.0 + u_clipPlane.w) : u_clipPlane.w;
+    float dMin = 99.0;
+    float bestArc = 0.0;
+    for (int i = 0; i < 8; i++) {
+      if (i >= segCount) break;
+      vec4 a = u_tracePts[i * 2];
+      vec4 b = u_tracePts[i * 2 + 1];
+      vec2 ab = b.xy - a.xy;
+      float segLen = sqrt(max(dot(ab, ab), 1e-5));
+      vec2 dir = ab / segLen;
+      vec2 perp = vec2(-dir.y, dir.x);
+      float h = clamp(dot(p - a.xy, dir) / segLen, 0.0, 1.0);
+      float glowR = max(mix(a.w, b.w, h), 0.025);
+      float fi = float(i);
+      float pin = sin(h * 3.14159265);
+      // Crisp angular triangle-wave micro-jags (never sinusoidal curls)
+      float triA = abs(fract(h * 2.0 + fi * 0.37) * 2.0 - 1.0) * 2.0 - 1.0;
+      float jitterFlip = sin(tArc + fi * 2.3);
+      float microJag = pin * triA * jitterFlip * glowR * 0.11;
+      float nd = length(p - (a.xy + dir * (h * segLen) + perp * microJag)) / glowR;
+      if (nd < dMin) {
+        dMin = nd;
+        bestArc = mix(a.z, b.z, h);
+      }
+    }
+    if (dMin >= 1.0) { outColor = vec4(0.0); return; }
+    float pulseDist = (bestArc - u_clipPlane.x) * 4.4;
+    float surgeWave = exp(-pulseDist * pulseDist) * u_clipPlane.y;
+    float rootMask = u_clipPlane.z > 0.001 ? smoothstep(u_clipPlane.z - 0.14, u_clipPlane.z + 0.24, bestArc) : 1.0;
+    float tipTaper = smoothstep(1.04, 0.68, bestArc) * 0.38 + 0.62;
+    // Wide saturated electric corona + tight mid-sheath + razor-sharp white spine that flares with surgeWave
+    float corona = pow(1.0 - dMin, 2.05);
+    float sheath = exp(-dMin * dMin * mix(20.0, 10.0, surgeWave)) * (1.0 - dMin);
+    float core = exp(-dMin * dMin * mix(155.0, 32.0, surgeWave)) * (1.0 - dMin);
+    vec3 outerHue = mix(u_color.rgb, u_capColor, 0.38);
+    vec3 midHue = mix(u_color.rgb, vec3(0.32, 0.92, 1.0), 0.58);
+    vec3 col = mix(outerHue, midHue, clamp(sheath * 1.3, 0.0, 1.0));
+    float hotness = clamp(u_color.a * (0.82 + 0.45 * surgeWave), 0.0, 1.0);
+    col = mix(col, vec3(0.99, 0.998, 1.0), clamp(core * (1.1 + 0.5 * surgeWave) * hotness * hotness, 0.0, 1.0));
+    float intensity = (corona * 0.54 + sheath * 0.56 + core * (0.88 + 0.45 * surgeWave)) * (0.78 + 0.56 * surgeWave) * rootMask * tipTaper;
+    float alpha = clamp(u_color.a * intensity, 0.0, 1.0) * mix(1.0, 0.45, u_blueprintMix);
+    if (alpha < 0.003) { outColor = vec4(0.0); return; }
+    outColor = vec4(clamp(col, 0.0, 1.0), alpha);
     return;
   }
 
