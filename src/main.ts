@@ -53,6 +53,7 @@ import {
   syncTimerPillOnlyImpl,
   syncTitleOverlayDomImpl,
 } from './ui/hud-and-title-view';
+import { mountLanDevTools } from './ui/lan-devtools';
 import {
   autoSolveCurrentLevelImpl,
   checkUrlHashForSaveImportImpl,
@@ -81,6 +82,8 @@ import {
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
 
 export * from './ui/catalog-meta';
+
+declare const __SHREDBLOCKS_LAN_DEVTOOLS__: boolean;
 
 declare global {
   interface Window {
@@ -174,7 +177,8 @@ export class ShredBlocksApp implements AppViewContext {
           trace.colorId,
           roomVis.zOffset,
           trace.spanCols,
-          trace.spanRows
+          trace.spanRows,
+          trace.intoGate
         );
       },
       onImmobileBlockTap: (block) => {
@@ -218,6 +222,9 @@ export class ShredBlocksApp implements AppViewContext {
     );
 
     this.bindDomEvents();
+    if (typeof __SHREDBLOCKS_LAN_DEVTOOLS__ !== 'undefined' && __SHREDBLOCKS_LAN_DEVTOOLS__) {
+      mountLanDevTools(this);
+    }
     this.setupDialogLightDismiss();
     this.setupPwaAndServiceWorker();
 

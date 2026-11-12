@@ -505,6 +505,7 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
     save.equippedSkin,
     (skinId, price) => {
       if (app.saveManager.unlockOrEquipSkin(skinId, price)) {
+        app.syncAllUiFromSave();
         app.sound.playButtonTap();
         app.renderThemesStudio();
         app.renderNow();
@@ -522,6 +523,7 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
     save.equippedTray,
     (trayId, price) => {
       if (app.saveManager.unlockOrEquipTray(trayId, price)) {
+        app.syncAllUiFromSave();
         app.sound.playButtonTap();
         app.renderThemesStudio();
         app.renderNow();
@@ -539,7 +541,8 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
     save.equippedParticle,
     (particleId, price) => {
       if (app.saveManager.unlockOrEquipParticle(particleId, price)) {
-        app.sound.playButtonTap();
+        app.syncAllUiFromSave();
+        app.sound.playParticlePreview(particleId);
         app.renderThemesStudio();
         app.renderNow();
       } else {

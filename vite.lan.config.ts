@@ -53,6 +53,9 @@ const FRAME_GUARD_HEADERS = {
 
 export default defineConfig({
   base: '/',
+  define: {
+    __SHREDBLOCKS_LAN_DEVTOOLS__: 'true',
+  },
   server: {
     host: '0.0.0.0',
     port: 8443,

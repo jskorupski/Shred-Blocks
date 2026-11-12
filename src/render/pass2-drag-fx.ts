@@ -46,27 +46,46 @@ export function spawnPathTraceImpl(
   colorId: ColorId,
   z = 0.0,
   spanCols = 1,
-  spanRows = 1
+  spanRows = 1,
+  intoGate = false
 ): void {
   if (rctx.lastOptions.reducedMotion || waypoints.length < 2) return;
   const cols = Math.max(1, spanCols);
   const rows = Math.max(1, spanRows);
   const adjusted = waypoints.slice();
-  const dx0 = adjusted[1].x - adjusted[0].x;
-  const dy0 = adjusted[1].y - adjusted[0].y;
+  const origLastPrev = waypoints[waypoints.length - 2];
+  const dx0 = waypoints[1].x - waypoints[0].x;
+  const dy0 = waypoints[1].y - waypoints[0].y;
   const len0 = Math.hypot(dx0, dy0);
   if (len0 > 0.12) {
     const ux = dx0 / len0;
     const uy = dy0 / len0;
-    const hx = Math.max(0.12, cols * 0.5 - 0.22);
-    const hy = Math.max(0.12, rows * 0.5 - 0.22);
-    const tMaxX = Math.abs(ux) > 1e-4 ? hx / Math.abs(ux) : 99;
-    const tMaxY = Math.abs(uy) > 1e-4 ? hy / Math.abs(uy) : 99;
-    const pullBack = Math.min(len0 * 0.35, Math.min(tMaxX, tMaxY) * 0.85);
+    const tMaxX = Math.abs(ux) > 1e-4 ? (cols * 0.5) / Math.abs(ux) : 99;
+    const tMaxY = Math.abs(uy) > 1e-4 ? (rows * 0.5) / Math.abs(uy) : 99;
+    const rearMargin = intoGate ? 0.36 : 0.18;
+    const maxFirstLegPull = waypoints.length > 2 ? len0 * 0.85 : 99;
+    const pullBack = Math.min(maxFirstLegPull, Math.max(0, Math.min(tMaxX, tMaxY) - rearMargin));
     adjusted[0] = {
-      x: Math.max(0.18, adjusted[0].x - ux * pullBack),
-      y: Math.max(0.18, adjusted[0].y - uy * pullBack),
+      x: adjusted[0].x - ux * pullBack,
+      y: adjusted[0].y - uy * pullBack,
     };
+  }
+  if (!intoGate) {
+    const lastIdx = adjusted.length - 1;
+    const dxL = adjusted[lastIdx].x - origLastPrev.x;
+    const dyL = adjusted[lastIdx].y - origLastPrev.y;
+    const lenL = Math.hypot(dxL, dyL);
+    if (lenL > 0.12) {
+      const uxL = dxL / lenL;
+      const uyL = dyL / lenL;
+      const tMaxX = Math.abs(uxL) > 1e-4 ? (cols * 0.5) / Math.abs(uxL) : 99;
+      const tMaxY = Math.abs(uyL) > 1e-4 ? (rows * 0.5) / Math.abs(uyL) : 99;
+      const headInset = Math.min(lenL * 0.65, Math.max(0.2, Math.min(tMaxX, tMaxY) - 0.32));
+      adjusted[lastIdx] = {
+        x: adjusted[lastIdx].x - uxL * headInset,
+        y: adjusted[lastIdx].y - uyL * headInset,
+      };
+    }
   }
   const { segments, totalLength } = buildTraceSegments(adjusted);
   if (segments.length === 0 || totalLength < 0.24) return;
@@ -430,7 +449,7 @@ export function renderMysticPathTraces3D(
 
     const alpha = envelope * (tr.alphaScale ?? 1.0) * baseAlpha;
     gl.uniform1i(rctx.uTraceCount, win.pointCount);
-    gl.uniform4fv(rctx.uTracePts, TRACE_UNIFORM_BUF);
+    gl.uniform4fv(rctx.uTracePts, TRACE_UNIFORM_BUF, 0, win.pointCount * 4);
     gl.uniform3f(rctx.uCapColor, coreR, coreG, coreB);
     rctx.drawMesh(
       gl,
@@ -570,7 +589,7 @@ export function renderCanvas2DDragAndTrailFx(
     const isLightTray = floorLum >= 0.38;
 
     ctx.save();
-    ctx.lineCap = 'round';
+    ctx.lineCap = 'butt';
     ctx.lineJoin = 'round';
     for (const tr of rctx.activePathTraces) {
       const p = Math.min(1, Math.max(0, tr.age / tr.maxAge));
@@ -639,21 +658,30 @@ export async function executeBenchmarkFramesImpl(
   const count = Math.max(10, frames);
   const samples = new Float32Array(count);
 
-  if (rctx.activeParticleCount < 60 && lastBoard) {
+  const spawnedSynthetic = rctx.activeParticleCount < 60 && Boolean(lastBoard);
+  if (spawnedSynthetic && lastBoard) {
     rctx.spawnParticlesAt(lastBoard.cols * 0.5, lastBoard.rows * 0.5, 0.45, 1, 60, 0, -1);
   }
   if (lastBoard) {
-    rctx.render(lastBoard, { ...rctx.lastOptions, dtSec: 1 / 120 });
+    for (let w = 0; w < 4; w++) {
+      rctx.render(lastBoard, { ...rctx.lastOptions, dtSec: 1 / 120 });
+    }
     rctx.gl?.finish();
   }
 
   for (let i = 0; i < count; i++) {
+    if (i > 0 && i % 12 === 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
     const t0 = performance.now();
     if (lastBoard) {
       rctx.render(lastBoard, { ...rctx.lastOptions, dtSec: 1 / 120 });
     }
     rctx.gl?.flush();
     samples[i] = Math.max(0.01, performance.now() - t0);
+  }
+  if (spawnedSynthetic) {
+    rctx.resetTransientFx?.();
   }
 
   let sum = 0;

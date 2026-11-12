@@ -45,6 +45,7 @@ export interface CommittedPathTraceInfo {
   zOffset: number;
   spanCols: number;
   spanRows: number;
+  intoGate?: boolean;
 }
 
 export interface HoverState {
@@ -413,7 +414,8 @@ export function buildCommittedMoveTrace(
     pts[pts.length - 1] = endPt;
   }
 
-  if (shredGateIndex >= 0 && board.gates[shredGateIndex]) {
+  const intoGate = Boolean(shredGateIndex >= 0 && board.gates[shredGateIndex]);
+  if (intoGate) {
     const [nx, ny] = getGateOutwardNormal(board.gates[shredGateIndex].edge);
     if (pts.length === 1 || Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y) < 0.12) {
       pts[0] = { x: startPt.x - nx * 0.18, y: startPt.y - ny * 0.18 };
@@ -428,6 +430,7 @@ export function buildCommittedMoveTrace(
     zOffset: 0,
     spanCols: shape.cols,
     spanRows: shape.rows,
+    intoGate,
   };
 }
 

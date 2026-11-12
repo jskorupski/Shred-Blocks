@@ -185,11 +185,82 @@
 .swatch-pixel_sparks,
 .swatch-soap_bubbles,
 .swatch-lightning_bolts {
-  background: radial-gradient(circle at 50% 50%, #4a3269 0%, #201633 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
+  font-size: 1.18rem;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.swatch-micro_cubes {
+  color: #fff2dc;
+  text-shadow: 0 1px 3px rgba(10, 6, 20, 0.72);
+  background:
+    linear-gradient(135deg, #f4665a 0 100%) 24% 26% / 8px 8px no-repeat,
+    linear-gradient(135deg, #f7c95c 0 100%) 76% 30% / 7px 7px no-repeat,
+    linear-gradient(135deg, #3bd6b8 0 100%) 72% 76% / 8px 8px no-repeat,
+    radial-gradient(circle at 50% 50% var(--in-oklab), #3f2b5c 0%, #1c142c 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(247, 201, 92, 0.34);
+}
+
+.swatch-star_confetti {
+  color: #ffe680;
+  text-shadow: 0 0 8px rgba(255, 224, 112, 0.65);
+  background:
+    radial-gradient(circle at 24% 28%, #ffe074 0 2.5px, transparent 3.2px),
+    radial-gradient(circle at 76% 24%, #ff7ec8 0 2.6px, transparent 3.4px),
+    radial-gradient(circle at 74% 74%, #ffe074 0 2.4px, transparent 3.2px),
+    radial-gradient(circle at 28% 76%, #6be8ff 0 2.2px, transparent 3px),
+    radial-gradient(circle at 50% 48% var(--in-oklab), #562c6e 0%, #231334 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 224, 116, 0.42);
+}
+
+.swatch-pixel_sparks {
+  color: #fff8dc;
+  text-shadow: 0 0 8px rgba(255, 186, 72, 0.8);
+  background:
+    linear-gradient(38deg, transparent 43%, rgba(255, 226, 132, 0.92) 48%, transparent 54%) 26% 28% / 14px
+    14px no-repeat,
+    linear-gradient(-38deg, transparent 43%, rgba(255, 118, 88, 0.9) 48%, transparent 54%) 74% 72% / 14px 14px
+    no-repeat,
+    radial-gradient(circle at 50% 50% var(--in-oklab), #4e2246 0%, #190e26 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 168, 84, 0.44);
+}
+
+.swatch-soap_bubbles {
+  color: #e6fbff;
+  text-shadow: 0 0 8px rgba(132, 240, 255, 0.72);
+  background:
+    radial-gradient(circle at 28% 28%, rgba(255, 255, 255, 0.88) 0 1.8px, transparent 2.8px),
+    radial-gradient(
+      circle at 30% 32%,
+      rgba(164, 244, 255, 0.16) 0 5px,
+      rgba(255, 182, 242, 0.62) 6.5px,
+      transparent 7.5px
+    ),
+    radial-gradient(
+      circle at 72% 68%,
+      rgba(164, 244, 255, 0.14) 0 4px,
+      rgba(142, 248, 224, 0.62) 5.4px,
+      transparent 6.4px
+    ),
+    radial-gradient(circle at 50% 50% var(--in-oklab), #1e4b64 0%, #112238 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(154, 242, 255, 0.45);
+}
+
+.swatch-lightning_bolts {
+  color: #9ef8ff;
+  text-shadow: 0 0 10px rgba(72, 238, 255, 0.92);
+  background:
+    linear-gradient(118deg, transparent 44%, rgba(124, 246, 255, 0.85) 49%, transparent 54%) 28% 34% / 16px
+    16px no-repeat,
+    linear-gradient(62deg, transparent 44%, rgba(188, 134, 255, 0.82) 49%, transparent 54%) 72% 68% / 16px
+    16px no-repeat,
+    radial-gradient(circle at 50% 50% var(--in-oklab), #1d3268 0%, #0b1126 100%);
+  box-shadow:
+    inset 0 0 8px rgba(72, 238, 255, 0.34),
+    inset 0 0 0 1.5px rgba(96, 238, 255, 0.52);
 }
 
 .theme-card.equipped {

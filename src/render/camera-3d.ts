@@ -19,10 +19,57 @@ export const BLOCK_LIFT_DELTA_Z = 0.46;
 export const DEFAULT_PITCH_DEG = 78;
 export const DEFAULT_FOV_DEG = 34;
 
+export function computeBoardTargetAspect(rows: number, cols: number): number {
+  return rows === cols ? 1 : Math.max(0.65, Math.min(1.25, (cols + 1.55) / (rows + 1.55)));
+}
+
+export function measureStageContentBox(
+  canvas: HTMLCanvasElement,
+  fallbackW: number,
+  fallbackH: number
+): [number, number] {
+  const stage = canvas.parentElement;
+  if (stage && typeof window !== 'undefined') {
+    const sr = stage.getBoundingClientRect();
+    if (sr.width > 1 && sr.height > 1) {
+      const cs = window.getComputedStyle(stage);
+      const padX = (Number.parseFloat(cs.paddingLeft) || 0) + (Number.parseFloat(cs.paddingRight) || 0);
+      const padY = (Number.parseFloat(cs.paddingTop) || 0) + (Number.parseFloat(cs.paddingBottom) || 0);
+      return [Math.max(1, sr.width - padX), Math.max(1, sr.height - padY)];
+    }
+  }
+  return [fallbackW, fallbackH];
+}
+
+export function computeBoardBleedFraming(
+  rows: number,
+  cols: number,
+  canvasCssW: number,
+  canvasCssH: number,
+  stageContentW = canvasCssW,
+  stageContentH = canvasCssH
+): { boardAspect: number; scaleX: number; scaleY: number } {
+  const safeW = Math.max(1, canvasCssW);
+  const safeH = Math.max(1, canvasCssH);
+  const cqw = stageContentW > 1 ? stageContentW : safeW;
+  const cqh = stageContentH > 1 ? stageContentH : safeH;
+  const boardAspect = computeBoardTargetAspect(rows, cols);
+  const boardBoxW = Math.min(0.96 * cqw, 0.82 * cqh * boardAspect, 550 * boardAspect);
+  const boardBoxH = boardBoxW / boardAspect;
+  const fitMul = Math.min(1, safeW / Math.max(1, boardBoxW), safeH / Math.max(1, boardBoxH));
+  return {
+    boardAspect,
+    scaleX: (boardBoxW * fitMul) / safeW,
+    scaleY: (boardBoxH * fitMul) / safeH,
+  };
+}
+
 export class Camera3D {
   private rows = 6;
   private cols = 6;
   private aspect = 1;
+  private scaleX = 1;
+  private scaleY = 1;
   private pitchDeg = DEFAULT_PITCH_DEG;
   private fovDeg = DEFAULT_FOV_DEG;
   private near = 0.5;
@@ -44,17 +91,22 @@ export class Camera3D {
   }
 
   /**
-   * Updates the camera framing for a `rows × cols` board tray and viewport `aspect = width / height`.
+   * Updates the camera framing for a `rows × cols` board tray, inner board `aspect = boxW / boxH`,
+   * and optional particle-bleed canvas focal scales `(scaleX = boxW / canvasW, scaleY = boxH / canvasH)`.
    */
-  public setBoardAndViewport(rows: number, cols: number, aspect: number): void {
+  public setBoardAndViewport(rows: number, cols: number, aspect: number, scaleX = 1, scaleY = 1): void {
     const safeRows = Math.max(1, rows);
     const safeCols = Math.max(1, cols);
     const safeAspect = Number.isFinite(aspect) && aspect > 0.05 ? aspect : 1;
+    const safeScaleX = Number.isFinite(scaleX) && scaleX > 0.05 ? scaleX : 1;
+    const safeScaleY = Number.isFinite(scaleY) && scaleY > 0.05 ? scaleY : 1;
 
     if (
       this.rows === safeRows &&
       this.cols === safeCols &&
       Math.abs(this.aspect - safeAspect) < 1e-6 &&
+      Math.abs(this.scaleX - safeScaleX) < 1e-6 &&
+      Math.abs(this.scaleY - safeScaleY) < 1e-6 &&
       this.viewMatrix[15] === 1
     ) {
       return;
@@ -63,6 +115,8 @@ export class Camera3D {
     this.rows = safeRows;
     this.cols = safeCols;
     this.aspect = safeAspect;
+    this.scaleX = safeScaleX;
+    this.scaleY = safeScaleY;
     this.recomputeMatrices();
   }
 
@@ -154,8 +208,8 @@ export class Camera3D {
     // WebGL2 [-1, +1] Z clip space projection matrix
     const pmGL = this.projMatrixWebGL;
     pmGL.fill(0);
-    pmGL[0] = f / this.aspect;
-    pmGL[5] = f;
+    pmGL[0] = (f / this.aspect) * this.scaleX;
+    pmGL[5] = f * this.scaleY;
     pmGL[10] = (far + near) * nf;
     pmGL[11] = -1;
     pmGL[14] = 2 * far * near * nf;
@@ -163,8 +217,8 @@ export class Camera3D {
     // WebGPU [0, 1] Z clip space projection matrix
     const pmGPU = this.projMatrixWebGPU;
     pmGPU.fill(0);
-    pmGPU[0] = f / this.aspect;
-    pmGPU[5] = f;
+    pmGPU[0] = (f / this.aspect) * this.scaleX;
+    pmGPU[5] = f * this.scaleY;
     pmGPU[10] = far * nf;
     pmGPU[11] = -1;
     pmGPU[14] = far * near * nf;
@@ -195,24 +249,25 @@ export class Camera3D {
     clientY: number,
     canvasRect: DOMRect,
     rows: number,
-    cols: number
+    cols: number,
+    scaleX = 1,
+    scaleY = 1,
+    boardAspect?: number
   ): { boardX: number; boardY: number } {
     const width = Math.max(1, canvasRect.width);
     const height = Math.max(1, canvasRect.height);
-    this.setBoardAndViewport(rows, cols, width / height);
+    this.setBoardAndViewport(rows, cols, boardAspect ?? width / height, scaleX, scaleY);
 
     const ndcX = ((clientX - canvasRect.left) / width) * 2 - 1;
     const ndcY = 1 - ((clientY - canvasRect.top) / height) * 2;
 
-    const halfFovRad = (this.fovDeg * Math.PI) / 360;
-    const tanHalfFovY = Math.tan(halfFovRad);
     const pitchRad = (this.pitchDeg * Math.PI) / 180;
     const sinPitch = Math.sin(pitchRad);
     const cosPitch = Math.cos(pitchRad);
 
-    // Direction in camera view space through (ndcX, ndcY) on the z_cam = -1 plane
-    const dirCamX = ndcX * this.aspect * tanHalfFovY;
-    const dirCamY = ndcY * tanHalfFovY;
+    // Exact inverse of projMatrixWebGL focal scales on the z_cam = -1 plane
+    const dirCamX = ndcX / this.projMatrixWebGL[0];
+    const dirCamY = ndcY / this.projMatrixWebGL[5];
     const dirCamZ = -1;
 
     // Transform direction to world space via transpose of view rotation
@@ -232,20 +287,18 @@ export class Camera3D {
   }
 
   /**
-   * Projects a 3D board coordinate `(boardX, boardY, worldZ)` into client screen coordinates `(x, y)`.
+   * Projects a 3D board coordinate `(boardX, boardY, worldZ)` using the current `vpMatrixWebGL`
+   * into a `(left, top, width, height)` screen/canvas rectangle.
    */
-  public boardToScreen(
+  public projectToRect(
     boardX: number,
     boardY: number,
     worldZ: number,
-    canvasRect: DOMRect,
-    rows: number,
-    cols: number
+    left: number,
+    top: number,
+    width: number,
+    height: number
   ): { x: number; y: number } {
-    const width = Math.max(1, canvasRect.width);
-    const height = Math.max(1, canvasRect.height);
-    this.setBoardAndViewport(rows, cols, width / height);
-
     const vp = this.vpMatrixWebGL;
     const clipX = vp[0] * boardX + vp[4] * boardY + vp[8] * worldZ + vp[12];
     const clipY = vp[1] * boardX + vp[5] * boardY + vp[9] * worldZ + vp[13];
@@ -255,10 +308,30 @@ export class Camera3D {
     const ndcX = clipX * invW;
     const ndcY = clipY * invW;
 
-    const x = canvasRect.left + (ndcX * 0.5 + 0.5) * width;
-    const y = canvasRect.top + (0.5 - ndcY * 0.5) * height;
+    return {
+      x: left + (ndcX * 0.5 + 0.5) * width,
+      y: top + (0.5 - ndcY * 0.5) * height,
+    };
+  }
 
-    return { x, y };
+  /**
+   * Projects a 3D board coordinate `(boardX, boardY, worldZ)` into client screen coordinates `(x, y)`.
+   */
+  public boardToScreen(
+    boardX: number,
+    boardY: number,
+    worldZ: number,
+    canvasRect: DOMRect,
+    rows: number,
+    cols: number,
+    scaleX = 1,
+    scaleY = 1,
+    boardAspect?: number
+  ): { x: number; y: number } {
+    const width = Math.max(1, canvasRect.width);
+    const height = Math.max(1, canvasRect.height);
+    this.setBoardAndViewport(rows, cols, boardAspect ?? width / height, scaleX, scaleY);
+    return this.projectToRect(boardX, boardY, worldZ, canvasRect.left, canvasRect.top, width, height);
   }
 }
 

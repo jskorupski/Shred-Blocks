@@ -1,6 +1,7 @@
 /**
- * GPU-instanced particle shaders (`R3D-04`, `RELIC-AWAKEN-01`): style particles, tumbling stone shards,
- * and billboard smoke puffs. Re-exported from `shaders-3d.ts` for zero-friction imports.
+ * GPU-instanced particle shaders (`R3D-04`, `SHRED-STYLE-01`, `RELIC-AWAKEN-01`):
+ * 5 distinct shredder styles, tumbling stone shards, rising relic embers, and billboard smoke puffs.
+ * Zero fragment `discard` so mobile tile-GPU LRZ Early-Z stays active.
  */
 export const PARTICLE_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -17,8 +18,9 @@ uniform int u_particleStyle; // 0=micro_cubes, 1=star_confetti, 2=pixel_sparks, 
 out vec3 v_normal;
 out vec3 v_color;
 out vec3 v_localPos;
-flat out float v_archetype; // 0=style particle, 1=stone shard, 2=smoke puff (RELIC-AWAKEN-01)
+flat out float v_archetype; // 0=style particle, 1=stone shard, 2=smoke puff, 3=relic ember (RELIC-AWAKEN-01)
 flat out float v_life;
+out float v_fade;
 
 void main() {
   float angle = a_instColorRot.w;
@@ -28,11 +30,24 @@ void main() {
   vec3 p = a_position;
   vec3 n = a_normal;
   float w = a_instPosScale.w;
-  v_archetype = w <= -10.0 ? 2.0 : (w < 0.0 ? 1.0 : 0.0);
+  v_archetype = w <= -10.0 ? 2.0 : (w <= -5.0 ? 3.0 : (w < 0.0 ? 1.0 : 0.0));
   v_life = a_instColorRot.w;
+  v_fade = 1.0;
   v_color = a_instColorRot.rgb;
   v_localPos = a_position;
 
+  if (v_archetype > 2.5) {
+    // Relic-awakening ember: exact tumbling micro-ember trajectory (RELIC-AWAKEN-01)
+    p = a_position * (-w - 5.0);
+    vec3 rotatedEmber = vec3(
+      p.x * c - p.y * s,
+      p.x * s + p.y * c,
+      p.z * c - p.x * s * 0.3
+    );
+    v_normal = n;
+    gl_Position = u_viewProj * vec4(rotatedEmber + a_instPosScale.xyz, 1.0);
+    return;
+  }
   if (v_archetype > 1.5) {
     // Camera-facing billboard smoke puff (camera pitch ~78deg: up = (0, -0.978, 0.208))
     float sz = -w - 10.0;
@@ -55,35 +70,57 @@ void main() {
     return;
   }
 
+  // Gameplay shred & ambient particles pack 10-bit lifeRatio in floor(w) and physical scale in fract(w)
+  float lifeRatio = clamp(floor(w) / 1023.0, 0.0, 1.0);
+  w = fract(w);
+  vec3 worldOffset;
+
   if (u_particleStyle == 1) {
-    // star_confetti: flat fluttering ribbon wafers
-    p = vec3(p.x * 1.38, p.y * 1.15, p.z * 0.16);
+    // star_confetti: fluttering 5-point foil star wafer with bounded front-facing 3D tilt
+    p = vec3(p.x * 1.62, p.y * 1.62, p.z * 0.12) * w;
+    float tilt = sin(angle * 1.4) * 0.65;
+    float ct = cos(tilt);
+    float st = sin(tilt);
+    p = vec3(p.x, p.y * ct - p.z * st, p.y * st + p.z * ct);
+    n = vec3(n.x, n.y * ct - n.z * st, n.y * st + n.z * ct);
+    worldOffset = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
+    v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
   } else if (u_particleStyle == 2) {
-    // pixel_sparks: crisp axis-aligned voxel sparks
-    p = p * 0.78;
-    c = 1.0;
-    s = 0.0;
+    // pixel_sparks: velocity-aligned incandescent laser streak (angle = atan2(vy, vx))
+    p = vec3(p.x * 2.35, p.y * 0.34, p.z * 0.34) * w;
+    worldOffset = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
+    v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
   } else if (u_particleStyle == 3) {
-    // soap_bubbles: inflated spherical droplets
+    // soap_bubbles: inflated iridescent spherical droplet
     vec3 sphereDir = normalize(a_position);
-    p = sphereDir * 0.62;
-    n = sphereDir;
+    worldOffset = sphereDir * (0.68 * w);
+    v_normal = sphereDir;
   } else if (u_particleStyle == 4) {
-    // lightning_bolts: elongated jagged electric streaks
-    p = vec3(p.x * 2.45, p.y * 0.28 + sin(p.x * 6.0) * 0.14, p.z * 0.28);
+    // lightning_bolts: jagged zig-zag electric arc streak
+    float zig = (abs(fract(p.x * 2.5) * 2.0 - 1.0) - 0.5) * 0.42;
+    p = vec3(p.x * 2.75, p.y * 0.26 + zig, p.z * 0.26) * w;
+    worldOffset = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
+    v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
+  } else {
+    // micro_cubes (0): full 3-axis tumbling beveled voxel cube
+    p = p * w;
+    float ax0 = angle * 0.82;
+    float ca0 = cos(ax0);
+    float sa0 = sin(ax0);
+    p = vec3(p.x, p.y * ca0 - p.z * sa0, p.y * sa0 + p.z * ca0);
+    n = vec3(n.x, n.y * ca0 - n.z * sa0, n.y * sa0 + n.z * ca0);
+    worldOffset = vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
+    v_normal = vec3(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
   }
 
-  p = p * a_instPosScale.w;
-  vec3 rotated = vec3(
-    p.x * c - p.y * s,
-    p.x * s + p.y * c,
-    p.z * c - p.x * s * 0.3
-  );
-
-  vec3 worldPos = rotated + a_instPosScale.xyz;
-  v_normal = n;
-
-  gl_Position = u_viewProj * vec4(worldPos, 1.0);
+  vec4 clipPos = u_viewProj * vec4(worldOffset + a_instPosScale.xyz, 1.0);
+  vec2 ndc = clipPos.xy / max(0.0001, abs(clipPos.w));
+  float edgeFade = smoothstep(0.992, 0.80, max(abs(ndc.x), abs(ndc.y)));
+  float lifeFade = u_particleStyle == 3
+    ? smoothstep(0.0, 0.22, lifeRatio)
+    : smoothstep(0.0, 0.42, lifeRatio);
+  v_fade = lifeFade * edgeFade;
+  gl_Position = clipPos;
 }
 `;
 
@@ -96,6 +133,7 @@ in vec3 v_color;
 in vec3 v_localPos;
 flat in float v_archetype;
 flat in float v_life;
+in float v_fade;
 
 uniform int u_particleStyle; // 0=micro_cubes, 1=star_confetti, 2=pixel_sparks, 3=soap_bubbles, 4=lightning_bolts
 
@@ -107,6 +145,10 @@ void main() {
   vec3 V = normalize(vec3(0.0, 0.21, 0.97));
   float light = 0.62 + max(dot(N, L), 0.0) * 0.45;
 
+  if (v_archetype > 2.5) {
+    outColor = vec4(clamp(v_color * light, 0.0, 1.0), 0.95);
+    return;
+  }
   if (v_archetype > 1.5) {
     // Soft volumetric smoke/dust puff: single-sided 2-triangle quad using exact composite alpha
     // a1 * (2.0 - a1), with zero fragment discard so mobile tile-GPU LRZ Early-Z stays active.
@@ -120,7 +162,7 @@ void main() {
     return;
   }
   if (v_archetype > 0.5) {
-    // Chiseled weathered stone shard with glowing amethyst-orchid-gold fracture edges (matches relic crack glow)
+    // Chiseled weathered stone shard with glowing amethyst-orchid-gold fracture edges
     vec3 lp = abs(v_localPos);
     float edgeCount = smoothstep(0.34, 0.47, lp.x) + smoothstep(0.34, 0.47, lp.y) + smoothstep(0.34, 0.47, lp.z);
     float edge = smoothstep(1.25, 1.9, edgeCount);
@@ -133,32 +175,48 @@ void main() {
   }
 
   if (u_particleStyle == 1) {
-    // star_confetti: glossy metallic foil sheen
-    float foil = 0.75 + 0.45 * abs(dot(N, L));
-    vec3 col = mix(v_color * foil, vec3(1.0, 0.96, 0.8), 0.22);
-    outColor = vec4(clamp(col, 0.0, 1.0), 0.96);
+    // star_confetti: 5-point polar star SDF with metallic foil specular flash (zero discard)
+    float r = length(v_localPos.xy);
+    float ang = atan(v_localPos.y, v_localPos.x) + 1.5708;
+    float starR = mix(0.2, 0.49, pow(0.5 + 0.5 * cos(ang * 5.0), 1.35));
+    float starMask = smoothstep(starR + 0.048, starR - 0.032, r);
+    float foil = 0.76 + 0.54 * pow(abs(dot(N, L)), 1.6);
+    float centerGlint = smoothstep(0.24, 0.0, r) * 0.28;
+    vec3 col = mix(v_color * foil, vec3(1.0, 0.96, 0.82), 0.24 + centerGlint);
+    outColor = vec4(clamp(col, 0.0, 1.0), starMask * 0.96 * v_fade);
     return;
   } else if (u_particleStyle == 2) {
-    // pixel_sparks: white-hot incandescent core with glowing edge
-    float core = clamp(1.0 - length(v_localPos) * 1.15, 0.0, 1.0);
-    vec3 col = mix(v_color * 1.25, vec3(1.0, 0.98, 0.82), core * 0.7);
-    outColor = vec4(clamp(col, 0.0, 1.0), 0.98);
+    // pixel_sparks: incandescent white-hot spine tapering along velocity streak
+    float spine = clamp(1.0 - abs(v_localPos.y) * 1.85, 0.0, 1.0);
+    float tipFade = smoothstep(0.52, 0.18, abs(v_localPos.x));
+    float core = spine * (0.55 + 0.45 * tipFade);
+    vec3 col = mix(v_color * 1.28, vec3(1.0, 0.98, 0.86), core * 0.78);
+    outColor = vec4(clamp(col, 0.0, 1.0), clamp(0.68 + core * 0.32, 0.0, 0.99) * v_fade);
     return;
   } else if (u_particleStyle == 3) {
-    // soap_bubbles: translucent sphere with iridescent Fresnel rim glow
-    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 2.0);
-    vec3 irid = mix(v_color, vec3(0.78, 0.96, 1.0), 0.55 * fresnel);
-    float alpha = clamp(0.28 + fresnel * 0.64, 0.25, 0.92);
-    outColor = vec4(clamp(irid + vec3(fresnel * 0.35), 0.0, 1.0), alpha);
+    // soap_bubbles: airy thin-film rainbow Fresnel sphere + crisp upper-left window glint
+    float ndv = max(dot(N, V), 0.0);
+    float fresnel = pow(1.0 - ndv, 2.25);
+    vec3 rainbow = 0.5 + 0.5 * cos(6.283 * (fresnel * 1.55 + v_localPos.x * 0.85 + vec3(0.0, 0.33, 0.67)));
+    vec3 film = mix(v_color, mix(rainbow, vec3(0.84, 0.97, 1.0), 0.42), 0.65 * fresnel + 0.18);
+    vec3 specDir = normalize(vec3(-0.38, -0.42, 0.82));
+    float windowGlint = smoothstep(0.86, 0.97, max(dot(N, specDir), 0.0));
+    vec3 col = film + vec3(fresnel * 0.32 + windowGlint * 0.78);
+    float alpha = clamp(0.16 + fresnel * 0.7 + windowGlint * 0.55, 0.14, 0.92) * v_fade;
+    outColor = vec4(clamp(col, 0.0, 1.0), alpha);
     return;
   } else if (u_particleStyle == 4) {
-    // lightning_bolts: high-voltage electric cyan/white arc flash
-    float arc = clamp(1.0 - abs(v_localPos.y) * 1.6, 0.0, 1.0);
-    vec3 col = mix(mix(v_color, vec3(0.35, 0.92, 1.0), 0.55), vec3(1.0), arc * 0.75);
-    outColor = vec4(clamp(col, 0.0, 1.0), 0.98);
+    // lightning_bolts: jagged high-voltage electric cyan/white plasma arc
+    float arc = clamp(1.0 - abs(v_localPos.y) * 1.75, 0.0, 1.0);
+    vec3 col = mix(mix(v_color, vec3(0.36, 0.94, 1.0), 0.58), vec3(1.0), arc * 0.82);
+    outColor = vec4(clamp(col, 0.0, 1.0), clamp(0.72 + arc * 0.27, 0.0, 0.99) * v_fade);
     return;
   }
 
-  outColor = vec4(clamp(v_color * light, 0.0, 1.0), 0.95);
+  // micro_cubes (0): sculpted 3D chamfered voxel with crisp edge bevel catch-light
+  vec3 lp0 = abs(v_localPos);
+  float bevel = smoothstep(0.34, 0.48, max(lp0.x, max(lp0.y, lp0.z)));
+  vec3 cubeCol = v_color * light + vec3(1.0, 0.97, 0.9) * (bevel * 0.16 * max(dot(N, L), 0.15));
+  outColor = vec4(clamp(cubeCol, 0.0, 1.0), 0.97 * v_fade);
 }
 `;

@@ -274,6 +274,7 @@ export class BoardInputController {
       const group = getMovedGroupBlocks(board, picked.id);
       const targets = group.length > 0 ? group : [picked];
       for (const b of targets) {
+        b.shredGateIndex = -1;
         b.reboundTimerMs = 240;
       }
       this.callbacks.sound?.playWallClack();

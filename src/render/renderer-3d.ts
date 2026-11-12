@@ -12,9 +12,14 @@ import {
   type TrayId,
 } from '../core/types';
 import { type AtlasTextureData, type AtlasUVRegion, createAtlasTextureData } from './atlas-3d';
-import { Camera3D } from './camera-3d';
+import {
+  Camera3D,
+  computeBoardBleedFraming,
+  computeBoardTargetAspect,
+  measureStageContentBox,
+} from './camera-3d';
 import { renderCanvas2DFallbackImpl } from './canvas2d-fallback';
-import { ENVIRONMENT_MESHES, type MeshData, POLYOMINO_MESH_CATALOG } from './mesh-generator';
+import type { MeshData } from './mesh-generator';
 import {
   detectAutomaticShredEventsImpl,
   getRoomVisualStateImpl,
@@ -34,8 +39,14 @@ import {
 import { spawnPathTraceImpl } from './pass2-drag-fx';
 import { renderPass3BlocksImpl } from './pass3-block-shells';
 import {
+  createEmptyParticleDrawHandles,
+  disposeWebGLResourcesImpl,
+  type ParticleDrawHandles,
+  prepareWebGL2FrameStateImpl,
   renderPass4ParticlesImpl,
+  resetTransientFxImpl,
   spawnRelicAwakeningBurstImpl,
+  uploadAtlasAndStaticMeshesImpl,
   warmUpWebGLPipelinesImpl,
 } from './relic-awakening-fx';
 import {
@@ -46,19 +57,17 @@ import {
   type GLMeshHandle,
   getMaterialStyleCodeForSkin,
   getParticleStyleCodeForId,
-  getStoneThemeMineralTint,
-  getTrayMaterialCode,
   HIGH_CONTRAST_TRAY_PALETTES,
   INSTANCE_STRIDE,
   MAX_PARTICLES,
   MAX_SMOKE_PUFFS,
   PARTICLE_STRIDE,
-  type PathWaypoint,
   QualityGovernor,
   type RenderPassContext,
   type RenderSceneOptions,
   TRAY_PALETTES,
   type TrayPalette,
+  type VisualGateBurst,
   type VisualPathTrace,
   type VisualShockwave,
   type VisualShredAnim,
@@ -128,6 +137,7 @@ export class Renderer3D implements RenderPassContext {
   public readonly smokeInstanceData = new Float32Array(MAX_SMOKE_PUFFS * INSTANCE_STRIDE);
   public activeParticleCount = 0;
   public activeSmokeCount = 0;
+  public hasGameplayParticles = false;
   public particlePoolCount = 0;
   public particleWriteCursor = 0;
 
@@ -135,6 +145,7 @@ export class Renderer3D implements RenderPassContext {
   public lastBoardLevelId = -1;
   public lastSessionShredded = 0;
   public lastMovesCommitted = 0;
+  public lastSyncedBoardRef: BoardState | null = null;
   public readonly blockLayerSnapshots: RenderPassContext['blockLayerSnapshots'] = new Map();
   public readonly crateSnapshots: RenderPassContext['crateSnapshots'] = new Map();
   public readonly gateSnapshots: RenderPassContext['gateSnapshots'] = new Map();
@@ -143,6 +154,7 @@ export class Renderer3D implements RenderPassContext {
   public readonly roomAwakenMap = new Map<number, number>();
   public readonly activeVisualShreds: VisualShredAnim[] = [];
   public readonly activeShockwaves: VisualShockwave[] = [];
+  public readonly activeGateBursts: VisualGateBurst[] = [];
   public readonly activePathTraces: VisualPathTrace[] = [];
   public readonly blockBounceMap = new Map<number, number>();
   public boardShakeTimer = 0;
@@ -152,9 +164,16 @@ export class Renderer3D implements RenderPassContext {
 
   private resizeObserver: ResizeObserver | null = null;
   private currentDpr = 1;
+  private stageContentW = 0;
+  private stageContentH = 0;
+  private canvasCssW = 0;
+  private canvasCssH = 0;
+  private lastCanvasRect: DOMRect | null = null;
+  private lastRectReadMs = 0;
   private lastAspectRows = 0;
   private lastAspectCols = 0;
   private lastBoard: BoardState | null = null;
+  private readonly cachedParticleHandles: ParticleDrawHandles = createEmptyParticleDrawHandles();
   public lastOptions: RenderSceneOptions = {};
   public startTimeMs = performance.now();
 
@@ -263,40 +282,34 @@ export class Renderer3D implements RenderPassContext {
 
     this.resizeObserver = new ResizeObserver(([entry]) => {
       if (!entry) return;
-      const maxDpr = this.qualityGovernor.getTargetMaxDpr();
-      const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-      const dpr = Math.min(maxDpr, rawDpr);
-      this.currentDpr = dpr;
-      this.qualityGovernor.setDpr(dpr);
+      if (entry.contentRect.width <= 0 || entry.contentRect.height <= 0) {
+        this.canvasCssW = 0;
+        this.canvasCssH = 0;
+        this.lastCanvasRect = null;
+        return;
+      }
+      const rect = this.canvas.getBoundingClientRect();
+      this.lastCanvasRect = rect;
+      this.lastRectReadMs = performance.now();
+      const cssEntryW = Math.max(1, rect.width || entry.contentRect.width);
+      const cssEntryH = Math.max(1, rect.height || entry.contentRect.height);
+      this.refreshStageMetrics(cssEntryW, cssEntryH);
+      const { dpr, rawDpr } = this.computeEffectiveDpr(cssEntryW, cssEntryH);
 
       const dpc = (
         entry as ResizeObserverEntry & {
           devicePixelContentBoxSize?: ReadonlyArray<{ inlineSize: number; blockSize: number }>;
         }
       ).devicePixelContentBoxSize;
-
-      const rawPixelW =
-        dpc && dpc.length > 0
-          ? dpc[0].inlineSize
-          : Math.round(
-              entry.contentRect.width * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)
-            );
-      const rawPixelH =
-        dpc && dpc.length > 0
-          ? dpc[0].blockSize
-          : Math.round(
-              entry.contentRect.height * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)
-            );
-
-      const scaleCap = rawDpr > maxDpr ? maxDpr / rawDpr : 1;
+      const rawPixelW = dpc && dpc.length > 0 ? dpc[0].inlineSize : Math.round(cssEntryW * rawDpr);
+      const rawPixelH = dpc && dpc.length > 0 ? dpc[0].blockSize : Math.round(cssEntryH * rawDpr);
+      const scaleCap = rawDpr > dpr ? dpr / rawDpr : 1;
       const targetW = Math.max(64, Math.round(rawPixelW * scaleCap));
       const targetH = Math.max(64, Math.round(rawPixelH * scaleCap));
-
       if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
         this.canvas.width = targetW;
         this.canvas.height = targetH;
       }
-
       if (this.lastBoard) {
         this.render(this.lastBoard, this.lastOptions);
       }
@@ -305,27 +318,42 @@ export class Renderer3D implements RenderPassContext {
     const supportsDevicePixelContentBox =
       typeof ResizeObserverEntry !== 'undefined' &&
       'devicePixelContentBoxSize' in ResizeObserverEntry.prototype;
-    const options: ResizeObserverOptions = supportsDevicePixelContentBox
-      ? { box: 'device-pixel-content-box' }
-      : {};
     try {
-      this.resizeObserver.observe(this.canvas, options);
+      this.resizeObserver.observe(
+        this.canvas,
+        supportsDevicePixelContentBox ? { box: 'device-pixel-content-box' } : {}
+      );
     } catch {
       this.resizeObserver.observe(this.canvas);
     }
   }
 
-  public resize(): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const cssW = rect.width > 0 ? rect.width : this.canvas.clientWidth || 640;
-    const cssH = rect.height > 0 ? rect.height : this.canvas.clientHeight || 640;
+  private refreshStageMetrics(cssW: number, cssH: number): void {
+    this.canvasCssW = cssW;
+    this.canvasCssH = cssH;
+    [this.stageContentW, this.stageContentH] = measureStageContentBox(this.canvas, cssW, cssH);
+  }
 
+  private computeEffectiveDpr(cssW: number, cssH: number): { dpr: number; rawDpr: number } {
     const maxDpr = this.qualityGovernor.getTargetMaxDpr();
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const dpr = Math.min(maxDpr, rawDpr);
+    const f = computeBoardBleedFraming(
+      this.lastBoard?.rows ?? 6,
+      this.lastBoard?.cols ?? 6,
+      cssW,
+      cssH,
+      this.stageContentW,
+      this.stageContentH
+    );
+    const boardMaxCss = Math.max(1, cssW * f.scaleX, cssH * f.scaleY);
+    const dpr = Math.min(maxDpr, rawDpr, Math.max(1, 900 / boardMaxCss));
     this.currentDpr = dpr;
     this.qualityGovernor.setDpr(dpr);
+    return { dpr, rawDpr };
+  }
 
+  private applyCanvasDpr(cssW: number, cssH: number): void {
+    const { dpr } = this.computeEffectiveDpr(cssW, cssH);
     const targetW = Math.max(64, Math.round(cssW * dpr));
     const targetH = Math.max(64, Math.round(cssH * dpr));
     if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
@@ -334,30 +362,31 @@ export class Renderer3D implements RenderPassContext {
     }
   }
 
-  private releaseWebGLResources(): void {
-    const gl = this.gl;
-    if (gl && !gl.isContextLost()) {
-      for (const handle of this.meshHandles.values()) {
-        gl.deleteVertexArray(handle.vao);
-        gl.deleteBuffer(handle.posBuffer);
-        gl.deleteBuffer(handle.normBuffer);
-        gl.deleteBuffer(handle.uvBuffer);
-        gl.deleteBuffer(handle.indexBuffer);
-      }
-      for (const h of [this.particleHandle, this.smokeHandle]) {
-        if (!h) continue;
-        gl.deleteVertexArray(h.vao);
-        gl.deleteBuffer(h.posBuf);
-        gl.deleteBuffer(h.normBuf);
-        gl.deleteBuffer(h.idxBuf);
-        gl.deleteBuffer(h.instBuf);
-      }
-      if (this.atlasTexture) gl.deleteTexture(this.atlasTexture);
-      if (this.mainProgram) gl.deleteProgram(this.mainProgram);
-      if (this.particleProgram) gl.deleteProgram(this.particleProgram);
+  public resize(): void {
+    const rect = this.canvas.getBoundingClientRect();
+    this.lastCanvasRect = rect;
+    this.lastRectReadMs = performance.now();
+    if ((rect.width <= 0 || rect.height <= 0) && this.canvas.isConnected) {
+      this.canvasCssW = 0;
+      this.canvasCssH = 0;
+      return;
     }
+    const cssW = rect.width > 0 ? rect.width : this.canvas.clientWidth || this.canvas.width || 640;
+    const cssH = rect.height > 0 ? rect.height : this.canvas.clientHeight || this.canvas.height || 640;
+    this.refreshStageMetrics(cssW, cssH);
+    this.applyCanvasDpr(cssW, cssH);
+  }
 
-    this.meshHandles.clear();
+  private releaseWebGLResources(): void {
+    disposeWebGLResourcesImpl(
+      this.gl,
+      this.meshHandles,
+      this.particleHandle,
+      this.smokeHandle,
+      this.atlasTexture,
+      this.mainProgram,
+      this.particleProgram
+    );
     this.particleHandle = null;
     this.smokeHandle = null;
     this.atlasTexture = null;
@@ -412,30 +441,9 @@ export class Renderer3D implements RenderPassContext {
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
     this.uPartStyle = gl.getUniformLocation(partProg, 'u_particleStyle');
 
-    // Upload 512x512 procedural RGBA texture atlas
-    const tex = gl.createTexture();
-    if (tex) {
-      this.atlasTexture = tex;
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlasData.canvas);
-    }
-
-    // Pre-upload static polyomino meshes (standard, studded, worn stone) + environment meshes
-    for (const entry of Object.values(POLYOMINO_MESH_CATALOG)) {
-      this.getOrCreateMeshHandle(gl, entry.meshOuter);
-      this.getOrCreateMeshHandle(gl, entry.meshInnerCore);
-      this.getOrCreateMeshHandle(gl, entry.meshOuterStudded);
-      this.getOrCreateMeshHandle(gl, entry.meshInnerCoreStudded);
-      this.getOrCreateMeshHandle(gl, entry.meshOuterWorn);
-      this.getOrCreateMeshHandle(gl, entry.meshInnerCoreWorn);
-    }
-    for (const envMesh of Object.values(ENVIRONMENT_MESHES) as MeshData[]) {
-      this.getOrCreateMeshHandle(gl, envMesh);
-    }
+    this.atlasTexture = uploadAtlasAndStaticMeshesImpl(gl, this.atlasData.canvas, (g, m) =>
+      this.getOrCreateMeshHandle(g, m)
+    );
 
     // Setup GPU-instanced particle & smoke quad VAOs + pre-warm Vulkan/Adreno PSOs
     this.particleHandle = createParticleInstancedVao(gl, this.particleInstanceData.byteLength);
@@ -452,18 +460,18 @@ export class Renderer3D implements RenderPassContext {
     );
   }
 
-  private getParticleDrawHandles() {
-    return {
-      program: this.particleProgram,
-      vao: this.particleHandle?.vao ?? null,
-      instanceBuffer: this.particleHandle?.instBuf ?? null,
-      indexCount: this.particleHandle?.indexCount ?? 0,
-      smokeVao: this.smokeHandle?.vao ?? null,
-      smokeInstanceBuffer: this.smokeHandle?.instBuf ?? null,
-      smokeIndexCount: this.smokeHandle?.indexCount ?? 0,
-      uViewProj: this.uPartViewProj,
-      uStyle: this.uPartStyle,
-    };
+  private getParticleDrawHandles(): ParticleDrawHandles {
+    const h = this.cachedParticleHandles;
+    h.program = this.particleProgram;
+    h.vao = this.particleHandle?.vao ?? null;
+    h.instanceBuffer = this.particleHandle?.instBuf ?? null;
+    h.indexCount = this.particleHandle?.indexCount ?? 0;
+    h.smokeVao = this.smokeHandle?.vao ?? null;
+    h.smokeInstanceBuffer = this.smokeHandle?.instBuf ?? null;
+    h.smokeIndexCount = this.smokeHandle?.indexCount ?? 0;
+    h.uViewProj = this.uPartViewProj;
+    h.uStyle = this.uPartStyle;
+    return h;
   }
 
   private getOrCreateMeshHandle(gl: WebGL2RenderingContext, mesh: MeshData): GLMeshHandle {
@@ -474,52 +482,71 @@ export class Renderer3D implements RenderPassContext {
     return handle;
   }
 
-  public screenToBoard(
-    clientX: number,
-    clientY: number,
-    rows: number,
-    cols: number
-  ): { boardX: number; boardY: number } {
-    const rect = this.canvas.getBoundingClientRect();
-    return this.camera.screenToBoardRayPlane(clientX, clientY, rect, rows, cols);
+  private syncRectAndFraming(rows: number, cols: number) {
+    const now = performance.now();
+    if (!this.lastCanvasRect || this.lastCanvasRect.width <= 0 || now - this.lastRectReadMs > 16) {
+      this.lastCanvasRect = this.canvas.getBoundingClientRect();
+      this.lastRectReadMs = now;
+    }
+    const rect = this.lastCanvasRect;
+    if (
+      rect.width > 0 &&
+      (Math.abs(rect.width - this.canvasCssW) > 0.5 || Math.abs(rect.height - this.canvasCssH) > 0.5)
+    ) {
+      this.refreshStageMetrics(rect.width, rect.height);
+    }
+    return {
+      rect,
+      f: computeBoardBleedFraming(
+        rows,
+        cols,
+        rect.width,
+        rect.height,
+        this.stageContentW,
+        this.stageContentH
+      ),
+    };
   }
 
-  public boardToScreen(
-    boardX: number,
-    boardY: number,
-    worldZ: number,
-    rows: number,
-    cols: number
-  ): { x: number; y: number } {
-    const rect = this.canvas.getBoundingClientRect();
-    return this.camera.boardToScreen(boardX, boardY, worldZ, rect, rows, cols);
+  public screenToBoard(clientX: number, clientY: number, rows: number, cols: number) {
+    const { rect, f } = this.syncRectAndFraming(rows, cols);
+    return this.camera.screenToBoardRayPlane(
+      clientX,
+      clientY,
+      rect,
+      rows,
+      cols,
+      f.scaleX,
+      f.scaleY,
+      f.boardAspect
+    );
   }
 
-  public spawnParticlesAt(
-    worldX: number,
-    worldY: number,
-    worldZ: number,
-    colorId: ColorId,
-    count?: number,
-    dirX = 0,
-    dirY = 0,
-    particleStyle: ParticleStyleId = 'micro_cubes'
-  ): void {
-    spawnParticlesAtImpl(this, worldX, worldY, worldZ, colorId, count, dirX, dirY, particleStyle);
+  public boardToScreen(boardX: number, boardY: number, worldZ: number, rows: number, cols: number) {
+    const { rect, f } = this.syncRectAndFraming(rows, cols);
+    return this.camera.boardToScreen(
+      boardX,
+      boardY,
+      worldZ,
+      rect,
+      rows,
+      cols,
+      f.scaleX,
+      f.scaleY,
+      f.boardAspect
+    );
+  }
+
+  public spawnParticlesAt(...args: Parameters<RenderPassContext['spawnParticlesAt']>): void {
+    spawnParticlesAtImpl(this, ...args);
   }
 
   public spawnShockwave(...args: Parameters<RenderPassContext['spawnShockwave']>): void {
     spawnShockwaveImpl(this, ...args);
   }
 
-  public spawnPathTrace(
-    waypoints: ReadonlyArray<PathWaypoint>,
-    colorId: ColorId,
-    z = 0,
-    spanCols = 1,
-    spanRows = 1
-  ): void {
-    spawnPathTraceImpl(this, waypoints, colorId, z, spanCols, spanRows);
+  public spawnPathTrace(...args: Parameters<RenderPassContext['spawnPathTrace']>): void {
+    spawnPathTraceImpl(this, ...args);
   }
 
   public spawnVictoryCelebrationBurst(board: BoardState): void {
@@ -568,21 +595,19 @@ export class Renderer3D implements RenderPassContext {
       this.qualityGovernor.setPreference(options.qualityTier);
     }
 
-    const maxDpr = this.qualityGovernor.getTargetMaxDpr();
-    const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const expectedDpr = Math.min(maxDpr, rawDpr);
     const boardDimsChanged = board.rows !== this.lastAspectRows || board.cols !== this.lastAspectCols;
-    if (boardDimsChanged) {
-      this.lastAspectRows = board.rows;
-      this.lastAspectCols = board.cols;
-      const targetAspect =
-        board.rows === board.cols
-          ? 1
-          : Math.max(0.65, Math.min(1.25, (board.cols + 1.55) / (board.rows + 1.55)));
-      this.canvas.style.setProperty('--board-aspect', targetAspect.toFixed(4));
+    if (boardDimsChanged || this.canvasCssW <= 1) {
+      this.canvas.style.setProperty(
+        '--board-aspect',
+        computeBoardTargetAspect(board.rows, board.cols).toFixed(4)
+      );
       this.resize();
-    } else if (Math.abs(expectedDpr - this.currentDpr) > 0.01) {
-      this.resize();
+      if (this.canvasCssW > 1) {
+        this.lastAspectRows = board.rows;
+        this.lastAspectCols = board.cols;
+      }
+    } else {
+      this.applyCanvasDpr(this.canvasCssW, this.canvasCssH);
     }
 
     const dtSec = options.dtSec ?? 1 / 60;
@@ -591,9 +616,17 @@ export class Renderer3D implements RenderPassContext {
     spawnAmbientCourtyardMotesImpl(this, board, options, dtSec, timeSec);
     this.stepParticles(dtSec);
 
-    const aspect =
-      this.canvas.width > 0 && this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
-    this.camera.setBoardAndViewport(board.rows, board.cols, aspect);
+    const cssW = this.canvasCssW > 1 ? this.canvasCssW : Math.max(1, this.canvas.width / this.currentDpr);
+    const cssH = this.canvasCssH > 1 ? this.canvasCssH : Math.max(1, this.canvas.height / this.currentDpr);
+    const f = computeBoardBleedFraming(
+      board.rows,
+      board.cols,
+      cssW,
+      cssH,
+      this.stageContentW,
+      this.stageContentH
+    );
+    this.camera.setBoardAndViewport(board.rows, board.cols, f.boardAspect, f.scaleX, f.scaleY);
 
     if (this.gl && !this.contextLost && this.mainProgram && this.particleProgram) {
       this.renderWebGL2(board, options, dtSec);
@@ -606,18 +639,8 @@ export class Renderer3D implements RenderPassContext {
     this.qualityGovernor.recordFrameWork(workDurationMs, nowMs);
   }
 
-  /** VISUAL-GOLDEN-01: drop all in-flight particles, motes, shockwaves, bounces & shakes for deterministic frames */
   public resetTransientFx(): void {
-    this.activeParticleCount = 0;
-    this.activeSmokeCount = 0;
-    this.particlePoolCount = 0;
-    this.particleWriteCursor = 0;
-    this.activeShockwaves.length = 0;
-    this.activePathTraces.length = 0;
-    this.activeVisualShreds.length = 0;
-    this.blockBounceMap.clear();
-    this.boardShakeTimer = 0;
-    this.ambientMoteAccumSec = 0;
+    resetTransientFxImpl(this);
   }
 
   public getColorRgb(
@@ -625,11 +648,8 @@ export class Renderer3D implements RenderPassContext {
     highContrast = false,
     colorblind = Boolean(this.lastOptions.colorblindSymbols)
   ): [number, number, number] {
-    const entry = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[0];
-    if (colorblind) {
-      return highContrast ? entry.cbHcRgb : entry.cbRgb;
-    }
-    return highContrast ? entry.hcRgb : entry.rgb;
+    const e = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[0];
+    return colorblind ? (highContrast ? e.cbHcRgb : e.cbRgb) : highContrast ? e.hcRgb : e.rgb;
   }
 
   public getMaterialStyleCode(skin: SkinId = 'classic_studs'): number {
@@ -671,15 +691,14 @@ export class Renderer3D implements RenderPassContext {
     gl.uniform1f(this.uRotZ, rotZ);
     gl.uniform4f(this.uColor, r, g, b, a);
     gl.uniform1i(this.uMaterialStyle, materialStyle);
-
-    if (uvRegion) {
-      gl.uniform1i(this.uUseTexture, 1);
-      gl.uniform4f(this.uUvRect, uvRegion.u0, uvRegion.v0, uvRegion.u1, uvRegion.v1);
-    } else {
-      gl.uniform1i(this.uUseTexture, 0);
-      gl.uniform4f(this.uUvRect, 0, 0, 1, 1);
-    }
-
+    gl.uniform1i(this.uUseTexture, uvRegion ? 1 : 0);
+    gl.uniform4f(
+      this.uUvRect,
+      uvRegion ? uvRegion.u0 : 0,
+      uvRegion ? uvRegion.v0 : 0,
+      uvRegion ? uvRegion.u1 : 1,
+      uvRegion ? uvRegion.v1 : 1
+    );
     gl.drawElements(gl.TRIANGLES, handle.indexCount, gl.UNSIGNED_SHORT, 0);
   }
 
@@ -689,6 +708,7 @@ export class Renderer3D implements RenderPassContext {
 
   public clearPathTraces(): void {
     this.activePathTraces.length = 0;
+    this.activeGateBursts.length = 0;
   }
 
   public drawNumberBadges(...args: Parameters<RenderPassContext['drawNumberBadges']>): void {
@@ -709,36 +729,27 @@ export class Renderer3D implements RenderPassContext {
     const palette = this.getEffectiveTrayPalette(trayId, highContrast);
     const timeSec = options.timeSec ?? (performance.now() - this.startTimeMs) * 0.001;
     const pulse = 0.5 + 0.5 * Math.sin(timeSec * 6.0);
-
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.0, 0.0, 0.0, 0.0);
-    gl.enable(gl.DEPTH_TEST);
-    gl.depthFunc(gl.LEQUAL);
-    gl.enable(gl.CULL_FACE);
-    gl.cullFace(gl.BACK);
-    gl.enable(gl.BLEND);
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
     const blueprintMix = Math.max(0, Math.min(1, options.blueprintMix ?? 0));
-    const stoneTint = getStoneThemeMineralTint(trayId, skinId);
-    gl.useProgram(this.mainProgram);
-    gl.uniformMatrix4fv(this.uViewProj, false, this.camera.getViewProjectionMatrix(false));
-    gl.uniform1i(this.uUseClipPlane, 0);
-    gl.uniform1f(this.uBlockSeed, 0);
-    gl.uniform4f(this.uClipPlane, 0, 0, 1, 0);
-    gl.uniform3f(this.uCapColor, 0.2, 0.2, 0.2);
-    gl.uniform1f(this.uBlueprintMix, blueprintMix);
-    gl.uniform3f(this.uBoardInfo, board.cols * 0.5, board.rows * 0.5, options.reducedMotion ? -1.0 : timeSec);
-    gl.uniform3f(this.uStoneTint, stoneTint[0], stoneTint[1], stoneTint[2]);
-    gl.uniform1i(this.uTrayMaterial, getTrayMaterialCode(trayId));
-    gl.uniform1i(this.uHighContrast, highContrast ? 1 : 0);
-
-    if (this.atlasTexture) {
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture);
-      gl.uniform1i(this.uAtlas, 0);
-    }
+    prepareWebGL2FrameStateImpl(
+      this,
+      gl,
+      this.mainProgram,
+      this.uViewProj,
+      this.uBlueprintMix,
+      this.uBoardInfo,
+      this.uStoneTint,
+      this.uTrayMaterial,
+      this.uHighContrast,
+      this.uAtlas,
+      this.atlasTexture,
+      board,
+      trayId,
+      skinId,
+      highContrast,
+      Boolean(options.reducedMotion),
+      timeSec,
+      blueprintMix
+    );
 
     // PASS 1..4: Courtyard, Gates & Barriers, Reticles, Blocks, and GPU-Instanced Particles
     renderPass1Courtyard(this, gl, board, palette, highContrast, colorblind, timeSec);
@@ -746,7 +757,7 @@ export class Renderer3D implements RenderPassContext {
     renderPass1PortcullisBarriers(this, gl, board, palette, timeSec);
     renderPass2ReticleAndPromptsImpl(this, gl, board, options, highContrast, pulse);
     renderPass3BlocksImpl(this, gl, board, options, skinId, highContrast, colorblind, pulse, timeSec, dtSec);
-    if (blueprintMix < 0.999) {
+    if (blueprintMix < 0.999 && this.activeParticleCount + this.activeSmokeCount > 0) {
       renderPass4ParticlesImpl(
         this,
         gl,
@@ -761,6 +772,7 @@ export class Renderer3D implements RenderPassContext {
   }
 
   public dispose(): void {
+    this.resetTransientFx();
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;

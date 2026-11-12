@@ -12,9 +12,9 @@ On-demand reference for **3D camera/grid math**, **swept polyomino physics**, **
 - **3D World Space (`x, y, z`)** ([`src/render/camera-3d.ts`](../src/render/camera-3d.ts)):
   - `x` corresponds to `col` ($x \in [0, \text{cols}]$); `y` corresponds to `row` ($y \in [0, \text{rows}]$).
   - `z` is vertical elevation above the courtyard floor ($z = 0$ floor tile surface; resting block top `BLOCK_TOP_Z = 0.58`; grabbed lift delta `BLOCK_LIFT_DELTA_Z = 0.46` in Pass 3, ray-plane hit at $z = 0.58$).
-- **Exact Ray-Plane Unprojection (`screenToBoardRayPlane`, `UX-01`)**:
-  - Camera tilts at `52°` from horizontal with a `34°` vertical FOV and frames `rows + 1.55` × `cols + 1.55` world units so perimeter shredder gates and the 3-tier stepped architectural plinth stay 100% inside the viewport across all aspect ratios.
-  - Pointer `(clientX, clientY)` unprojects via `invViewProj` onto $z = 0.58$ for zero-parallax 1:1 finger/cursor tracking.
+- **Exact Ray-Plane Unprojection & Zero-Layout-Shift Particle Bleed (`screenToBoardRayPlane`, `computeBoardBleedFraming`, `UX-01`)**:
+  - Camera tilts at `78°` pitch (`52°` foreshortened wall elevation feel) with a `34°` vertical FOV and frames `rows + 1.55` × `cols + 1.55` world units inside the inner board box (`min(96cqw, 82cqh * aspect, 550px * aspect)`).
+  - `#game-canvas` sits `position: absolute; inset: 0; margin: auto` inside `.board-stage` with a `1.48×` sanctuary particle-bleed margin (clamped to `100%` of `.board-stage` so outer HUD/dock layout shifts `0px` across all viewports while keeping `h > w` on tall portrait boards). `Camera3D.setBoardAndViewport(rows, cols, boardAspect, scaleX, scaleY)` scales `projMatrix[0]` and `projMatrix[5]` by `(scaleX, scaleY)` so every 3D board vertex projects to the exact same screen pixel while `screenToBoardRayPlane` unprojects onto $z = 0.58$ with zero parallax.
 
 ---
 

@@ -106,6 +106,9 @@ export const FRAME_GUARD_HEADERS = {
 
 export default defineConfig({
   base: '/',
+  define: {
+    __SHREDBLOCKS_LAN_DEVTOOLS__: 'false',
+  },
   plugins: [pwaAutoVersionPlugin()],
   build: {
     target: 'es2022',

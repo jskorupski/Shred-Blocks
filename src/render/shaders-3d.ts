@@ -58,11 +58,13 @@ void main() {
     vec2 p = v_worldPos.xy;
     int segCount = min(u_traceCount - 1, 15);
     float span = max(u_tracePts[segCount].z, 0.08);
-    // Distance-adaptive tail taper: short moves narrow/fade over a short distance (~0.68 cells on a 1-cell nudge),
-    // while longer sweeps narrow/fade gracefully over up to ~2.35 cells.
+    // Distance-adaptive tail taper + elliptical head/corner/tail caps (headCap <= 0.16) so smears never leak forward or sideways
     float taperLen = min(span * 0.84, max(0.42, min(span * 0.68, 2.35)));
     float tailBaseHw = u_tracePts[0].w;
     float tipMinScale = clamp(0.15 + max(0.0, tailBaseHw - taperLen * 0.85) * 0.28, 0.15, 0.48);
+    vec2 hAb = u_tracePts[segCount].xy - u_tracePts[segCount - 1].xy;
+    vec2 headDir = hAb / sqrt(max(dot(hAb, hAb), 1e-5));
+    float globalHeadOver = max(0.0, dot(p - u_tracePts[segCount].xy, headDir));
 
     float segNormD[15];
     float segArcS[15];
@@ -76,20 +78,23 @@ void main() {
       vec2 dir = ab / segLen;
       float rawProj = dot(p - a.xy, dir);
       float h = clamp(rawProj / segLen, 0.0, 1.0);
-      vec2 closest = a.xy + dir * (h * segLen);
+      vec2 dVec = p - (a.xy + dir * (h * segLen));
       float sClamped = mix(a.z, b.z, h);
       float taperT = clamp(sClamped / max(taperLen, 1e-4), 0.0, 1.0);
       float widthScale = mix(tipMinScale, 1.0, smoothstep(0.0, 1.0, pow(taperT, 0.66)));
       float hw = max(mix(a.w, b.w, h) * widthScale, 0.06);
-      float nd = length(p - closest) / hw;
+      float along = dot(dVec, dir);
+      vec2 latVec = dVec - dir * along;
+      float headCap = min(hw, 0.16);
+      float longCap = (along >= 0.0) ? ((i == segCount - 1) ? headCap : min(hw, 0.38)) : ((i == 0) ? min(hw, 0.18) : min(hw, 0.38));
+      float headRatio = (b.z > span - 0.85) ? (globalHeadOver / max(headCap, 1e-4)) : 0.0;
+      float longTerm = max(abs(along) / max(longCap, 1e-4), headRatio);
+      float nd = sqrt(dot(latVec, latVec) / (hw * hw) + longTerm * longTerm);
       segNormD[i] = nd;
-      // Extend signed arc distance smoothly into segment 0's rounded tail tip so s=0 never cuts a flat perpendicular edge
       segArcS[i] = (i == 0 && rawProj < 0.0) ? (a.z + rawProj) : sClamped;
       dMin = min(dMin, nd);
     }
-    if (dMin >= 1.0) {
-      discard;
-    }
+    if (dMin >= 1.0) { outColor = vec4(0.0); return; }
     float wSum = 0.0;
     float sSum = 0.0;
     for (int i = 0; i < 15; i++) {
@@ -100,9 +105,8 @@ void main() {
     }
     float smoothS = sSum / max(wSum, 1e-5);
     float smoothU = clamp(smoothS / span, 0.0, 1.0);
-    float tailTipHw = max(tailBaseHw * tipMinScale, 0.06);
-    float tailT = clamp((smoothS + tailTipHw) / max(taperLen + tailTipHw, 1e-4), 0.0, 1.0);
-    // Near the head (tailT -> 1), keep a full block-width cushion; near the tail (tailT -> 0), round into a center-peaked plume
+    float tailCap = min(max(tailBaseHw * tipMinScale, 0.06), 0.18);
+    float tailT = clamp((smoothS + tailCap) / max(taperLen + tailCap, 1e-4), 0.0, 1.0);
     float innerPlateau = mix(0.0, 0.18, tailT);
     float radialExp = mix(1.58, 0.92, tailT);
     float crossProfile = pow(smoothstep(1.0, innerPlateau, dMin), radialExp);
@@ -113,9 +117,7 @@ void main() {
       smearRgb = mix(smearRgb, vec3(0.82, 0.72, 0.58), u_blueprintMix * 0.88);
     }
     float alpha = u_color.a * crossProfile * tailRise * mix(1.0, 0.52, u_blueprintMix);
-    if (alpha < 0.003) {
-      discard;
-    }
+    if (alpha < 0.003) { outColor = vec4(0.0); return; }
     outColor = vec4(smearRgb, alpha);
     return;
   }
@@ -185,13 +187,8 @@ void main() {
     specPower = 88.0;
     specStrength = u_highContrast == 1 ? 0.48 : 0.75;
   } else if (u_materialStyle == 2) {
-    // carved_wood (WOOD-GRAIN-01): stained hardwood. Concentric growth rings around a log axis running along
-    // block-local X (flowing cathedral arcs on top faces, end-grain arcs on sides), noise-warped figure,
-    // earlywood/latewood contrast, elongated open pores, and a satin varnish sheen.
+    // carved_wood (WOOD-GRAIN-01): stained hardwood with noise-warped latewood rings, pores, and bent knots
     vec3 wq = v_localPos;
-    // Fine straight-grained hardwood: long fiber lines running along block-local X whose spacing drifts with
-    // low-frequency noise (no regular waves), thin dark latewood lines, fine pores, and occasional dark knots
-    // that the grain visibly bends around.
     float figureWarp = relicNoise(vec2(wq.x * 0.55, wq.y * 1.8) + 3.7) * 1.1 + relicNoise(vec2(wq.x * 1.6, wq.y * 4.0)) * 0.3;
     vec2 knotCell = floor(wq.xy * vec2(0.55, 0.8));
     vec2 knotHash = hashRelic22(knotCell + 17.0);

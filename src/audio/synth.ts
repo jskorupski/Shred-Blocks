@@ -1,4 +1,4 @@
-import type { BoosterType } from '../core/types';
+import type { BoosterType, ParticleStyleId } from '../core/types';
 import {
   getOrCreateRelicAwakenNoiseBuffer,
   playBoosterVoice,
@@ -6,6 +6,7 @@ import {
   playFilteredNoiseBurstVoice,
   playLossBuzzerVoice,
   playRelicAwakenVoice,
+  playShredStyleOvertoneVoice,
   playWinFanfareVoices,
   scheduleAmbientStepVoice,
 } from './synth-voices';
@@ -20,6 +21,7 @@ export class SoundEngine {
   public sfxEnabled = true;
   public musicEnabled = true;
   public hapticsEnabled = true;
+  public equippedParticle: ParticleStyleId = 'micro_cubes';
 
   private ctx: AudioContext | null = null;
   private sfxGain: GainNode | null = null;
@@ -99,10 +101,12 @@ export class SoundEngine {
     sfxEnabled?: boolean;
     musicEnabled?: boolean;
     hapticsEnabled?: boolean;
+    equippedParticle?: ParticleStyleId;
   }): void {
     if (settings.sfxEnabled !== undefined) this.setSfxEnabled(settings.sfxEnabled);
     if (settings.musicEnabled !== undefined) this.setMusicEnabled(settings.musicEnabled);
     if (settings.hapticsEnabled !== undefined) this.setHapticsEnabled(settings.hapticsEnabled);
+    if (settings.equippedParticle !== undefined) this.equippedParticle = settings.equippedParticle;
   }
 
   /**
@@ -375,7 +379,7 @@ export class SoundEngine {
    * Crisp rhythmic series of `8` ascending xylophone/marimba micro-grains (`320 Hz .. 960 Hz`)
    * + filtered white-noise mechanical whirr + staggered haptic buzz (`[12, 18, 12] ms`).
    */
-  public playShred(cascadeIndex = 0): void {
+  public playShred(cascadeIndex = 0, style: ParticleStyleId = this.equippedParticle): void {
     this.triggerHaptic([12, 18, 12], 70);
     if (!this.sfxEnabled) return;
     const ctx = this.ensureContext();
@@ -408,8 +412,21 @@ export class SoundEngine {
       osc.stop(startTime + 0.038);
     }
 
-    // Soft filtered noise whirr for the mechanical shredder rollers
+    // Soft filtered noise whirr for the mechanical shredder rollers + equipped shred-style overtone
     this.playFilteredNoiseBurst(now, 0.16, 1200 * pitchScale, 0.09);
+    playShredStyleOvertoneVoice(ctx, this.sfxGain, now, pitchScale, style, false);
+  }
+
+  public playParticlePreview(style: ParticleStyleId): void {
+    this.triggerHaptic(6, 65);
+    if (!this.sfxEnabled) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.sfxGain) return;
+    if (ctx.state !== 'running' && ctx.currentTime === 0) {
+      void ctx.resume().catch(() => {});
+      return;
+    }
+    playShredStyleOvertoneVoice(ctx, this.sfxGain, ctx.currentTime, 1.0, style, true);
   }
 
   /**

@@ -765,12 +765,12 @@ body.high-contrast #screen-game.title-backdrop-mode .board-stage::after {
 
 #game-canvas {
   --board-aspect: 1;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  margin: auto;
   z-index: 2;
-  aspect-ratio: var(--board-aspect);
-  width: min(94dvw, calc(60dvh * var(--board-aspect)), calc(660px * var(--board-aspect)));
-  height: auto;
-  max-height: min(60dvh, 660px);
+  width: min(100%, 100dvw, calc(82dvh * var(--board-aspect)), calc(748px * var(--board-aspect)));
+  height: min(100%, calc(100dvw / var(--board-aspect)), 82dvh, 748px);
   border-radius: var(--radius-lg);
   border: none;
   background: transparent;
@@ -782,7 +782,9 @@ body.high-contrast #screen-game.title-backdrop-mode .board-stage::after {
 
 @supports (width: 100cqw) {
   #game-canvas {
-    width: min(96cqw, calc(82cqh * var(--board-aspect)), calc(550px * var(--board-aspect)));
-    max-height: min(82cqh, 550px);
+    --board-box-w: min(96cqw, calc(82cqh * var(--board-aspect)), calc(550px * var(--board-aspect)));
+    --board-box-h: min(calc(96cqw / var(--board-aspect)), 82cqh, 550px);
+    width: min(100%, calc(var(--board-box-w) * 1.36));
+    height: min(100%, calc(var(--board-box-h) * 1.36));
   }
 }

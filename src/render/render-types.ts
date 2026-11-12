@@ -15,18 +15,21 @@ import type { AtlasTextureData, AtlasUVRegion } from './atlas-3d';
 import type { Camera3D } from './camera-3d';
 import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 import { executeBenchmarkFramesImpl, type PathWaypoint, type VisualPathTrace } from './pass2-drag-fx';
+import type { VisualGateBurst } from './shred-style-fx';
 
-export { executeBenchmarkFramesImpl, type PathWaypoint, type VisualPathTrace };
+export { executeBenchmarkFramesImpl, type PathWaypoint, type VisualGateBurst, type VisualPathTrace };
 
 export const MAX_PARTICLES = 2048;
-export const PARTICLE_STRIDE = 14; // x, y, z, vx, vy, vz, r, g, b, scale, age, maxAge, rotAngle, rotSpeed
+export const PARTICLE_STRIDE = 15; // x, y, z, vx, vy, vz, r, g, b, scale, age, maxAge, rotAngle, rotSpeed, styleTag
 export const INSTANCE_STRIDE = 8; // x, y, z, scale, r, g, b, rotAngle
 /**
  * Relic-awakening particle archetypes are encoded in the `scale` slot (`RELIC-AWAKEN-01`):
  * `0 < scale` = standard style particle, `-5 < scale < 0` = tumbling 3D stone shard,
+ * `-10 < scale <= -5` = rising relic-awakening ember (`-(5 + radius)`),
  * `scale <= -10` = billowing smoke puff (`-(10 + radius)`, rotAngle slot carries `lifeRatio`).
  */
 export const MAX_SMOKE_PUFFS = 256;
+export const RELIC_EMBER_SCALE_OFFSET = 5;
 export const SMOKE_SCALE_OFFSET = 10;
 
 /**
@@ -431,6 +434,7 @@ export interface RenderPassContext {
   readonly particlePool: Float32Array;
   readonly particleInstanceData: Float32Array;
   activeParticleCount: number;
+  hasGameplayParticles?: boolean;
   /** Translucent relic-awakening smoke puffs (`RELIC-AWAKEN-01`), drawn in a 2nd depth-write-off pass. */
   readonly smokeInstanceData: Float32Array;
   activeSmokeCount: number;
@@ -439,6 +443,8 @@ export interface RenderPassContext {
   lastBoardLevelId: number;
   lastSessionShredded: number;
   lastMovesCommitted: number;
+  lastSyncedBoardRef?: BoardState | null;
+  resetTransientFx?(): void;
   readonly blockLayerSnapshots: Map<
     number,
     {
@@ -471,6 +477,7 @@ export interface RenderPassContext {
   readonly roomAwakenMap: Map<number, number>;
   readonly activeVisualShreds: VisualShredAnim[];
   readonly activeShockwaves: VisualShockwave[];
+  readonly activeGateBursts: VisualGateBurst[];
   readonly activePathTraces: VisualPathTrace[];
   readonly blockBounceMap: Map<number, number>;
   boardShakeTimer: number;
@@ -513,7 +520,8 @@ export interface RenderPassContext {
     colorId: ColorId,
     z?: number,
     spanCols?: number,
-    spanRows?: number
+    spanRows?: number,
+    intoGate?: boolean
   ): void;
   drawMesh(
     gl: WebGL2RenderingContext,

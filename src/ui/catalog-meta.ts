@@ -59,6 +59,12 @@ export interface ShredBlocksDebugBridge {
   boardToScreen: (boardX: number, boardY: number) => { x: number; y: number };
   getHoverState: () => HoverState;
   getActivePathTraceCount: () => number;
+  getParticleTelemetry: () => {
+    activeParticles: number;
+    activeGateBursts: number;
+    gateBurstModes: string[];
+    meanParticleZ: number;
+  };
   /** VISUAL-GOLDEN-01: pause the rAF loop and render one frame at a fixed shader time (`null` resumes live time) */
   freezeTime: (timeSec: number | null) => void;
   /** VISUAL-GOLDEN-01: while frozen, deterministically step simulation + render `frames` frames of `dtSec` */
@@ -263,16 +269,28 @@ export const PARTICLE_CATALOG: ReadonlyArray<{ id: ParticleStyleId; name: string
   {
     id: 'micro_cubes',
     name: 'Micro Cubes',
-    desc: 'Crisp 3D voxel cubes flying from the rollers',
+    desc: 'Beveled 3D voxel cubes bouncing off the courtyard',
   },
-  { id: 'star_confetti', name: 'Star Confetti', desc: 'Celebratory tumbling party bursts' },
-  { id: 'pixel_sparks', name: 'Pixel Sparks', desc: 'High-velocity arcade energy sparks' },
+  {
+    id: 'star_confetti',
+    name: 'Star Confetti',
+    desc: '5-point golden & matching foil stars fluttering down',
+  },
+  {
+    id: 'pixel_sparks',
+    name: 'Pixel Sparks',
+    desc: 'Velocity-streaked incandescent sparks with crisp ricochets',
+  },
   {
     id: 'soap_bubbles',
     name: 'Soap Bubbles',
-    desc: 'Floaty iridescent spheres with gentle drift',
+    desc: 'Buoyant rainbow-iridescent bubbles floating skyward',
   },
-  { id: 'lightning_bolts', name: 'Lightning Bolts', desc: 'Crackling electric shredder surges' },
+  {
+    id: 'lightning_bolts',
+    name: 'Lightning Bolts',
+    desc: 'Crackling plasma bolts & electric gate threshold arcs',
+  },
 ];
 
 export const PWA_INSTALLED_STORAGE_KEY = 'shredblocks_pwa_installed_v1';

@@ -9,7 +9,13 @@ import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino'
 import { type BoardState, COLOR_PALETTE, type ColorId } from '../core/types';
 import { BLOCK_LIFT_DELTA_Z, BLOCK_TOP_Z } from './camera-3d';
 import { renderCanvas2DDragAndTrailFx } from './pass2-drag-fx';
-import { INSTANCE_STRIDE, type RenderPassContext, type RenderSceneOptions } from './render-types';
+import {
+  INSTANCE_STRIDE,
+  RELIC_EMBER_SCALE_OFFSET,
+  type RenderPassContext,
+  type RenderSceneOptions,
+} from './render-types';
+import { renderGateBurstsCanvas2D } from './shred-style-fx';
 
 /**
  * Complete `Canvas2D` fallback renderer (`R3D-05`) using `Camera3D.boardToScreen` so all 18 obstacles,
@@ -44,24 +50,12 @@ export function renderCanvas2DFallbackImpl(
     `rgb(${Math.round(Math.min(1, rgb[0] * mul) * 255)}, ${Math.round(Math.min(1, rgb[1] * mul) * 255)}, ${Math.round(Math.min(1, rgb[2] * mul) * 255)})`;
   const dtMs = dtSec * 1000;
 
-  const virtualRect = {
-    left: 0,
-    top: 0,
-    width: w,
-    height: h,
-    right: w,
-    bottom: h,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  } as DOMRect;
-
   ctx.clearRect(0, 0, w, h);
 
   const blueprintMix = Math.max(0, Math.min(1, options.blueprintMix ?? 0));
   const zRelief = 1.0 - 0.78 * blueprintMix;
   const project = (bx: number, by: number, bz: number) =>
-    rctx.camera.boardToScreen(bx, by, bz * zRelief, virtualRect, board.rows, board.cols);
+    rctx.camera.projectToRect(bx, by, bz * zRelief, 0, 0, w, h);
 
   const fillProjectedQuad = (
     x0: number,
@@ -770,8 +764,16 @@ export function renderCanvas2DFallbackImpl(
     const pg = Math.round(rctx.particleInstanceData[base + 5] * 255);
     const pb = Math.round(rctx.particleInstanceData[base + 6] * 255);
     const pt = project(px, py, pz);
-    const rad = Math.max(2, Math.abs(pScale) * 28); // stone shards encode negative scale
-    ctx.fillStyle = `rgb(${pr}, ${pg}, ${pb})`;
+    const isGameplay = pScale > 0;
+    const effScale = isGameplay
+      ? pScale - Math.floor(pScale)
+      : pScale <= -RELIC_EMBER_SCALE_OFFSET
+        ? -pScale - RELIC_EMBER_SCALE_OFFSET
+        : Math.abs(pScale);
+    const alpha = isGameplay ? Math.min(1, Math.floor(pScale) / 1023 / 0.42) : 1;
+    const rad = Math.max(2, effScale * 28);
+    ctx.fillStyle = `rgba(${pr}, ${pg}, ${pb}, ${alpha.toFixed(3)})`;
     ctx.fillRect(pt.x - rad * 0.5, pt.y - rad * 0.5, rad, rad);
   }
+  renderGateBurstsCanvas2D(rctx, ctx, project);
 }

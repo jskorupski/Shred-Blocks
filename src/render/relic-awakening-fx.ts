@@ -1,15 +1,19 @@
 import { fxRandom } from '../core/fx-random';
 import { isBlockInLockedRoom } from '../core/physics';
 import { getShape } from '../core/polyomino';
-import type { BoardState } from '../core/types';
-import { ENVIRONMENT_MESHES } from './mesh-generator';
+import type { BoardState, SkinId, TrayId } from '../core/types';
+import { ENVIRONMENT_MESHES, type MeshData, POLYOMINO_MESH_CATALOG } from './mesh-generator';
 import {
   allocParticleSlot,
+  type GLMeshHandle,
   getStoneThemeMineralTint,
+  getTrayMaterialCode,
   INSTANCE_STRIDE,
+  RELIC_EMBER_SCALE_OFFSET,
   type RenderPassContext,
   SMOKE_SCALE_OFFSET,
 } from './render-types';
+import type { ParticleInstancedVaoHandle } from './shaders-3d';
 
 /**
  * Relic Awakening Transformation (`RELIC-AWAKEN-01`):
@@ -57,6 +61,7 @@ function writeParticle(
   pool[idx + 11] = maxAge;
   pool[idx + 12] = rot;
   pool[idx + 13] = rotSpeed;
+  pool[idx + 14] = -1;
 }
 
 export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: BoardState): void {
@@ -198,7 +203,7 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
       (rand() - 0.5) * 1.6,
       3.2 + rand() * 2.2,
       rgb,
-      0.045 + rand() * 0.035,
+      -(RELIC_EMBER_SCALE_OFFSET + 0.045 + rand() * 0.035),
       0.6 + rand() * 0.4,
       rand() * 6.283,
       (rand() < 0.5 ? -1 : 1) * 6
@@ -238,10 +243,18 @@ export function renderPass4ParticlesImpl(
   gl.uniform1i(h.uStyle, styleCode);
 
   if (solid > 0 && h.vao && h.instanceBuffer) {
+    const translucentGameplay =
+      (rctx.lastOptions.blueprintMix ?? 0) <= 0.01 || Boolean(rctx.hasGameplayParticles);
     gl.bindVertexArray(h.vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, h.instanceBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, rctx.particleInstanceData.subarray(0, solid * INSTANCE_STRIDE));
+    if (translucentGameplay) {
+      gl.depthMask(false);
+    }
     gl.drawElementsInstanced(gl.TRIANGLES, h.indexCount, gl.UNSIGNED_SHORT, 0, solid);
+    if (translucentGameplay) {
+      gl.depthMask(true);
+    }
   }
   if (smoke > 0 && h.smokeVao && h.smokeInstanceBuffer) {
     gl.bindVertexArray(h.smokeVao);
@@ -363,4 +376,146 @@ export function warmUpWebGLPipelinesImpl(
   gl.depthMask(true);
   gl.disable(gl.SCISSOR_TEST);
   gl.flush();
+}
+
+export function disposeWebGLResourcesImpl(
+  gl: WebGL2RenderingContext | null,
+  meshHandles: Map<MeshData, GLMeshHandle>,
+  particleHandle: ParticleInstancedVaoHandle | null,
+  smokeHandle: ParticleInstancedVaoHandle | null,
+  atlasTexture: WebGLTexture | null,
+  mainProgram: WebGLProgram | null,
+  particleProgram: WebGLProgram | null
+): void {
+  if (gl && !gl.isContextLost()) {
+    for (const handle of meshHandles.values()) {
+      gl.deleteVertexArray(handle.vao);
+      gl.deleteBuffer(handle.posBuffer);
+      gl.deleteBuffer(handle.normBuffer);
+      gl.deleteBuffer(handle.uvBuffer);
+      gl.deleteBuffer(handle.indexBuffer);
+    }
+    for (const h of [particleHandle, smokeHandle]) {
+      if (!h) continue;
+      gl.deleteVertexArray(h.vao);
+      gl.deleteBuffer(h.posBuf);
+      gl.deleteBuffer(h.normBuf);
+      gl.deleteBuffer(h.idxBuf);
+      gl.deleteBuffer(h.instBuf);
+    }
+    if (atlasTexture) gl.deleteTexture(atlasTexture);
+    if (mainProgram) gl.deleteProgram(mainProgram);
+    if (particleProgram) gl.deleteProgram(particleProgram);
+  }
+  meshHandles.clear();
+}
+
+export function uploadAtlasAndStaticMeshesImpl(
+  gl: WebGL2RenderingContext,
+  atlasCanvas: HTMLCanvasElement,
+  ensureMesh: (gl: WebGL2RenderingContext, mesh: MeshData) => GLMeshHandle
+): WebGLTexture | null {
+  const tex = gl.createTexture();
+  if (tex) {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlasCanvas);
+  }
+  for (const entry of Object.values(POLYOMINO_MESH_CATALOG)) {
+    for (const m of [
+      entry.meshOuter,
+      entry.meshInnerCore,
+      entry.meshOuterStudded,
+      entry.meshInnerCoreStudded,
+      entry.meshOuterWorn,
+      entry.meshInnerCoreWorn,
+    ]) {
+      ensureMesh(gl, m);
+    }
+  }
+  for (const envMesh of Object.values(ENVIRONMENT_MESHES) as MeshData[]) {
+    ensureMesh(gl, envMesh);
+  }
+  return tex;
+}
+
+export function createEmptyParticleDrawHandles(): ParticleDrawHandles {
+  return {
+    program: null,
+    vao: null,
+    instanceBuffer: null,
+    indexCount: 0,
+    smokeVao: null,
+    smokeInstanceBuffer: null,
+    smokeIndexCount: 0,
+    uViewProj: null,
+    uStyle: null,
+  };
+}
+
+export function resetTransientFxImpl(rctx: RenderPassContext): void {
+  rctx.activeParticleCount = 0;
+  rctx.activeSmokeCount = 0;
+  rctx.hasGameplayParticles = false;
+  rctx.particlePoolCount = 0;
+  rctx.particleWriteCursor = 0;
+  rctx.activeShockwaves.length = 0;
+  rctx.activeGateBursts.length = 0;
+  rctx.activePathTraces.length = 0;
+  rctx.activeVisualShreds.length = 0;
+  rctx.blockBounceMap.clear();
+  rctx.boardShakeTimer = 0;
+  rctx.ambientMoteAccumSec = 0;
+}
+
+export function prepareWebGL2FrameStateImpl(
+  rctx: RenderPassContext,
+  gl: WebGL2RenderingContext,
+  mainProgram: WebGLProgram | null,
+  uViewProj: WebGLUniformLocation | null,
+  uBlueprintMix: WebGLUniformLocation | null,
+  uBoardInfo: WebGLUniformLocation | null,
+  uStoneTint: WebGLUniformLocation | null,
+  uTrayMaterial: WebGLUniformLocation | null,
+  uHighContrast: WebGLUniformLocation | null,
+  uAtlas: WebGLUniformLocation | null,
+  atlasTexture: WebGLTexture | null,
+  board: BoardState,
+  trayId: TrayId,
+  skinId: SkinId,
+  highContrast: boolean,
+  reducedMotion: boolean,
+  timeSec: number,
+  blueprintMix: number
+): void {
+  gl.viewport(0, 0, rctx.canvas.width, rctx.canvas.height);
+  gl.clearColor(0.0, 0.0, 0.0, 0.0);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.enable(gl.BLEND);
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  const stoneTint = getStoneThemeMineralTint(trayId, skinId);
+  gl.useProgram(mainProgram);
+  gl.uniformMatrix4fv(uViewProj, false, rctx.camera.getViewProjectionMatrix(false));
+  gl.uniform1i(rctx.uUseClipPlane, 0);
+  gl.uniform1f(rctx.uBlockSeed, 0);
+  gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
+  gl.uniform3f(rctx.uCapColor, 0.2, 0.2, 0.2);
+  gl.uniform1f(uBlueprintMix, blueprintMix);
+  gl.uniform3f(uBoardInfo, board.cols * 0.5, board.rows * 0.5, reducedMotion ? -1.0 : timeSec);
+  gl.uniform3f(uStoneTint, stoneTint[0], stoneTint[1], stoneTint[2]);
+  gl.uniform1i(uTrayMaterial, getTrayMaterialCode(trayId));
+  gl.uniform1i(uHighContrast, highContrast ? 1 : 0);
+  if (atlasTexture) {
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+    gl.uniform1i(uAtlas, 0);
+  }
 }

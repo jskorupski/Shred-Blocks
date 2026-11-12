@@ -178,6 +178,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
     sfxEnabled: save.settings.sfxEnabled,
     musicEnabled: save.settings.musicEnabled,
     hapticsEnabled: save.settings.hapticsEnabled,
+    equippedParticle: save.equippedParticle,
   });
   app.renderer.setQualityPreference(save.settings.qualityTier);
 

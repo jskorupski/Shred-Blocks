@@ -111,6 +111,7 @@ export function commitBlockMove(
     b.col += dCol;
     b.x = b.col;
     b.y = b.row;
+    b.shredGateIndex = -1;
   }
 
   rebuildOccupancyGrid(board);
@@ -225,6 +226,7 @@ function destroyOrPeelBlockByBooster(board: BoardState, block: BlockState): void
 
   // Zero-Softlock Law: always trigger Key, Scissors, and Shutter Gem when hit by a booster
   triggerCarrierItems(board, block);
+  block.shredGateIndex = -1;
 
   // If frozen, chained, or roped, clear the restriction or peel outer layer
   if (block.iceCount > 0) block.iceCount = 0;

@@ -376,6 +376,7 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
       app.saveManager.unlockOrEquipSkin(skin, 0);
       app.saveManager.unlockOrEquipTray(tray, 0);
       app.saveManager.unlockOrEquipParticle(particle, 0);
+      app.syncAllUiFromSave();
       app.renderThemesStudio();
       app.renderNow();
     },
@@ -405,13 +406,22 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
     advanceFrozenFrames: (frames: number, dtSec = 1 / 60) => app.advanceFrozenFrames(frames, dtSec),
     getHoverState: () => app.inputController.getHoverState(),
     getActivePathTraceCount: () => app.renderer.activePathTraces.length,
-    setFxRandomSeed: (seed: number | null) => setFxRandomSeed(seed),
-    boardToScreen: (boardX: number, boardY: number) => {
-      const rect = app.renderer.canvas.getBoundingClientRect();
-      return app.renderer
-        .getCamera()
-        .boardToScreen(boardX, boardY, 0.58, rect, app.board.rows, app.board.cols);
+    getParticleTelemetry: () => {
+      const n = app.renderer.activeParticleCount;
+      let sumZ = 0;
+      for (let i = 0; i < n; i++) {
+        sumZ += app.renderer.particleInstanceData[i * 8 + 2];
+      }
+      return {
+        activeParticles: n,
+        activeGateBursts: app.renderer.activeGateBursts.length,
+        gateBurstModes: app.renderer.activeGateBursts.map((g) => `${g.mode}:${g.style}`),
+        meanParticleZ: n > 0 ? sumZ / n : 0,
+      };
     },
+    setFxRandomSeed: (seed: number | null) => setFxRandomSeed(seed),
+    boardToScreen: (boardX: number, boardY: number) =>
+      app.renderer.boardToScreen(boardX, boardY, 0.58, app.board.rows, app.board.cols),
   };
 }
 
@@ -508,6 +518,7 @@ export function openTitleScreenImpl(app: AppViewContext): void {
   app.syncTitleOverlayDom();
   app.syncPwaUpdateBanner();
   app.checkForPwaUpdate(false);
+  app.renderer.resetTransientFx();
   app.renderer.resize();
   app.renderNow();
 
@@ -574,6 +585,7 @@ export function switchScreenImpl(
   }
   if (screen !== 'game') {
     app.blueprintMix = 0;
+    app.renderer.resetTransientFx();
   }
   app.syncTitleOverlayDom();
   app.syncPwaUpdateBanner();
