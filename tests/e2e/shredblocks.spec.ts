@@ -258,7 +258,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#title-overlay')).toBeVisible();
     await expect(page.locator('#title-returning-summary')).toBeVisible();
     await expect(page.locator('#title-returning-nav')).toBeVisible();
-    await expect(page.locator('#btn-title-play')).toHaveText('▶ CONTINUE · LEVEL 3');
+    await expect(page.locator('#btn-title-play')).toHaveText('⚔️ ▶ CONTINUE · LEVEL 3');
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#title-overlay')).toBeHidden();
     await expect(page.locator('#hud-level-title')).toContainText('Level 3');

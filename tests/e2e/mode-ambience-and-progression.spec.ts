@@ -86,16 +86,34 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
         const shell = document.getElementById('app-shell');
         const backdrop = document.querySelector('.mode-ambience-backdrop');
         const ornament = document.querySelector('#screen-game .sacred-geometry-ornament');
+        const hudBar = document.querySelector('#screen-game .hud-top-bar');
+        const dockBar = document.querySelector('#screen-game .booster-dock');
+        const titlePlayBtn = document.getElementById('btn-title-play');
+        const mapPlayBtn = document.getElementById('btn-play-current');
+        const navPlayBtn = document.getElementById('tab-btn-play');
+        const navPlayIcon = document.getElementById('tab-play-mode-icon');
+        const pauseResumeBtn = document.getElementById('btn-pause-resume');
         const canvas = document.getElementById('game-canvas');
         const ch = document.querySelector('.ambience-challenge');
         const zn = document.querySelector('.ambience-zen');
         const tm = document.querySelector('.ambience-timed');
         return {
           playMode: shell?.getAttribute('data-play-mode'),
+          bodyPlayMode: document.body.getAttribute('data-play-mode'),
           titleOpen: shell?.getAttribute('data-title-open'),
           activeScreen: shell?.getAttribute('data-active-screen'),
           backdropOpacity: backdrop ? window.getComputedStyle(backdrop).opacity : '',
           ornamentColor: ornament ? window.getComputedStyle(ornament).color : '',
+          hudBg: hudBar ? window.getComputedStyle(hudBar).backgroundImage : '',
+          dockBg: dockBar ? window.getComputedStyle(dockBar).backgroundImage : '',
+          titlePlayBg: titlePlayBtn ? window.getComputedStyle(titlePlayBtn).backgroundImage : '',
+          titlePlayText: titlePlayBtn?.textContent ?? '',
+          mapPlayBg: mapPlayBtn ? window.getComputedStyle(mapPlayBtn).backgroundImage : '',
+          mapPlayText: mapPlayBtn?.textContent ?? '',
+          navPlayBg: navPlayBtn ? window.getComputedStyle(navPlayBtn).backgroundImage : '',
+          navPlayIcon: navPlayIcon?.textContent ?? '',
+          pauseResumeBg: pauseResumeBtn ? window.getComputedStyle(pauseResumeBtn).backgroundImage : '',
+          pauseResumeText: pauseResumeBtn?.textContent ?? '',
           canvasFilter: canvas ? window.getComputedStyle(canvas).filter : '',
           layerOpacity: {
             challenge: ch ? window.getComputedStyle(ch).opacity : '',
@@ -107,26 +125,50 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
 
     const challengeState = await readModeVisualState();
     expect(challengeState.playMode).toBe('CHALLENGE');
+    expect(challengeState.bodyPlayMode).toBe('CHALLENGE');
     expect(challengeState.titleOpen).toBe('false');
     expect(challengeState.activeScreen).toBe('game');
     expect(challengeState.backdropOpacity).toBe('1');
     expect(challengeState.canvasFilter).toBe('none');
     expect(challengeState.layerOpacity).toEqual({ challenge: '1', zen: '0', timed: '0' });
+    expect(challengeState.titlePlayText).toContain('⚔️ ▶ CONTINUE');
+    expect(challengeState.mapPlayText).toContain('⚔️ ▶ PLAY');
+    expect(challengeState.navPlayIcon).toBe('⚔️');
+    expect(challengeState.pauseResumeText).toBe('⚔️ ▶ Resume');
+    expect(challengeState.mapPlayBg).toBe(challengeState.navPlayBg);
+    expect(challengeState.pauseResumeBg).toBe(challengeState.navPlayBg);
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPlayMode('ZEN'));
     const zenState = await readModeVisualState();
     expect(zenState.playMode).toBe('ZEN');
+    expect(zenState.bodyPlayMode).toBe('ZEN');
     expect(zenState.canvasFilter).toBe('none');
     expect(zenState.layerOpacity).toEqual({ challenge: '0', zen: '1', timed: '0' });
     expect(zenState.ornamentColor).not.toBe(challengeState.ornamentColor);
+    expect(zenState.hudBg).not.toBe(challengeState.hudBg);
+    expect(zenState.dockBg).not.toBe(challengeState.dockBg);
+    expect(zenState.titlePlayText).toContain('🌿 ▶ CONTINUE');
+    expect(zenState.mapPlayText).toContain('🌿 ▶ PLAY');
+    expect(zenState.navPlayIcon).toBe('🌿');
+    expect(zenState.pauseResumeText).toBe('🌿 ▶ Resume');
+    expect(zenState.navPlayBg).not.toBe(challengeState.navPlayBg);
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPlayMode('TIMED'));
     const timedState = await readModeVisualState();
     expect(timedState.playMode).toBe('TIMED');
+    expect(timedState.bodyPlayMode).toBe('TIMED');
     expect(timedState.canvasFilter).toBe('none');
     expect(timedState.layerOpacity).toEqual({ challenge: '0', zen: '0', timed: '1' });
     expect(timedState.ornamentColor).not.toBe(zenState.ornamentColor);
     expect(timedState.ornamentColor).not.toBe(challengeState.ornamentColor);
+    expect(timedState.hudBg).not.toBe(zenState.hudBg);
+    expect(timedState.hudBg).not.toBe(challengeState.hudBg);
+    expect(timedState.titlePlayText).toContain('⏱ ▶ CONTINUE');
+    expect(timedState.mapPlayText).toContain('⏱ ▶ PLAY');
+    expect(timedState.navPlayIcon).toBe('⏱');
+    expect(timedState.pauseResumeText).toBe('⏱ ▶ Resume');
+    expect(timedState.navPlayBg).not.toBe(zenState.navPlayBg);
+    expect(timedState.navPlayBg).not.toBe(challengeState.navPlayBg);
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setHighContrast(true));
     const hcBackdropOpacity = await page.evaluate(() => {

@@ -22,6 +22,7 @@ import {
   type AppViewContext,
   getChapterMetaForLevel,
   getNextSanctuaryAwakeningText,
+  getPlayModeMeta,
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
 
@@ -247,7 +248,8 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
     modePanelEl.setAttribute('aria-labelledby', `map-tab-${activeMode.toLowerCase()}`);
   }
 
-  // Hero Launch Card (Scoped to Active Mode Ladder)
+  // Hero Launch Card & Mode-Aware Play CTAs (Scoped to Active Mode Ladder — `PLAY-CTA-MODE-01`)
+  const modeInfo = getPlayModeMeta(activeMode);
   const activeLadder = save.modeState[activeMode];
   const targetLevelId = Math.max(1, activeLadder.currentLevelId || activeLadder.highestUnlocked || 1);
   const targetSpec = getLevelSpec(targetLevelId);
@@ -258,7 +260,10 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   const heroNote = document.getElementById('hero-level-note');
   const heroAwakeningText = document.getElementById('hero-awakening-text');
   const playBtn = document.getElementById('btn-play-current');
+  const tabPlayBtn = document.getElementById('tab-btn-play');
+  const tabPlayModeIcon = document.getElementById('tab-play-mode-icon');
   const tabPlayLabel = document.getElementById('tab-play-label');
+  const pauseResumeBtn = document.getElementById('btn-pause-resume');
 
   if (heroChapterTag) {
     heroChapterTag.textContent = `${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`;
@@ -283,10 +288,19 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
     heroAwakeningText.textContent = getNextSanctuaryAwakeningText(targetSpec.id);
   }
   if (playBtn) {
-    playBtn.textContent = `▶ PLAY LEVEL ${targetSpec.id}`;
+    playBtn.textContent = `${modeInfo.icon} ▶ PLAY LEVEL ${targetSpec.id}`;
+  }
+  if (tabPlayModeIcon) {
+    tabPlayModeIcon.textContent = modeInfo.icon;
   }
   if (tabPlayLabel) {
-    tabPlayLabel.textContent = `Play Lvl ${targetSpec.id}`;
+    tabPlayLabel.textContent = targetSpec.id >= 1000 ? `Play ${targetSpec.id}` : `Play Lvl ${targetSpec.id}`;
+  }
+  if (tabPlayBtn) {
+    tabPlayBtn.title = `Continue ${modeInfo.shortLabel} · Level ${targetSpec.id}`;
+  }
+  if (pauseResumeBtn) {
+    pauseResumeBtn.textContent = `${modeInfo.icon} ▶ Resume`;
   }
 
   // Sacred-Geometry Title Crest Overlay (Adaptive New vs. Returning Player State)
@@ -306,7 +320,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (titleReturningSummary) titleReturningSummary.hidden = isNewPlayer;
   if (titleReturningNav) titleReturningNav.hidden = isNewPlayer;
   if (titleChapterBadge) {
-    titleChapterBadge.textContent = `${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`;
+    titleChapterBadge.textContent = `${modeInfo.badgeLabel} · ${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`;
   }
   if (titleLevelSubtitle) {
     titleLevelSubtitle.textContent = `Level ${targetSpec.id} — ${targetSpec.name}`;
@@ -315,7 +329,10 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (titleStatCoins) titleStatCoins.textContent = String(save.coins);
   if (titleStatStreak) titleStatStreak.textContent = String(save.winStreak);
   if (titlePlayBtn) {
-    titlePlayBtn.textContent = isNewPlayer ? '▶ BEGIN JOURNEY' : `▶ CONTINUE · LEVEL ${targetSpec.id}`;
+    titlePlayBtn.setAttribute('data-new-player', isNewPlayer ? 'true' : 'false');
+    titlePlayBtn.textContent = isNewPlayer
+      ? '▶ BEGIN JOURNEY'
+      : `${modeInfo.icon} ▶ CONTINUE · LEVEL ${targetSpec.id}`;
   }
   if (titleSyncLabel) {
     titleSyncLabel.textContent = isNewPlayer ? 'Restore Save' : 'Sync';
@@ -362,6 +379,7 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   if (appShell) {
     appShell.setAttribute('data-play-mode', playMode);
   }
+  document.body.setAttribute('data-play-mode', playMode);
 
   // Skips exist strictly in Zen Mode (`MAP-MODE-SPLIT-01`)
   const canSkipInMode = playMode === 'ZEN';

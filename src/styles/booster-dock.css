@@ -238,8 +238,8 @@
 }
 
 /* ==========================================================================
-   SUBTLE GAME-MODE AMBIENT FRAMING (`MODE-AMBIENCE-01`)
-   Compositor-only opacity layers + rotating astrolabe ring & 1px rim hairlines
+   GAME-MODE NOCTURNAL SKYBOXES & STONE CHROME FRAMING (`MODE-AMBIENCE-01`)
+   Compositor-only opacity skyboxes + wide stage aura, astrolabe & rim glow
    ========================================================================== */
 
 #app-shell > .screen,
@@ -263,6 +263,12 @@ body.high-contrast #app-shell .mode-ambience-backdrop {
   opacity: 0;
 }
 
+@media (forced-colors: active) {
+  #app-shell .mode-ambience-backdrop {
+    opacity: 0;
+  }
+}
+
 .mode-ambience-layer {
   position: absolute;
   inset: 0;
@@ -270,37 +276,64 @@ body.high-contrast #app-shell .mode-ambience-backdrop {
   transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* CHALLENGE: Burnished Sanctuary Amber-Bronze & Ember Hearth Skybox */
 .ambience-challenge {
   background:
+    radial-gradient(circle at 18% 14%, rgba(255, 238, 210, 0.16) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 82% 20%, rgba(255, 238, 210, 0.14) 0 1.5px, transparent 2px),
     radial-gradient(
-      96% 54% at 50% 0% var(--in-oklab),
-      rgba(243, 190, 92, 0.115) 0%,
-      rgba(192, 128, 52, 0.048) 54%,
+      110% 58% at 50% 0% var(--in-oklab),
+      rgba(248, 188, 84, 0.26) 0%,
+      rgba(198, 112, 42, 0.12) 54%,
+      transparent 86%
+    ),
+    radial-gradient(
+      105% 54% at 50% 100% var(--in-oklab),
+      rgba(244, 162, 68, 0.24) 0%,
+      rgba(168, 82, 36, 0.11) 56%,
       transparent 84%
     ),
-    radial-gradient(88% 46% at 50% 100% var(--in-oklab), rgba(243, 190, 92, 0.08) 0%, transparent 76%);
+    linear-gradient(180deg var(--in-oklab), #1b1224 0%, #2e1d32 42%, #4b2c2a 76%, #5e3624 100%);
 }
 
+/* ZEN: Deep Botanical Jade-Cypress & Moonlit Mist Skybox */
 .ambience-zen {
   background:
+    radial-gradient(circle at 18% 14%, rgba(208, 255, 240, 0.15) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 82% 20%, rgba(208, 255, 240, 0.13) 0 1.5px, transparent 2px),
     radial-gradient(
-      96% 54% at 50% 0% var(--in-oklab),
-      rgba(56, 212, 184, 0.125) 0%,
-      rgba(28, 122, 106, 0.055) 54%,
+      110% 58% at 50% 0% var(--in-oklab),
+      rgba(56, 224, 188, 0.27) 0%,
+      rgba(22, 136, 114, 0.13) 54%,
+      transparent 86%
+    ),
+    radial-gradient(
+      105% 54% at 50% 100% var(--in-oklab),
+      rgba(52, 214, 178, 0.24) 0%,
+      rgba(18, 118, 102, 0.12) 56%,
       transparent 84%
     ),
-    radial-gradient(88% 46% at 50% 100% var(--in-oklab), rgba(56, 212, 184, 0.088) 0%, transparent 76%);
+    linear-gradient(180deg var(--in-oklab), #0d1c22 0%, #122b30 42%, #17403e 76%, #1f5248 100%);
 }
 
+/* TIMED: Astral Sapphire-Cobalt & Chrono Horizon Skybox */
 .ambience-timed {
   background:
+    radial-gradient(circle at 18% 14%, rgba(214, 236, 255, 0.16) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 82% 20%, rgba(214, 236, 255, 0.14) 0 1.5px, transparent 2px),
     radial-gradient(
-      96% 54% at 50% 0% var(--in-oklab),
-      rgba(88, 174, 255, 0.135) 0%,
-      rgba(44, 102, 172, 0.06) 54%,
+      110% 58% at 50% 0% var(--in-oklab),
+      rgba(82, 178, 255, 0.29) 0%,
+      rgba(38, 104, 198, 0.14) 54%,
+      transparent 86%
+    ),
+    radial-gradient(
+      105% 54% at 50% 100% var(--in-oklab),
+      rgba(76, 168, 255, 0.25) 0%,
+      rgba(34, 92, 182, 0.12) 56%,
       transparent 84%
     ),
-    radial-gradient(88% 46% at 50% 100% var(--in-oklab), rgba(88, 174, 255, 0.092) 0%, transparent 76%);
+    linear-gradient(180deg var(--in-oklab), #0e162c 0%, #152548 42%, #1e3868 76%, #274b82 100%);
 }
 
 #app-shell[data-play-mode="CHALLENGE"] .ambience-challenge,
@@ -309,26 +342,38 @@ body.high-contrast #app-shell .mode-ambience-backdrop {
   opacity: 1;
 }
 
-/* Astrolabe ring & stage center aura framing when active in-game (Title Screen keeps pure MYSTIC-RELIC-01) */
+/* Astrolabe ring & wide peripheral stage aura when active in-game (Title Screen keeps pure MYSTIC-RELIC-01) */
 body:not(.high-contrast)
   #app-shell[data-play-mode="CHALLENGE"]
   #screen-game:not(.title-backdrop-mode)
   .sacred-geometry-ornament {
-  color: rgba(246, 202, 128, 0.46);
+  color: rgba(252, 206, 116, 0.62);
 }
 
 body:not(.high-contrast)
   #app-shell[data-play-mode="ZEN"]
   #screen-game:not(.title-backdrop-mode)
   .sacred-geometry-ornament {
-  color: rgba(110, 234, 206, 0.44);
+  color: rgba(104, 242, 208, 0.6);
 }
 
 body:not(.high-contrast)
   #app-shell[data-play-mode="TIMED"]
   #screen-game:not(.title-backdrop-mode)
   .sacred-geometry-ornament {
-  color: rgba(132, 196, 255, 0.46);
+  color: rgba(128, 202, 255, 0.64);
+}
+
+body:not(.high-contrast)
+  #app-shell[data-play-mode="CHALLENGE"]
+  #screen-game:not(.title-backdrop-mode)
+  .board-stage {
+  background: radial-gradient(
+    ellipse 88% 64% at 50% 48%,
+    rgba(248, 192, 88, 0.3) 0%,
+    rgba(186, 104, 44, 0.16) 58%,
+    rgba(92, 48, 24, 0) 100%
+  );
 }
 
 body:not(.high-contrast)
@@ -336,10 +381,10 @@ body:not(.high-contrast)
   #screen-game:not(.title-backdrop-mode)
   .board-stage {
   background: radial-gradient(
-    closest-side at 50% 48%,
-    rgba(56, 212, 184, 0.16) 0%,
-    rgba(36, 108, 106, 0.1) 56%,
-    rgba(24, 62, 68, 0) 100%
+    ellipse 88% 64% at 50% 48%,
+    rgba(56, 224, 188, 0.28) 0%,
+    rgba(24, 138, 118, 0.16) 58%,
+    rgba(16, 68, 64, 0) 100%
   );
 }
 
@@ -348,69 +393,178 @@ body:not(.high-contrast)
   #screen-game:not(.title-backdrop-mode)
   .board-stage {
   background: radial-gradient(
-    closest-side at 50% 48%,
-    rgba(88, 174, 255, 0.17) 0%,
-    rgba(46, 88, 152, 0.11) 56%,
-    rgba(24, 46, 88, 0) 100%
+    ellipse 88% 64% at 50% 48%,
+    rgba(82, 178, 255, 0.3) 0%,
+    rgba(42, 108, 204, 0.17) 58%,
+    rgba(18, 48, 96, 0) 100%
   );
 }
 
-/* 1px Mode-Tinted Sanctuary Rim Hairlines on HUD, Booster Dock & Map Chrome */
+/* Mode-Harmonized Architectural Stone Chrome, Rim Hairlines & Specular Edge Glow */
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"]
   #screen-game
-  .hud-top-bar,
+  .hud-top-bar {
+  background: linear-gradient(180deg var(--in-oklab), rgba(34, 22, 20, 0.88) 0%, rgba(44, 28, 22, 0.84) 100%);
+  border-bottom-color: rgba(248, 196, 104, 0.44);
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 226, 160, 0.16),
+    0 4px 16px rgba(18, 9, 4, 0.42);
+}
+
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"]
   #screen-home
   .top-economy-bar {
-  border-bottom-color: rgba(245, 196, 112, 0.24);
+  border-bottom-color: rgba(248, 196, 104, 0.36);
 }
 
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"]
   #screen-game
-  .booster-dock,
+  .booster-dock {
+  background: linear-gradient(180deg var(--in-oklab), rgba(40, 25, 20, 0.88) 0%, rgba(26, 16, 14, 0.94) 100%);
+  border-top-color: rgba(248, 196, 104, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 226, 160, 0.15),
+    0 -4px 16px rgba(18, 9, 4, 0.42);
+}
+
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="CHALLENGE"][data-active-screen="home"]
   .bottom-tab-bar {
-  border-top-color: rgba(245, 196, 112, 0.22);
+  border-top-color: rgba(248, 196, 104, 0.34);
 }
 
-body:not(.high-contrast) #app-shell[data-title-open="false"][data-play-mode="ZEN"] #screen-game .hud-top-bar,
+body:not(.high-contrast) #app-shell[data-title-open="false"][data-play-mode="ZEN"] #screen-game .hud-top-bar {
+  background: linear-gradient(180deg var(--in-oklab), rgba(11, 28, 28, 0.88) 0%, rgba(15, 38, 36, 0.84) 100%);
+  border-bottom-color: rgba(82, 232, 198, 0.46);
+  box-shadow:
+    inset 0 -1px 0 rgba(168, 252, 232, 0.16),
+    0 4px 16px rgba(4, 16, 16, 0.44);
+}
+
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="ZEN"]
   #screen-home
   .top-economy-bar {
-  border-bottom-color: rgba(88, 228, 200, 0.28);
+  border-bottom-color: rgba(82, 232, 198, 0.38);
 }
 
-body:not(.high-contrast) #app-shell[data-title-open="false"][data-play-mode="ZEN"] #screen-game .booster-dock,
+body:not(.high-contrast)
+  #app-shell[data-title-open="false"][data-play-mode="ZEN"]
+  #screen-game
+  .booster-dock {
+  background: linear-gradient(180deg var(--in-oklab), rgba(14, 36, 34, 0.88) 0%, rgba(9, 23, 23, 0.94) 100%);
+  border-top-color: rgba(82, 232, 198, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(168, 252, 232, 0.15),
+    0 -4px 16px rgba(4, 16, 16, 0.44);
+}
+
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="ZEN"][data-active-screen="home"]
   .bottom-tab-bar {
-  border-top-color: rgba(88, 228, 200, 0.25);
+  border-top-color: rgba(82, 232, 198, 0.36);
 }
 
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="TIMED"]
   #screen-game
-  .hud-top-bar,
+  .hud-top-bar {
+  background: linear-gradient(180deg var(--in-oklab), rgba(12, 22, 42, 0.88) 0%, rgba(17, 31, 58, 0.84) 100%);
+  border-bottom-color: rgba(108, 190, 255, 0.48);
+  box-shadow:
+    inset 0 -1px 0 rgba(184, 224, 255, 0.18),
+    0 4px 16px rgba(4, 10, 24, 0.46);
+}
+
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="TIMED"]
   #screen-home
   .top-economy-bar {
-  border-bottom-color: rgba(114, 188, 255, 0.3);
+  border-bottom-color: rgba(108, 190, 255, 0.4);
 }
 
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="TIMED"]
   #screen-game
-  .booster-dock,
+  .booster-dock {
+  background: linear-gradient(180deg var(--in-oklab), rgba(16, 29, 54, 0.88) 0%, rgba(10, 18, 34, 0.94) 100%);
+  border-top-color: rgba(108, 190, 255, 0.44);
+  box-shadow:
+    inset 0 1px 0 rgba(184, 224, 255, 0.16),
+    0 -4px 16px rgba(4, 10, 24, 0.46);
+}
+
 body:not(.high-contrast)
   #app-shell[data-title-open="false"][data-play-mode="TIMED"][data-active-screen="home"]
   .bottom-tab-bar {
-  border-top-color: rgba(114, 188, 255, 0.27);
+  border-top-color: rgba(108, 190, 255, 0.38);
+}
+
+/* Mode-Harmonized Carousel Wings & Stage Debut Banner */
+body:not(.high-contrast) #app-shell[data-play-mode="CHALLENGE"] #screen-game .btn-mode-wing {
+  background: linear-gradient(180deg var(--in-oklab), rgba(82, 56, 38, 0.92) 0%, rgba(52, 34, 24, 0.96) 100%);
+  border-color: rgba(248, 202, 118, 0.28);
+}
+
+body:not(.high-contrast) #app-shell[data-play-mode="ZEN"] #screen-game .btn-mode-wing {
+  background: linear-gradient(180deg var(--in-oklab), rgba(26, 68, 64, 0.92) 0%, rgba(16, 44, 42, 0.96) 100%);
+  border-color: rgba(124, 238, 212, 0.28);
+}
+
+body:not(.high-contrast) #app-shell[data-play-mode="TIMED"] #screen-game .btn-mode-wing {
+  background: linear-gradient(180deg var(--in-oklab), rgba(30, 56, 98, 0.92) 0%, rgba(18, 36, 68, 0.96) 100%);
+  border-color: rgba(140, 202, 255, 0.3);
+}
+
+@media (hover: hover) {
+  body:not(.high-contrast)
+    #app-shell[data-play-mode="CHALLENGE"]
+    #screen-game
+    .btn-tactile.btn-mode-wing:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(102, 70, 46, 0.96) 0%,
+      rgba(66, 44, 30, 0.98) 100%
+    );
+  }
+  body:not(.high-contrast)
+    #app-shell[data-play-mode="ZEN"]
+    #screen-game
+    .btn-tactile.btn-mode-wing:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(34, 86, 80, 0.96) 0%,
+      rgba(20, 56, 54, 0.98) 100%
+    );
+  }
+  body:not(.high-contrast)
+    #app-shell[data-play-mode="TIMED"]
+    #screen-game
+    .btn-tactile.btn-mode-wing:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(38, 72, 124, 0.96) 0%,
+      rgba(24, 46, 86, 0.98) 100%
+    );
+  }
+}
+
+body:not(.high-contrast) #app-shell[data-play-mode="CHALLENGE"] #screen-game .unlock-banner {
+  background: rgba(30, 19, 18, 0.92);
+  border-color: rgba(248, 196, 104, 0.42);
+}
+
+body:not(.high-contrast) #app-shell[data-play-mode="ZEN"] #screen-game .unlock-banner {
+  background: rgba(11, 28, 28, 0.92);
+  border-color: rgba(82, 232, 198, 0.44);
+}
+
+body:not(.high-contrast) #app-shell[data-play-mode="TIMED"] #screen-game .unlock-banner {
+  background: rgba(12, 22, 42, 0.92);
+  border-color: rgba(108, 190, 255, 0.46);
 }
 
 @media (prefers-reduced-motion: reduce) {

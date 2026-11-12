@@ -369,3 +369,17 @@ export interface AppViewContext {
   markPwaInstalled(): void;
   handleInstallAction(): Promise<void>;
 }
+
+export function getPlayModeMeta(mode: PlayMode): {
+  icon: string;
+  shortLabel: string;
+  badgeLabel: string;
+} {
+  if (mode === 'ZEN') {
+    return { icon: '🌿', shortLabel: 'Zen', badgeLabel: '🌿 ZEN' };
+  }
+  if (mode === 'TIMED') {
+    return { icon: '⏱', shortLabel: 'Speed Rush', badgeLabel: '⏱ SPEED RUSH' };
+  }
+  return { icon: '⚔️', shortLabel: 'Challenge', badgeLabel: '⚔️ CHALLENGE' };
+}

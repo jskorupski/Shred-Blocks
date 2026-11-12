@@ -573,9 +573,9 @@
   overflow: hidden;
   padding: 0.35rem;
   background: radial-gradient(
-    closest-side at 50% 48%,
-    rgba(246, 189, 96, 0.22) 0%,
-    rgba(115, 70, 99, 0.14) 56%,
+    ellipse 88% 64% at 50% 48%,
+    rgba(246, 189, 96, 0.28) 0%,
+    rgba(196, 114, 52, 0.15) 58%,
     rgba(115, 70, 99, 0) 100%
   );
 }

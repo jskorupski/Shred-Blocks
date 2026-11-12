@@ -8,6 +8,7 @@ import {
   type AppViewContext,
   BOOSTER_DEBUT_NOTES,
   getChapterMetaForLevel,
+  getPlayModeMeta,
   getThemeItemPrice,
   PARTICLE_CATALOG,
   SKIN_CATALOG,
@@ -20,6 +21,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
   const save = app.saveManager.getPayload();
   const playMode = save.settings.playMode;
+  const modeInfo = getPlayModeMeta(playMode);
   const modeLadder = save.modeState[playMode];
   const activeCurrentId = Math.max(1, modeLadder.currentLevelId || 1);
   const allCampaign = getCampaignRoadmapMeta();
@@ -211,7 +213,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const playCue = document.createElement('span');
       playCue.className = 'node-play-cue';
       playCue.setAttribute('aria-hidden', 'true');
-      playCue.textContent = 'Play ›';
+      playCue.textContent = `${modeInfo.icon} Play ›`;
       currentSubRow.append(nameDiv, playCue);
       contentDiv.appendChild(currentSubRow);
     }

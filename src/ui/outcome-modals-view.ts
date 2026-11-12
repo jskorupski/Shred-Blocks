@@ -2,7 +2,7 @@ import { isBoardDeadlocked, isBoardWon } from '../core/board';
 import { hasFinalTouchGrace } from '../core/board-state';
 import { solveBoard } from '../levels/solver';
 import { BOOSTER_RARITY, CONTINUE_COIN_COST, type LevelWinRewardSummary } from '../storage/save-manager';
-import { type AppViewContext, BOOSTER_DISPLAY_NAMES } from './catalog-meta';
+import { type AppViewContext, BOOSTER_DISPLAY_NAMES, getPlayModeMeta } from './catalog-meta';
 
 /**
  * Level outcome feedback (`ECON-V2` victory rewards, `OUT_OF_MOVES` / `TIME_OUT` / `BOMB_EXPLODED` failure options,
@@ -24,6 +24,11 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   const milestoneFillEl = document.getElementById('victory-milestone-chest-fill');
 
   const save = app.saveManager.getPayload();
+  const modeInfo = getPlayModeMeta(save.settings.playMode);
+  const nextLevelBtn = document.getElementById('btn-next-level');
+  if (nextLevelBtn) {
+    nextLevelBtn.textContent = `${modeInfo.icon} ▶ Next Level`;
+  }
 
   if (titleEl) {
     titleEl.textContent = `Level ${app.board.levelId} Cleared!`;
@@ -143,11 +148,17 @@ export function handleLevelFailureImpl(
 
   const save = app.saveManager.getPayload();
   const playMode = save.settings.playMode;
+  const modeInfo = getPlayModeMeta(playMode);
   const titleEl = document.getElementById('failure-title');
   const reasonEl = document.getElementById('failure-reason');
+  const retryBtn = document.getElementById('btn-retry-level');
   const blessingBtn = document.getElementById('btn-use-zen-blessing');
   const continueBtn = document.getElementById('btn-continue-level');
   const zenBtn = document.getElementById('btn-failure-zen');
+
+  if (retryBtn) {
+    retryBtn.textContent = `${modeInfo.icon} ↻ Try Again (Free)`;
+  }
 
   if (blessingBtn) {
     const blessings = save.zenBlessings || 0;

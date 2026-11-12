@@ -390,11 +390,97 @@
   line-height: 1;
 }
 
+.tab-play-icon-pair {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.16rem;
+}
+
+.tab-play-mode-glyph {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
 .tab-label {
   font-size: 0.66rem;
   font-weight: 600;
   letter-spacing: 0.025em;
   white-space: nowrap;
+}
+
+/* ==========================================================================
+   MODE-RESPONSIVE PLANE 2 PLAY / CONTINUE / RESUME BEACONS (`PLAY-CTA-MODE-01`)
+   WCAG AAA (>= 8.4:1) dark carved ink on Burnished Gold / Jade / Sky-Sapphire.
+   New-player `▶ BEGIN JOURNEY` (`data-new-player="true"`) stays Sanctuary Jade!
+   ========================================================================== */
+
+#btn-title-play:not([data-new-player="true"]) {
+  letter-spacing: 0.055em;
+  white-space: nowrap;
+}
+
+body:not(.high-contrast)[data-play-mode="ZEN"] #title-chapter-badge {
+  color: #6ce8d8;
+}
+
+body:not(.high-contrast)[data-play-mode="TIMED"] #title-chapter-badge {
+  color: #82c8ff;
+}
+
+body:not(.high-contrast)[data-play-mode="CHALLENGE"] #btn-title-play:not([data-new-player="true"]),
+body:not(.high-contrast)[data-play-mode="CHALLENGE"] #btn-play-current,
+body:not(.high-contrast)[data-play-mode="CHALLENGE"] #btn-next-level,
+body:not(.high-contrast)[data-play-mode="CHALLENGE"] #btn-pause-resume,
+body:not(.high-contrast)[data-play-mode="CHALLENGE"] .tab-item.tab-play-cta {
+  background: linear-gradient(180deg var(--in-oklab), #f6ce76 0%, #d89b32 100%);
+  color: #1c1104;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 252, 235, 0.52),
+    0 2px 0 #7a510e,
+    0 6px 16px rgba(229, 178, 93, 0.28);
+}
+
+body:not(.high-contrast)[data-play-mode="TIMED"] #btn-title-play:not([data-new-player="true"]),
+body:not(.high-contrast)[data-play-mode="TIMED"] #btn-play-current,
+body:not(.high-contrast)[data-play-mode="TIMED"] #btn-next-level,
+body:not(.high-contrast)[data-play-mode="TIMED"] #btn-pause-resume,
+body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
+  background: linear-gradient(180deg var(--in-oklab), #6ec2ff 0%, #3688e6 100%);
+  color: #061326;
+  box-shadow:
+    inset 0 1px 0 rgba(235, 248, 255, 0.5),
+    0 2px 0 #18457a,
+    0 6px 16px rgba(72, 158, 255, 0.28);
+}
+
+@media (hover: hover) {
+  body:not(.high-contrast)[data-play-mode="CHALLENGE"]
+    #btn-title-play:not([data-new-player="true"]):hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="CHALLENGE"] #btn-play-current:hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="CHALLENGE"] #btn-next-level:hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="CHALLENGE"] #btn-pause-resume:hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="CHALLENGE"] .tab-item.tab-play-cta:hover:not(:disabled) {
+    background: linear-gradient(180deg var(--in-oklab), #ffdc8a 0%, #e4a83c 100%);
+    color: #1c1104;
+  }
+
+  body:not(.high-contrast)[data-play-mode="TIMED"]
+    #btn-title-play:not([data-new-player="true"]):hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="TIMED"] #btn-play-current:hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="TIMED"] #btn-next-level:hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="TIMED"] #btn-pause-resume:hover:not(:disabled),
+  body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta:hover:not(:disabled) {
+    background: linear-gradient(180deg var(--in-oklab), #86ceff 0%, #4296f2 100%);
+    color: #061326;
+  }
+}
+
+@media (forced-colors: active) {
+  .tab-item.tab-play-cta {
+    border: 1px solid ButtonText;
+    outline: 2px solid Highlight;
+  }
 }
 
 @media (max-width: 520px), (max-height: 740px) {
