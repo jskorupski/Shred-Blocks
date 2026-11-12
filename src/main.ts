@@ -72,6 +72,7 @@ import {
   switchPlayModeImpl,
   switchScreenImpl,
   updateTelemetryReadoutImpl,
+  useZenBlessingContinueImpl,
 } from './ui/modals-and-save-transfer';
 import {
   handleLevelFailureImpl,
@@ -178,7 +179,8 @@ export class ShredBlocksApp implements AppViewContext {
           roomVis.zOffset,
           trace.spanCols,
           trace.spanRows,
-          trace.intoGate
+          trace.intoGate,
+          trace.cellMask
         );
       },
       onImmobileBlockTap: (block) => {
@@ -339,6 +341,9 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   public skipCurrentLevel(): void {
+    if (this.saveManager.getPayload().settings.playMode !== 'ZEN') {
+      return;
+    }
     this.sound.playButtonTap();
     const currentId = this.board.levelId;
     this.saveManager.recordLevelSkip(currentId);
@@ -392,7 +397,9 @@ export class ShredBlocksApp implements AppViewContext {
             trace.colorId,
             roomVis.zOffset,
             trace.spanCols,
-            trace.spanRows
+            trace.spanRows,
+            trace.intoGate,
+            trace.cellMask
           );
         }
       }
@@ -494,6 +501,10 @@ export class ShredBlocksApp implements AppViewContext {
 
   public continueFailedLevel(): void {
     continueFailedLevelImpl(this);
+  }
+
+  public useZenBlessingContinue(): void {
+    useZenBlessingContinueImpl(this);
   }
 
   private handleImmobileBlockTap(block: BlockState): void {

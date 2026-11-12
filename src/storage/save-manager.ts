@@ -1,5 +1,12 @@
 import type { BoosterType, LevelRecord, ParticleStyleId, SavePayloadV1, SkinId, TrayId } from '../core/types';
 import { decodeSaveCode, encodeSaveCode, validateSavePayloadV1 } from './save-code';
+import {
+  applyZenOnlySkip,
+  cloneModeState,
+  createDefaultModeState,
+  evaluateModeLevelWin,
+  migrateSavePayload,
+} from './save-mode-ladders';
 
 export const SAVE_STORAGE_KEY = 'shredblocks.save.v1';
 export const PRE_IMPORT_BACKUP_KEY = 'shredblocks.save.pre_import_backup';
@@ -110,6 +117,11 @@ export interface LevelWinRewardSummary {
   milestoneChestOpened: boolean;
   starReliquaryChestsOpened: number;
   rewardedBoosters: BoosterType[];
+  zenStarAwarded?: boolean;
+  zenStarProgress?: number;
+  zenBlessingAwarded?: boolean;
+  zenBlessingsTotal?: number;
+  zenBlessingProgress?: number;
 }
 
 export function createDefaultSavePayload(): SavePayloadV1 {
@@ -130,6 +142,12 @@ export function createDefaultSavePayload(): SavePayloadV1 {
     milestoneChestLevel: 0,
     starReliquaryLevel: 0,
     economyVersion: 2,
+    modeLadderVersion: 1,
+    modeState: createDefaultModeState(),
+    zenStarsEarned: 0,
+    zenStarProgress: 0,
+    zenBlessings: 0,
+    zenBlessingProgress: 0,
     boosters: {
       UNDO: 3,
       HINT: 2,
@@ -157,24 +175,26 @@ export function createDefaultSavePayload(): SavePayloadV1 {
   };
 }
 
+function migrateEconomyStep(payload: SavePayloadV1): SavePayloadV1 {
+  if ((payload.economyVersion ?? 1) >= 2) return payload;
+  if (payload.settings.playMode === 'ZEN') {
+    payload.settings.playMode = 'CHALLENGE';
+  }
+  if (payload.coins > 600) {
+    payload.coins = Math.min(payload.coins, 600 + Math.round((payload.coins - 600) ** 0.72 * 3.5));
+  }
+  payload.starReliquaryLevel = Math.floor((payload.totalStars || 0) / 25) * 25;
+  payload.economyVersion = 2;
+  return payload;
+}
+
 /**
- * One-time graceful migration from Economy v1 -> v2 (`ECON-V2`):
- * - Switches legacy default `'ZEN'` -> `'CHALLENGE'` so returning players experience Move Budgets
- * - Soft-scales bloated v1 coin balances (`> 600`) while preserving every unlocked item & star
- * - Initializes `starReliquaryLevel` to current 25-star milestone floor
+ * Forward-migration pipeline (`SAVE-COMPAT-01`, `ECON-V2`, `MAP-MODE-SPLIT-01`, `ZEN-STARS-01`):
+ * - Upgrades Economy v1 -> v2 (`ZEN` -> `CHALLENGE`, soft-scales `> 600` coin balances, sets `starReliquaryLevel`)
+ * - Upgrades `modeLadderVersion: 0 -> 1` (per-mode ladders, additive stars, Zen Stars & Zen Blessings)
  */
 export function migrateLegacyEconomy(payload: SavePayloadV1): SavePayloadV1 {
-  if ((payload.economyVersion ?? 1) >= 2) return payload;
-  const migrated = clonePayload(payload);
-  if (migrated.settings.playMode === 'ZEN') {
-    migrated.settings.playMode = 'CHALLENGE';
-  }
-  if (migrated.coins > 600) {
-    migrated.coins = Math.min(migrated.coins, 600 + Math.round((migrated.coins - 600) ** 0.72 * 3.5));
-  }
-  migrated.starReliquaryLevel = Math.floor((migrated.totalStars || 0) / 25) * 25;
-  migrated.economyVersion = 2;
-  return migrated;
+  return migrateSavePayload(clonePayload(payload), migrateEconomyStep);
 }
 
 /**
@@ -201,6 +221,7 @@ function clonePayload(payload: SavePayloadV1): SavePayloadV1 {
   }
   return {
     ...payload,
+    modeState: cloneModeState(payload.modeState),
     boosters: { ...payload.boosters },
     unlockedSkins: [...payload.unlockedSkins],
     unlockedTrays: [...payload.unlockedTrays],
@@ -281,26 +302,34 @@ export class SaveManager {
   }
 
   public updateSettings(partial: Partial<SavePayloadV1['settings']>): SavePayloadV1 {
+    const prevMode = this.payload.settings.playMode;
     this.payload.settings = {
       ...this.payload.settings,
       ...partial,
     };
+    const nextMode = this.payload.settings.playMode;
+    if (nextMode !== prevMode) {
+      this.payload.currentLevelId = this.payload.modeState[nextMode].currentLevelId;
+    }
     return this.save();
   }
 
   public setCurrentLevel(levelId: number, allowJump = false): SavePayloadV1 {
     const cleanId = Math.max(1, Math.floor(levelId));
-    this.payload.currentLevelId = allowJump ? cleanId : Math.min(cleanId, this.payload.highestLevelUnlocked);
+    const ladder = this.payload.modeState[this.payload.settings.playMode];
+    const nextId = allowJump ? cleanId : Math.min(cleanId, ladder.highestUnlocked);
+    ladder.currentLevelId = nextId;
+    this.payload.currentLevelId = nextId;
     return this.save();
   }
 
   /**
-   * Economy v2 Level Clear & Reliquary Progression (`F-10`, `ECON-V2`):
-   * - Challenge / Rush Clear (`1..3` Gold Stars): `15 / 25 / 40` base coins (`NORMAL / HARD / SUPER_HARD`; `20%` replay),
+   * Economy v2 & Per-Mode Progression (`F-10`, `ECON-V2`, `MAP-MODE-SPLIT-01`, `ZEN-STARS-01`):
+   * - Challenge / Rush Clear (`1..3` Gold Stars per mode): `15 / 25 / 40` base coins (`NORMAL / HARD / SUPER_HARD`; `20%` replay),
    *   `+5 Coins/★` improvement, Flow Streak bonus (`+5..+25`), Shredder Chest (`100` blocks -> `+50c + 1 Booster`),
-   *   Milestone Chest (every `10` levels -> `+75c + 1 Booster`), and 25-Star Reliquary Chest (`+90c + 1 Booster`).
-   * - Zen Clear (`0` Gold Stars): sets `zenCleared: true`, advances `highestLevelUnlocked`, pauses `winStreak`,
-   *   and awards tranquil `+10` (`+2` replay) coins + Shredder Chest progress.
+   *   Global Milestone Chest (every `10` levels -> `+75c + 1 Booster`), and 25-Star Reliquary Chest (`+90c + 1 Booster`).
+   * - Zen Clear: advances `modeState.ZEN`, awards `+10` (`+2` replay) coins, `+1 ★` Gold Star every `3` unique clears,
+   *   `+1 🌿 Zen Blessing` every `4` unique clears (cap `3`), and triggers Global Milestone / Shredder / Reliquary chests.
    */
   public recordLevelWin(
     levelId: number,
@@ -328,10 +357,8 @@ export class SaveManager {
               ? 2
               : 1));
 
-    const prevRecord = this.payload.levelRecords[levelId];
-    const prevStars = prevRecord && !prevRecord.skipped ? prevRecord.stars : 0;
-    const isFirstClear = isZenRun ? prevStars === 0 && !prevRecord?.zenCleared : prevStars === 0;
-    const starsImproved = isZenRun ? 0 : Math.max(0, stars - prevStars);
+    const evalWin = evaluateModeLevelWin(this.payload, levelId, moves, timeSec, stars, isZenRun);
+    const { isFirstClear, starsImproved, zenStarAwarded, zenBlessingAwarded } = evalWin;
 
     if (!isZenRun) {
       this.payload.winStreak = (this.payload.winStreak || 0) + 1;
@@ -375,7 +402,7 @@ export class SaveManager {
       rewardedBoosters.push(bType);
     }
 
-    if (!isZenRun && isFirstClear && levelId % 10 === 0 && levelId > this.payload.milestoneChestLevel) {
+    if (isFirstClear && levelId % 10 === 0 && levelId > this.payload.milestoneChestLevel) {
       this.payload.milestoneChestLevel = levelId;
       milestoneChestOpened = true;
       chestCoins += 75;
@@ -397,24 +424,7 @@ export class SaveManager {
     const totalCoinsEarned = baseCoins + starCoins + streakCoins + chestCoins;
     this.payload.coins += totalCoinsEarned;
 
-    const mergedStars = Math.max(prevStars, stars);
-    const nextRecord: LevelRecord = {
-      stars: mergedStars,
-      bestMoves: prevRecord && prevRecord.bestMoves > 0 ? Math.min(prevRecord.bestMoves, moves) : moves,
-      bestTimeSec:
-        prevRecord && prevRecord.bestTimeSec > 0 ? Math.min(prevRecord.bestTimeSec, timeSec) : timeSec,
-      skipped: false,
-    };
-    if (isZenRun && mergedStars === 0) {
-      nextRecord.zenCleared = true;
-    }
-    this.payload.levelRecords[levelId] = nextRecord;
-
-    if (levelId + 1 > this.payload.highestLevelUnlocked) {
-      this.payload.highestLevelUnlocked = levelId + 1;
-    }
-    this.payload.currentLevelId = levelId + 1;
-
+    evalWin.commitRecordAndLadders();
     this.save();
 
     return {
@@ -431,6 +441,11 @@ export class SaveManager {
       milestoneChestOpened,
       starReliquaryChestsOpened,
       rewardedBoosters,
+      zenStarAwarded,
+      zenStarProgress: this.payload.zenStarProgress,
+      zenBlessingAwarded,
+      zenBlessingsTotal: this.payload.zenBlessings,
+      zenBlessingProgress: this.payload.zenBlessingProgress,
     };
   }
 
@@ -440,26 +455,21 @@ export class SaveManager {
   }
 
   /**
-   * Free Skip Level (`0` coins cost): unlocks `levelId + 1` with `stars: 0, skipped: true`
-   * so no player is ever stuck on any puzzle.
+   * Zen-Only Free Skip Level (`0` coins cost): unlocks `levelId + 1` in `modeState.ZEN` with `zenSkipped: true`.
+   * Strict no-op when `playMode !== 'ZEN'`.
    */
   public recordLevelSkip(levelId: number): SavePayloadV1 {
-    const existing = this.payload.levelRecords[levelId];
-    // Never overwrite a Zen clear: otherwise Zen clear -> Skip -> Zen clear re-farms first-clear coins & chests
-    if (!existing || (existing.stars === 0 && !existing.zenCleared)) {
-      this.payload.levelRecords[levelId] = {
-        stars: 0,
-        bestMoves: 0,
-        bestTimeSec: 0,
-        skipped: true,
-      };
+    if (!applyZenOnlySkip(this.payload, levelId)) {
+      return this.getPayload();
     }
-    if (levelId + 1 > this.payload.highestLevelUnlocked) {
-      this.payload.highestLevelUnlocked = levelId + 1;
-    }
-    this.payload.currentLevelId = levelId + 1;
-    this.payload.winStreak = 0;
     return this.save();
+  }
+
+  public consumeZenBlessing(): boolean {
+    if ((this.payload.zenBlessings || 0) <= 0) return false;
+    this.payload.zenBlessings -= 1;
+    this.save();
+    return true;
   }
 
   public getBoosterCount(type: BoosterType): number {

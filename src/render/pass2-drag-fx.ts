@@ -40,6 +40,18 @@ export function getShapeAnchorCellOffset(shape: PolyominoShape): { x: number; y:
   return { x: bestDc + 0.5, y: bestDr + 0.5 };
 }
 
+function buildDefaultRectCellMask(cols: number, rows: number): number {
+  const w = Math.min(4, Math.max(1, Math.round(cols)));
+  const h = Math.min(4, Math.max(1, Math.round(rows)));
+  let mask = 0;
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      mask |= 1 << (r * 4 + c);
+    }
+  }
+  return mask;
+}
+
 export function spawnPathTraceImpl(
   rctx: RenderPassContext,
   waypoints: ReadonlyArray<PathWaypoint>,
@@ -47,13 +59,14 @@ export function spawnPathTraceImpl(
   z = 0.0,
   spanCols = 1,
   spanRows = 1,
-  intoGate = false
+  intoGate = false,
+  cellMask?: number
 ): void {
   if (rctx.lastOptions.reducedMotion || waypoints.length < 2) return;
   const cols = Math.max(1, spanCols);
   const rows = Math.max(1, spanRows);
   const adjusted = waypoints.slice();
-  const origLastPrev = waypoints[waypoints.length - 2];
+  const endPt = waypoints[waypoints.length - 1];
   const dx0 = waypoints[1].x - waypoints[0].x;
   const dy0 = waypoints[1].y - waypoints[0].y;
   const len0 = Math.hypot(dx0, dy0);
@@ -62,7 +75,9 @@ export function spawnPathTraceImpl(
     const uy = dy0 / len0;
     const tMaxX = Math.abs(ux) > 1e-4 ? (cols * 0.5) / Math.abs(ux) : 99;
     const tMaxY = Math.abs(uy) > 1e-4 ? (rows * 0.5) / Math.abs(uy) : 99;
-    const rearMargin = intoGate ? 0.36 : 0.18;
+    const perpSpan0 = Math.abs(uy) * cols + Math.abs(ux) * rows;
+    const estTailHw = Math.max(0.41, perpSpan0 * 0.44) * 0.28;
+    const rearMargin = intoGate ? 0.36 : Math.max(0.22, estTailHw * 0.85);
     const maxFirstLegPull = waypoints.length > 2 ? len0 * 0.85 : 99;
     const pullBack = Math.min(maxFirstLegPull, Math.max(0, Math.min(tMaxX, tMaxY) - rearMargin));
     adjusted[0] = {
@@ -70,35 +85,23 @@ export function spawnPathTraceImpl(
       y: adjusted[0].y - uy * pullBack,
     };
   }
-  if (!intoGate) {
-    const lastIdx = adjusted.length - 1;
-    const dxL = adjusted[lastIdx].x - origLastPrev.x;
-    const dyL = adjusted[lastIdx].y - origLastPrev.y;
-    const lenL = Math.hypot(dxL, dyL);
-    if (lenL > 0.12) {
-      const uxL = dxL / lenL;
-      const uyL = dyL / lenL;
-      const tMaxX = Math.abs(uxL) > 1e-4 ? (cols * 0.5) / Math.abs(uxL) : 99;
-      const tMaxY = Math.abs(uyL) > 1e-4 ? (rows * 0.5) / Math.abs(uyL) : 99;
-      const headInset = Math.min(lenL * 0.65, Math.max(0.2, Math.min(tMaxX, tMaxY) - 0.32));
-      adjusted[lastIdx] = {
-        x: adjusted[lastIdx].x - uxL * headInset,
-        y: adjusted[lastIdx].y - uyL * headInset,
-      };
-    }
-  }
   const { segments, totalLength } = buildTraceSegments(adjusted);
   if (segments.length === 0 || totalLength < 0.24) return;
 
   let weightedPerp = 0;
   for (const seg of segments) {
     const perpSpan = Math.abs(Math.sin(seg.rotZ)) * cols + Math.abs(Math.cos(seg.rotZ)) * rows;
-    seg.width = Math.max(0.84, perpSpan * 0.9);
+    seg.width = Math.max(0.82, perpSpan * 0.88);
     seg.alphaScale = 1 / Math.max(1, perpSpan) ** 0.1;
     weightedPerp += perpSpan * seg.len;
   }
   const avgPerpSpan = weightedPerp / Math.max(1e-4, totalLength);
   const alphaScale = 1 / Math.max(1, avgPerpSpan) ** 0.1;
+  const resolvedMask = intoGate
+    ? 0
+    : cellMask && cellMask > 0
+      ? cellMask
+      : buildDefaultRectCellMask(cols, rows);
 
   const maxTraces = rctx.qualityGovernor.getActiveTier() === 'ULTRA_120' ? 5 : 3;
   while (rctx.activePathTraces.length >= maxTraces) {
@@ -112,6 +115,11 @@ export function spawnPathTraceImpl(
     age: 0.001,
     maxAge: DEFAULT_TRACE_MAX_AGE_SEC,
     alphaScale,
+    headOriginX: endPt.x - cols * 0.5,
+    headOriginY: endPt.y - rows * 0.5,
+    spanCols: cols,
+    spanRows: rows,
+    headCellMask: resolvedMask,
   });
 }
 
@@ -405,15 +413,14 @@ export function renderMysticPathTraces3D(
 
   for (const tr of rctx.activePathTraces) {
     const p = Math.min(1, Math.max(0, tr.age / tr.maxAge));
-    const headFrac = Math.min(1, p / 0.15);
-    const tailFrac = Math.max(0, (p - 0.26) / 0.74) ** 1.35;
-    const headDist = headFrac * tr.totalLength;
+    const headDist = tr.totalLength;
+    const tailFrac = Math.max(0, (p - 0.08) / 0.92) ** 1.28;
     const tailDist = tailFrac * tr.totalLength;
     const win = fillTraceUniformWindow(tr, tailDist, headDist, TRACE_UNIFORM_BUF);
     if (win.pointCount < 2) continue;
 
-    const fadeIn = Math.min(1, p * 18.0);
-    const fadeOut = (1 - p) ** 0.96;
+    const fadeIn = Math.min(1, p * 22.0);
+    const fadeOut = (1 - p) ** 1.02;
     const envelope = fadeIn * fadeOut;
 
     const [br, bg, bb] = rctx.getColorRgb(tr.colorId, highContrast, colorblind);
@@ -451,6 +458,14 @@ export function renderMysticPathTraces3D(
     gl.uniform1i(rctx.uTraceCount, win.pointCount);
     gl.uniform4fv(rctx.uTracePts, TRACE_UNIFORM_BUF, 0, win.pointCount * 4);
     gl.uniform3f(rctx.uCapColor, coreR, coreG, coreB);
+    gl.uniform4f(
+      rctx.uClipPlane,
+      tr.headOriginX ?? 0,
+      tr.headOriginY ?? 0,
+      tr.spanCols ?? 1,
+      tr.spanRows ?? 1
+    );
+    gl.uniform1f(rctx.uBlockSeed, tr.headCellMask ?? 0);
     rctx.drawMesh(
       gl,
       ENVIRONMENT_MESHES.overlayQuad,
@@ -470,6 +485,7 @@ export function renderMysticPathTraces3D(
     );
   }
   gl.uniform1i(rctx.uTraceCount, 0);
+  gl.uniform1f(rctx.uBlockSeed, 0);
 
   gl.enable(gl.CULL_FACE);
   gl.depthMask(true);
@@ -589,12 +605,12 @@ export function renderCanvas2DDragAndTrailFx(
     const isLightTray = floorLum >= 0.38;
 
     ctx.save();
-    ctx.lineCap = 'butt';
+    ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     for (const tr of rctx.activePathTraces) {
       const p = Math.min(1, Math.max(0, tr.age / tr.maxAge));
-      const headDist = Math.min(1, p / 0.16) * tr.totalLength;
-      const tailDist = Math.max(0, (p - 0.22) / 0.78) ** 1.32 * tr.totalLength;
+      const headDist = tr.totalLength;
+      const tailDist = Math.max(0, (p - 0.08) / 0.92) ** 1.28 * tr.totalLength;
       if (headDist - tailDist <= 0.04) continue;
       const env = Math.min(1, p * 16) * (1 - p) ** 1.15 * (tr.alphaScale ?? 1.0);
       const [br, bg, bb] = rctx.getColorRgb(tr.colorId, highContrast, colorblind);
@@ -667,6 +683,7 @@ export async function executeBenchmarkFramesImpl(
       rctx.render(lastBoard, { ...rctx.lastOptions, dtSec: 1 / 120 });
     }
     rctx.gl?.finish();
+    rctx.qualityGovernor.resetWorkSamples();
   }
 
   for (let i = 0; i < count; i++) {

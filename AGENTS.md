@@ -6,10 +6,10 @@ Authoritative engineering entrypoint for autonomous coding agents and contributo
 
 ## 1. Core Architectural & Product Invariants (NON-NEGOTIABLE)
 
-1. **100% Free-to-Play, Zero Ads, Zero IAP & Fair Economy v2 (`ECON-01`–`04`, `ECON-V2`)**:
-   - Never add ad SDKs, paid currency, stamina bars, or paywalls. Keep **Unlimited Lives (`F-01`)**, **1-Tap Zen Rescue**, **Free Level Skip (`0 Coins`, `F-04`)**, and **3 Free Undos (`F-08`)** + accidental-restart recovery (`preRestartSnapshot`) on every stage.
-   - **3 Play Modes**: `'CHALLENGE'` (default move budget + Touch-Move Coalescing + `FINAL-TOUCH-01` grace, `1–3★` via `STARS-SLACK-01`, Continue caps at `1★`), `'ZEN'` (untimed, `bombsInert` `ZEN-CALM-01`, `🌿 Zen` badge, `0★`; switching `Zen -> Challenge/Timed` after moves restarts Move 0), and `'TIMED'` (`TIMED-BOMB-01` move-paced fuses, `1–3★`).
-   - **Boosters & Undo Integrity (`UNDO-RES-01`)**: `UNDO (L1, 60c)`, `HINT (L2, 80c: hintMove + 2 Free Moves, or +10s in TIMED)`, `HAMMER (L8, 140c)`, `ROCKET (L18, 220c)`, `VACUUM (L30, 350c)`. Always use `carryLiveResourcesIntoUndo`, charge before applying, clear `undoStack` on `HAMMER`/`ROCKET`/`VACUUM`, and keep `#level-jump-input` locked to `1 .. highestLevelUnlocked`.
+1. **100% Free-to-Play, Zero Ads, Zero IAP & Fair Economy v2 (`ECON-01`–`04`, `ECON-V2`, `MAP-MODE-SPLIT-01`, `ZEN-STARS-01`)**:
+   - Never add ad SDKs, paid currency, stamina bars, or paywalls. Keep **Unlimited Lives (`F-01`)**, **Free Zen Blessing Continues** (`1 / 4` unique Zen clears, cap `3`), **Zen-Only Free Level Skips (`0 Coins`, `F-04`)**, and **3 Free Undos (`F-08`)** + accidental-restart recovery (`preRestartSnapshot`) on every stage.
+   - **3 Independent Mode Ladders (`modeState[mode]`)**: `'CHALLENGE'` (default move budget + Touch-Move Coalescing + `FINAL-TOUCH-01` grace, `1–3★` via `STARS-SLACK-01`, Continue caps at `1★`), `'ZEN'` (untimed, `bombsInert` `ZEN-CALM-01`, Zen-only skips, `1★ / 3` unique clears + `1 🌿 Zen Blessing / 4` unique clears), and `'TIMED'` (`TIMED-BOMB-01` move-paced fuses, `1–3★`), with additive `totalStars` and global `highestLevelUnlocked = max(modeState.*.highestUnlocked)` for booster unlocks (`L2/8/18/30`) and Level-10 Milestone Chests.
+   - **Boosters & Undo Integrity (`UNDO-RES-01`)**: `UNDO (L1, 60c)`, `HINT (L2, 80c: hintMove + 2 Free Moves, or +10s in TIMED)`, `HAMMER (L8, 140c)`, `ROCKET (L18, 220c)`, `VACUUM (L30, 350c)`. Always use `carryLiveResourcesIntoUndo`, charge before applying, clear `undoStack` on `HAMMER`/`ROCKET`/`VACUUM`, and keep `#level-jump-input` locked to `1 .. modeState[activeMode].highestUnlocked`.
 2. **Local Process, Port & Sandbox Execution SOP (`SANDBOX-SOP-01`)**:
    - **Never leak Vite or Chromium processes.** Spawn `./node_modules/.bin/vite` directly (never `npx vite`). Strict ports: Playwright `4178` ([`playwright.config.ts`](playwright.config.ts)), visual harness `4179` ([`scripts/visual-harness.ts`](scripts/visual-harness.ts)).
    - **Sandbox vs. `BypassSandbox: true` First-Try Matrix (DO NOT WASTE FAILED ATTEMPTS)**:
@@ -48,15 +48,15 @@ Every repository text/SVG file (except `package-lock.json`) is enforced `<= 800 
 | Path | Responsibility |
 | :--- | :--- |
 | [`index.html`](index.html) & [`src/ui/dialogs-template.ts`](src/ui/dialogs-template.ts) | SPA shell (`#screen-home`, `#screen-game`, `#screen-themes`, `#title-overlay`), CSP, SEO/OG/Twitter/JSON-LD head tags + lazy `<dialog>` modals. |
-| [`src/main.ts`](src/main.ts) & [`src/ui/*.ts`](src/ui/) | `ShredBlocksApp` orchestrator + modular views (`catalog-meta`, `boosters-controller`, `hud-and-title-view`, `outcome-modals-view`, `roadmap-and-themes-view`, `modals-and-save-transfer`, `dom-events-and-pwa`). |
+| [`src/main.ts`](src/main.ts) & [`src/ui/*.ts`](src/ui/) | `ShredBlocksApp` orchestrator + modular views (`catalog-meta`, `boosters-controller`, `hud-and-title-view`, `outcome-modals-view`, `roadmap-and-themes-view`, `modals-and-save-transfer`, `dom-events-and-pwa`, compile-time `lan-devtools`). |
 | [`src/styles/main.css`](src/styles/main.css) & [`src/styles/*.css`](src/styles/) | Ordered CSS barrel: `tokens-and-shell`, `screen-home`, `roadmap-path`, `screen-game`, `booster-dock`, `themes-and-nav`, `dialogs`, `title-and-a11y`. |
 | [`src/core/*.ts`](src/core/) | `types`, `polyomino` (19 shapes), `physics` & `room-and-occupancy`, `gate-clearance` & `shred-side-effects`, `board` & `board-state`, `fx-random`. |
 | [`src/levels/*.ts`](src/levels/) | `catalog` & `curated-early` (`1..300` + O(1) `getCampaignRoadmapMeta`), `generator*` (`82..300` & Endless `301+`), `solver` (Zobrist A\* `solveBoard` & hints). |
 | [`src/render/*.ts`](src/render/) | `camera-3d`, `atlas-3d`, `mesh-generator` & `mesh-primitives`, `renderer-3d`, `render-types`, `shaders-*`, `pass1..3*`, `path-trace-ribbon`, `particle-fx`, `shred-style-fx`, `relic-awakening-fx`, `canvas2d-fallback`. |
 | [`src/input/*.ts`](src/input/) & [`src/audio/*.ts`](src/audio/) | Pointer/touch drag controller (`pointer-controller`, `targeting-and-keyboard`) and procedural Web Audio synthesizer (`synth`, `synth-voices`). |
-| [`src/storage/*.ts`](src/storage/) | `save-manager` (`localStorage` + `IndexedDB`), `save-code` (53-bit `SB1-...` + LZ77 + CRC32), `qr-svg` (ISO 18004 QR SVG). |
+| [`src/storage/*.ts`](src/storage/) | `save-manager` (`localStorage` + `IndexedDB`), `save-mode-ladders` (`modeState` + `[0xa6, 0x4d]` trailer), `save-code` (53-bit `SB1-...` + LZ77 + CRC32), `qr-svg` (ISO 18004 QR SVG). |
 | [`public/*`](public/) & [`scripts/*`](scripts/) | Zen Mystic `icon*.{svg,png}`, `apple-touch-icon.png`, `favicon.ico` / `favicon-*.png`, `og-image.png`, `_headers`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `sw.js`, `fonts/*.woff2`, `generate-icons.ts`, `visual-harness.ts`. |
-| [`tests/unit/*.test.ts`](tests/unit/), [`tests/e2e/*.spec.ts`](tests/e2e/), [`tests/visual/*`](tests/visual/) | 6 Vitest unit/solver/security suites (`63+` tests), 25 Playwright E2E specs, and 18 deterministic visual golden snapshots. |
+| [`tests/unit/*.test.ts`](tests/unit/), [`tests/e2e/*.spec.ts`](tests/e2e/), [`tests/visual/*`](tests/visual/) | 8 Vitest unit/solver/security/FX/ladder suites (`75+` tests), 28+ Playwright E2E specs, and 18 deterministic visual golden snapshots. |
 
 ---
 

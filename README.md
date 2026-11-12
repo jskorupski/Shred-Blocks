@@ -26,13 +26,13 @@
 ## Features
 
 - **300 Campaign Levels + Infinite Endless Mode**: Progress across 6 architectural chapters—from approachable `5×5` courtyards to non-rectangular atriums, multi-room portcullis sanctums, sealed mystery vaults, and `9×9` citadels—followed by seeded procedural Endless boards (`Level 301+`). Every stage is verified 100% solvable without power-ups by a deterministic A\* solver.
-- **Three Play Modes (Switch Anytime)**:
-  - **Challenge**: Clear the courtyard within a calibrated move budget to earn 1–3 Gold Stars, streak bonuses, and chest rewards.
-  - **Zen**: Untimed, unlimited-move play—always one tap away if you want a relaxed pace.
-  - **Timed Rush**: An arcade countdown mode for speedrunners.
+- **Three Independent Play Modes (`MAP-MODE-SPLIT-01`)**:
+  - **Challenge**: Clear the courtyard within a calibrated move budget to earn 1–3 Gold Stars, streak bonuses, and chest rewards on its own campaign ladder.
+  - **Zen**: Untimed, unlimited-move sanctuary flow with free skips—every 3 unique Zen clears awards `+1` Gold Star, and every 4 unique clears banks a **🌿 Zen Blessing** (up to 3) for a free `+5 Moves` / `+20s` Continue in Challenge or Rush.
+  - **Speed Rush**: An arcade countdown ladder for speedrunners, with additive Gold Stars and globally shared booster unlocks (`L2/8/18/30`) across all modes.
 - **18 Gradual Mechanics**: Introduces new spatial twists across the campaign, including axis-locked rails, multi-layer blocks, ice blocks & frozen gates, star gates, keys & locks, wooden crates, time-bombs, glued block groups, ropes & scissors, dynamic shutters, block generators, colored floor paths, and moving elevators.
 - **Power-Ups & Themes Studio**: Earn coins through normal play and milestone chests to stock 5 optional boosters (*Undo*, *Hint*, *Hammer*, *Row/Col Rocket*, *Color Vacuum*) and unlock 15 cosmetic **Block Skins**, **Board Trays**, and **Shred Animations** (*Micro Cubes*, *Star Confetti*, *Pixel Sparks*, buoyant *Soap Bubbles*, and *Lightning Bolts* with electric gate arcs).
-- **Player-Friendly & Accessible**: Unlimited lives, 3 free undos per attempt, free level skip anytime, colorblind symbol badges, high-contrast palettes, full keyboard navigation, and reduced-motion mode.
+- **Player-Friendly & Accessible**: Unlimited lives, 3 free undos per attempt, free Zen skips & Zen Blessing rescues, colorblind symbol badges, high-contrast palettes, full keyboard navigation, and reduced-motion mode.
 - **Offline PWA & Account-Free Sync**: Installs to iOS, Android, or Desktop home screens and runs offline after the first visit. Transfer progress across devices without an account using a compact Save Code, shareable Sync Link, offline QR Code, or JSON backup.
 
 ## Controls

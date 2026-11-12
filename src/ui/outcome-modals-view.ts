@@ -30,7 +30,9 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   }
   if (subtitleEl) {
     subtitleEl.textContent = summary.zenClear
-      ? '🌿 Tranquil Zen Clear — Replay in Challenge Mode for Gold Stars ★'
+      ? summary.zenStarAwarded
+        ? '★ +1 Gold Star Earned in Zen Sanctuary! Every 3 unique Zen clears awards a Gold Star.'
+        : `🌿 Tranquil Zen Clear — ★ ${save.zenStarProgress}/3 toward next Gold Star · Blessings ${save.zenBlessings}/3`
       : summary.starsEarned === 3
         ? 'Flawless 3-Star Shredder Mastery!'
         : summary.starsEarned === 2
@@ -41,7 +43,9 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
     if (summary.zenClear) {
       const pill = document.createElement('span');
       pill.className = 'zen-victory-pill';
-      pill.textContent = '🌿 Zen Cleared · Stage Unlocked';
+      pill.textContent = summary.zenStarAwarded
+        ? '🌿 Zen Cleared · ★ +1 Gold Star Earned!'
+        : `🌿 Zen Cleared · ★ ${save.zenStarProgress}/3`;
       starsEl.replaceChildren(pill);
     } else {
       const slots: HTMLSpanElement[] = [];
@@ -116,6 +120,9 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
         `✦ Star Reliquary Chest Opened! (+${summary.starReliquaryChestsOpened * 90} Coins & ${rewardPart})`
       );
     }
+    if (summary.zenBlessingAwarded) {
+      chestNotes.push(`🌿 Zen Blessing Earned! (${save.zenBlessings}/3 Free Continues Banked)`);
+    }
     if (chestNotes.length > 0) {
       chestFanfareEl.textContent = chestNotes.join(' | ');
       chestFanfareEl.hidden = false;
@@ -134,14 +141,28 @@ export function handleLevelFailureImpl(
   // A timeout/bomb can fire mid-drag in TIMED: drop the held block so release can't "win" behind the modal
   app.inputController.cancelActiveDrag?.();
 
-  const playMode = app.saveManager.getPayload().settings.playMode;
+  const save = app.saveManager.getPayload();
+  const playMode = save.settings.playMode;
   const titleEl = document.getElementById('failure-title');
   const reasonEl = document.getElementById('failure-reason');
+  const blessingBtn = document.getElementById('btn-use-zen-blessing');
   const continueBtn = document.getElementById('btn-continue-level');
   const zenBtn = document.getElementById('btn-failure-zen');
 
+  if (blessingBtn) {
+    const blessings = save.zenBlessings || 0;
+    blessingBtn.hidden = playMode === 'ZEN' || blessings <= 0;
+    blessingBtn.textContent =
+      reason === 'OUT_OF_MOVES'
+        ? `🌿 Zen Blessing: +5 Moves (Free · ${blessings}/3)`
+        : reason === 'BOMB_EXPLODED'
+          ? `🌿 Zen Blessing: Defuse & Continue (Free · ${blessings}/3)`
+          : `🌿 Zen Blessing: +20 Seconds (Free · ${blessings}/3)`;
+  }
+
   if (zenBtn) {
     zenBtn.hidden = playMode === 'ZEN';
+    zenBtn.textContent = `🌿 Switch to Zen Mode · Lvl ${save.modeState.ZEN.currentLevelId}`;
   }
 
   if (titleEl) {
@@ -155,10 +176,10 @@ export function handleLevelFailureImpl(
   if (reasonEl) {
     reasonEl.textContent =
       reason === 'OUT_OF_MOVES'
-        ? 'You reached the move budget! Retry for free, finish this board in Zen Mode, add +5 moves, or skip ahead.'
+        ? 'You reached the move budget! Retry for free, use a Zen Blessing or Coins for +5 moves, or switch to Zen Mode.'
         : reason === 'BOMB_EXPLODED'
-          ? 'A countdown bomb reached zero! Defuse bombs to keep playing, finish in Zen Mode, retry for free, or skip ahead.'
-          : 'You ran out of time in Speed Rush! Add +20 seconds, finish in Zen Mode, retry for free, or skip ahead.';
+          ? 'A countdown bomb reached zero! Retry for free, defuse with a Zen Blessing or Coins, or switch to Zen Mode.'
+          : 'You ran out of time in Speed Rush! Retry for free, add +20 seconds with a Zen Blessing or Coins, or switch to Zen Mode.';
   }
   if (continueBtn) {
     continueBtn.textContent =

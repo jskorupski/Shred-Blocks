@@ -337,6 +337,7 @@ export interface AppViewContext {
   restartCurrentLevel(): void;
   skipCurrentLevel(): void;
   continueFailedLevel(): void;
+  useZenBlessingContinue(): void;
   activateBooster(type: BoosterType): void;
   openTitleScreen(): void;
   dismissTitleScreen(targetScreen?: 'game' | 'home' | 'themes', animateAwakening?: boolean): void;

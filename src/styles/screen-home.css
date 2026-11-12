@@ -2,18 +2,176 @@
    SCREEN A: HOME ROADMAP & DASHBOARD — Progressive Zen Sanctuary Trail
    ========================================================================== */
 
-.home-dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 0.36rem;
-  padding: 0.42rem 0.85rem 0.3rem;
+.home-global-strip {
+  padding: 0.34rem 0.62rem 0.22rem;
   flex-shrink: 0;
 }
 
 .chests-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.34rem;
+}
+
+/* Connected Folder-Tab Sanctuary Mode Encapsulation (`MAP-MODE-SPLIT-01`) */
+.mode-sanctuary-shell {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.52rem 0.36rem;
+}
+
+.map-mode-tablist {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.28rem;
+  padding-inline: 0.36rem;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.map-mode-tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 36px;
+  margin-top: 3px;
+  padding: 0.24rem 0.42rem;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border: 1px solid rgba(246, 213, 168, 0.14);
+  border-bottom: 1px solid transparent;
+  background: linear-gradient(180deg var(--in-oklab), rgba(36, 27, 62, 0.86) 0%, rgba(21, 16, 40, 0.94) 100%);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: clamp(0.7rem, 0.9dvw + 0.36rem, 0.82rem);
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 248, 236, 0.08);
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+@media (hover: hover) {
+  .map-mode-tab[aria-selected="false"]:hover {
+    background: linear-gradient(
+      180deg var(--in-oklab),
+      rgba(54, 41, 90, 0.92) 0%,
+      rgba(30, 22, 54, 0.96) 100%
+    );
+    color: var(--text-primary);
+  }
+}
+
+.map-mode-tab:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: -2px;
+}
+
+.mode-tab-icon {
+  font-size: 0.82rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.mode-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mode-tab-lvl {
+  padding: 0.08rem 0.34rem;
+  border-radius: var(--radius-xs);
+  background: rgba(9, 6, 20, 0.58);
+  color: var(--text-secondary);
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.map-mode-tab[aria-selected="true"] {
+  margin-top: 0;
+  color: var(--text-primary);
+  font-weight: 700;
+  position: relative;
+  z-index: 3;
+}
+
+.map-mode-tab[data-mode-tab="CHALLENGE"][aria-selected="true"] {
+  background: linear-gradient(180deg var(--in-oklab), #43305f 0%, #261b3e 100%);
+  border-color: rgba(243, 203, 120, 0.44);
+  border-bottom-color: #261b3e;
+  box-shadow: inset 0 1px 0 rgba(255, 238, 198, 0.28);
+}
+
+.map-mode-tab[data-mode-tab="CHALLENGE"][aria-selected="true"] .mode-tab-lvl {
+  background: rgba(243, 203, 120, 0.2);
+  color: #f8dea0;
+}
+
+.map-mode-tab[data-mode-tab="ZEN"][aria-selected="true"] {
+  background: linear-gradient(180deg var(--in-oklab), #1b433b 0%, #132c28 100%);
+  border-color: rgba(110, 224, 184, 0.44);
+  border-bottom-color: #132c28;
+  box-shadow: inset 0 1px 0 rgba(196, 255, 235, 0.24);
+}
+
+.map-mode-tab[data-mode-tab="ZEN"][aria-selected="true"] .mode-tab-lvl {
+  background: rgba(74, 212, 168, 0.22);
+  color: #a7f3d0;
+}
+
+.map-mode-tab[data-mode-tab="TIMED"][aria-selected="true"] {
+  background: linear-gradient(180deg var(--in-oklab), #1d355b 0%, #14243e 100%);
+  border-color: rgba(112, 186, 255, 0.44);
+  border-bottom-color: #14243e;
+  box-shadow: inset 0 1px 0 rgba(202, 232, 255, 0.24);
+}
+
+.map-mode-tab[data-mode-tab="TIMED"][aria-selected="true"] .mode-tab-lvl {
+  background: rgba(86, 172, 255, 0.22);
+  color: #bae6fd;
+}
+
+.mode-sanctuary-panel {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(243, 203, 120, 0.44);
+  background: linear-gradient(180deg var(--in-oklab), #261b3e 0%, rgba(19, 14, 34, 0.94) 100%);
+  box-shadow: 0 8px 22px rgba(6, 4, 16, 0.46);
+  position: relative;
+  z-index: 1;
+}
+
+.mode-sanctuary-panel[data-play-mode="ZEN"] {
+  border-color: rgba(110, 224, 184, 0.44);
+  background: linear-gradient(180deg var(--in-oklab), #132c28 0%, rgba(13, 24, 26, 0.94) 100%);
+}
+
+.mode-sanctuary-panel[data-play-mode="TIMED"] {
+  border-color: rgba(112, 186, 255, 0.44);
+  background: linear-gradient(180deg var(--in-oklab), #14243e 0%, rgba(13, 20, 36, 0.94) 100%);
+}
+
+.home-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.34rem;
+  padding: 0.42rem 0.62rem 0.28rem;
+  flex-shrink: 0;
 }
 
 /* Plane 0 Recessed Dark Wells for Passive Chest Gauges */
@@ -49,6 +207,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chest-label-short {
+  display: none;
 }
 
 .chest-svg-icon {
@@ -87,6 +249,10 @@
   background: var(--accent-gold);
 }
 
+.fill-emerald {
+  background: linear-gradient(90deg var(--in-oklab), #34d399 0%, #6ee7b7 100%);
+}
+
 .chest-caption {
   font-size: 0.62rem;
   color: var(--text-muted);
@@ -120,6 +286,26 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 248, 236, 0.16),
     0 6px 18px rgba(8, 5, 20, 0.42);
+}
+
+.mode-sanctuary-panel[data-play-mode="ZEN"] .hero-launch-card {
+  background: linear-gradient(
+    135deg var(--in-oklab),
+    rgba(24, 62, 54, 0.88) 0%,
+    rgba(28, 72, 64, 0.84) 58%,
+    rgba(38, 66, 68, 0.82) 100%
+  );
+  border-color: rgba(110, 224, 184, 0.28);
+}
+
+.mode-sanctuary-panel[data-play-mode="TIMED"] .hero-launch-card {
+  background: linear-gradient(
+    135deg var(--in-oklab),
+    rgba(26, 48, 84, 0.88) 0%,
+    rgba(36, 58, 98, 0.84) 58%,
+    rgba(50, 56, 96, 0.82) 100%
+  );
+  border-color: rgba(112, 186, 255, 0.28);
 }
 
 .hero-astrolabe-watermark {
@@ -360,27 +546,130 @@
   gap: 0.56rem;
 }
 
-@media (max-height: 700px) {
-  .home-dashboard {
+@media (max-width: 520px) {
+  .home-global-strip {
+    padding: 0.26rem 0.42rem 0.16rem;
+  }
+  .home-global-strip .chests-row {
     gap: 0.24rem;
-    padding: 0.28rem 0.62rem 0.2rem;
+  }
+  .home-global-strip .chest-card {
+    padding: 0.28rem 0.4rem;
+  }
+  .home-global-strip .chest-header {
+    gap: 0.18rem;
+    font-size: 0.66rem;
+    letter-spacing: 0;
+  }
+  .home-global-strip .chest-title {
+    gap: 0.18rem;
+  }
+  .home-global-strip .chest-svg-icon {
+    width: 11px;
+    height: 11px;
+  }
+  .home-global-strip .chest-label-full {
+    display: none;
+  }
+  .home-global-strip .chest-label-short {
+    display: inline;
+  }
+  .mode-sanctuary-shell {
+    padding: 0 0.36rem 0.26rem;
+  }
+  .map-mode-tablist {
+    gap: 0.16rem;
+    padding-inline: 0.2rem;
+  }
+  .map-mode-tab {
+    gap: 0.16rem;
+    padding: 0.2rem 0.18rem;
+    font-size: 0.65rem;
+    letter-spacing: 0;
+  }
+  .mode-tab-icon {
+    font-size: 0.72rem;
+  }
+  .mode-tab-lvl {
+    padding: 0.05rem 0.22rem;
+    font-size: 0.56rem;
+  }
+}
+
+@media (max-height: 700px) {
+  .home-global-strip {
+    padding: 0.22rem 0.52rem 0.14rem;
+  }
+  .mode-sanctuary-shell {
+    padding: 0 0.44rem 0.24rem;
+  }
+  .map-mode-tab {
+    min-height: 32px;
+    padding: 0.18rem 0.34rem;
+  }
+  .home-dashboard {
+    gap: 0.22rem;
+    padding: 0.3rem 0.52rem 0.18rem;
   }
   .chest-card {
-    padding: 0.24rem 0.46rem;
-    gap: 0.12rem;
+    padding: 0.22rem 0.4rem;
+    gap: 0.1rem;
   }
   .hero-launch-card {
-    padding: 0.4rem 0.62rem;
-    gap: 0.26rem;
+    padding: 0.38rem 0.58rem;
+    gap: 0.24rem;
   }
   .hero-awakening-banner {
-    margin-top: 0.14rem;
-    padding: 0.12rem 0.4rem;
+    margin-top: 0.12rem;
+    padding: 0.1rem 0.36rem;
   }
   .roadmap-scroll {
-    padding-block: 0.32rem 1rem;
-    padding-inline: 0.62rem;
-    gap: 0.46rem;
+    padding-block: 0.28rem 0.9rem;
+    padding-inline: 0.52rem;
+    gap: 0.44rem;
+  }
+}
+
+/* High Contrast, Forced Colors & Reduced Motion (`AX-01`, `AX-02`) */
+body.high-contrast .map-mode-tab[aria-selected="false"] {
+  background: #0d0a1a;
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #f8fafc;
+}
+
+body.high-contrast .map-mode-tab[aria-selected="true"] {
+  background: #141026;
+  border-width: 2px;
+  border-color: #fde047;
+  border-bottom-color: #141026;
+  color: #ffffff;
+}
+
+body.high-contrast .mode-sanctuary-panel {
+  background: #141026;
+  border-width: 2px;
+  border-color: #fde047;
+}
+
+body.reduced-motion .map-mode-tab,
+body.reduced-motion .progress-fill {
+  transition: none;
+}
+
+@media (forced-colors: active) {
+  .map-mode-tab[aria-selected="false"] {
+    border: 1px solid ButtonText;
+  }
+  .map-mode-tab[data-mode-tab][aria-selected="true"] {
+    border: 2px solid Highlight;
+    border-bottom-color: Canvas;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .mode-sanctuary-panel,
+  .mode-sanctuary-panel[data-play-mode] {
+    border: 2px solid Highlight;
+    background: Canvas;
   }
 }
 

@@ -14,7 +14,7 @@ import { getLevelSpec } from '../levels/catalog';
 import { solveBoard } from '../levels/solver';
 import { generateQrSvg } from '../storage/qr-svg';
 import { decodeSaveCode, validateSavePayloadV1 } from '../storage/save-code';
-import { CONTINUE_COIN_COST, extractImportCodeFromHash } from '../storage/save-manager';
+import { CONTINUE_COIN_COST, extractImportCodeFromHash, migrateLegacyEconomy } from '../storage/save-manager';
 import {
   type AppHistoryState,
   type AppViewContext,
@@ -166,9 +166,9 @@ export function previewSaveImportImpl(app: AppViewContext, rawInput: string): bo
   try {
     let incoming: SavePayloadV1;
     if (trimmed.startsWith('{')) {
-      incoming = validateSavePayloadV1(JSON.parse(trimmed));
+      incoming = migrateLegacyEconomy(validateSavePayloadV1(JSON.parse(trimmed)));
     } else {
-      incoming = decodeSaveCode(trimmed);
+      incoming = migrateLegacyEconomy(decodeSaveCode(trimmed));
     }
 
     app.pendingImportPayload = incoming;
@@ -265,22 +265,57 @@ export function checkUrlHashForSaveImportImpl(app: AppViewContext): void {
 }
 
 export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, silent = false): void {
-  const prevMode = app.saveManager.getPayload().settings.playMode;
-  if (prevMode === nextMode) {
-    if (nextMode === 'ZEN') {
-      const failDlg = getModalElement('failure');
-      if (failDlg?.open) {
-        failDlg.close();
-      }
-    }
+  const prevSave = app.saveManager.getPayload();
+  const prevMode = prevSave.settings.playMode;
+  const failDlg = getModalElement('failure');
+  const fromFailureModal = Boolean(failDlg?.open);
+
+  if (prevMode === nextMode && !fromFailureModal) {
     return;
   }
 
   app.saveManager.updateSettings({ playMode: nextMode });
-  // Freeze seconds are a TIMED-only resource; never let them leak into Challenge/Zen move-based bomb ticks
   if (prevMode === 'TIMED') {
     app.board.freezeRemainingSec = 0;
   }
+
+  const nextSave = app.saveManager.getPayload();
+  const nextLadder = nextSave.modeState[nextMode];
+  const frontierId = Math.max(1, Math.min(nextLadder.highestUnlocked, nextLadder.currentLevelId || 1));
+
+  // 1. On Sanctuary Map / Themes / Title: switch mode ladder & refresh Hero + Roadmap without entering game
+  if (app.activeScreen !== 'game' || app.titleOverlayOpen) {
+    if (app.board.levelId !== frontierId) {
+      app.loadLevel(frontierId, false, false);
+    }
+    app.syncAllUiFromSave();
+    app.renderRoadmap();
+    app.renderNow();
+    return;
+  }
+
+  // 2. From Failure Modal (`#btn-failure-zen`) or when current stage is locked / behind frontier in `nextMode`:
+  //    load `nextMode`'s frontier cleanly at Move 0 so ladders stay 100% independent.
+  if (
+    fromFailureModal ||
+    app.board.levelId > nextLadder.highestUnlocked ||
+    (app.board.movesCommitted === 0 && !app.runTouchedZen && nextLadder.currentLevelId > app.board.levelId)
+  ) {
+    app.closeAllModals();
+    app.loadLevel(frontierId, true, true);
+    if (!silent) {
+      app.showGameToast(
+        nextMode === 'ZEN'
+          ? `🌿 Zen Mode · Level ${frontierId} — clear stages to earn ★ & Zen Blessings!`
+          : nextMode === 'CHALLENGE'
+            ? `⚔️ Challenge Mode · Level ${frontierId}`
+            : `⏱ Speed Rush · Level ${frontierId}`
+      );
+    }
+    return;
+  }
+
+  app.saveManager.setCurrentLevel(app.board.levelId);
 
   if (nextMode === 'ZEN') {
     app.runTouchedZen = true;
@@ -293,11 +328,8 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
         b.bombCount = Math.max(4, b.bombMax);
       }
     }
-    const failDlg = getModalElement('failure');
-    if (failDlg?.open) {
-      failDlg.close();
-    }
     app.syncAllUiFromSave();
+    app.renderRoadmap();
     app.renderNow();
     if (!silent) {
       app.showGameToast('🌿 Switched to Zen Mode — finish this board freely!');
@@ -308,7 +340,7 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
   const mustRestart = app.board.movesCommitted > 0 || app.runTouchedZen;
   if (mustRestart) {
     app.closeAllModals();
-    app.loadLevel(app.board.levelId, app.activeScreen === 'game' && !app.titleOverlayOpen, false);
+    app.loadLevel(app.board.levelId, true, false);
     if (!silent) {
       app.showGameToast(
         nextMode === 'CHALLENGE'
@@ -320,6 +352,7 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
     app.runTouchedZen = false;
     app.levelOutcomeHandled = false;
     app.syncAllUiFromSave();
+    app.renderRoadmap();
     app.renderNow();
     if (!silent) {
       app.showGameToast(
@@ -336,7 +369,27 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
     getBoard: () => app.board,
     getSave: () => app.saveManager.getPayload(),
     patchSave: (patch: Partial<SavePayloadV1>) => {
-      const next = validateSavePayloadV1({ ...app.saveManager.getPayload(), ...patch });
+      const cur = app.saveManager.getPayload();
+      const merged: Partial<SavePayloadV1> = { ...cur, ...patch };
+      if (
+        !patch.modeState &&
+        (patch.highestLevelUnlocked !== undefined || patch.currentLevelId !== undefined)
+      ) {
+        const activeMode = merged.settings?.playMode ?? cur.settings.playMode;
+        const nextHighest = Math.max(
+          1,
+          patch.highestLevelUnlocked ?? cur.modeState[activeMode].highestUnlocked
+        );
+        const nextCurrent = Math.min(
+          nextHighest,
+          Math.max(1, patch.currentLevelId ?? cur.modeState[activeMode].currentLevelId)
+        );
+        merged.modeState = {
+          ...cur.modeState,
+          [activeMode]: { highestUnlocked: nextHighest, currentLevelId: nextCurrent },
+        };
+      }
+      const next = validateSavePayloadV1(merged);
       if (next) {
         app.saveManager.importSaveJson(JSON.stringify(next));
         app.syncAllUiFromSave();
@@ -425,16 +478,8 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
   };
 }
 
-export function continueFailedLevelImpl(app: AppViewContext): void {
-  const save = app.saveManager.getPayload();
-  // Charge first: the +5 Moves / +20s are only granted once the 150-coin payment actually succeeds
-  if (save.coins < CONTINUE_COIN_COST || !app.saveManager.buyBoosterWithCoins('HINT', CONTINUE_COIN_COST)) {
-    app.showGameToast(`Need ${CONTINUE_COIN_COST} Coins — or Retry, Zen Mode, or Skip for FREE!`);
-    return;
-  }
-  app.saveManager.spendBooster('HINT');
+function applyContinueRescueToBoard(app: AppViewContext, playMode: PlayMode): void {
   app.board.continuesUsed = (app.board.continuesUsed ?? 0) + 1; // STARS-SLACK-01: caps this clear at 1★
-  const playMode = save.settings.playMode;
   if (playMode === 'CHALLENGE') {
     app.board.movesRemaining = Math.max(5, app.board.movesRemaining + 5);
     app.board.moveLimit += 5;
@@ -450,8 +495,33 @@ export function continueFailedLevelImpl(app: AppViewContext): void {
   app.board.timerRunning = true;
   app.closeAllModals();
   app.sound.playBooster('HINT');
-  app.syncInGameHud();
+  app.syncAllUiFromSave();
   app.renderNow();
+}
+
+export function continueFailedLevelImpl(app: AppViewContext): void {
+  const save = app.saveManager.getPayload();
+  if (save.coins < CONTINUE_COIN_COST || !app.saveManager.buyBoosterWithCoins('HINT', CONTINUE_COIN_COST)) {
+    app.showGameToast(
+      `Need ${CONTINUE_COIN_COST} Coins — Retry for FREE or bank a 🌿 Zen Blessing in Zen Mode!`
+    );
+    return;
+  }
+  app.saveManager.spendBooster('HINT');
+  applyContinueRescueToBoard(app, save.settings.playMode);
+}
+
+export function useZenBlessingContinueImpl(app: AppViewContext): void {
+  const save = app.saveManager.getPayload();
+  if (save.settings.playMode === 'ZEN' || !app.saveManager.consumeZenBlessing()) {
+    return;
+  }
+  applyContinueRescueToBoard(app, save.settings.playMode);
+  app.showGameToast(
+    save.settings.playMode === 'TIMED'
+      ? '🌿 Zen Blessing used — +20 Seconds granted (Free)!'
+      : '🌿 Zen Blessing used — +5 Moves granted (Free)!'
+  );
 }
 
 function isAppHistoryState(val: unknown): val is AppHistoryState {
@@ -484,8 +554,12 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
 
     if (st.view === 'game') {
       const save = app.saveManager.getPayload();
-      const maxAllowed = Math.max(1, save.highestLevelUnlocked || 1);
-      const targetId = Math.min(maxAllowed, Math.max(1, Math.floor(st.levelId || save.currentLevelId || 1)));
+      const ladder = save.modeState[save.settings.playMode];
+      const maxAllowed = Math.max(1, ladder.highestUnlocked || 1);
+      const targetId = Math.min(
+        maxAllowed,
+        Math.max(1, Math.floor(st.levelId || ladder.currentLevelId || 1))
+      );
       if (app.board.levelId !== targetId) {
         app.loadLevel(targetId, true, true);
       } else {
@@ -510,7 +584,8 @@ export function openTitleScreenImpl(app: AppViewContext): void {
   const gameToast = document.getElementById('game-toast');
   if (gameToast) gameToast.hidden = true;
   const save = app.saveManager.getPayload();
-  const targetLevelId = Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
+  const ladder = save.modeState[save.settings.playMode];
+  const targetLevelId = Math.max(1, ladder.currentLevelId || ladder.highestUnlocked || 1);
   if (app.board.levelId !== targetLevelId) {
     app.loadLevel(targetLevelId, false, false);
   }

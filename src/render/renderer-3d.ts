@@ -164,6 +164,9 @@ export class Renderer3D implements RenderPassContext {
 
   private resizeObserver: ResizeObserver | null = null;
   private currentDpr = 1;
+  private lastAppliedMaxDpr = 0;
+  private rawDevicePixelW = 0;
+  private rawDevicePixelH = 0;
   private stageContentW = 0;
   private stageContentH = 0;
   private canvasCssW = 0;
@@ -197,6 +200,7 @@ export class Renderer3D implements RenderPassContext {
       if (this.lastBoard) {
         this.render(this.lastBoard, this.lastOptions);
       }
+      this.qualityGovernor.resetWorkSamples();
     };
 
     this.canvas.addEventListener('webglcontextlost', this.onContextLostBound, false);
@@ -294,22 +298,15 @@ export class Renderer3D implements RenderPassContext {
       const cssEntryW = Math.max(1, rect.width || entry.contentRect.width);
       const cssEntryH = Math.max(1, rect.height || entry.contentRect.height);
       this.refreshStageMetrics(cssEntryW, cssEntryH);
-      const { dpr, rawDpr } = this.computeEffectiveDpr(cssEntryW, cssEntryH);
-
       const dpc = (
         entry as ResizeObserverEntry & {
           devicePixelContentBoxSize?: ReadonlyArray<{ inlineSize: number; blockSize: number }>;
         }
       ).devicePixelContentBoxSize;
-      const rawPixelW = dpc && dpc.length > 0 ? dpc[0].inlineSize : Math.round(cssEntryW * rawDpr);
-      const rawPixelH = dpc && dpc.length > 0 ? dpc[0].blockSize : Math.round(cssEntryH * rawDpr);
-      const scaleCap = rawDpr > dpr ? dpr / rawDpr : 1;
-      const targetW = Math.max(64, Math.round(rawPixelW * scaleCap));
-      const targetH = Math.max(64, Math.round(rawPixelH * scaleCap));
-      if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
-        this.canvas.width = targetW;
-        this.canvas.height = targetH;
-      }
+      this.rawDevicePixelW = dpc && dpc.length > 0 ? dpc[0].inlineSize : 0;
+      this.rawDevicePixelH = dpc && dpc.length > 0 ? dpc[0].blockSize : 0;
+      this.lastAppliedMaxDpr = 0;
+      this.applyCanvasDpr(cssEntryW, cssEntryH);
       if (this.lastBoard) {
         this.render(this.lastBoard, this.lastOptions);
       }
@@ -346,16 +343,29 @@ export class Renderer3D implements RenderPassContext {
       this.stageContentH
     );
     const boardMaxCss = Math.max(1, cssW * f.scaleX, cssH * f.scaleY);
-    const dpr = Math.min(maxDpr, rawDpr, Math.max(1, 900 / boardMaxCss));
+    const canvasMaxCss = Math.max(1, cssW, cssH);
+    const dpr = Math.min(maxDpr, rawDpr, Math.max(1, Math.min(900 / boardMaxCss, 1024 / canvasMaxCss)));
     this.currentDpr = dpr;
     this.qualityGovernor.setDpr(dpr);
     return { dpr, rawDpr };
   }
 
   private applyCanvasDpr(cssW: number, cssH: number): void {
-    const { dpr } = this.computeEffectiveDpr(cssW, cssH);
-    const targetW = Math.max(64, Math.round(cssW * dpr));
-    const targetH = Math.max(64, Math.round(cssH * dpr));
+    const maxDpr = this.qualityGovernor.getTargetMaxDpr();
+    if (maxDpr === this.lastAppliedMaxDpr && this.canvas.width >= 64 && this.canvas.height >= 64) {
+      return;
+    }
+    const { dpr, rawDpr } = this.computeEffectiveDpr(cssW, cssH);
+    const scaleCap = rawDpr > dpr ? dpr / rawDpr : 1;
+    const targetW = Math.max(
+      64,
+      this.rawDevicePixelW > 0 ? Math.round(this.rawDevicePixelW * scaleCap) : Math.round(cssW * dpr)
+    );
+    const targetH = Math.max(
+      64,
+      this.rawDevicePixelH > 0 ? Math.round(this.rawDevicePixelH * scaleCap) : Math.round(cssH * dpr)
+    );
+    this.lastAppliedMaxDpr = maxDpr;
     if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
       this.canvas.width = targetW;
       this.canvas.height = targetH;
@@ -373,6 +383,9 @@ export class Renderer3D implements RenderPassContext {
     }
     const cssW = rect.width > 0 ? rect.width : this.canvas.clientWidth || this.canvas.width || 640;
     const cssH = rect.height > 0 ? rect.height : this.canvas.clientHeight || this.canvas.height || 640;
+    this.rawDevicePixelW = 0;
+    this.rawDevicePixelH = 0;
+    this.lastAppliedMaxDpr = 0;
     this.refreshStageMetrics(cssW, cssH);
     this.applyCanvasDpr(cssW, cssH);
   }

@@ -347,16 +347,29 @@ export function computeDefaultMoveLimit(
  * - Paid Continues stay counted so Undo can't erase the `1★` cap; Zen's inert-bomb state (`bombsInert`) persists.
  */
 export function carryLiveResourcesIntoUndo(restored: BoardState, live: BoardState, playMode: PlayMode): void {
+  const continueAdded = (live.continuesUsed ?? 0) > (restored.continuesUsed ?? 0);
   restored.freezeRemainingSec = live.freezeRemainingSec;
   restored.bombsInert = live.bombsInert;
   restored.freeMovesRemaining = Math.max(restored.freeMovesRemaining, live.freeMovesRemaining);
   restored.continuesUsed = Math.max(restored.continuesUsed ?? 0, live.continuesUsed ?? 0);
+  if (live.moveLimit > restored.moveLimit) {
+    const bonusMoves = live.moveLimit - restored.moveLimit;
+    restored.moveLimit = live.moveLimit;
+    restored.movesRemaining += bonusMoves;
+  }
   if (playMode === 'TIMED') {
     restored.timeRemainingSec = live.timeRemainingSec;
+  }
+  if (continueAdded || playMode === 'TIMED') {
     for (const b of restored.blocks) {
       if (b.bombMax <= 0) continue;
       const liveBlock = live.blocks.find((lb) => lb.id === b.id);
-      if (liveBlock) b.bombCount = Math.min(b.bombCount, liveBlock.bombCount);
+      if (!liveBlock) continue;
+      if (continueAdded && liveBlock.bombCount > b.bombCount) {
+        b.bombCount = liveBlock.bombCount;
+      } else if (playMode === 'TIMED') {
+        b.bombCount = Math.min(b.bombCount, liveBlock.bombCount);
+      }
     }
   }
 }

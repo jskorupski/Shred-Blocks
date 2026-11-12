@@ -25,19 +25,24 @@ Every curated level (`1..300` in [`src/levels/catalog.ts`](../src/levels/catalog
 
 ---
 
-## 2. Play Modes, Coalescing, Stars & Undo Integrity
+## 2. Independent Mode Ladders, Zen Stars/Blessings, Coalescing & Undo Integrity (`MAP-MODE-SPLIT-01`, `ZEN-STARS-01`)
 
+- **Independent Per-Mode Ladders (`modeState[mode]`) & Additive Stars**:
+  - `modeState` tracks `{ currentLevelId, highestUnlocked }` independently from Level 1 for `'CHALLENGE'`, `'ZEN'`, and `'TIMED'`. Global `highestLevelUnlocked = max(modeState.*.highestUnlocked)` unlocks boosters (`L2/8/18/30`) across all modes and triggers Level-10 Milestone Chests once per global decade (`levelId % 10 === 0 && levelId > milestoneChestLevel`).
+  - `totalStars` sums per-stage `challengeStars` (`1–3★`) + `timedStars` (`1–3★`) + `zenStarsEarned`, feeding 25-Star Reliquary Chests (`+90c + 1 Power-Up`). `#level-jump-input` is locked to `1 .. modeState[activeMode].highestUnlocked`.
 - **`'CHALLENGE'` (Default — Tactical Move Budget)**:
   - `moveLimit = computeDefaultMoveLimit(parMoves, difficulty, levelId)`: `par + 6` (`L1–12`) $\rightarrow$ `+5 / +4` (`L13–25`) $\rightarrow$ `+5` breathers or `+4 / +3 / +2` for `NORMAL / HARD / SUPER_HARD` (`L26+`). Buzzer-beater wins (`movesRemaining === 0 && isBoardWon`) succeed before `OUT_OF_MOVES`.
   - **Touch-Move Coalescing**: Consecutive drags of `lastMovedBlockId === block.id && !lastMoveDidShred` (including sliding into position then pulling into a gate) count as **`1` move tick**.
   - **Final-Touch Grace (`FINAL-TOUCH-01`)**: At `0` moves remaining, if the last-moved unshredded block can still reach an eligible gate (`hasFinalTouchGrace`), finishing that block is a free coalesced touch while any other block move is rejected.
-- **`'ZEN'` (Sanctuary Flow — `ZEN-CALM-01`)**:
-  - Unlimited moves, untimed, advances `highestLevelUnlocked`, sets `zenCleared: true` (`🌿 Zen` badge, `0` Gold Stars, pauses rather than resets `winStreak`), and marks `board.bombsInert = true` (fuses never tick or detonate).
+- **`'ZEN'` (Sanctuary Flow — `ZEN-CALM-01`, `ZEN-STARS-01`)**:
+  - Unlimited moves, untimed, advances `modeState.ZEN.highestUnlocked`, sets `zenCleared: true` (`🌿 Zen` badge, pauses rather than resets `winStreak`), and marks `board.bombsInert = true` (fuses never tick or detonate).
+  - **Zen-Only Skips**: Stage skips (`#btn-skip-hud`, `#btn-pause-skip`, `recordLevelSkip`) exist **only** in `'ZEN'` (`zenSkipped: true`, hidden/no-op in `'CHALLENGE'` & `'TIMED'`, and never overwrite `zenCleared`).
+  - **Zen Stars & Zen Blessings**: Every `3` unique non-skipped Zen clears (`zenStarProgress: 0..2`) awards `+1 ★` (`zenStarsEarned++`, `+5c`, Reliquary progress). Every `4` unique non-skipped Zen clears (`zenBlessingProgress: 0..3`) banks `+1 🌿 Zen Blessing` (cap `3`), redeemable via `#btn-use-zen-blessing` on `#dialog-failure` in `'CHALLENGE'`/`'TIMED'` for a free `+5 Moves` / `+20s` Continue (`0 Coins`, `continuesUsed++` `1★` cap).
 - **`'TIMED'` (Speed Rush — `TIMED-BOMB-01`)**:
   - Countdown `round(minMoves * secPerMove + 12)` (`4.6 / 4.0 / 3.5s` per move). Bombs tick once per `getTimedBombTickSec(board)` (`max(2.5s, timeLimitSec / parMoves)` — never `1/sec`). Booster targeting never pauses the clock; only modals, Pause, and Title do.
 - **Anti-Cheese Mode Switching (`switchPlayModeImpl`)**:
-  - `Challenge`/`Timed` $\rightarrow$ `Zen` mid-level preserves the live board (`runTouchedZen = true`, defusing `0`-count bombs and closing `#dialog-failure`).
-  - `Zen` $\rightarrow$ `Challenge`/`Timed` after `movesCommitted > 0 || runTouchedZen` restarts from Move 0. Leaving `TIMED` zeroes `freezeRemainingSec`; Skip never overwrites `zenCleared`.
+  - Switching from `#dialog-failure` (`#btn-failure-zen`) or when `board.levelId` is locked/behind frontier in `nextMode` loads `nextMode`'s frontier cleanly at Move 0.
+  - Same-stage in-game `Challenge`/`Timed` $\rightarrow$ `Zen` preserves the live board (`runTouchedZen = true`, defusing `0`-count bombs); `Zen` $\rightarrow$ `Challenge`/`Timed` after `movesCommitted > 0 || runTouchedZen` restarts from Move 0. Leaving `TIMED` zeroes `freezeRemainingSec`.
 - **Slack-Scaled Stars (`STARS-SLACK-01`, `computeEarnedStars`)**:
   - `CHALLENGE`: `slack = moveLimit - parMoves`; `3★ <= par + floor(slack/3)`, `2★ <= par + floor(2*slack/3)`, else `1★`. `TIMED`: `3★ >= 28%` / `2★ >= 12%` time left. Any Continue (`continuesUsed > 0`) caps at `1★`.
 - **Undo & Stuck Detection (`F-08`, `UNDO-RES-01`, `STUCK-01`)**:

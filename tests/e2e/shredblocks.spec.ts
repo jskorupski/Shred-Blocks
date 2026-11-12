@@ -90,7 +90,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     // Click a locked level (#5) on Home Roadmap and verify global #game-toast feedback appears on #screen-home
     await page.locator('#roadmap-list .level-node-card').nth(4).click();
     await expect(page.locator('#game-toast')).toBeVisible();
-    await expect(page.locator('#game-toast')).toContainText('Clear or Skip up to Level');
+    await expect(page.locator('#game-toast')).toContainText('Clear up to Level');
 
     // Filter by 51-100
     await page.locator('.chip-filter[data-range="51-100"]').click();

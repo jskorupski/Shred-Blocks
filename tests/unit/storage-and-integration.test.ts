@@ -358,13 +358,16 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(manager.getPayload().milestoneChestLevel).toBe(10);
     });
 
-    it('supports free recordLevelSkip, pre-import backup slot, 1-tap restorePreImportBackup, JSON import/export, and extractImportCodeFromHash', () => {
+    it('supports Zen-only free recordLevelSkip, pre-import backup slot, 1-tap restorePreImportBackup, JSON import/export, and extractImportCodeFromHash', () => {
       const manager = new SaveManager();
+      expect(manager.recordLevelSkip(1).highestLevelUnlocked).toBe(1); // Challenge skip is a strict no-op
+      manager.updateSettings({ playMode: 'ZEN' });
       manager.recordLevelSkip(1);
       const afterSkip = manager.getPayload();
       expect(afterSkip.highestLevelUnlocked).toBe(2);
       expect(afterSkip.currentLevelId).toBe(2);
       expect(afterSkip.levelRecords[1]?.skipped).toBe(true);
+      expect(afterSkip.levelRecords[1]?.zenSkipped).toBe(true);
       expect(afterSkip.levelRecords[1]?.stars).toBe(0);
 
       // Export JSON and modify a copy to import

@@ -1,12 +1,18 @@
-import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
-import { type GLMeshHandle, INSTANCE_STRIDE } from './render-types';
+import type { MeshData } from './mesh-generator';
+import type { GLMeshHandle } from './render-types';
 
 export { MAIN_VERTEX_SHADER } from './shaders-main-vertex';
 
 import { GLSL_STONE_LIB } from './shaders-glsl-lib';
 import { GLSL_TRAY_MATERIALS } from './shaders-tray-materials';
 
-export { PARTICLE_FRAGMENT_SHADER, PARTICLE_VERTEX_SHADER } from './shaders-particles';
+export {
+  createParticleInstancedVao,
+  createSmokeBillboardInstancedVao,
+  PARTICLE_FRAGMENT_SHADER,
+  PARTICLE_VERTEX_SHADER,
+  type ParticleInstancedVaoHandle,
+} from './shaders-particles';
 
 export const MAIN_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
@@ -51,24 +57,20 @@ void main() {
   }
 
   if (u_materialStyle == 8) {
-    // MYSTIC-TRACE-01: Single-quad analytic tapered capsule-curve motion blur (2 flat triangles = zero polygon overlap lines!)
-    if (u_traceCount < 2) {
-      discard;
-    }
+    // MYSTIC-TRACE-01: Single-quad rounded capsule-spline motion blur + exact polyomino leading-silhouette mask
+    if (u_traceCount < 2) { discard; }
     vec2 p = v_worldPos.xy;
     int segCount = min(u_traceCount - 1, 15);
     float span = max(u_tracePts[segCount].z, 0.08);
-    // Distance-adaptive tail taper + elliptical head/corner/tail caps (headCap <= 0.16) so smears never leak forward or sideways
     float taperLen = min(span * 0.84, max(0.42, min(span * 0.68, 2.35)));
     float tailBaseHw = u_tracePts[0].w;
-    float tipMinScale = clamp(0.15 + max(0.0, tailBaseHw - taperLen * 0.85) * 0.28, 0.15, 0.48);
-    vec2 hAb = u_tracePts[segCount].xy - u_tracePts[segCount - 1].xy;
-    vec2 headDir = hAb / sqrt(max(dot(hAb, hAb), 1e-5));
-    float globalHeadOver = max(0.0, dot(p - u_tracePts[segCount].xy, headDir));
+    float tipMinScale = clamp(0.15 + max(0.0, tailBaseHw - taperLen * 0.85) * 0.24, 0.15, 0.42);
 
     float segNormD[15];
     float segArcS[15];
     float dMin = 99.0;
+    vec2 blockSpan = max(u_clipPlane.zw, vec2(1.0));
+    float tailCap = max(tailBaseHw * tipMinScale, 0.06);
     for (int i = 0; i < 15; i++) {
       if (i >= segCount) break;
       vec4 a = u_tracePts[i];
@@ -85,16 +87,45 @@ void main() {
       float hw = max(mix(a.w, b.w, h) * widthScale, 0.06);
       float along = dot(dVec, dir);
       vec2 latVec = dVec - dir * along;
-      float headCap = min(hw, 0.16);
-      float longCap = (along >= 0.0) ? ((i == segCount - 1) ? headCap : min(hw, 0.38)) : ((i == 0) ? min(hw, 0.18) : min(hw, 0.38));
-      float headRatio = (b.z > span - 0.85) ? (globalHeadOver / max(headCap, 1e-4)) : 0.0;
-      float longTerm = max(abs(along) / max(longCap, 1e-4), headRatio);
-      float nd = sqrt(dot(latVec, latVec) / (hw * hw) + longTerm * longTerm);
+      float alongHalf = 0.5 * (abs(dir.x) * blockSpan.x + abs(dir.y) * blockSpan.y);
+      float endCap = min(hw, max(0.32, alongHalf * 0.84));
+      float jointCap = min(hw, min(blockSpan.x, blockSpan.y) * 0.44);
+      bool isOuterEnd = (i == 0 && along < 0.0) || (i == segCount - 1 && along >= 0.0);
+      float longCap = isOuterEnd ? endCap : jointCap;
+      if (i == 0 && along < 0.0) { tailCap = longCap; }
+      float nd = sqrt(dot(latVec, latVec) / (hw * hw) + (along * along) / (longCap * longCap));
       segNormD[i] = nd;
-      segArcS[i] = (i == 0 && rawProj < 0.0) ? (a.z + rawProj) : sClamped;
+      segArcS[i] = (i == 0 && rawProj < 0.0) ? (a.z + rawProj) : ((i == segCount - 1 && rawProj > segLen) ? (b.z + (rawProj - segLen)) : sClamped);
       dMin = min(dMin, nd);
     }
     if (dMin >= 1.0) { outColor = vec4(0.0); return; }
+
+    float leadMask = 1.0;
+    int headMask = int(u_blockSeed + 0.5);
+    if (headMask > 0) {
+      vec2 hAb = u_tracePts[segCount].xy - u_tracePts[segCount - 1].xy;
+      vec2 headDir = hAb / sqrt(max(dot(hAb, hAb), 1e-5));
+      vec2 headCenter = u_clipPlane.xy + u_clipPlane.zw * 0.5;
+      float frontWeight = smoothstep(-0.38, 0.0, dot(p - headCenter, headDir));
+      if (frontWeight > 0.001) {
+        float bestShadowD = 99.0;
+        float dDiff = headDir.x - headDir.y;
+        float dSum = headDir.x + headDir.y;
+        for (int cIdx = 0; cIdx < 16; cIdx++) {
+          if ((headMask & (1 << cIdx)) == 0) continue;
+          vec2 q = (u_clipPlane.xy + vec2(float(cIdx & 3) + 0.5, float(cIdx >> 2) + 0.5)) - p;
+          float fMin = max(abs(q.x), abs(q.y));
+          if (abs(headDir.x) > 1e-4) { float tx = max(0.0, q.x / headDir.x); fMin = min(fMin, max(abs(q.x - tx * headDir.x), abs(q.y - tx * headDir.y))); }
+          if (abs(headDir.y) > 1e-4) { float ty = max(0.0, q.y / headDir.y); fMin = min(fMin, max(abs(q.x - ty * headDir.x), abs(q.y - ty * headDir.y))); }
+          if (abs(dDiff) > 1e-4) { float t1 = max(0.0, (q.x - q.y) / dDiff); fMin = min(fMin, max(abs(q.x - t1 * headDir.x), abs(q.y - t1 * headDir.y))); }
+          if (abs(dSum) > 1e-4) { float t2 = max(0.0, (q.x + q.y) / dSum); fMin = min(fMin, max(abs(q.x - t2 * headDir.x), abs(q.y - t2 * headDir.y))); }
+          bestShadowD = min(bestShadowD, fMin - 0.46);
+        }
+        leadMask = mix(1.0, smoothstep(0.02, -0.18, bestShadowD), frontWeight);
+      }
+    }
+    if (leadMask < 0.002) { outColor = vec4(0.0); return; }
+
     float wSum = 0.0;
     float sSum = 0.0;
     for (int i = 0; i < 15; i++) {
@@ -105,18 +136,13 @@ void main() {
     }
     float smoothS = sSum / max(wSum, 1e-5);
     float smoothU = clamp(smoothS / span, 0.0, 1.0);
-    float tailCap = min(max(tailBaseHw * tipMinScale, 0.06), 0.18);
     float tailT = clamp((smoothS + tailCap) / max(taperLen + tailCap, 1e-4), 0.0, 1.0);
-    float innerPlateau = mix(0.0, 0.18, tailT);
-    float radialExp = mix(1.58, 0.92, tailT);
-    float crossProfile = pow(smoothstep(1.0, innerPlateau, dMin), radialExp);
+    float crossProfile = pow(smoothstep(1.0, mix(0.0, 0.14, tailT), dMin), mix(1.58, 0.96, tailT));
     float tailRise = pow(smoothstep(0.0, 1.0, tailT), 1.32);
     float coreMix = smoothstep(0.78, 0.0, dMin) * tailRise * (0.42 + 0.58 * smoothU) * 0.64;
     vec3 smearRgb = mix(u_color.rgb, u_capColor, coreMix);
-    if (u_blueprintMix > 0.001) {
-      smearRgb = mix(smearRgb, vec3(0.82, 0.72, 0.58), u_blueprintMix * 0.88);
-    }
-    float alpha = u_color.a * crossProfile * tailRise * mix(1.0, 0.52, u_blueprintMix);
+    if (u_blueprintMix > 0.001) { smearRgb = mix(smearRgb, vec3(0.82, 0.72, 0.58), u_blueprintMix * 0.88); }
+    float alpha = u_color.a * crossProfile * tailRise * leadMask * mix(1.0, 0.52, u_blueprintMix);
     if (alpha < 0.003) { outColor = vec4(0.0); return; }
     outColor = vec4(smearRgb, alpha);
     return;
@@ -688,108 +714,4 @@ export function createMeshHandle(gl: WebGL2RenderingContext, mesh: MeshData): GL
     indexBuffer,
     indexCount: mesh.indices.length,
   };
-}
-
-export interface ParticleInstancedVaoHandle {
-  vao: WebGLVertexArrayObject;
-  posBuf: WebGLBuffer;
-  normBuf: WebGLBuffer;
-  idxBuf: WebGLBuffer;
-  instBuf: WebGLBuffer;
-  indexCount: number;
-}
-
-export function createParticleInstancedVao(
-  gl: WebGL2RenderingContext,
-  instanceByteLength: number
-): ParticleInstancedVaoHandle | null {
-  const cube = ENVIRONMENT_MESHES.unitParticleCube;
-  const vao = gl.createVertexArray();
-  const posBuf = gl.createBuffer();
-  const normBuf = gl.createBuffer();
-  const idxBuf = gl.createBuffer();
-  const instBuf = gl.createBuffer();
-  if (!vao || !posBuf || !normBuf || !idxBuf || !instBuf) return null;
-
-  gl.bindVertexArray(vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, cube.positions, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, cube.normals, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(1);
-  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cube.indices, gl.STATIC_DRAW);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, instanceByteLength, gl.DYNAMIC_DRAW);
-
-  const strideBytes = INSTANCE_STRIDE * 4;
-  gl.enableVertexAttribArray(3);
-  gl.vertexAttribPointer(3, 4, gl.FLOAT, false, strideBytes, 0);
-  gl.vertexAttribDivisor(3, 1);
-
-  gl.enableVertexAttribArray(4);
-  gl.vertexAttribPointer(4, 4, gl.FLOAT, false, strideBytes, 16);
-  gl.vertexAttribDivisor(4, 1);
-  gl.bindVertexArray(null);
-
-  return { vao, posBuf, normBuf, idxBuf, instBuf, indexCount: cube.indices.length };
-}
-
-const SMOKE_QUAD_POSITIONS = new Float32Array([
-  -0.5, -0.5, 0.0, 0.5, -0.5, 0.0, 0.5, 0.5, 0.0, -0.5, 0.5, 0.0,
-]);
-const SMOKE_QUAD_NORMALS = new Float32Array([
-  0.0, 0.21, 0.97, 0.0, 0.21, 0.97, 0.0, 0.21, 0.97, 0.0, 0.21, 0.97,
-]);
-const SMOKE_QUAD_INDICES = new Uint16Array([0, 1, 2, 0, 2, 3]);
-
-/**
- * Dedicated 4-vertex (2-triangle) billboard quad VAO + separate instance buffer for translucent smoke puffs
- * (`PERF-TRANSITION-01`), avoiding 24-vertex cube double-face overdraw and mid-pass VBO write hazards on tile GPUs.
- */
-export function createSmokeBillboardInstancedVao(
-  gl: WebGL2RenderingContext,
-  instanceByteLength: number
-): ParticleInstancedVaoHandle | null {
-  const vao = gl.createVertexArray();
-  const posBuf = gl.createBuffer();
-  const normBuf = gl.createBuffer();
-  const idxBuf = gl.createBuffer();
-  const instBuf = gl.createBuffer();
-  if (!vao || !posBuf || !normBuf || !idxBuf || !instBuf) return null;
-
-  gl.bindVertexArray(vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, SMOKE_QUAD_POSITIONS, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, SMOKE_QUAD_NORMALS, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(1);
-  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, SMOKE_QUAD_INDICES, gl.STATIC_DRAW);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, instanceByteLength, gl.DYNAMIC_DRAW);
-
-  const strideBytes = INSTANCE_STRIDE * 4;
-  gl.enableVertexAttribArray(3);
-  gl.vertexAttribPointer(3, 4, gl.FLOAT, false, strideBytes, 0);
-  gl.vertexAttribDivisor(3, 1);
-
-  gl.enableVertexAttribArray(4);
-  gl.vertexAttribPointer(4, 4, gl.FLOAT, false, strideBytes, 16);
-  gl.vertexAttribDivisor(4, 1);
-  gl.bindVertexArray(null);
-
-  return { vao, posBuf, normBuf, idxBuf, instBuf, indexCount: SMOKE_QUAD_INDICES.length };
 }

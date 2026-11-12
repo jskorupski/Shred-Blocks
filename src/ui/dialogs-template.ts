@@ -93,7 +93,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         <div class="dialog-header">
           <h2 id="failure-title" class="dialog-title">Out of Moves</h2>
           <p id="failure-reason" class="dialog-subtitle">
-            Retry for free, finish this board in Zen Mode, add +5 moves, or skip ahead!
+            Retry for free, spend a Zen Blessing or Coins to continue, or switch to Zen Mode!
           </p>
         </div>
 
@@ -101,14 +101,14 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           <button type="button" id="btn-retry-level" class="btn-tactile btn-primary" autofocus>
             ↻ Try Again (Free)
           </button>
-          <button type="button" id="btn-failure-zen" class="btn-tactile btn-secondary">
-            🌿 Finish in Zen Mode (Free)
+          <button type="button" id="btn-use-zen-blessing" class="btn-tactile btn-blessing" hidden>
+            🌿 Zen Blessing: +5 Moves (Free · 1/3)
           </button>
           <button type="button" id="btn-continue-level" class="btn-tactile btn-warning">
             ➕ +5 Moves (150 Coins)
           </button>
-          <button type="button" id="btn-skip-level" class="btn-tactile btn-secondary">
-            Skip Level (Free) ▸▸
+          <button type="button" id="btn-failure-zen" class="btn-tactile btn-secondary">
+            🌿 Switch to Zen Mode · Lvl 1
           </button>
           <button type="button" id="btn-failure-home" class="btn-tactile btn-sanctuary">
             ‹ Return to Sanctuary Map

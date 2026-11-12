@@ -283,6 +283,11 @@ export class QualityGovernor {
     this.benchmarkRunner = runner;
   }
 
+  public resetWorkSamples(): void {
+    this.sampleCount = 0;
+    this.writeCursor = 0;
+  }
+
   public recordFrameWork(workDurationMs: number, nowMs = performance.now()): void {
     const clampedWork = Math.max(0.01, workDurationMs);
     this.workRing[this.writeCursor] = clampedWork;
@@ -521,7 +526,8 @@ export interface RenderPassContext {
     z?: number,
     spanCols?: number,
     spanRows?: number,
-    intoGate?: boolean
+    intoGate?: boolean,
+    cellMask?: number
   ): void;
   drawMesh(
     gl: WebGL2RenderingContext,

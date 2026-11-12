@@ -19,8 +19,19 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   if (!container) return;
 
   const save = app.saveManager.getPayload();
+  const playMode = save.settings.playMode;
+  const modeLadder = save.modeState[playMode];
+  const activeCurrentId = Math.max(1, modeLadder.currentLevelId || 1);
   const allCampaign = getCampaignRoadmapMeta();
-  const unlockedMax = Math.max(1, save.highestLevelUnlocked, save.currentLevelId);
+  const unlockedMax = Math.max(1, modeLadder.highestUnlocked, activeCurrentId);
+
+  const getModeStars = (levelId: number): number => {
+    const r = save.levelRecords[levelId];
+    if (!r) return 0;
+    if (playMode === 'ZEN') return 0;
+    if (playMode === 'TIMED') return Math.max(0, r.timedStars ?? 0);
+    return Math.max(0, r.challengeStars ?? (r.timedStars === undefined && !r.skipped ? (r.stars ?? 0) : 0));
+  };
 
   let levelsToShow = allCampaign;
   if (app.activeRoadmapRange === '1-50') {
@@ -87,11 +98,11 @@ export function renderRoadmapImpl(app: AppViewContext): void {
 
   const buildLevelNode = (spec: LevelRoadmapMeta, isEndlessNode: boolean): StageNodeBuildInfo => {
     const record = save.levelRecords[spec.id];
-    const earnedStars = Math.max(0, record?.stars ?? 0);
-    const hasClearedStars = earnedStars > 0;
-    const isZenCleared = Boolean(record?.zenCleared && !hasClearedStars);
-    const isSkipped = Boolean(record?.skipped && !hasClearedStars && !isZenCleared);
-    const isCurrent = spec.id === save.currentLevelId;
+    const earnedStars = getModeStars(spec.id);
+    const hasClearedStars = playMode !== 'ZEN' && earnedStars > 0;
+    const isZenCleared = playMode === 'ZEN' && Boolean(record?.zenCleared);
+    const isSkipped = playMode === 'ZEN' && Boolean((record?.zenSkipped ?? record?.skipped) && !isZenCleared);
+    const isCurrent = spec.id === activeCurrentId;
     const isUnlocked = spec.id <= unlockedMax || hasClearedStars || isZenCleared || isSkipped;
     const isCompleted = hasClearedStars && !isCurrent;
     const isZenNode = isZenCleared && !isCurrent;
@@ -177,13 +188,13 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       rightCluster.append(zenFlag);
     }
 
-    let starDisplay = isUnlocked ? '☆☆☆' : '🔒';
+    let starDisplay = isUnlocked ? (playMode === 'ZEN' ? '🌿 Open' : '☆☆☆') : '🔒';
     if (hasClearedStars) {
       starDisplay = '★'.repeat(earnedStars) + '☆'.repeat(3 - earnedStars);
     } else if (isZenCleared) {
-      starDisplay = '☆☆☆';
+      starDisplay = '✓ Tranquil';
     } else if (isSkipped) {
-      starDisplay = isCurrent ? '☆☆☆' : 'Skipped';
+      starDisplay = isCurrent ? '🌿 Open' : 'Skipped';
     }
 
     const starsSpan = document.createElement('span');
@@ -217,7 +228,11 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     btn.addEventListener('click', () => {
       if (!isUnlocked) {
         app.sound.playWallClack();
-        app.showGameToast(`🔒 Clear or Skip up to Level ${spec.id} to unlock!`);
+        app.showGameToast(
+          playMode === 'ZEN'
+            ? `🔒 Clear or Skip up to Level ${spec.id} in Zen Mode to unlock!`
+            : `🔒 Clear up to Level ${spec.id} in ${playMode === 'TIMED' ? 'Speed Rush' : 'Challenge Mode'} to unlock!`
+        );
         return;
       }
       app.sound.playButtonTap();
@@ -251,13 +266,14 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const builtNodes = groupSpecs.map((s) => buildLevelNode(s, isEndlessGroup));
 
       const clearedCount = builtNodes.filter((n) => n.isCompleted).length;
-      const zenCount = builtNodes.filter((n) => n.isZenCleared && !n.isCompleted).length;
-      const skippedCount = builtNodes.filter((n) => n.isSkipped && !n.isCompleted).length;
+      const zenCount = builtNodes.filter((n) => n.isZenCleared).length;
+      const skippedCount = builtNodes.filter((n) => n.isSkipped).length;
       const unlockedCount = builtNodes.filter((n) => n.isUnlocked).length;
       const hasCurrent = builtNodes.some((n) => n.isCurrent);
       const groupStars = builtNodes.reduce((sum, n) => sum + n.earnedStars, 0);
       const maxGroupStars = builtNodes.length * 3;
-      const allCleared = clearedCount === builtNodes.length;
+      const allCleared =
+        playMode === 'ZEN' ? zenCount === builtNodes.length : clearedCount === builtNodes.length;
       const allLocked = unlockedCount === 0;
 
       const groupEl = document.createElement('div');
@@ -288,19 +304,23 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       const summarySpan = document.createElement('span');
       if (allCleared) {
         summarySpan.className = 'stage-group-summary summary-cleared';
-        summarySpan.textContent = `✓ ${clearedCount}/${builtNodes.length} Cleared · ★ ${groupStars}/${maxGroupStars}`;
+        summarySpan.textContent =
+          playMode === 'ZEN'
+            ? `✓ ${zenCount}/${builtNodes.length} Zen Cleared`
+            : `✓ ${clearedCount}/${builtNodes.length} Cleared · ★ ${groupStars}/${maxGroupStars}`;
       } else if (allLocked) {
         summarySpan.className = 'stage-group-summary summary-locked';
         summarySpan.textContent = '🔒 Locked';
-      } else {
+      } else if (playMode === 'ZEN') {
         summarySpan.className = 'stage-group-summary summary-progress';
-        const parts = [`${clearedCount}/${builtNodes.length} Cleared`];
-        if (zenCount > 0) {
-          parts.push(`🌿 ${zenCount} Zen`);
-        }
+        const parts = [`🌿 ${zenCount}/${builtNodes.length} Cleared`];
         if (skippedCount > 0) {
           parts.push(`${skippedCount} Skipped`);
         }
+        summarySpan.textContent = parts.join(' · ');
+      } else {
+        summarySpan.className = 'stage-group-summary summary-progress';
+        const parts = [`${clearedCount}/${builtNodes.length} Cleared`];
         if (groupStars > 0) {
           parts.push(`★ ${groupStars}/${maxGroupStars}`);
         }
@@ -336,17 +356,27 @@ export function renderRoadmapImpl(app: AppViewContext): void {
     if (ch.chapterNum !== lastChapterNum) {
       flushChapterBatch();
       lastChapterNum = ch.chapterNum;
-      let chStars = 0;
-      for (let lid = ch.startLevel; lid <= ch.endLevel; lid++) {
-        chStars += save.levelRecords[lid]?.stars ?? 0;
+      let chMetricLabel = '';
+      const stageCount = ch.endLevel - ch.startLevel + 1;
+      if (playMode === 'ZEN') {
+        let chZenClears = 0;
+        for (let lid = ch.startLevel; lid <= ch.endLevel; lid++) {
+          if (save.levelRecords[lid]?.zenCleared) chZenClears++;
+        }
+        chMetricLabel = `🌿 ${chZenClears} / ${stageCount}`;
+      } else {
+        let chStars = 0;
+        for (let lid = ch.startLevel; lid <= ch.endLevel; lid++) {
+          chStars += getModeStars(lid);
+        }
+        chMetricLabel = `★ ${chStars} / ${stageCount * 3}`;
       }
-      const maxStars = (ch.endLevel - ch.startLevel + 1) * 3;
       fragment.appendChild(
         createChapterBanner(
           `${ch.chapterNum} · LEVELS ${ch.startLevel}–${ch.endLevel}`,
           ch.title,
           ch.subtitle,
-          `★ ${chStars} / ${maxStars}`
+          chMetricLabel
         )
       );
     }
@@ -372,7 +402,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
       rawWindows.push([endlessStart, Math.max(TOTAL_CAMPAIGN_LEVELS + 6, unlockedMax + 3)]);
     } else {
       rawWindows.push([endlessStart, endlessStart + 5]);
-      const focusLevel = save.currentLevelId >= endlessStart ? save.currentLevelId : unlockedMax;
+      const focusLevel = activeCurrentId >= endlessStart ? activeCurrentId : unlockedMax;
       rawWindows.push([
         Math.max(endlessStart + 6, focusLevel - 8),
         Math.min(unlockedMax + 3, focusLevel + 8),
@@ -418,7 +448,7 @@ export function renderRoadmapImpl(app: AppViewContext): void {
   // Auto-focus the player's Current Sanctuary Stage in the scrollable linked path
   // (or reset to top when viewing Level 1 or a filter range without the active stage).
   const currentNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
-  if (currentNode && save.currentLevelId > 1) {
+  if (currentNode && activeCurrentId > 1) {
     const scrollCurrentStageIntoView = () => {
       const activeNode = container.querySelector<HTMLElement>('.level-node-card.current-level');
       if (activeNode && container.clientHeight > 0) {

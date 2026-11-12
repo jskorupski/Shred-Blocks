@@ -54,7 +54,8 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   document.getElementById('tab-btn-play')?.addEventListener('click', () => {
     app.sound.playButtonTap();
     const save = app.saveManager.getPayload();
-    app.loadLevel(save.currentLevelId || save.highestLevelUnlocked || 1, true);
+    const ladder = save.modeState[save.settings.playMode];
+    app.loadLevel(ladder.currentLevelId || ladder.highestUnlocked || 1, true);
   });
   document.getElementById('tab-btn-themes')?.addEventListener('click', () => {
     app.sound.playButtonTap();
@@ -69,11 +70,42 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     app.openModal('pause');
   });
 
+  // Connected Folder-Tab Sanctuary Mode Selector (`MAP-MODE-SPLIT-01`, WAI-ARIA `role="tablist"`)
+  const modeTabs = Array.from(document.querySelectorAll<HTMLButtonElement>('#map-mode-tabs [data-mode-tab]'));
+  const activateMapModeTab = (tab: HTMLButtonElement, focusTab = false) => {
+    const nextMode = tab.dataset.modeTab as PlayMode | undefined;
+    if (!nextMode) return;
+    app.sound.playButtonTap();
+    app.switchPlayMode(nextMode, true);
+    if (focusTab) {
+      tab.focus();
+    }
+  };
+  for (const tab of modeTabs) {
+    tab.addEventListener('click', () => {
+      activateMapModeTab(tab, false);
+    });
+    tab.addEventListener('keydown', (e: KeyboardEvent) => {
+      const idx = modeTabs.indexOf(tab);
+      if (idx < 0) return;
+      let nextIdx = -1;
+      if (e.key === 'ArrowRight') nextIdx = (idx + 1) % modeTabs.length;
+      else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + modeTabs.length) % modeTabs.length;
+      else if (e.key === 'Home') nextIdx = 0;
+      else if (e.key === 'End') nextIdx = modeTabs.length - 1;
+      if (nextIdx >= 0) {
+        e.preventDefault();
+        activateMapModeTab(modeTabs[nextIdx], true);
+      }
+    });
+  }
+
   // Home Screen Actions
   document.getElementById('btn-play-current')?.addEventListener('click', () => {
     app.sound.playButtonTap();
     const save = app.saveManager.getPayload();
-    app.loadLevel(save.currentLevelId || save.highestLevelUnlocked || 1, true);
+    const ladder = save.modeState[save.settings.playMode];
+    app.loadLevel(ladder.currentLevelId || ladder.highestUnlocked || 1, true);
   });
 
   document.getElementById('btn-install-header')?.addEventListener('click', () => {
@@ -109,14 +141,15 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     });
   });
 
-  // Direct Level Jump (Locked to 1..highestLevelUnlocked)
+  // Direct Level Jump (Locked to 1..modeState[playMode].highestUnlocked)
   const jumpInput = document.getElementById('level-jump-input') as HTMLInputElement | null;
   const triggerLevelJump = () => {
     if (!jumpInput) return;
     const val = Number(jumpInput.value);
     if (!Number.isFinite(val) || val < 1) return;
     const target = Math.min(MAX_ENDLESS_LEVEL, Math.floor(val));
-    const maxUnlocked = Math.max(1, app.saveManager.getPayload().highestLevelUnlocked || 1);
+    const save = app.saveManager.getPayload();
+    const maxUnlocked = Math.max(1, save.modeState[save.settings.playMode].highestUnlocked || 1);
     if (target > maxUnlocked) {
       app.sound.playWallClack();
       app.showGameToast(`🔒 Stage #${target} is locked — reach Stage #${maxUnlocked} first!`);
@@ -242,6 +275,9 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     app.closeAllModals();
     app.switchScreen('home');
   });
+  document.getElementById('btn-use-zen-blessing')?.addEventListener('click', () => {
+    app.useZenBlessingContinue();
+  });
   document.getElementById('btn-continue-level')?.addEventListener('click', () => {
     app.continueFailedLevel();
   });
@@ -252,9 +288,6 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   document.getElementById('btn-retry-level')?.addEventListener('click', () => {
     app.sound.playButtonTap();
     app.loadLevel(app.board.levelId, true);
-  });
-  document.getElementById('btn-skip-level')?.addEventListener('click', () => {
-    app.skipCurrentLevel();
   });
 
   // Pause & Settings Modal Controls

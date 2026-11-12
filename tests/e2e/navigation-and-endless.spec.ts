@@ -39,8 +39,11 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
     await assertZeroUrlMutation();
 
-    // 4. Advance through multiple levels in-game (Level 1 -> 2 -> 3) via Skip:
-    //    replaceState prevents per-level history stack bloat!
+    // 4. Advance through multiple levels in-game (Level 1 -> 2 -> 3) via Zen-only Skip:
+    //    verify Skip is hidden in Challenge, switch to Zen, and verify replaceState prevents stack bloat!
+    await expect(page.locator('#btn-skip-hud')).toBeHidden();
+    await page.locator('#btn-mode-next').click();
+    await expect(page.locator('#btn-skip-hud')).toBeVisible();
     await page.locator('#btn-skip-hud').click();
     await expect(page.locator('#hud-level-title')).toContainText('Level 2');
     await page.locator('#btn-skip-hud').click();
@@ -186,10 +189,12 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1850');
 
-    // Verify In-Game HUD Map button (#btn-hud-home) & Pause Modal Map/Install buttons match 1:1!
+    // Verify In-Game HUD Map button (#btn-hud-home), Zen-only Skip palette, & Pause Modal Map/Install buttons match 1:1!
     const hudMapStyle = await getButtonPalette('#btn-hud-home');
-    const hudSkipStyle = await getButtonPalette('#btn-skip-hud');
     expect(hudMapStyle).toEqual(titleMapStyle);
+    await expect(page.locator('#btn-skip-hud')).toBeHidden();
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPlayMode('ZEN'));
+    const hudSkipStyle = await getButtonPalette('#btn-skip-hud');
     expect(hudSkipStyle.bg).toBe(titleThemesStyle.bg);
 
     await page.locator('#btn-pause').click();
@@ -400,31 +405,38 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#screen-game')).toBeVisible();
 
-    // Create a realistic mixed progression up to Stage #12:
-    // - Completed: #1 (3★), #3 (2★), #5 (3★), #6..#10 (all 3★ -> fully cleared group!)
-    // - Skipped: #2 ( via real HUD Skip button below + seeded #4, #11 )
-    // - Current: #12
+    // Create a realistic mixed progression up to Stage #12 across Challenge & Zen ladders:
+    // - Zen Mode: real HUD Skip on Level 1, plus mixed Zen Cleared (#1, #3, #5..#10) & Skipped (#2, #4, #11)
+    // - Challenge Mode: Completed (#1 3★, #3 2★, #5 3★, #6..#10 all 3★ -> fully cleared group!), Current #12
+    await page.locator('#btn-mode-next').click(); // Switch to ZEN so Zen-only #btn-skip-hud is available
     await page.locator('#btn-skip-hud').click(); // Real UI skip on Level 1 first to verify live Skip wiring
     await expect(page.locator('#hud-level-title')).toContainText('Level 2');
 
     const mixedSaveJson = await page.evaluate(() => {
       const clone = JSON.parse(JSON.stringify(window.__SHREDBLOCKS_DEBUG__.getSave()));
+      clone.settings.playMode = 'CHALLENGE';
       clone.highestLevelUnlocked = 12;
       clone.currentLevelId = 12;
-      clone.levelRecords = {
-        1: { stars: 3, bestMoves: 2, bestTimeSec: 8, skipped: false },
-        2: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true },
-        3: { stars: 2, bestMoves: 5, bestTimeSec: 14, skipped: false },
-        4: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true },
-        5: { stars: 3, bestMoves: 4, bestTimeSec: 12, skipped: false },
-        6: { stars: 3, bestMoves: 5, bestTimeSec: 15, skipped: false },
-        7: { stars: 3, bestMoves: 6, bestTimeSec: 16, skipped: false },
-        8: { stars: 3, bestMoves: 6, bestTimeSec: 18, skipped: false },
-        9: { stars: 3, bestMoves: 7, bestTimeSec: 19, skipped: false },
-        10: { stars: 3, bestMoves: 6, bestTimeSec: 17, skipped: false },
-        11: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true },
+      clone.modeLadderVersion = 1;
+      clone.modeState = {
+        CHALLENGE: { highestUnlocked: 12, currentLevelId: 12 },
+        ZEN: { highestUnlocked: 12, currentLevelId: 12 },
+        TIMED: { highestUnlocked: 1, currentLevelId: 1 },
       };
-      clone.totalStars = 23;
+      clone.levelRecords = {
+        1: { stars: 3, challengeStars: 3, bestMoves: 2, bestTimeSec: 8, skipped: false, zenCleared: true },
+        2: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true, zenSkipped: true },
+        3: { stars: 2, challengeStars: 2, bestMoves: 5, bestTimeSec: 14, skipped: false, zenCleared: true },
+        4: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true, zenSkipped: true },
+        5: { stars: 3, challengeStars: 3, bestMoves: 4, bestTimeSec: 12, skipped: false, zenCleared: true },
+        6: { stars: 3, challengeStars: 3, bestMoves: 5, bestTimeSec: 15, skipped: false, zenCleared: true },
+        7: { stars: 3, challengeStars: 3, bestMoves: 6, bestTimeSec: 16, skipped: false, zenCleared: true },
+        8: { stars: 3, challengeStars: 3, bestMoves: 6, bestTimeSec: 18, skipped: false, zenCleared: true },
+        9: { stars: 3, challengeStars: 3, bestMoves: 7, bestTimeSec: 19, skipped: false, zenCleared: true },
+        10: { stars: 3, challengeStars: 3, bestMoves: 6, bestTimeSec: 17, skipped: false, zenCleared: true },
+        11: { stars: 0, bestMoves: null, bestTimeSec: null, skipped: true, zenSkipped: true },
+      };
+      clone.totalStars = 25;
       return JSON.stringify(clone);
     });
 
@@ -469,22 +481,19 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     const firstThreeGroups = page.locator('#roadmap-list .roadmap-stage-group');
     await expect(firstThreeGroups.nth(0)).toContainText('STAGES 1–5');
-    await expect(firstThreeGroups.nth(0)).toContainText('3/5 Cleared · 2 Skipped · ★ 8/15');
+    await expect(firstThreeGroups.nth(0)).toContainText('3/5 Cleared · ★ 8/15');
     await expect(firstThreeGroups.nth(1)).toHaveClass(/stage-group-cleared/);
     await expect(firstThreeGroups.nth(1)).toContainText('STAGES 6–10');
     await expect(firstThreeGroups.nth(1)).toContainText('✓ 5/5 Cleared · ★ 15/15');
     await expect(firstThreeGroups.nth(2)).toHaveClass(/stage-group-active/);
     await expect(firstThreeGroups.nth(2)).toContainText('STAGES 11–15');
 
-    // Verify Completed (#1) vs Skipped (#2) visual states & strict vertical step progression
-    const stateComparison = await page.evaluate(() => {
+    // Verify Completed (#1) on Challenge tab & Skipped (#2) on Zen tab + strict vertical step progression
+    const chComparison = await page.evaluate(() => {
       const n1 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="1"]');
-      const n2 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="2"]');
-      const n12 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="12"]');
       const n14 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="14"]');
-      if (!n1 || !n2 || !n12 || !n14) return null;
+      if (!n1 || !n14) return null;
       const cs1 = window.getComputedStyle(n1);
-      const cs2 = window.getComputedStyle(n2);
       const firstGroup = document.querySelector('.roadmap-stage-group');
       const group1Nodes = Array.from(
         firstGroup ? firstGroup.querySelectorAll<HTMLElement>('.level-node-card') : []
@@ -502,26 +511,46 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
         n1Completed: n1.classList.contains('completed-level') && !n1.classList.contains('skipped-level'),
         n1Text: n1.textContent ?? '',
         n1Opacity: Number(cs1.opacity),
-        n2Skipped: n2.classList.contains('skipped-level') && !n2.classList.contains('completed-level'),
-        n2Text: n2.textContent ?? '',
-        n2Opacity: Number(cs2.opacity),
-        distinctBg: cs1.backgroundImage !== cs2.backgroundImage,
+        n1Bg: cs1.backgroundImage,
         n14Locked: n14.classList.contains('locked-level'),
         strictlyVertical,
       };
     });
-    expect(stateComparison?.n1Completed).toBe(true);
-    expect(stateComparison?.n1Text).toContain('✓ Cleared');
-    expect(stateComparison?.n1Text).toContain('★★★');
-    expect(stateComparison?.n1Opacity).toBe(1);
-    expect(stateComparison?.n2Skipped).toBe(true);
-    expect(stateComparison?.n2Text).toContain('Skipped');
-    expect(stateComparison?.n2Text).not.toContain('✓ Cleared');
-    expect(stateComparison?.n2Opacity).toBeLessThan(0.85);
-    expect(stateComparison?.n2Opacity).toBeGreaterThan(0.55);
-    expect(stateComparison?.distinctBg).toBe(true);
-    expect(stateComparison?.n14Locked).toBe(true);
-    expect(stateComparison?.strictlyVertical).toBe(true);
+    expect(chComparison?.n1Completed).toBe(true);
+    expect(chComparison?.n1Text).toContain('✓ Cleared');
+    expect(chComparison?.n1Text).toContain('★★★');
+    expect(chComparison?.n1Opacity).toBe(1);
+    expect(chComparison?.n14Locked).toBe(true);
+    expect(chComparison?.strictlyVertical).toBe(true);
+
+    // Switch to Zen folder tab to verify Zen Cleared (#1) vs Skipped (#2) visual states (Skips exist only in Zen)
+    await page.locator('#map-tab-zen').click();
+    await page.evaluate(() => {
+      const list = document.getElementById('roadmap-list');
+      if (list) list.scrollTop = 0;
+    });
+    await expect(firstThreeGroups.nth(0)).toContainText('🌿 3/5 Cleared · 2 Skipped');
+    const zenComparison = await page.evaluate(() => {
+      const n1 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="1"]');
+      const n2 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="2"]');
+      if (!n1 || !n2) return null;
+      const cs1 = window.getComputedStyle(n1);
+      const cs2 = window.getComputedStyle(n2);
+      return {
+        n1Zen: n1.classList.contains('zen-cleared-level'),
+        n2Skipped: n2.classList.contains('skipped-level') && !n2.classList.contains('completed-level'),
+        n2Text: n2.textContent ?? '',
+        n2Opacity: Number(cs2.opacity),
+        distinctBg: cs1.backgroundImage !== cs2.backgroundImage,
+      };
+    });
+    expect(zenComparison?.n1Zen).toBe(true);
+    expect(zenComparison?.n2Skipped).toBe(true);
+    expect(zenComparison?.n2Text).toContain('Skipped');
+    expect(zenComparison?.n2Text).not.toContain('✓ Cleared');
+    expect(zenComparison?.n2Opacity).toBeLessThan(0.85);
+    expect(zenComparison?.n2Opacity).toBeGreaterThan(0.55);
+    expect(zenComparison?.distinctBg).toBe(true);
 
     // 3. Verify responsive layout & zero horizontal overflow across compact mobile, standard mobile, tablet, and desktop
     for (const vp of [
@@ -658,30 +687,37 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await dragCell(3, 1, 4, 1);
     await expect(page.locator('#dialog-failure')).toBeVisible();
     await expect(page.locator('#failure-title')).toContainText('Out of Moves');
+    await expect(page.locator('#btn-skip-level')).toHaveCount(0);
+    await expect(page.locator('#btn-failure-zen')).toContainText('Switch to Zen Mode · Lvl 1');
     await page.locator('#btn-failure-zen').click();
     await expect(page.locator('#dialog-failure')).toBeHidden();
     await expect(page.locator('#hud-mode-label')).toContainText('Zen');
+    await expect(page.locator('#hud-level-title')).toContainText('Level 1');
 
-    // Finish Level 1 in Zen Mode (board state preserved!) -> awards `🌿 Zen Clear` (0 Gold Stars)
+    // Clear Level 1 on the independent Zen ladder -> awards `🌿 Zen Cleared · ★ 1/3`
     await dragCell(1, 1, 1, 0);
+    await dragCell(3, 2, 3, 1);
+    await dragCell(3, 1, 4, 1);
     await expect(page.locator('#dialog-victory')).toBeVisible();
-    await expect(page.locator('#victory-stars')).toContainText('🌿 Zen Clear');
+    await expect(page.locator('#victory-stars')).toContainText('🌿 Zen Cleared');
     await page.locator('#btn-victory-home').click();
     await expect(page.locator('#screen-home')).toBeVisible();
+    await expect(page.locator('#map-tab-zen')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.level-node-card[data-level-id="1"]')).toHaveClass(/zen-cleared-level/);
     await expect(page.locator('.level-node-card[data-level-id="1"]')).toContainText('🌿 Zen');
 
-    // 4. Anti-Cheese: on Level 2 in Zen Mode, make a move (`Moves: 1 / Par 3`), then switch Zen -> Timed/Challenge -> resets to Move 0
-    await page.locator('.level-node-card[data-level-id="2"]').click();
-    await expect(page.locator('#hud-level-title')).toContainText('Level 2');
-    await dragCell(1, 1, 0, 1);
+    // 4. Anti-Cheese & Independent Ladders: on Level 1 in Zen Mode, make a move (`Moves: 1 / Par 2`),
+    //    then switch Zen -> Timed/Challenge -> resets to Move 0
+    await page.locator('.level-node-card[data-level-id="1"]').click();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 1');
+    await dragCell(3, 2, 3, 1);
     await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 1 / Par');
     await page.locator('#btn-mode-toggle').click(); // ZEN -> TIMED -> restarts at Move 0
     await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
     await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 0 / Par');
     await page.locator('#btn-mode-next').click(); // TIMED -> CHALLENGE via right wing keycap
     await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
+    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
     await page.locator('#btn-mode-prev').click(); // CHALLENGE -> TIMED via left wing keycap
     await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
     await page.locator('#btn-mode-toggle').click(); // TIMED -> CHALLENGE via center toggle

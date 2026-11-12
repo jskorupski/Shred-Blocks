@@ -122,9 +122,7 @@
         <div class="mode-ambience-layer ambience-timed"></div>
       </div>
 
-      <!-- ===================================================================
-           SCREEN A: HOME ROADMAP (#screen-home)
-           =================================================================== -->
+      <!-- SCREEN A: HOME ROADMAP (#screen-home) -->
       <section id="screen-home" class="screen active" aria-label="Home Roadmap">
         <header class="top-economy-bar">
           <button type="button" id="btn-home-title" class="brand-cluster brand-cluster-btn" title="Return to Title Screen" aria-label="Return to Title Screen">
@@ -164,47 +162,19 @@
           </div>
         </header>
 
-        <!-- Hero Sanctuary Card & Integrated Chest Progress Strip -->
-        <div class="home-dashboard">
-          <div class="hero-launch-card">
-            <svg class="hero-astrolabe-watermark" viewBox="0 0 200 200" fill="none" aria-hidden="true">
-              <circle cx="100" cy="100" r="88" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 5" />
-              <circle cx="100" cy="100" r="68" stroke="currentColor" stroke-width="1.2" />
-              <rect x="48" y="48" width="104" height="104" stroke="currentColor" stroke-width="1.1" transform="rotate(45 100 100)" />
-              <rect x="48" y="48" width="104" height="104" stroke="currentColor" stroke-width="1" />
-            </svg>
-            <div class="hero-level-meta">
-              <div class="hero-meta-top">
-                <span id="hero-chapter-tag" class="hero-chapter-tag">CHAPTER I · SANCTUARY COURTYARD</span>
-                <span id="hero-badge-difficulty" class="badge-difficulty diff-normal">NORMAL</span>
-              </div>
-              <h2 id="hero-level-heading" class="hero-level-title">Level 1 — First Shred</h2>
-              <p id="hero-level-note" class="hero-level-subtitle">
-                Drag blocks into matching color shredder gates!
-              </p>
-              <div id="hero-awakening-banner" class="hero-awakening-banner">
-                <span class="awakening-spark" aria-hidden="true">✦</span>
-                <span id="hero-awakening-text" class="awakening-text">Next Awakening · Lvl 2: Hint Power-Up</span>
-              </div>
-            </div>
-            <div class="hero-cta-group">
-              <button type="button" id="btn-play-current" class="btn-tactile btn-primary btn-hero">
-                ▶ PLAY LEVEL 1
-              </button>
-            </div>
-          </div>
-
+        <div class="home-global-strip">
           <div class="chests-row">
             <div class="chest-card" title="+50 Coins &amp; Free Booster per 100 blocks shredded">
               <div class="chest-header">
                 <span class="chest-title">
-                  <svg class="chest-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                  <svg class="chest-svg-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
                     <polygon points="12,2 21,12 12,22 3,12" />
                     <circle cx="12" cy="12" r="3" fill="currentColor" />
                   </svg>
-                  Shred Chest
+                  <span class="chest-label-full">Shred Chest</span>
+                  <span class="chest-label-short">Shreds</span>
                 </span>
-                <span id="shredder-chest-text" class="chest-counter">0 / 100</span>
+                <span id="shredder-chest-text" class="chest-counter">0/100</span>
               </div>
               <div class="progress-track" aria-hidden="true">
                 <div id="shredder-chest-fill" class="progress-fill fill-cyan" style="width: 0%"></div>
@@ -215,49 +185,112 @@
             <div class="chest-card" title="+75 Coins &amp; Free Booster every 10 levels (plus +90 Coins &amp; Booster every 25 Gold Stars)">
               <div class="chest-header">
                 <span class="chest-title">
-                  <svg class="chest-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                  <svg class="chest-svg-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
                     <path d="M12 2L15 8L22 9L17 14L18.5 21L12 17.5L5.5 21L7 14L2 9L9 8L12 2Z" />
                   </svg>
-                  Level Chest
+                  <span class="chest-label-full">Level Chest</span>
+                  <span class="chest-label-short">Chest</span>
                 </span>
-                <span id="milestone-chest-text" class="chest-counter">Level 10</span>
+                <span id="milestone-chest-text" class="chest-counter">Lvl 10</span>
               </div>
               <div class="progress-track" aria-hidden="true">
                 <div id="milestone-chest-fill" class="progress-fill fill-gold" style="width: 10%"></div>
               </div>
               <span class="chest-caption">+75 Coins &amp; Booster / 10 levels</span>
             </div>
-          </div>
 
-          <!-- Range Filter & Direct Level Jump -->
-          <div class="roadmap-toolbar">
-            <div class="filter-pills" role="group" aria-label="Filter Levels by Tier">
-              <button type="button" class="chip-filter active" data-range="all">All</button>
-              <button type="button" class="chip-filter" data-range="1-50">1–50</button>
-              <button type="button" class="chip-filter" data-range="51-100">51–100</button>
-              <button type="button" class="chip-filter" data-range="101-150">101–150</button>
-              <button type="button" class="chip-filter" data-range="151-200">151–200</button>
-              <button type="button" class="chip-filter" data-range="201-250">201–250</button>
-              <button type="button" class="chip-filter" data-range="251-300">251–300</button>
-              <button type="button" class="chip-filter" data-range="endless">∞ 301+</button>
-            </div>
-            <div class="level-jump-box">
-              <label for="level-jump-input" class="sr-only">Jump to Level</label>
-              <input type="number" id="level-jump-input" min="1" max="999999" placeholder="Lvl #" class="input-compact" />
-              <button type="button" id="btn-level-jump" class="btn-tactile btn-secondary btn-compact">
-                Go
-              </button>
+            <div id="zen-sanctuary-card" class="chest-card" title="Zen Mode: +1 Gold Star every 3 clears &amp; +1 Free Continue Blessing every 4 clears (max 3)">
+              <div class="chest-header">
+                <span class="chest-title">
+                  <span class="chest-label-full">🌿 Blessings</span>
+                  <span class="chest-label-short">🌿 Zen</span>
+                </span>
+                <span id="zen-progress-text" class="chest-counter">0/3 · ★0/3</span>
+              </div>
+              <div class="progress-track" aria-hidden="true">
+                <div id="zen-progress-fill" class="progress-fill fill-emerald" style="width: 8%"></div>
+              </div>
+              <span class="chest-caption">+1 ★ / 3 Zen clears · +1 Continue / 4</span>
             </div>
           </div>
         </div>
 
-        <!-- 300-Level Linked Sanctuary Path + Endless Mastery -->
-        <div id="roadmap-list" class="roadmap-scroll" role="region" aria-label="Campaign Levels"></div>
+        <div class="mode-sanctuary-shell">
+          <div id="map-mode-tabs" class="map-mode-tablist" role="tablist" aria-label="Game Modes">
+            <button type="button" id="map-tab-challenge" class="map-mode-tab" role="tab" data-mode-tab="CHALLENGE" aria-selected="true" aria-controls="map-mode-panel" tabindex="0">
+              <span class="mode-tab-icon" aria-hidden="true">⚔️</span>
+              <span class="mode-tab-name">Challenge</span>
+              <span id="map-tab-lvl-challenge" class="mode-tab-lvl">Lvl 1</span>
+            </button>
+            <button type="button" id="map-tab-zen" class="map-mode-tab" role="tab" data-mode-tab="ZEN" aria-selected="false" aria-controls="map-mode-panel" tabindex="-1">
+              <span class="mode-tab-icon" aria-hidden="true">🌿</span>
+              <span class="mode-tab-name">Zen</span>
+              <span id="map-tab-lvl-zen" class="mode-tab-lvl">Lvl 1</span>
+            </button>
+            <button type="button" id="map-tab-timed" class="map-mode-tab" role="tab" data-mode-tab="TIMED" aria-selected="false" aria-controls="map-mode-panel" tabindex="-1">
+              <span class="mode-tab-icon" aria-hidden="true">⏱</span>
+              <span class="mode-tab-name">Rush</span>
+              <span id="map-tab-lvl-timed" class="mode-tab-lvl">Lvl 1</span>
+            </button>
+          </div>
+
+          <div id="map-mode-panel" class="mode-sanctuary-panel" role="tabpanel" aria-labelledby="map-tab-challenge" data-play-mode="CHALLENGE">
+            <div class="home-dashboard">
+              <div class="hero-launch-card">
+                <svg class="hero-astrolabe-watermark" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+                  <circle cx="100" cy="100" r="88" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 5" />
+                  <circle cx="100" cy="100" r="68" stroke="currentColor" stroke-width="1.2" />
+                  <rect x="48" y="48" width="104" height="104" stroke="currentColor" stroke-width="1.1" transform="rotate(45 100 100)" />
+                  <rect x="48" y="48" width="104" height="104" stroke="currentColor" stroke-width="1" />
+                </svg>
+                <div class="hero-level-meta">
+                  <div class="hero-meta-top">
+                    <span id="hero-chapter-tag" class="hero-chapter-tag">CHAPTER I · SANCTUARY COURTYARD</span>
+                    <span id="hero-badge-difficulty" class="badge-difficulty diff-normal">NORMAL</span>
+                  </div>
+                  <h2 id="hero-level-heading" class="hero-level-title">Level 1 — First Shred</h2>
+                  <p id="hero-level-note" class="hero-level-subtitle">
+                    Drag blocks into matching color shredder gates!
+                  </p>
+                  <div id="hero-awakening-banner" class="hero-awakening-banner">
+                    <span class="awakening-spark" aria-hidden="true">✦</span>
+                    <span id="hero-awakening-text" class="awakening-text">Next Awakening · Lvl 2: Hint Power-Up</span>
+                  </div>
+                </div>
+                <div class="hero-cta-group">
+                  <button type="button" id="btn-play-current" class="btn-tactile btn-primary btn-hero">
+                    ▶ PLAY LEVEL 1
+                  </button>
+                </div>
+              </div>
+
+              <div class="roadmap-toolbar">
+                <div class="filter-pills" role="group" aria-label="Filter Levels by Tier">
+                  <button type="button" class="chip-filter active" data-range="all">All</button>
+                  <button type="button" class="chip-filter" data-range="1-50">1–50</button>
+                  <button type="button" class="chip-filter" data-range="51-100">51–100</button>
+                  <button type="button" class="chip-filter" data-range="101-150">101–150</button>
+                  <button type="button" class="chip-filter" data-range="151-200">151–200</button>
+                  <button type="button" class="chip-filter" data-range="201-250">201–250</button>
+                  <button type="button" class="chip-filter" data-range="251-300">251–300</button>
+                  <button type="button" class="chip-filter" data-range="endless">∞ 301+</button>
+                </div>
+                <div class="level-jump-box">
+                  <label for="level-jump-input" class="sr-only">Jump to Level</label>
+                  <input type="number" id="level-jump-input" min="1" max="999999" placeholder="Lvl #" class="input-compact" />
+                  <button type="button" id="btn-level-jump" class="btn-tactile btn-secondary btn-compact">
+                    Go
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div id="roadmap-list" class="roadmap-scroll" role="region" aria-label="Campaign Levels"></div>
+          </div>
+        </div>
       </section>
 
-      <!-- ===================================================================
-           SCREEN B: IN-GAME HUD & 3D VIEWPORT (#screen-game)
-           =================================================================== -->
+      <!-- SCREEN B: IN-GAME HUD & 3D VIEWPORT (#screen-game) -->
       <section id="screen-game" class="screen" aria-label="In-Game Puzzle Board" hidden>
         <header class="hud-top-bar">
           <!-- Tier 1: Primary Architectural Archway Navigation & Level Crest -->
@@ -465,9 +498,7 @@
         </footer>
       </section>
 
-      <!-- ===================================================================
-           SCREEN C: THEMES STUDIO (#screen-themes)
-           =================================================================== -->
+      <!-- SCREEN C: THEMES STUDIO (#screen-themes) -->
       <section id="screen-themes" class="screen" aria-label="Themes Studio" hidden>
         <header class="top-economy-bar">
           <div class="brand-cluster">
@@ -515,9 +546,7 @@
         </div>
       </section>
 
-      <!-- ===================================================================
-           BOTTOM NAVIGATION TAB BAR (Menu View)
-           =================================================================== -->
+      <!-- BOTTOM NAVIGATION TAB BAR -->
       <nav id="menu-tab-bar" class="bottom-tab-bar" aria-label="Primary Navigation">
         <button type="button" id="tab-btn-home" class="tab-item active" data-tab="home">
           <span class="tab-icon" aria-hidden="true">
@@ -566,10 +595,7 @@
         </button>
       </nav>
 
-      <!-- ===================================================================
-           SCREEN 0: SACRED-GEOMETRY TITLE CREST OVERLAY (#title-overlay)
-           Frames the live 3D courtyard backdrop with Top Crest + Bottom Pedestal
-           =================================================================== -->
+      <!-- SCREEN 0: SACRED-GEOMETRY TITLE CREST OVERLAY (#title-overlay) -->
       <section id="title-overlay" class="title-overlay" aria-labelledby="title-crest-heading">
         <!-- Top Sacred-Geometry Title Crest Banner -->
         <header class="title-crest-banner">

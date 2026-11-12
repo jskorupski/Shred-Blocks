@@ -46,6 +46,7 @@ export interface CommittedPathTraceInfo {
   spanCols: number;
   spanRows: number;
   intoGate?: boolean;
+  cellMask?: number;
 }
 
 export interface HoverState {
@@ -424,6 +425,12 @@ export function buildCommittedMoveTrace(
   }
 
   if (pts.length < 2) return null;
+  let cellMask = 0;
+  for (const [dr, dc] of shape.cells) {
+    if (dr >= 0 && dr < 4 && dc >= 0 && dc < 4) {
+      cellMask |= 1 << (dr * 4 + dc);
+    }
+  }
   return {
     waypoints: pts,
     colorId,
@@ -431,6 +438,7 @@ export function buildCommittedMoveTrace(
     spanCols: shape.cols,
     spanRows: shape.rows,
     intoGate,
+    cellMask,
   };
 }
 

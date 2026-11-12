@@ -450,13 +450,14 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
     setFxRandomSeed(null);
   });
 
-  it('MYSTIC-TRACE-01: keeps motion-blur traces strictly trailing behind blocks with zero leading-edge leak on short moves', () => {
-    expect(MAIN_FRAGMENT_SHADER).toContain('float headCap = min(hw, 0.16);');
+  it('MYSTIC-TRACE-01: keeps motion-blur traces smoothly rounded on diagonals & bends with zero mid-board flat cuts or leading-edge leak', () => {
+    expect(MAIN_FRAGMENT_SHADER).toContain('alongHalf');
+    expect(MAIN_FRAGMENT_SHADER).toContain('bestShadowD');
+    expect(MAIN_FRAGMENT_SHADER).not.toContain('min(hw, 0.16)');
     const rctx = createMockParticleContext(false);
     const board = createBoardState(getLevelSpec(1));
-    const headCap = 0.16;
 
-    // 1. 1x1 block moving 1 cell right (col 1 -> col 2; landed leading edge at x = 2.955, trailing edge at x = 2.045)
+    // 1. 1x1 block moving 1 cell right (col 1 -> col 2; landed cell [2, 3] x [2, 3])
     rctx.activePathTraces.length = 0;
     spawnPathTraceImpl(
       rctx,
@@ -471,11 +472,14 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
       false
     );
     expect(rctx.activePathTraces).toHaveLength(1);
-    const monoSeg = rctx.activePathTraces[0].segments[rctx.activePathTraces[0].segments.length - 1];
-    expect(monoSeg.x0).toBeLessThan(2.045); // trails visibly behind the landed block
-    expect(monoSeg.x1 + headCap).toBeLessThan(2.5); // terminates >= 0.45 cells inside leading edge (2.955)
+    const monoTr = rctx.activePathTraces[0];
+    const monoSeg = monoTr.segments[monoTr.segments.length - 1];
+    expect(monoSeg.x0).toBeLessThan(2.045);
+    expect(monoSeg.x1).toBeCloseTo(2.5, 4);
+    expect(monoTr.headOriginX).toBeCloseTo(2, 4);
+    expect(monoTr.headCellMask).toBe(1);
 
-    // 2. Wide 1x3 horizontal bar (cols=3, rows=1) nudged 1 cell UP (row 3 -> row 2; landed leading edge at y = 2.045)
+    // 2. Wide 1x3 horizontal bar (cols=3, rows=1) nudged 1 cell UP (row 3 -> row 2; landed [1, 4] x [2, 3])
     rctx.activePathTraces.length = 0;
     spawnPathTraceImpl(
       rctx,
@@ -490,11 +494,14 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
       false
     );
     expect(rctx.activePathTraces).toHaveLength(1);
-    const wideSeg = rctx.activePathTraces[0].segments[rctx.activePathTraces[0].segments.length - 1];
-    expect(wideSeg.y0).toBeGreaterThan(2.955); // trails behind trailing bottom edge
-    expect(wideSeg.y1 - headCap).toBeGreaterThan(2.5); // zero forward leak out top leading edge (2.045)
+    const wideTr = rctx.activePathTraces[0];
+    const wideSeg = wideTr.segments[wideTr.segments.length - 1];
+    expect(wideSeg.y0).toBeGreaterThan(3.0);
+    expect(wideSeg.y1).toBeCloseTo(2.5, 4);
+    expect(wideTr.headOriginY).toBeCloseTo(2, 4);
+    expect(wideTr.headCellMask).toBe(0b111);
 
-    // 3. Long 1x3 horizontal bar (cols=3, rows=1) nudged 1 cell RIGHT (col 1 -> col 2; landed [2.045, 4.955], vacated [1.045, 2.045])
+    // 3. Long 1x3 horizontal bar (cols=3, rows=1) nudged 1 cell RIGHT (col 1 -> col 2; vacated [1, 2])
     rctx.activePathTraces.length = 0;
     spawnPathTraceImpl(
       rctx,
@@ -510,13 +517,40 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
     );
     expect(rctx.activePathTraces).toHaveLength(1);
     const longSeg = rctx.activePathTraces[0].segments[rctx.activePathTraces[0].segments.length - 1];
-    expect(longSeg.x0).toBeLessThan(1.3); // reaches into vacated cell 1
-    expect(longSeg.x0 - 0.18).toBeGreaterThanOrEqual(0.999); // zero rear leak into unvisited col 0
-    expect(longSeg.x1 + headCap).toBeLessThan(3.1); // tucked behind center (3.5), > 1.85 cells inside leading edge (4.955)
+    expect(longSeg.x0).toBeLessThan(1.35);
+    expect(longSeg.x0 - 0.18).toBeGreaterThanOrEqual(0.99);
+    expect(longSeg.x1).toBeCloseTo(3.5, 4);
 
-    // 4. Multi-segment L-bend: 1x3 vertical bar (cols=1, rows=3) sliding 2 cells RIGHT (col 1 -> 3) then 1 cell DOWN (row 1 -> 2)
-    expect(MAIN_FRAGMENT_SHADER).toContain('globalHeadOver');
-    expect(MAIN_FRAGMENT_SHADER).toContain('longCap');
+    // 4. Diagonal 2x2 glide from (col=0, row=4) to (col=4, row=0) ([4, 6] x [0, 2]):
+    //    Reaches (5.0, 1.0) immediately from Frame 0 with both lateral wings tucked strictly inside [4, 6] x [0, 2]
+    //    and near-circular longitudinal cap ratio (~1:1, never squared-off)!
+    rctx.activePathTraces.length = 0;
+    spawnPathTraceImpl(
+      rctx,
+      [
+        { x: 1.0, y: 5.0 },
+        { x: 5.0, y: 1.0 },
+      ],
+      4,
+      0,
+      2,
+      2,
+      false
+    );
+    expect(rctx.activePathTraces).toHaveLength(1);
+    const diagTr = rctx.activePathTraces[0];
+    const diagSeg = diagTr.segments[0];
+    expect(diagSeg.x1).toBeCloseTo(5.0, 4);
+    expect(diagSeg.y1).toBeCloseTo(1.0, 4);
+    const diagHw = (diagSeg.width ?? 1) * 0.5;
+    const leftWingX = diagSeg.x1 - Math.SQRT1_2 * diagHw;
+    const rightWingY = diagSeg.y1 + Math.SQRT1_2 * diagHw;
+    expect(leftWingX).toBeGreaterThan(4.05);
+    expect(rightWingY).toBeLessThan(1.95);
+    const diagAlongHalf = 0.5 * (Math.SQRT1_2 * 2 + Math.SQRT1_2 * 2);
+    expect(Math.min(diagHw, diagAlongHalf * 0.84) / diagHw).toBeGreaterThan(0.94);
+
+    // 5. Multi-segment L-bend: 1x3 vertical bar (cols=1, rows=3) sliding 2 cells RIGHT (col 1 -> 3) then 1 cell DOWN (row 1 -> 2)
     rctx.activePathTraces.length = 0;
     spawnPathTraceImpl(
       rctx,
@@ -534,14 +568,21 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
     expect(rctx.activePathTraces).toHaveLength(1);
     const lBendSegs = rctx.activePathTraces[0].segments;
     expect(lBendSegs.length).toBeGreaterThanOrEqual(4);
-    for (const seg of lBendSegs) {
-      // Corner longitudinal cap (<= 0.38) keeps wide-span L-bend strictly inside col 3 (< 3.955, zero leak into col 4)
-      expect(Math.max(seg.x0, seg.x1) + 0.38).toBeLessThan(3.955);
+    for (let sIdx = 0; sIdx < lBendSegs.length; sIdx++) {
+      const seg = lBendSegs[sIdx];
+      const ux = Math.abs(Math.cos(seg.rotZ));
+      const uy = Math.abs(Math.sin(seg.rotZ));
+      const endCap = Math.max(0.32, 0.5 * (ux * 1 + uy * 3) * 0.84);
+      const jointCap = Math.min(1, 3) * 0.44;
+      const posCap = sIdx === lBendSegs.length - 1 ? endCap : jointCap;
+      expect(seg.x1 + ux * posCap).toBeLessThan(3.96);
     }
-    const lBendFinal = lBendSegs[lBendSegs.length - 1];
-    expect(lBendFinal.y1 + headCap).toBeLessThan(3.5); // well inside landed bottom edge (4.955)
 
-    // 5. Gate shred (`intoGate === true`) preserves full outward extension into the shredder jaw
+    // 6. Non-convex L3_BL excludes its empty top-right notch cell (bit 1 === 0) & gate shreds set headCellMask = 0
+    const lShapeTrace = buildCommittedMoveTrace(board, 'L3_BL', 2, 1, 1, 2, 3, -1);
+    expect(lShapeTrace?.cellMask).toBe((1 << 0) | (1 << 4) | (1 << 5));
+    expect((lShapeTrace?.cellMask ?? 0) & (1 << 1)).toBe(0);
+
     const shredTrace = buildCommittedMoveTrace(board, '1x1', 1, 2, 0, 2, 1, 0);
     expect(shredTrace?.intoGate).toBe(true);
 

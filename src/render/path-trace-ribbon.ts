@@ -26,6 +26,11 @@ export interface VisualPathTrace {
   age: number;
   maxAge: number;
   alphaScale?: number;
+  headOriginX?: number;
+  headOriginY?: number;
+  spanCols?: number;
+  spanRows?: number;
+  headCellMask?: number;
 }
 
 export const DEFAULT_TRACE_MAX_AGE_SEC = 0.5;
@@ -193,7 +198,7 @@ export function fillTraceUniformWindow(
     pushPt(seg.x0 + (seg.x1 - seg.x0) * t1, seg.y0 + (seg.y1 - seg.y0) * t1, vis1, hw);
   }
 
-  const pad = maxHw + 0.08;
+  const pad = maxHw + 0.16;
   return {
     pointCount: count,
     minX: minX - pad,

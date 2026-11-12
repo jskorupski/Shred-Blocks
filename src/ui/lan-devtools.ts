@@ -54,6 +54,22 @@ export function applyLanUnlockAll(app: AppViewContext): void {
     writeSeq: cur.writeSeq + 1,
     updatedAt: Date.now(),
     highestLevelUnlocked: Math.max(cur.highestLevelUnlocked, 305),
+    modeLadderVersion: 1,
+    modeState: {
+      CHALLENGE: {
+        currentLevelId: cur.modeState.CHALLENGE.currentLevelId,
+        highestUnlocked: Math.max(cur.modeState.CHALLENGE.highestUnlocked, 305),
+      },
+      ZEN: {
+        currentLevelId: cur.modeState.ZEN.currentLevelId,
+        highestUnlocked: Math.max(cur.modeState.ZEN.highestUnlocked, 305),
+      },
+      TIMED: {
+        currentLevelId: cur.modeState.TIMED.currentLevelId,
+        highestUnlocked: Math.max(cur.modeState.TIMED.highestUnlocked, 305),
+      },
+    },
+    zenBlessings: 3,
     coins: Math.max(cur.coins, 9999),
     boosters: {
       UNDO: Math.max(cur.boosters.UNDO, 25),
@@ -72,7 +88,7 @@ export function applyLanUnlockAll(app: AppViewContext): void {
   syncRestoreButtonLabels();
   app.sound.playBooster('HINT');
   app.showGameToast(
-    '🛠 LAN DevTools: Unlocked all 15 cosmetics, 9,999 Coins, 25× Boosters & Lvl 1–305!',
+    '🛠 LAN DevTools: Unlocked all 15 cosmetics, 9,999 Coins, 25× Boosters, 3 Zen Blessings & Lvl 1–305 across all modes!',
     3200
   );
 }

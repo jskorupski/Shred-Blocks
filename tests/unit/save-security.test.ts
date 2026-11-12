@@ -64,7 +64,19 @@ function expectSanitized(p: SavePayloadV1): void {
     expect(Number.isInteger(Number(k))).toBe(true);
     expect(
       Object.keys(r).every((key) =>
-        ['stars', 'bestMoves', 'bestTimeSec', 'skipped', 'zenCleared'].includes(key)
+        [
+          'stars',
+          'bestMoves',
+          'bestTimeSec',
+          'skipped',
+          'zenCleared',
+          'challengeStars',
+          'challengeBestMoves',
+          'timedStars',
+          'timedBestTimeSec',
+          'zenBestMoves',
+          'zenSkipped',
+        ].includes(key)
       )
     ).toBe(true);
   }
@@ -241,7 +253,15 @@ describe('SAVE-COMPAT-01: Live Player Save Backward-Compatibility & Forward Migr
     expect(importedFromRawJson.economyVersion).toBe(2);
     expect(importedFromRawJson.settings.playMode).toBe('CHALLENGE');
     expect(importedFromRawJson.settings.colorblindSymbols).toBe(true);
-    expect(importedFromRawJson.levelRecords[1]).toEqual({ stars: 3, bestMoves: 2, bestTimeSec: 5 });
+    expect(importedFromRawJson.modeLadderVersion).toBe(1);
+    expect(importedFromRawJson.modeState.CHALLENGE.highestUnlocked).toBe(18);
+    expect(importedFromRawJson.levelRecords[1]).toEqual({
+      stars: 3,
+      bestMoves: 2,
+      bestTimeSec: 5,
+      challengeStars: 3,
+      challengeBestMoves: 2,
+    });
 
     // 3. Partial early-v1 JSON missing newer optional fields + containing unknown future keys
     const legacyPartialJson = JSON.stringify({
@@ -292,5 +312,45 @@ describe('SAVE-COMPAT-01: Live Player Save Backward-Compatibility & Forward Migr
     expect(decodedFuture.highestLevelUnlocked).toBe(312);
     expect(decodedFuture.coins).toBe(1845);
     expect(decodedFuture.settings.colorblindSymbols).toBe(true);
+
+    // 5. [0xa6, 0x4d] trailer boundary checks, > 1,500-record qrCompact preservation & hostile recordCount DoS rejection
+    const largeSave = createDefaultSavePayload();
+    largeSave.modeState = {
+      CHALLENGE: { currentLevelId: 1605, highestUnlocked: 1610 },
+      ZEN: { currentLevelId: 42, highestUnlocked: 45 },
+      TIMED: { currentLevelId: 18, highestUnlocked: 20 },
+    };
+    largeSave.highestLevelUnlocked = 1610;
+    largeSave.currentLevelId = 1605;
+    largeSave.zenStarsEarned = 14;
+    largeSave.zenStarProgress = 2;
+    largeSave.zenBlessings = 3;
+    largeSave.zenBlessingProgress = 1;
+    for (let lvl = 1; lvl <= 1600; lvl++) {
+      largeSave.levelRecords[lvl] = {
+        stars: 3,
+        bestMoves: 8,
+        bestTimeSec: 20,
+        challengeStars: 3,
+      };
+    }
+    largeSave.totalStars = 1600 * 3 + 14;
+    const compact1600 = decodeSaveCode(encodeSaveCode(largeSave, { qrCompact: true }));
+    expect(compact1600.modeState).toEqual(largeSave.modeState);
+    expect(compact1600.totalStars).toBe(largeSave.totalStars);
+    expect(compact1600.zenStarsEarned).toBe(14);
+    expect(compact1600.zenBlessings).toBe(3);
+
+    // Appending a hypothetical future `0xa7` trailer AFTER `[0xa6, 0x4d]` decodes cleanly
+    const modeCode = encodeSaveCode(mgr.getPayload());
+    const modeRaw = decompressFramedBytes(fromB64Url(modeCode.slice(4, modeCode.lastIndexOf('-'))));
+    const withPostModeTrailer = new Uint8Array(modeRaw.length + 4);
+    withPostModeTrailer.set(modeRaw, 0);
+    withPostModeTrailer.set([0xa7, 0x01, 0x10, 0x00], modeRaw.length);
+    expect(decodeSaveCode(forgeCode(compressLz77(withPostModeTrailer))).highestLevelUnlocked).toBe(44);
+
+    // Truncated mid-`[0xa6, 0x4d]` trailer is rejected cleanly
+    const truncatedModeTrailer = modeRaw.slice(0, modeRaw.length - 2);
+    expect(() => decodeSaveCode(forgeCode(compressLz77(truncatedModeTrailer)))).toThrow(SaveCodeError);
   });
 });

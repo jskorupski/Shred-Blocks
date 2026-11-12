@@ -197,22 +197,59 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (streakEl) streakEl.textContent = String(save.winStreak);
   if (themesCoinsEl) themesCoinsEl.textContent = String(save.coins);
 
-  // Chests Progress
+  // Chests & Zen Sanctuary Progress
   const shredChestProg = Math.min(100, Math.max(0, save.shredderChestProgress % 100));
   const shredText = document.getElementById('shredder-chest-text');
   const shredFill = document.getElementById('shredder-chest-fill');
-  if (shredText) shredText.textContent = `${shredChestProg} / 100`;
+  if (shredText) shredText.textContent = `${shredChestProg}/100`;
   if (shredFill) shredFill.style.width = `${shredChestProg}%`;
 
   const nextMilestone = Math.ceil(Math.max(1, save.highestLevelUnlocked) / 10) * 10;
   const milestoneStep = ((save.highestLevelUnlocked - 1) % 10) * 10;
   const mileText = document.getElementById('milestone-chest-text');
   const mileFill = document.getElementById('milestone-chest-fill');
-  if (mileText) mileText.textContent = `Level ${nextMilestone}`;
+  if (mileText) mileText.textContent = `Lvl ${nextMilestone}`;
   if (mileFill) mileFill.style.width = `${Math.max(10, milestoneStep)}%`;
 
-  // Hero Launch Card
-  const targetLevelId = Math.max(1, save.currentLevelId || save.highestLevelUnlocked || 1);
+  const blessCount = Math.min(3, Math.max(0, save.zenBlessings || 0));
+  const starProg = Math.min(2, Math.max(0, save.zenStarProgress || 0));
+  const blessProg = Math.min(3, Math.max(0, save.zenBlessingProgress || 0));
+  const zenText = document.getElementById('zen-progress-text');
+  const zenFill = document.getElementById('zen-progress-fill');
+  if (zenText) zenText.textContent = `${blessCount}/3 · ★${starProg}/3`;
+  if (zenFill) {
+    const ratio = blessCount < 3 ? blessProg / 4 : starProg / 3;
+    zenFill.style.width = `${Math.max(8, Math.round(ratio * 100))}%`;
+  }
+
+  // Connected Folder-Tab Sanctuary Mode Selector (`MAP-MODE-SPLIT-01`)
+  const activeMode = save.settings.playMode;
+  const modeTabDefs = [
+    { mode: 'CHALLENGE', tabId: 'map-tab-challenge', lvlId: 'map-tab-lvl-challenge' },
+    { mode: 'ZEN', tabId: 'map-tab-zen', lvlId: 'map-tab-lvl-zen' },
+    { mode: 'TIMED', tabId: 'map-tab-timed', lvlId: 'map-tab-lvl-timed' },
+  ] as const;
+  for (const def of modeTabDefs) {
+    const tabEl = document.getElementById(def.tabId);
+    const lvlEl = document.getElementById(def.lvlId);
+    const isSelected = def.mode === activeMode;
+    if (tabEl) {
+      tabEl.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      tabEl.tabIndex = isSelected ? 0 : -1;
+    }
+    if (lvlEl) {
+      lvlEl.textContent = `Lvl ${save.modeState[def.mode].currentLevelId}`;
+    }
+  }
+  const modePanelEl = document.getElementById('map-mode-panel');
+  if (modePanelEl) {
+    modePanelEl.setAttribute('data-play-mode', activeMode);
+    modePanelEl.setAttribute('aria-labelledby', `map-tab-${activeMode.toLowerCase()}`);
+  }
+
+  // Hero Launch Card (Scoped to Active Mode Ladder)
+  const activeLadder = save.modeState[activeMode];
+  const targetLevelId = Math.max(1, activeLadder.currentLevelId || activeLadder.highestUnlocked || 1);
   const targetSpec = getLevelSpec(targetLevelId);
   const chapterMeta = getChapterMetaForLevel(targetLevelId);
   const heroChapterTag = document.getElementById('hero-chapter-tag');
@@ -235,7 +272,12 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   }
   if (heroNote) {
     heroNote.textContent =
-      targetSpec.unlockNote ?? `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`;
+      targetSpec.unlockNote ??
+      (activeMode === 'ZEN'
+        ? 'Untimed sanctuary flow — 3 clears earn +1 ★ & 4 clears bank a Free Continue Blessing'
+        : activeMode === 'TIMED'
+          ? `Beat the ${targetSpec.timeLimitSec ?? 90}s Speed Rush clock for up to 3 Gold Stars`
+          : `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`);
   }
   if (heroAwakeningText) {
     heroAwakeningText.textContent = getNextSanctuaryAwakeningText(targetSpec.id);
@@ -299,9 +341,9 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
 
   const jumpInput = document.getElementById('level-jump-input') as HTMLInputElement | null;
   if (jumpInput) {
-    const maxUnlocked = Math.max(1, save.highestLevelUnlocked || 1);
+    const maxUnlocked = Math.max(1, activeLadder.highestUnlocked || 1);
     jumpInput.max = String(maxUnlocked);
-    jumpInput.title = `Jump to unlocked stage (1–${maxUnlocked})`;
+    jumpInput.title = `Jump to unlocked ${activeMode.toLowerCase()} stage (1–${maxUnlocked})`;
   }
 
   const hudSfxBtn = document.getElementById('btn-hud-sfx');
@@ -319,6 +361,19 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   const appShell = document.getElementById('app-shell');
   if (appShell) {
     appShell.setAttribute('data-play-mode', playMode);
+  }
+
+  // Skips exist strictly in Zen Mode (`MAP-MODE-SPLIT-01`)
+  const canSkipInMode = playMode === 'ZEN';
+  const skipHudBtn = document.getElementById('btn-skip-hud') as HTMLButtonElement | null;
+  const pauseSkipBtn = document.getElementById('btn-pause-skip') as HTMLButtonElement | null;
+  if (skipHudBtn) {
+    skipHudBtn.hidden = !canSkipInMode;
+    skipHudBtn.disabled = !canSkipInMode;
+  }
+  if (pauseSkipBtn) {
+    pauseSkipBtn.hidden = !canSkipInMode;
+    pauseSkipBtn.disabled = !canSkipInMode;
   }
 
   const titleEl = document.getElementById('hud-level-title');

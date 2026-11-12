@@ -1,3 +1,6 @@
+import { ENVIRONMENT_MESHES } from './mesh-generator';
+import { INSTANCE_STRIDE } from './render-types';
+
 /**
  * GPU-instanced particle shaders (`R3D-04`, `SHRED-STYLE-01`, `RELIC-AWAKEN-01`):
  * 5 distinct shredder styles, tumbling stone shards, rising relic embers, and billboard smoke puffs.
@@ -220,3 +223,107 @@ void main() {
   outColor = vec4(clamp(cubeCol, 0.0, 1.0), 0.97 * v_fade);
 }
 `;
+
+export interface ParticleInstancedVaoHandle {
+  vao: WebGLVertexArrayObject;
+  posBuf: WebGLBuffer;
+  normBuf: WebGLBuffer;
+  idxBuf: WebGLBuffer;
+  instBuf: WebGLBuffer;
+  indexCount: number;
+}
+
+export function createParticleInstancedVao(
+  gl: WebGL2RenderingContext,
+  instanceByteLength: number
+): ParticleInstancedVaoHandle | null {
+  const cube = ENVIRONMENT_MESHES.unitParticleCube;
+  const vao = gl.createVertexArray();
+  const posBuf = gl.createBuffer();
+  const normBuf = gl.createBuffer();
+  const idxBuf = gl.createBuffer();
+  const instBuf = gl.createBuffer();
+  if (!vao || !posBuf || !normBuf || !idxBuf || !instBuf) return null;
+
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, cube.positions, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, cube.normals, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cube.indices, gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, instanceByteLength, gl.DYNAMIC_DRAW);
+
+  const strideBytes = INSTANCE_STRIDE * 4;
+  gl.enableVertexAttribArray(3);
+  gl.vertexAttribPointer(3, 4, gl.FLOAT, false, strideBytes, 0);
+  gl.vertexAttribDivisor(3, 1);
+
+  gl.enableVertexAttribArray(4);
+  gl.vertexAttribPointer(4, 4, gl.FLOAT, false, strideBytes, 16);
+  gl.vertexAttribDivisor(4, 1);
+  gl.bindVertexArray(null);
+
+  return { vao, posBuf, normBuf, idxBuf, instBuf, indexCount: cube.indices.length };
+}
+
+const SMOKE_QUAD_POSITIONS = new Float32Array([
+  -0.5, -0.5, 0.0, 0.5, -0.5, 0.0, 0.5, 0.5, 0.0, -0.5, 0.5, 0.0,
+]);
+const SMOKE_QUAD_NORMALS = new Float32Array([
+  0.0, 0.21, 0.97, 0.0, 0.21, 0.97, 0.0, 0.21, 0.97, 0.0, 0.21, 0.97,
+]);
+const SMOKE_QUAD_INDICES = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+/**
+ * Dedicated 4-vertex (2-triangle) billboard quad VAO + separate instance buffer for translucent smoke puffs
+ * (`PERF-TRANSITION-01`), avoiding 24-vertex cube double-face overdraw and mid-pass VBO write hazards on tile GPUs.
+ */
+export function createSmokeBillboardInstancedVao(
+  gl: WebGL2RenderingContext,
+  instanceByteLength: number
+): ParticleInstancedVaoHandle | null {
+  const vao = gl.createVertexArray();
+  const posBuf = gl.createBuffer();
+  const normBuf = gl.createBuffer();
+  const idxBuf = gl.createBuffer();
+  const instBuf = gl.createBuffer();
+  if (!vao || !posBuf || !normBuf || !idxBuf || !instBuf) return null;
+
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, SMOKE_QUAD_POSITIONS, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, SMOKE_QUAD_NORMALS, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, SMOKE_QUAD_INDICES, gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, instanceByteLength, gl.DYNAMIC_DRAW);
+
+  const strideBytes = INSTANCE_STRIDE * 4;
+  gl.enableVertexAttribArray(3);
+  gl.vertexAttribPointer(3, 4, gl.FLOAT, false, strideBytes, 0);
+  gl.vertexAttribDivisor(3, 1);
+
+  gl.enableVertexAttribArray(4);
+  gl.vertexAttribPointer(4, 4, gl.FLOAT, false, strideBytes, 16);
+  gl.vertexAttribDivisor(4, 1);
+  gl.bindVertexArray(null);
+
+  return { vao, posBuf, normBuf, idxBuf, instBuf, indexCount: SMOKE_QUAD_INDICES.length };
+}

@@ -252,6 +252,13 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
 export type AxisLock = 'NONE' | 'H' | 'V';
 export type EdgeDir = 'TOP' | 'RIGHT' | 'BOTTOM' | 'LEFT';
 export type PlayMode = 'CHALLENGE' | 'ZEN' | 'TIMED';
+
+export interface ModeLadderState {
+  currentLevelId: number;
+  highestUnlocked: number;
+}
+
+export type ModeStateMap = Record<PlayMode, ModeLadderState>;
 export type BoosterType = 'UNDO' | 'HINT' | 'HAMMER' | 'ROCKET' | 'VACUUM';
 export type InputMode = 'DRAG' | 'TARGET_HAMMER' | 'TARGET_ROCKET' | 'TARGET_VACUUM';
 export type RocketAxis = 'ROW' | 'COL';
@@ -546,11 +553,17 @@ export interface LevelSpec {
 }
 
 export interface LevelRecord {
-  stars: number; // 0 = skipped or Zen-only clear, 1..3 = earned Gold Stars in Challenge/Timed
+  stars: number; // 0 = skipped or Zen-only clear, 1..3 = max Gold Stars across Challenge/Timed
   bestMoves: number;
   bestTimeSec: number;
   skipped?: boolean;
   zenCleared?: boolean;
+  challengeStars?: number;
+  challengeBestMoves?: number;
+  timedStars?: number;
+  timedBestTimeSec?: number;
+  zenBestMoves?: number;
+  zenSkipped?: boolean;
 }
 
 export interface SavePayloadV1 {
@@ -570,6 +583,12 @@ export interface SavePayloadV1 {
   milestoneChestLevel: number;
   starReliquaryLevel: number;
   economyVersion: number;
+  modeLadderVersion: number;
+  modeState: ModeStateMap;
+  zenStarsEarned: number;
+  zenStarProgress: number;
+  zenBlessings: number;
+  zenBlessingProgress: number;
   boosters: Record<BoosterType, number>;
   unlockedSkins: SkinId[];
   unlockedTrays: TrayId[];

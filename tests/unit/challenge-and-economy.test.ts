@@ -397,8 +397,11 @@ describe('Challenge Mode, Touch-Move Coalescing, Hint Free Moves, Authentic L26+
     timed.parMoves = 100;
     expect(getTimedBombTickSec(timed)).toBe(2.5);
 
-    // 4. Skipping a Zen-cleared stage never resets it into a re-farmable first clear
+    // 4. Skipping is Zen-only (no-op in Challenge/Timed) and never resets a Zen-cleared stage into a re-farmable first clear
     const manager = new SaveManager();
+    manager.recordLevelSkip(1);
+    expect(manager.getPayload().modeState.CHALLENGE.highestUnlocked).toBe(1);
+    manager.updateSettings({ playMode: 'ZEN' });
     manager.recordLevelWin(3, 6, 30, 3, 0, 4, 'NORMAL', true);
     manager.recordLevelSkip(3);
     expect(manager.getPayload().levelRecords[3]?.zenCleared).toBe(true);
