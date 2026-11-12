@@ -75,21 +75,21 @@ export const UI_BOOSTER_PRICES: Record<BoosterType, number> = BOOSTER_COIN_COSTS
 
 export const BOOSTER_DISPLAY_NAMES: Record<BoosterType, string> = {
   UNDO: 'Undo',
-  FREEZE: 'Stasis / Hint',
+  HINT: 'Hint',
   HAMMER: 'Hammer',
   ROCKET: 'Rocket',
   VACUUM: 'Color Vacuum',
 };
 
 export const BOOSTER_DEBUT_NOTES: Partial<Record<number, string>> = {
-  2: 'UNCOMMON Power-Up Unlocked: Stasis / Hint! Grants +2 Stasis Moves in Challenge Mode (or freezes Rush clocks for 10s) and highlights the optimal move.',
+  2: 'UNCOMMON Power-Up Unlocked: Hint! Highlights the optimal move (+2 Free Moves in Challenge Mode, or +10s Freeze in Speed Rush).',
   8: 'RARE Power-Up Unlocked: Hammer! Tap any block, crate, or locked gate to shatter it.',
   18: 'EPIC Power-Up Unlocked: Rocket! Blasts an entire row or column of blocks.',
   30: 'LEGENDARY Power-Up Unlocked: Color Vacuum! Sweeps all unlocked blocks of a chosen color off the board.',
 };
 
 export const SANCTUARY_AWAKENING_MILESTONES: ReadonlyArray<{ levelId: number; label: string }> = [
-  { levelId: 2, label: 'Stasis / Hint Power-Up' },
+  { levelId: 2, label: 'Hint Power-Up' },
   { levelId: 8, label: 'Hammer Power-Up' },
   { levelId: 11, label: 'Axis-Lock Guide Rails' },
   { levelId: 14, label: 'Sculpted Sanctuary Courtyards' },

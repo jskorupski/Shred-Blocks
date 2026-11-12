@@ -194,8 +194,8 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   document.getElementById('btn-booster-undo')?.addEventListener('click', () => {
     app.activateBooster('UNDO');
   });
-  document.getElementById('btn-booster-freeze')?.addEventListener('click', () => {
-    app.activateBooster('FREEZE');
+  document.getElementById('btn-booster-hint')?.addEventListener('click', () => {
+    app.activateBooster('HINT');
   });
   document.getElementById('btn-booster-hammer')?.addEventListener('click', () => {
     app.activateBooster('HAMMER');

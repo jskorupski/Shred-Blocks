@@ -193,7 +193,7 @@ describe('SAVE-COMPAT-01: Live Player Save Backward-Compatibility & Forward Migr
     expect(decoded.totalStars).toBe(795);
     expect(decoded.starReliquaryLevel).toBe(775);
     expect(decoded.economyVersion).toBe(2);
-    expect(decoded.boosters).toEqual({ UNDO: 11, FREEZE: 6, HAMMER: 4, ROCKET: 3, VACUUM: 2 });
+    expect(decoded.boosters).toEqual({ UNDO: 11, HINT: 6, HAMMER: 4, ROCKET: 3, VACUUM: 2 });
     expect(decoded.unlockedSkins).toEqual(SKINS);
     expect(decoded.unlockedTrays).toEqual(TRAYS);
     expect(decoded.unlockedParticles).toEqual(PARTICLES);
@@ -265,9 +265,20 @@ describe('SAVE-COMPAT-01: Live Player Save Backward-Compatibility & Forward Migr
     expect(importedJson.economyVersion).toBe(2);
     expect(importedJson.starReliquaryLevel).toBe(75);
     expect(importedJson.equippedSkin).toBe('carved_wood');
-    expect(importedJson.boosters).toEqual({ UNDO: 5, FREEZE: 1, HAMMER: 0, ROCKET: 0, VACUUM: 0 });
+    expect(importedJson.boosters).toEqual({ UNDO: 5, HINT: 1, HAMMER: 0, ROCKET: 0, VACUUM: 0 });
     expect(importedJson.settings.colorblindSymbols).toBe(true);
     expect('futureTelemetryFieldV3' in importedJson).toBe(false);
+
+    // Round-trip newly saved `boosters.HINT` payload through `encodeSaveCode` / `decodeSaveCode` & JSON import
+    const roundTrippedCode = mgr.exportSaveCode();
+    expect(decodeSaveCode(roundTrippedCode).boosters).toEqual({
+      UNDO: 5,
+      HINT: 1,
+      HAMMER: 0,
+      ROCKET: 0,
+      VACUUM: 0,
+    });
+    expect(mgr.importSaveJson(mgr.exportSaveJson()).boosters.HINT).toBe(1);
 
     // 4. Append-only forward trailer tolerance: appending a hypothetical future `0xa6` trailer after `0xa5`
     const baseRaw = decompressFramedBytes(

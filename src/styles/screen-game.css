@@ -196,7 +196,7 @@
   font-weight: 700;
 }
 
-.moves-pill.moves-stasis {
+.moves-pill.moves-bonus {
   padding: 0.06rem 0.34rem;
   border-radius: var(--radius-xs);
   background: rgba(40, 181, 167, 0.24);

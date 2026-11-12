@@ -416,11 +416,11 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
 export function continueFailedLevelImpl(app: AppViewContext): void {
   const save = app.saveManager.getPayload();
   // Charge first: the +5 Moves / +20s are only granted once the 150-coin payment actually succeeds
-  if (save.coins < CONTINUE_COIN_COST || !app.saveManager.buyBoosterWithCoins('FREEZE', CONTINUE_COIN_COST)) {
+  if (save.coins < CONTINUE_COIN_COST || !app.saveManager.buyBoosterWithCoins('HINT', CONTINUE_COIN_COST)) {
     app.showGameToast(`Need ${CONTINUE_COIN_COST} Coins — or Retry, Zen Mode, or Skip for FREE!`);
     return;
   }
-  app.saveManager.spendBooster('FREEZE');
+  app.saveManager.spendBooster('HINT');
   app.board.continuesUsed = (app.board.continuesUsed ?? 0) + 1; // STARS-SLACK-01: caps this clear at 1★
   const playMode = save.settings.playMode;
   if (playMode === 'CHALLENGE') {
@@ -437,7 +437,7 @@ export function continueFailedLevelImpl(app: AppViewContext): void {
   app.levelOutcomeHandled = false;
   app.board.timerRunning = true;
   app.closeAllModals();
-  app.sound.playBooster('FREEZE');
+  app.sound.playBooster('HINT');
   app.syncInGameHud();
   app.renderNow();
 }

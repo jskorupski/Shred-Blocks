@@ -11,7 +11,7 @@ export type BoosterRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY
 
 export const BOOSTER_RARITY: Record<BoosterType, BoosterRarity> = {
   UNDO: 'COMMON',
-  FREEZE: 'UNCOMMON',
+  HINT: 'UNCOMMON',
   HAMMER: 'RARE',
   ROCKET: 'EPIC',
   VACUUM: 'LEGENDARY',
@@ -19,7 +19,7 @@ export const BOOSTER_RARITY: Record<BoosterType, BoosterRarity> = {
 
 export const BOOSTER_UNLOCK_LEVEL: Record<BoosterType, number> = {
   UNDO: 1,
-  FREEZE: 2,
+  HINT: 2,
   HAMMER: 8,
   ROCKET: 18,
   VACUUM: 30,
@@ -27,7 +27,7 @@ export const BOOSTER_UNLOCK_LEVEL: Record<BoosterType, number> = {
 
 export const BOOSTER_COIN_COSTS: Record<BoosterType, number> = {
   UNDO: 60,
-  FREEZE: 80,
+  HINT: 80,
   HAMMER: 140,
   ROCKET: 220,
   VACUUM: 350,
@@ -66,7 +66,7 @@ export function pickRarityWeightedBooster(
 
   const baseWeights: ReadonlyArray<{ type: BoosterType; shredWeight: number; mileWeight: number }> = [
     { type: 'UNDO', shredWeight: 42, mileWeight: 0 },
-    { type: 'FREEZE', shredWeight: 30, mileWeight: 38 },
+    { type: 'HINT', shredWeight: 30, mileWeight: 38 },
     { type: 'HAMMER', shredWeight: 16, mileWeight: 32 },
     { type: 'ROCKET', shredWeight: 8, mileWeight: 20 },
     { type: 'VACUUM', shredWeight: 4, mileWeight: 10 },
@@ -132,7 +132,7 @@ export function createDefaultSavePayload(): SavePayloadV1 {
     economyVersion: 2,
     boosters: {
       UNDO: 3,
-      FREEZE: 2,
+      HINT: 2,
       HAMMER: 1,
       ROCKET: 1,
       VACUUM: 1,

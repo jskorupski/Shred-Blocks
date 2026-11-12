@@ -266,7 +266,7 @@ async function runVisualHarness(): Promise<void> {
     await mobilePage.locator('#level-jump-input').fill('2');
     await mobilePage.locator('#btn-level-jump').click();
     await mobilePage.waitForTimeout(100);
-    await mobilePage.locator('#btn-booster-freeze').click();
+    await mobilePage.locator('#btn-booster-hint').click();
     await mobilePage.waitForTimeout(80);
     const dragPts = await mobilePage.evaluate(() => {
       const start = window.__SHREDBLOCKS_DEBUG__.boardToScreen(3.5, 2.5);

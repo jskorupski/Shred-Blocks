@@ -377,7 +377,8 @@ function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
     economyVersion: clampNum(obj.economyVersion, 1, 10, 1),
     boosters: {
       UNDO: clampNum(b.UNDO, 0, MAX_SAVE_COUNTER, 0),
-      FREEZE: clampNum(b.FREEZE, 0, MAX_SAVE_COUNTER, 0),
+      // SAVE-COMPAT-01: Migrate legacy `boosters.FREEZE` JSON payloads seamlessly to `boosters.HINT`
+      HINT: clampNum(b.HINT ?? b.FREEZE, 0, MAX_SAVE_COUNTER, 0),
       HAMMER: clampNum(b.HAMMER, 0, MAX_SAVE_COUNTER, 0),
       ROCKET: clampNum(b.ROCKET, 0, MAX_SAVE_COUNTER, 0),
       VACUUM: clampNum(b.VACUUM, 0, MAX_SAVE_COUNTER, 0),
@@ -434,7 +435,7 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
 
   const b = payload.boosters;
   writeVarint(out, b.UNDO || 0);
-  writeVarint(out, b.FREEZE || 0);
+  writeVarint(out, b.HINT || 0);
   writeVarint(out, b.HAMMER || 0);
   writeVarint(out, b.ROCKET || 0);
   writeVarint(out, b.VACUUM || 0);
@@ -567,7 +568,7 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
 
   const boosters = {
     UNDO: readVarint(),
-    FREEZE: readVarint(),
+    HINT: readVarint(),
     HAMMER: readVarint(),
     ROCKET: readVarint(),
     VACUUM: readVarint(),

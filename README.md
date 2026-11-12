@@ -31,7 +31,7 @@
   - **Zen**: Untimed, unlimited-move play—always one tap away if you want a relaxed pace.
   - **Timed Rush**: An arcade countdown mode for speedrunners.
 - **18 Gradual Mechanics**: Introduces new spatial twists across the campaign, including axis-locked rails, multi-layer blocks, ice blocks & frozen gates, star gates, keys & locks, wooden crates, time-bombs, glued block groups, ropes & scissors, dynamic shutters, block generators, colored floor paths, and moving elevators.
-- **Power-Ups & Themes Studio**: Earn coins through normal play and milestone chests to stock 5 optional boosters (*Undo*, *Stasis / Hint*, *Hammer*, *Row/Col Rocket*, *Color Vacuum*) and unlock 15 cosmetic **Block Skins**, **Board Trays**, and **Particle Styles**.
+- **Power-Ups & Themes Studio**: Earn coins through normal play and milestone chests to stock 5 optional boosters (*Undo*, *Hint*, *Hammer*, *Row/Col Rocket*, *Color Vacuum*) and unlock 15 cosmetic **Block Skins**, **Board Trays**, and **Particle Styles**.
 - **Player-Friendly & Accessible**: Unlimited lives, 3 free undos per attempt, free level skip anytime, colorblind symbol badges, high-contrast palettes, full keyboard navigation, and reduced-motion mode.
 - **Offline PWA & Account-Free Sync**: Installs to iOS, Android, or Desktop home screens and runs offline after the first visit. Transfer progress across devices without an account using a compact Save Code, shareable Sync Link, offline QR Code, or JSON backup.
 

@@ -252,7 +252,7 @@ export const COLOR_PALETTE: Record<ColorId, ColorThemeEntry> = {
 export type AxisLock = 'NONE' | 'H' | 'V';
 export type EdgeDir = 'TOP' | 'RIGHT' | 'BOTTOM' | 'LEFT';
 export type PlayMode = 'CHALLENGE' | 'ZEN' | 'TIMED';
-export type BoosterType = 'UNDO' | 'FREEZE' | 'HAMMER' | 'ROCKET' | 'VACUUM';
+export type BoosterType = 'UNDO' | 'HINT' | 'HAMMER' | 'ROCKET' | 'VACUUM';
 export type InputMode = 'DRAG' | 'TARGET_HAMMER' | 'TARGET_ROCKET' | 'TARGET_VACUUM';
 export type RocketAxis = 'ROW' | 'COL';
 export type QualityTier = 'AUTO' | 'ULTRA_120' | 'BALANCED_60';
@@ -451,7 +451,7 @@ export interface BoardState {
   parMoves: number;
   moveLimit: number;
   movesRemaining: number;
-  stasisMovesRemaining: number;
+  freeMovesRemaining: number;
   lastMovedBlockId: number;
   timeLimitSec: number;
   timeRemainingSec: number;

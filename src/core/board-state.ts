@@ -300,7 +300,7 @@ export function createBoardState(spec: LevelSpec): BoardState {
     parMoves,
     moveLimit,
     movesRemaining: moveLimit,
-    stasisMovesRemaining: 0,
+    freeMovesRemaining: 0,
     lastMovedBlockId: 0,
     timeLimitSec,
     timeRemainingSec: timeLimitSec,
@@ -343,13 +343,13 @@ export function computeDefaultMoveLimit(
  * Undo Resource Integrity (`UNDO-RES-01`): when an Undo restores an older snapshot, carry forward the live
  * resources the player already paid for or that must never rewind:
  * - `TIMED`: the countdown (`timeRemainingSec`) and clock-driven bomb fuses (`TIMED-BOMB-01`) never wind back.
- * - `FREEZE`: purchased Stasis Moves (`max`, so undoing a stasis move refunds it) and freeze seconds persist.
+ * - `HINT`: purchased Free Moves (`max`, so undoing a bonus free move refunds it) and freeze seconds persist.
  * - Paid Continues stay counted so Undo can't erase the `1★` cap; Zen's inert-bomb state (`bombsInert`) persists.
  */
 export function carryLiveResourcesIntoUndo(restored: BoardState, live: BoardState, playMode: PlayMode): void {
   restored.freezeRemainingSec = live.freezeRemainingSec;
   restored.bombsInert = live.bombsInert;
-  restored.stasisMovesRemaining = Math.max(restored.stasisMovesRemaining, live.stasisMovesRemaining);
+  restored.freeMovesRemaining = Math.max(restored.freeMovesRemaining, live.freeMovesRemaining);
   restored.continuesUsed = Math.max(restored.continuesUsed ?? 0, live.continuesUsed ?? 0);
   if (playMode === 'TIMED') {
     restored.timeRemainingSec = live.timeRemainingSec;
@@ -515,7 +515,7 @@ export function isBoardFailed(
   if (
     playMode === 'CHALLENGE' &&
     board.movesRemaining <= 0 &&
-    board.stasisMovesRemaining <= 0 &&
+    board.freeMovesRemaining <= 0 &&
     !hasFinalTouchGrace(board)
   ) {
     return { failed: true, reason: 'OUT_OF_MOVES' };

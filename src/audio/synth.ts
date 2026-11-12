@@ -515,7 +515,7 @@ export class SoundEngine {
   }
 
   /**
-   * 9. Booster Activation (Hammer, Rocket, Vacuum, Freeze, Undo):
+   * 9. Booster Activation (Hammer, Rocket, Vacuum, Hint, Undo):
    * Distinct procedural sound signature per booster.
    */
   public playBooster(type: BoosterType = 'HAMMER'): void {

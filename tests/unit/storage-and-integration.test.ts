@@ -400,40 +400,40 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
     it('enforces progressive power-up unlocking, 5 rarity tiers, and rarity-weighted chest drops (ECON-01..04)', () => {
       expect(BOOSTER_UNLOCK_LEVEL).toEqual({
         UNDO: 1,
-        FREEZE: 2,
+        HINT: 2,
         HAMMER: 8,
         ROCKET: 18,
         VACUUM: 30,
       });
       expect(BOOSTER_RARITY).toEqual({
         UNDO: 'COMMON',
-        FREEZE: 'UNCOMMON',
+        HINT: 'UNCOMMON',
         HAMMER: 'RARE',
         ROCKET: 'EPIC',
         VACUUM: 'LEGENDARY',
       });
-      expect(BOOSTER_COIN_COSTS.UNDO).toBeLessThan(BOOSTER_COIN_COSTS.FREEZE);
-      expect(BOOSTER_COIN_COSTS.FREEZE).toBeLessThan(BOOSTER_COIN_COSTS.HAMMER);
+      expect(BOOSTER_COIN_COSTS.UNDO).toBeLessThan(BOOSTER_COIN_COSTS.HINT);
+      expect(BOOSTER_COIN_COSTS.HINT).toBeLessThan(BOOSTER_COIN_COSTS.HAMMER);
       expect(BOOSTER_COIN_COSTS.HAMMER).toBeLessThan(BOOSTER_COIN_COSTS.ROCKET);
       expect(BOOSTER_COIN_COSTS.ROCKET).toBeLessThan(BOOSTER_COIN_COSTS.VACUUM);
 
       // Level 1: only UNDO is unlocked
       expect(isBoosterUnlocked('UNDO', 1)).toBe(true);
-      expect(isBoosterUnlocked('FREEZE', 1)).toBe(false);
+      expect(isBoosterUnlocked('HINT', 1)).toBe(false);
       expect(isBoosterUnlocked('HAMMER', 1)).toBe(false);
       expect(isBoosterUnlocked('ROCKET', 1)).toBe(false);
       expect(isBoosterUnlocked('VACUUM', 1)).toBe(false);
 
-      // Level 5: only UNDO and FREEZE are unlocked; chest drops never award locked boosters
+      // Level 5: only UNDO and HINT are unlocked; chest drops never award locked boosters
       for (let seed = 1; seed <= 100; seed++) {
         const drop = pickRarityWeightedBooster(seed, 5, false);
-        expect(['UNDO', 'FREEZE']).toContain(drop);
+        expect(['UNDO', 'HINT']).toContain(drop);
       }
 
-      // Level 12: UNDO, FREEZE, HAMMER unlocked; ROCKET and VACUUM never drop
+      // Level 12: UNDO, HINT, HAMMER unlocked; ROCKET and VACUUM never drop
       for (let seed = 1; seed <= 100; seed++) {
         const drop = pickRarityWeightedBooster(seed, 12, false);
-        expect(['UNDO', 'FREEZE', 'HAMMER']).toContain(drop);
+        expect(['UNDO', 'HINT', 'HAMMER']).toContain(drop);
       }
 
       // Milestone debuts: Level 10 milestone awards HAMMER, Level 20 awards ROCKET, Level 30 awards VACUUM
@@ -442,13 +442,13 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       expect(pickRarityWeightedBooster(42, 30, true)).toBe('VACUUM');
 
       // Level 50+: all 5 boosters unlocked, and COMMON/UNCOMMON drops outnumber EPIC/LEGENDARY
-      const counts = { UNDO: 0, FREEZE: 0, HAMMER: 0, ROCKET: 0, VACUUM: 0 };
+      const counts = { UNDO: 0, HINT: 0, HAMMER: 0, ROCKET: 0, VACUUM: 0 };
       for (let seed = 0; seed < 1000; seed++) {
         const b = pickRarityWeightedBooster(seed, 50, false);
         counts[b]++;
       }
       expect(counts.UNDO).toBeGreaterThan(counts.HAMMER);
-      expect(counts.FREEZE).toBeGreaterThan(counts.ROCKET);
+      expect(counts.HINT).toBeGreaterThan(counts.ROCKET);
       expect(counts.HAMMER).toBeGreaterThan(counts.VACUUM);
       expect(counts.VACUUM).toBeGreaterThan(0);
     });

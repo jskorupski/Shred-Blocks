@@ -276,7 +276,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.evaluate(() => {
       window.__SHREDBLOCKS_DEBUG__.patchSave({
         highestLevelUnlocked: 45,
-        boosters: { UNDO: 3, FREEZE: 3, HAMMER: 3, ROCKET: 2, VACUUM: 2 },
+        boosters: { UNDO: 3, HINT: 3, HAMMER: 3, ROCKET: 2, VACUUM: 2 },
       });
     });
     await page.locator('#btn-title-play').click();
@@ -356,15 +356,15 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#booster-target-banner')).toBeHidden();
     await expect(page.locator('#badge-booster-vacuum')).toHaveText('1');
 
-    // 4. Test Stasis + Hint in Challenge Mode, then cycle CHAL -> ZEN -> TIMED and Freeze clock
-    await page.locator('#btn-booster-freeze').click();
+    // 4. Test Hint (+2 Free Moves) in Challenge Mode, then cycle CHAL -> ZEN -> TIMED and Freeze clock
+    await page.locator('#btn-booster-hint').click();
     expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().hintMove !== null)).toBe(true);
-    await expect(page.locator('#hud-moves-pill')).toContainText('❄️×2');
+    await expect(page.locator('#hud-moves-pill')).toContainText('+2 Free');
     await page.locator('#btn-mode-toggle').click();
     await page.locator('#btn-mode-toggle').click();
     await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
     await expect(page.locator('#hud-timer-pill')).toBeVisible();
-    await page.locator('#btn-booster-freeze').click();
+    await page.locator('#btn-booster-hint').click();
     await expect(page.locator('#hud-timer-pill')).toContainText('❄️');
 
     expect(errors).toEqual([]);

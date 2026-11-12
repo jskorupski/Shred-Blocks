@@ -43,7 +43,7 @@ export interface CommitMoveOutcome {
  * - Enforces **Touch-Move Coalescing** (`allowCoalesce = true`): consecutive non-shredding
  *   repositions of the same `lead.id` (or finishing that block's drag into its gate) coalesce
  *   into 1 move tick so players aren't penalized for micro-adjustments.
- * - Honors `stasisMovesRemaining` (`FREEZE` booster in `CHALLENGE` / `ZEN` modes) before
+ * - Honors `freeMovesRemaining` (`HINT` booster in `CHALLENGE` / `ZEN` modes) before
  *   decrementing `movesRemaining` (`CHALLENGE`) or Bomb counters (`CHALLENGE`; inert in Zen via `bombsInert`).
  * - `FINAL-TOUCH-01`: at `0` moves in `CHALLENGE`, rejects every move except a coalesced finish of `lastMovedBlockId`.
  */
@@ -76,7 +76,7 @@ export function commitBlockMove(
   const dCol = targetCol - lead.col;
 
   // FINAL-TOUCH-01: with 0 moves left in CHALLENGE, only a free coalesced finish of the last-moved block is allowed
-  const outOfMoves = playMode === 'CHALLENGE' && board.movesRemaining <= 0 && board.stasisMovesRemaining <= 0;
+  const outOfMoves = playMode === 'CHALLENGE' && board.movesRemaining <= 0 && board.freeMovesRemaining <= 0;
   const isFinishingLastBlock =
     allowCoalesce && board.lastMovedBlockId > 0 && board.lastMovedBlockId === lead.id;
   if ((outOfMoves && !isFinishingLastBlock) || !canGroupOccupyOffset(board, group, dRow, dCol)) {
@@ -147,8 +147,8 @@ export function commitBlockMove(
 
     if (!wasCoalesced) {
       board.movesCommitted++;
-      if (board.stasisMovesRemaining > 0) {
-        board.stasisMovesRemaining--;
+      if (board.freeMovesRemaining > 0) {
+        board.freeMovesRemaining--;
       } else {
         if (playMode === 'CHALLENGE') {
           board.movesRemaining = Math.max(0, board.movesRemaining - 1);
@@ -187,12 +187,13 @@ export function commitBlockMove(
 }
 
 /**
- * Booster 2: Freeze / Stasis (`❄️`) —
- * - In `TIMED` (`RUSH`) mode: freezes the clock & bombs for `10s` + highlights `hintMove`.
- * - In `CHALLENGE` & `ZEN` modes: grants `+2` **Stasis Moves** (next 2 committed moves do not
- *   decrement `movesRemaining` or Bomb counters) + highlights `hintMove`.
+ * Booster 2: Hint (`💡`) —
+ * - Highlights `hintMove` (optimal next move on the board).
+ * - In `TIMED` (`RUSH`) mode: freezes the clock & bombs for `10s`.
+ * - In `CHALLENGE` & `ZEN` modes: grants `+2` **Free Moves** (next 2 committed moves do not
+ *   decrement `movesRemaining` or Bomb counters).
  */
-export function applyBoosterFreeze(
+export function applyBoosterHint(
   board: BoardState,
   playMode: PlayMode,
   hintMove?: BoardState['hintMove']
@@ -200,7 +201,7 @@ export function applyBoosterFreeze(
   if (playMode === 'TIMED') {
     board.freezeRemainingSec = Math.max(board.freezeRemainingSec, 10);
   } else {
-    board.stasisMovesRemaining += 2;
+    board.freeMovesRemaining += 2;
   }
   board.lastMovedBlockId = 0;
   if (hintMove !== undefined) {

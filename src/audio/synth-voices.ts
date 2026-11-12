@@ -93,8 +93,8 @@ export function playBoosterVoice(
       osc.start(now + idx * 0.02);
       osc.stop(now + 0.21);
     });
-  } else if (type === 'FREEZE') {
-    // Shimmering crystalline slow-down chime
+  } else if (type === 'HINT') {
+    // Shimmering crystalline insight chime
     const freqs = [1567.98, 1318.51, 1046.5, 783.99];
     freqs.forEach((f, idx) => {
       const t = now + idx * 0.035;

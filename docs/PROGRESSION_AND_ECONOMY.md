@@ -41,7 +41,7 @@ Every curated level (`1..300` in [`src/levels/catalog.ts`](../src/levels/catalog
 - **Slack-Scaled Stars (`STARS-SLACK-01`, `computeEarnedStars`)**:
   - `CHALLENGE`: `slack = moveLimit - parMoves`; `3★ <= par + floor(slack/3)`, `2★ <= par + floor(2*slack/3)`, else `1★`. `TIMED`: `3★ >= 28%` / `2★ >= 12%` time left. Any Continue (`continuesUsed > 0`) caps at `1★`.
 - **Undo & Stuck Detection (`F-08`, `UNDO-RES-01`, `STUCK-01`)**:
-  - 3 free Undos per level + accidental restart recovery (`preRestartSnapshot`, forfeited only on a real committed move). `carryLiveResourcesIntoUndo` carries forward live clock, fuses, Stasis, freeze seconds, and `continuesUsed`. Executing `HAMMER`, `ROCKET`, or `VACUUM` clears `undoStack`.
+  - 3 free Undos per level + accidental restart recovery (`preRestartSnapshot`, forfeited only on a real committed move). `carryLiveResourcesIntoUndo` carries forward live clock, fuses, Free Moves, freeze seconds, and `continuesUsed`. Executing `HAMMER`, `ROCKET`, or `VACUUM` clears `undoStack`.
   - Idle `scheduleStuckBoardCheckImpl` warns only when gridlocked or `solveBoard` sets `searchExhausted === true` without a solution (never on search-budget timeouts).
 
 ---
@@ -49,7 +49,7 @@ Every curated level (`1..300` in [`src/levels/catalog.ts`](../src/levels/catalog
 ## 3. Economy v2, Power-Ups & Scarcity (`ECON-01`–`04`, `ECON-V2`)
 
 - **5 Progressive Power-Ups** (`120` starter coins + `1` unit each on `economyVersion: 2`):
-  - `UNDO` (`COMMON`, Lvl 1, `60c`), `FREEZE` (`UNCOMMON`, Lvl 2, `80c` — grants **`+2` Stasis Moves** pausing `movesRemaining` & Bombs + `hintMove` in `CHALLENGE`/`ZEN`, or `+10s` clock/bomb freeze + `hintMove` in `TIMED`), `HAMMER` (`RARE`, Lvl 8, `140c`), `ROCKET` (`EPIC`, Lvl 18, `220c`), `VACUUM` (`LEGENDARY`, Lvl 30, `350c`). Charge boosters/Continues before (or roll back with) their effect.
+  - `UNDO` (`COMMON`, Lvl 1, `60c`), `HINT` (`UNCOMMON`, Lvl 2, `80c` — highlights `hintMove` + grants **`+2` Free Moves** pausing `movesRemaining` & Bombs in `CHALLENGE`/`ZEN`, or `+10s` clock/bomb freeze + `hintMove` in `TIMED`), `HAMMER` (`RARE`, Lvl 8, `140c`), `ROCKET` (`EPIC`, Lvl 18, `220c`), `VACUUM` (`LEGENDARY`, Lvl 30, `350c`). Charge boosters/Continues before (or roll back with) their effect.
 - **Payouts, Chests & Pricing**:
   - First Gold clear: `15 / 25 / 40c` (`NORMAL / HARD / SUPER_HARD`; `20%` min `3c` replay) + `+5c` per new Gold Star + **Flow Streak** (`+5..+25c`). Zen clear: `+10c` first (`+2c` replay).
   - Rarity-weighted chests (`pickRarityWeightedBooster`): **Shredder** (`+50c + 1 Booster` / `100` blocks), **Milestone** (`+75c + 1 Booster` / `10` levels), **25-Star Reliquary** (`+90c + 1 Booster` / `25` Gold Stars).

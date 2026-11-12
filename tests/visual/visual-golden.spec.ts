@@ -34,7 +34,7 @@ function buildSave(levelId: number, tray: TrayId, skin: SkinId, extra: Record<st
     milestoneChestLevel: 20,
     starReliquaryLevel: 25,
     economyVersion: 2,
-    boosters: { UNDO: 3, FREEZE: 2, HAMMER: 1, ROCKET: 1, VACUUM: 1 },
+    boosters: { UNDO: 3, HINT: 2, HAMMER: 1, ROCKET: 1, VACUUM: 1 },
     unlockedSkins: ['classic_studs', 'relic_stone', 'gummy_jelly', 'carved_wood', 'neon_cyber'],
     unlockedTrays: ['industrial_slate', 'warm_birch', 'midnight_arcade', 'frosted_quartz', 'mint_studio'],
     unlockedParticles: ['micro_cubes', 'star_confetti', 'pixel_sparks', 'soap_bubbles', 'lightning_bolts'],

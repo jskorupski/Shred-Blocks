@@ -1,6 +1,6 @@
 import {
-  applyBoosterFreeze,
   applyBoosterHammer,
+  applyBoosterHint,
   applyBoosterRocket,
   applyBoosterVacuum,
   carryLiveResourcesIntoUndo,
@@ -32,18 +32,19 @@ function canAffordBooster(app: BoosterAppContext, type: BoosterType): boolean {
   if (app.saveManager.getBoosterCount(type) > 0) return true;
   const price = UI_BOOSTER_PRICES[type];
   if (app.saveManager.getPayload().coins >= price) return true;
-  app.showGameToast(`Need ${price} Coins for ${type} booster!`);
+  app.showGameToast(`Need ${price} Coins for ${BOOSTER_DISPLAY_NAMES[type]}!`);
   return false;
 }
 
 function ensureBoosterAvailable(app: BoosterAppContext, type: BoosterType): boolean {
   if (app.saveManager.getBoosterCount(type) > 0) return true;
   const price = UI_BOOSTER_PRICES[type];
+  const displayName = BOOSTER_DISPLAY_NAMES[type];
   if (app.saveManager.buyBoosterWithCoins(type, price)) {
-    app.showGameToast(`Purchased ${type} booster for ${price} Coins!`);
+    app.showGameToast(`Purchased ${displayName} for ${price} Coins!`);
     return true;
   }
-  app.showGameToast(`Need ${price} Coins for ${type} booster!`);
+  app.showGameToast(`Need ${price} Coins for ${displayName}!`);
   return false;
 }
 
@@ -63,8 +64,8 @@ export function activateBoosterImpl(app: BoosterAppContext, type: BoosterType): 
     executeUndoBoosterImpl(app);
     return;
   }
-  if (type === 'FREEZE') {
-    executeHintOrFreezeBoosterImpl(app);
+  if (type === 'HINT') {
+    executeHintBoosterImpl(app);
     return;
   }
 
@@ -131,26 +132,28 @@ function executeUndoBoosterImpl(app: BoosterAppContext): void {
   app.renderNow();
 }
 
-function executeHintOrFreezeBoosterImpl(app: BoosterAppContext): void {
+function executeHintBoosterImpl(app: BoosterAppContext): void {
   const playMode = app.saveManager.getPayload().settings.playMode;
-  if (!canAffordBooster(app, 'FREEZE')) return;
+  if (!canAffordBooster(app, 'HINT')) return;
 
   const hint = findNextHintMove(app.board);
   if (playMode === 'ZEN' && !hint) {
     app.showGameToast('💡 No hint needed right now!');
     return;
   }
-  if (!ensureBoosterAvailable(app, 'FREEZE')) return;
-  app.saveManager.spendBooster('FREEZE');
-  applyBoosterFreeze(app.board, playMode, hint);
-  app.sound.playBooster('FREEZE');
+  if (!ensureBoosterAvailable(app, 'HINT')) return;
+  app.saveManager.spendBooster('HINT');
+  applyBoosterHint(app.board, playMode, hint);
+  app.sound.playBooster('HINT');
   app.showGameToast(
     playMode === 'CHALLENGE'
       ? hint
-        ? '❄️ +2 Stasis Moves & Optimal Hint!'
-        : '❄️ +2 Stasis Moves Activated!'
+        ? '💡 Hint + 2 Free Moves!'
+        : '💡 +2 Free Moves Activated!'
       : playMode === 'TIMED'
-        ? '❄️ Timer & Bombs Frozen for +10s!'
+        ? hint
+          ? '💡 Hint + 10s Clock Freeze!'
+          : '❄️ Timer & Bombs Frozen for +10s!'
         : '💡 Optimal next move highlighted on the board!'
   );
   app.syncInGameHud();

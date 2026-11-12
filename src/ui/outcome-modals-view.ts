@@ -178,7 +178,7 @@ export function handleLevelFailureImpl(
  */
 export function notifyFinalTouchImpl(app: AppViewContext, moved: boolean): void {
   if (app.levelOutcomeHandled || app.saveManager.getPayload().settings.playMode !== 'CHALLENGE') return;
-  if (app.board.movesRemaining > 0 || app.board.stasisMovesRemaining > 0 || !hasFinalTouchGrace(app.board))
+  if (app.board.movesRemaining > 0 || app.board.freeMovesRemaining > 0 || !hasFinalTouchGrace(app.board))
     return;
   app.showGameToast(
     moved

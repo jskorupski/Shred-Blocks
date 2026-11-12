@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  applyBoosterFreeze,
   applyBoosterHammer,
+  applyBoosterHint,
   carryLiveResourcesIntoUndo,
   commitBlockMove,
   computeDefaultMoveLimit,
@@ -52,7 +52,7 @@ function createMemoryStorage(): Storage {
   };
 }
 
-describe('Challenge Mode, Touch-Move Coalescing, Stasis, Authentic L26+ Rules & Economy v2', () => {
+describe('Challenge Mode, Touch-Move Coalescing, Hint Free Moves, Authentic L26+ Rules & Economy v2', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', createMemoryStorage());
   });
@@ -106,10 +106,10 @@ describe('Challenge Mode, Touch-Move Coalescing, Stasis, Authentic L26+ Rules & 
     expect(isBoardFailed(failBoard, 'ZEN')).toEqual({ failed: false, reason: null });
   });
 
-  it('coalesces consecutive adjustments of the same block into 1 move tick and honors +2 Stasis Moves', () => {
+  it('coalesces consecutive adjustments of the same block into 1 move tick and honors +2 Free Moves from Hint', () => {
     const spec: LevelSpec = {
       id: 42,
-      name: 'Coalesce & Stasis Test',
+      name: 'Coalesce & Free Moves Test',
       difficulty: 'NORMAL',
       rows: 5,
       cols: 5,
@@ -148,27 +148,27 @@ describe('Challenge Mode, Touch-Move Coalescing, Stasis, Authentic L26+ Rules & 
     expect(board.movesRemaining).toBe(5);
     expect(board.lastMovedBlockId).toBe(0);
 
-    // Activate FREEZE in CHALLENGE mode -> grants +2 Stasis Moves!
+    // Activate HINT in CHALLENGE mode -> highlights hintMove + grants +2 Free Moves!
     expect(
-      applyBoosterFreeze(board, 'CHALLENGE', {
+      applyBoosterHint(board, 'CHALLENGE', {
         blockId: 2,
         targetRow: 4,
         targetCol: 2,
         exitsGateIndex: 1,
       })
     ).toBe(true);
-    expect(board.stasisMovesRemaining).toBe(2);
+    expect(board.freeMovesRemaining).toBe(2);
     expect(board.hintMove?.blockId).toBe(2);
 
-    // Move 1 under Stasis (allowCoalesce=false to force 2 distinct ticks): consumes 1 stasis, 0 moves, 0 bomb ticks!
+    // Move 1 under Free Moves (allowCoalesce=false to force 2 distinct ticks): consumes 1 free move, 0 moves, 0 bomb ticks!
     commitBlockMove(board, 2, 2, 1, 'CHALLENGE', 0, 0, false);
-    expect(board.stasisMovesRemaining).toBe(1);
+    expect(board.freeMovesRemaining).toBe(1);
     expect(board.movesRemaining).toBe(5);
     expect(board.blocks[1].bombCount).toBe(4);
 
-    // Move 2 under Stasis: consumes final stasis, still 5 moves remaining and bomb at 4!
+    // Move 2 under Free Moves: consumes final free move, still 5 moves remaining and bomb at 4!
     commitBlockMove(board, 2, 3, 1, 'CHALLENGE', 0, 0, false);
-    expect(board.stasisMovesRemaining).toBe(0);
+    expect(board.freeMovesRemaining).toBe(0);
     expect(board.movesRemaining).toBe(5);
     expect(board.blocks[1].bombCount).toBe(4);
 
@@ -259,7 +259,7 @@ describe('Challenge Mode, Touch-Move Coalescing, Stasis, Authentic L26+ Rules & 
     expect(defaults.coins).toBe(120);
     expect(defaults.boosters).toEqual({
       UNDO: 3,
-      FREEZE: 2,
+      HINT: 2,
       HAMMER: 1,
       ROCKET: 1,
       VACUUM: 1,
@@ -371,17 +371,17 @@ describe('Challenge Mode, Touch-Move Coalescing, Stasis, Authentic L26+ Rules & 
     board.timeRemainingSec = 59;
     expect(computeEarnedStars(board, 'TIMED', false)).toBe(1);
 
-    // 2. Undo never rewinds the TIMED clock/fuses and never deletes purchased stasis or Continue caps
+    // 2. Undo never rewinds the TIMED clock/fuses and never deletes purchased Free Moves or Continue caps
     const restored = createBoardState(getLevelSpec(1));
     const live = createBoardState(getLevelSpec(1));
     restored.timeRemainingSec = 80;
     live.timeRemainingSec = 41;
-    live.stasisMovesRemaining = 2;
+    live.freeMovesRemaining = 2;
     live.freezeRemainingSec = 6;
     live.continuesUsed = 1;
     carryLiveResourcesIntoUndo(restored, live, 'TIMED');
     expect(restored.timeRemainingSec).toBe(41);
-    expect(restored.stasisMovesRemaining).toBe(2);
+    expect(restored.freeMovesRemaining).toBe(2);
     expect(restored.freezeRemainingSec).toBe(6);
     expect(restored.continuesUsed).toBe(1);
     const challengeRestored = createBoardState(getLevelSpec(1));

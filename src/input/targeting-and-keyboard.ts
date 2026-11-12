@@ -65,7 +65,7 @@ export interface BoardInputCallbacks {
   /** Called when a targeted booster (Hammer, Rocket, Vacuum) is executed on a valid target */
   onExecuteBooster?: (type: BoosterType, target: BoosterTargetPayload) => boolean;
   /** Called when a keyboard shortcut triggers a quick action or booster slot 1..5 */
-  onShortcutAction?: (action: 'UNDO' | 'RESTART' | 'FREEZE' | 'HAMMER' | 'ROCKET' | 'VACUUM') => void;
+  onShortcutAction?: (action: 'UNDO' | 'RESTART' | 'HINT' | 'HAMMER' | 'ROCKET' | 'VACUUM') => void;
   /** Called whenever hover/selection/targeting state changes */
   onHoverChanged?: (state: HoverState) => void;
   /** Optional guard returning whether keyboard/pointer board controls are currently active */
@@ -419,7 +419,7 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
     callbacks.onShortcutAction?.('RESTART');
   } else if (key === '2') {
     e.preventDefault();
-    callbacks.onShortcutAction?.('FREEZE');
+    callbacks.onShortcutAction?.('HINT');
   } else if (key === '3') {
     e.preventDefault();
     callbacks.onShortcutAction?.('HAMMER');

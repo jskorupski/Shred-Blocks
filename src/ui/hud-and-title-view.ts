@@ -342,9 +342,9 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   }
   if (movesPill) {
     if (playMode === 'CHALLENGE') {
-      if (app.board.stasisMovesRemaining > 0) {
-        movesPill.textContent = `Moves Left: ${app.board.movesRemaining} · ❄️×${app.board.stasisMovesRemaining}`;
-        movesPill.className = 'tabular-metric moves-pill moves-stasis';
+      if (app.board.freeMovesRemaining > 0) {
+        movesPill.textContent = `Moves Left: ${app.board.movesRemaining} (+${app.board.freeMovesRemaining} Free)`;
+        movesPill.className = 'tabular-metric moves-pill moves-bonus';
       } else {
         movesPill.textContent = `Moves Left: ${app.board.movesRemaining}`;
         movesPill.className =
@@ -363,15 +363,6 @@ export function syncInGameHudImpl(app: AppViewContext): void {
     timerPill.hidden = playMode !== 'TIMED';
   }
   app.syncTimerPillOnly();
-
-  const svgHint = document.getElementById('svg-booster-hint');
-  const svgFreeze = document.getElementById('svg-booster-freeze');
-  const freezeLabel = document.getElementById('label-booster-freeze');
-  if (svgHint) svgHint.toggleAttribute('hidden', playMode !== 'ZEN');
-  if (svgFreeze) svgFreeze.toggleAttribute('hidden', playMode === 'ZEN');
-  if (freezeLabel) {
-    freezeLabel.textContent = playMode === 'CHALLENGE' ? 'Stasis' : playMode === 'TIMED' ? 'Freeze' : 'Hint';
-  }
 
   // Boosters Dock Badges, Rarity Accents & Progressive Level Unlocking (ECON-01 / ECON-02)
   const effectiveLevel = Math.max(app.board.levelId, save.highestLevelUnlocked);
@@ -420,7 +411,7 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   };
 
   syncBoosterSlot('btn-booster-undo', 'badge-booster-undo', 'UNDO');
-  syncBoosterSlot('btn-booster-freeze', 'badge-booster-freeze', 'FREEZE');
+  syncBoosterSlot('btn-booster-hint', 'badge-booster-hint', 'HINT');
   syncBoosterSlot('btn-booster-hammer', 'badge-booster-hammer', 'HAMMER');
   syncBoosterSlot('btn-booster-rocket', 'badge-booster-rocket', 'ROCKET');
   syncBoosterSlot('btn-booster-vacuum', 'badge-booster-vacuum', 'VACUUM');
