@@ -403,6 +403,8 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
     },
     freezeTime: (timeSec: number | null) => app.freezeTime(timeSec),
     advanceFrozenFrames: (frames: number, dtSec = 1 / 60) => app.advanceFrozenFrames(frames, dtSec),
+    getHoverState: () => app.inputController.getHoverState(),
+    getActivePathTraceCount: () => app.renderer.activePathTraces.length,
     setFxRandomSeed: (seed: number | null) => setFxRandomSeed(seed),
     boardToScreen: (boardX: number, boardY: number) => {
       const rect = app.renderer.canvas.getBoundingClientRect();

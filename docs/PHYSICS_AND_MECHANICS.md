@@ -45,6 +45,8 @@ On-demand reference for **3D camera/grid math**, **swept polyomino physics**, **
   - `pickBlockAtBoardPoint` checks `getSealedVaultAtCell` before the `0.22`-cell halo fallback so sealed vaults never leak concealed hits (`onLockedVaultTap` shows `"🔒 Sealed Mystery Vault: Shred N more blocks to reveal hidden blocks!"`).
   - While `bar.isVault && !bar.open`, `rebuildOccupancyGrid` preserves `-3` (`BARRIER`) across `bar.cells` and skips concealed blocks (`isBlockInSealedVault`).
   - `pointercancel`, `window.blur`, or `visibilitychange` cleanly snaps active drags (and glued `groupId` partners) to the last valid integer cell (`snapActiveDragToGridAndEnd`).
+  - **Rocket Booster Aiming (`ROCKET-AIM-01`)**: Activating `ROCKET` starts unhighlighted (`hoverRow = -1, hoverCol = -1`) until hovered/pressed; supports desktop hover + click, mobile press-slide-release preview + drag-off-board cancel (`0` Rockets spent), and keyboard Arrow/WASD aim + `X`/`Space` axis toggle + `Enter` fire.
+  - **Origin Ghost & Post-Commit Motion-Blur Corridor (`ORIGIN-GHOST-01`, `MYSTIC-TRACE-01`)**: Live drags track `dragLeftOrigin` so returning onto `(startRow, startCol)` cancels cleanly (`0` moves spent). `buildCommittedMoveTrace` emits a trace **only** after a piece shreds/peels or commits to a different cell (`endRow !== startRow || endCol !== startCol`), using obstacle-safe swept diagonal string-pulling so open diagonal glides sweep in `1` smooth corridor without stair-step turns.
 
 ---
 

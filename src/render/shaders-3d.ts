@@ -30,6 +30,8 @@ uniform vec3 u_stoneTint;
 uniform int u_trayMaterial; // TRAY-IDENTITY-01: 0 slate, 1 birch planks, 2 obsidian grid, 3 frost crystal, 4 jade terrazzo
 uniform float u_blockSeed; // BLOCK-STONE-01: integer per-block seed (offsets the rune/chip cell grid) // subtle mineral tint multiplier from equipped tray + skin
 uniform int u_highContrast;
+uniform int u_traceCount;
+uniform vec4 u_tracePts[16]; // xy = board pos, z = 0..1 sub-curve progress, w = halfWidth
 
 out vec4 outColor;
 
@@ -46,6 +48,76 @@ void main() {
       outColor = vec4(u_capColor, u_color.a);
       return;
     }
+  }
+
+  if (u_materialStyle == 8) {
+    // MYSTIC-TRACE-01: Single-quad analytic tapered capsule-curve motion blur (2 flat triangles = zero polygon overlap lines!)
+    if (u_traceCount < 2) {
+      discard;
+    }
+    vec2 p = v_worldPos.xy;
+    int segCount = min(u_traceCount - 1, 15);
+    float span = max(u_tracePts[segCount].z, 0.08);
+    // Distance-adaptive tail taper: short moves narrow/fade over a short distance (~0.68 cells on a 1-cell nudge),
+    // while longer sweeps narrow/fade gracefully over up to ~2.35 cells.
+    float taperLen = min(span * 0.84, max(0.42, min(span * 0.68, 2.35)));
+    float tailBaseHw = u_tracePts[0].w;
+    float tipMinScale = clamp(0.15 + max(0.0, tailBaseHw - taperLen * 0.85) * 0.28, 0.15, 0.48);
+
+    float segNormD[15];
+    float segArcS[15];
+    float dMin = 99.0;
+    for (int i = 0; i < 15; i++) {
+      if (i >= segCount) break;
+      vec4 a = u_tracePts[i];
+      vec4 b = u_tracePts[i + 1];
+      vec2 ab = b.xy - a.xy;
+      float segLen = sqrt(max(dot(ab, ab), 1e-5));
+      vec2 dir = ab / segLen;
+      float rawProj = dot(p - a.xy, dir);
+      float h = clamp(rawProj / segLen, 0.0, 1.0);
+      vec2 closest = a.xy + dir * (h * segLen);
+      float sClamped = mix(a.z, b.z, h);
+      float taperT = clamp(sClamped / max(taperLen, 1e-4), 0.0, 1.0);
+      float widthScale = mix(tipMinScale, 1.0, smoothstep(0.0, 1.0, pow(taperT, 0.66)));
+      float hw = max(mix(a.w, b.w, h) * widthScale, 0.06);
+      float nd = length(p - closest) / hw;
+      segNormD[i] = nd;
+      // Extend signed arc distance smoothly into segment 0's rounded tail tip so s=0 never cuts a flat perpendicular edge
+      segArcS[i] = (i == 0 && rawProj < 0.0) ? (a.z + rawProj) : sClamped;
+      dMin = min(dMin, nd);
+    }
+    if (dMin >= 1.0) {
+      discard;
+    }
+    float wSum = 0.0;
+    float sSum = 0.0;
+    for (int i = 0; i < 15; i++) {
+      if (i >= segCount) break;
+      float w = exp(-14.0 * (segNormD[i] - dMin));
+      wSum += w;
+      sSum += w * segArcS[i];
+    }
+    float smoothS = sSum / max(wSum, 1e-5);
+    float smoothU = clamp(smoothS / span, 0.0, 1.0);
+    float tailTipHw = max(tailBaseHw * tipMinScale, 0.06);
+    float tailT = clamp((smoothS + tailTipHw) / max(taperLen + tailTipHw, 1e-4), 0.0, 1.0);
+    // Near the head (tailT -> 1), keep a full block-width cushion; near the tail (tailT -> 0), round into a center-peaked plume
+    float innerPlateau = mix(0.0, 0.18, tailT);
+    float radialExp = mix(1.58, 0.92, tailT);
+    float crossProfile = pow(smoothstep(1.0, innerPlateau, dMin), radialExp);
+    float tailRise = pow(smoothstep(0.0, 1.0, tailT), 1.32);
+    float coreMix = smoothstep(0.78, 0.0, dMin) * tailRise * (0.42 + 0.58 * smoothU) * 0.64;
+    vec3 smearRgb = mix(u_color.rgb, u_capColor, coreMix);
+    if (u_blueprintMix > 0.001) {
+      smearRgb = mix(smearRgb, vec3(0.82, 0.72, 0.58), u_blueprintMix * 0.88);
+    }
+    float alpha = u_color.a * crossProfile * tailRise * mix(1.0, 0.52, u_blueprintMix);
+    if (alpha < 0.003) {
+      discard;
+    }
+    outColor = vec4(smearRgb, alpha);
+    return;
   }
 
   if (u_useTexture == 1) {

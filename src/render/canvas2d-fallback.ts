@@ -8,6 +8,7 @@ import {
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import { type BoardState, COLOR_PALETTE, type ColorId } from '../core/types';
 import { BLOCK_LIFT_DELTA_Z, BLOCK_TOP_Z } from './camera-3d';
+import { renderCanvas2DDragAndTrailFx } from './pass2-drag-fx';
 import { INSTANCE_STRIDE, type RenderPassContext, type RenderSceneOptions } from './render-types';
 
 /**
@@ -255,7 +256,8 @@ export function renderCanvas2DFallbackImpl(
     }
   }
 
-  // 5. Draw Target Reticles & Hint Ghost Outline
+  // 5. Draw Target Reticles, Origin Ghost Footprint, Mystic Path Traces & Hint Ghost Outline
+  renderCanvas2DDragAndTrailFx(rctx, ctx, board, options, project, fillCellPad, drawCenteredText);
   let draggedId = options.draggedBlockId ?? null;
   if (draggedId === null) {
     const lifted = board.blocks.find((b) => b.status === 'ACTIVE' && b.liftAlpha > 0.1);
@@ -277,12 +279,21 @@ export function renderCanvas2DFallbackImpl(
         dRow = 0;
         dCol = 0;
       }
+      const isReturnedHomeConfirm = Boolean(options.dragLeftOrigin) && dRow === 0 && dCol === 0;
       for (const b of group) {
         const shape = getShape(b.shapeId);
         const snapRow = b.row + dRow;
         const snapCol = b.col + dCol;
         for (const [dr, dc] of shape.cells) {
-          fillCellPad(snapCol + dc, snapRow + dr, 0.06, 0.015, 'rgba(255, 255, 255, 0.25)', '#FFFFFF');
+          fillCellPad(
+            snapCol + dc,
+            snapRow + dr,
+            0.06,
+            0.015,
+            isReturnedHomeConfirm ? 'rgba(254, 243, 199, 0.28)' : 'rgba(255, 255, 255, 0.25)',
+            isReturnedHomeConfirm ? '#FEF3C7' : '#FFFFFF',
+            isReturnedHomeConfirm ? 2.5 : undefined
+          );
         }
       }
     }

@@ -26,8 +26,18 @@ import {
 } from '../../src/core/physics';
 import { getActiveColor, getLayersRemaining, getShape, POLYOMINO_SHAPES } from '../../src/core/polyomino';
 import type { LevelSpec } from '../../src/core/types';
+import { buildCommittedMoveTrace } from '../../src/input/targeting-and-keyboard';
 import { getLevelSpec } from '../../src/levels/catalog';
 import { findNextHintMove } from '../../src/levels/solver';
+import {
+  buildTraceSegments,
+  getShapeAnchorCellOffset,
+  spawnPathTraceImpl,
+  stepPathTracesImpl,
+  type VisualPathTrace,
+} from '../../src/render/pass2-drag-fx';
+import { fillTraceUniformWindow, MAX_TRACE_UNIFORM_PTS } from '../../src/render/path-trace-ribbon';
+import { QualityGovernor, type RenderPassContext } from '../../src/render/render-types';
 
 describe('Polyomino Shape Catalog (37 Orientations)', () => {
   it('contains all 37 canonical polyomino orientations with accurate non-convex flags', () => {
@@ -619,5 +629,124 @@ describe('All 5 Boosters & Zero-Softlock Law', () => {
       }
     }
     expect(capturedGate2).toBe(1);
+  });
+
+  it('MYSTIC-TRACE-01 & ORIGIN-GHOST-01: simplifies L-turn & diagonal waypoints, picks occupied concave anchors, and honors reducedMotion & 0.50s lifetime', () => {
+    // 1. Every polyomino shape's anchor cell offset must lie inside an actually occupied cell (never an empty concave notch)
+    for (const shapeId of Object.keys(POLYOMINO_SHAPES)) {
+      const shape = getShape(shapeId);
+      const anchor = getShapeAnchorCellOffset(shape);
+      const cellR = Math.floor(anchor.y);
+      const cellC = Math.floor(anchor.x);
+      expect(shape.cells.some(([dr, dc]) => dr === cellR && dc === cellC)).toBe(true);
+    }
+
+    // 2. Collinear straight steps collapse to 1 GPU segment; 90-degree L-turns curve smoothly around corners via Quadratic Bezier filleting without clipping obstacle corners
+    const straight = buildTraceSegments([
+      { x: 1.5, y: 2.5 },
+      { x: 2.5, y: 2.5 },
+      { x: 3.5, y: 2.5 },
+      { x: 4.5, y: 2.5 },
+    ]);
+    expect(straight.segments).toHaveLength(1);
+    expect(straight.totalLength).toBeCloseTo(3.0, 4);
+
+    const lTurn = buildTraceSegments([
+      { x: 1.5, y: 3.5 },
+      { x: 2.5, y: 3.5 },
+      { x: 3.5, y: 3.5 },
+      { x: 3.5, y: 2.5 },
+      { x: 3.5, y: 1.5 },
+    ]);
+    expect(lTurn.segments).toHaveLength(6); // Entry leg + 4 smooth Bezier corner chords + exit leg
+    expect(lTurn.totalLength).toBeGreaterThan(3.6);
+    expect(lTurn.totalLength).toBeLessThan(4.0);
+    // Every curved vertex stays inside the open corridor (`x > 3.0` or `y > 3.0`), never cutting across obstacle cell `(row 2, col 2)` (`[2..3, 2..3]`)
+    for (const seg of lTurn.segments) {
+      expect(seg.x1 > 3.0 || seg.y1 > 3.0).toBe(true);
+    }
+
+    // 3. Committed shred trace extends outward into the exit gate, and open diagonal glides collapse stair-steps into 1 clean diagonal sweep
+    const board = createBoardState(getLevelSpec(1));
+    const shredTrace = buildCommittedMoveTrace(board, '1x2', 0, 1, 0, 1, 1, 0);
+    expect(shredTrace).not.toBeNull();
+    expect((shredTrace?.waypoints.length ?? 0) >= 2).toBe(true);
+
+    commitBlockMove(board, 1, 4, 0, 'CHALLENGE');
+    const diagTrace = buildCommittedMoveTrace(board, '1x2', 1, 1, 4, 0, 1, -1);
+    expect(diagTrace).not.toBeNull();
+    expect(diagTrace?.waypoints).toHaveLength(2);
+    // Returning to the starting cell without shredding emits no trace
+    expect(buildCommittedMoveTrace(board, '1x2', 4, 0, 4, 0, 1, -1)).toBeNull();
+
+    // Uniform window slices true arc distance `s` (0 at tail -> span at head) for move-length-adaptive comet-tail narrowing
+    const uniformBuf = new Float32Array(MAX_TRACE_UNIFORM_PTS * 4);
+    const sampleTrace: VisualPathTrace = {
+      segments: lTurn.segments,
+      totalLength: lTurn.totalLength,
+      colorId: 1,
+      z: 0,
+      age: 0.05,
+      maxAge: 0.5,
+    };
+    const win = fillTraceUniformWindow(sampleTrace, 0.4, 2.9, uniformBuf);
+    expect(win.pointCount).toBeGreaterThanOrEqual(3);
+    expect(uniformBuf[2]).toBeCloseTo(0, 4);
+    expect(uniformBuf[(win.pointCount - 1) * 4 + 2]).toBeCloseTo(2.5, 4);
+    expect(win.maxX - win.minX).toBeGreaterThan(1.5);
+    expect(win.maxY - win.minY).toBeGreaterThan(1.5);
+
+    // 4. Pool cap, 0.50s motion-blur decay, and complete reducedMotion suppression
+    const gov = new QualityGovernor();
+    gov.setPreference('ULTRA_120');
+    const activePathTraces: VisualPathTrace[] = [];
+    const mockCtx = {
+      qualityGovernor: gov,
+      activePathTraces,
+      lastOptions: { reducedMotion: false },
+    } as unknown as RenderPassContext;
+
+    for (let i = 0; i < 8; i++) {
+      spawnPathTraceImpl(
+        mockCtx,
+        [
+          { x: 0.5, y: 0.5 },
+          { x: 2.5, y: 0.5 },
+        ],
+        1,
+        0
+      );
+    }
+    expect(activePathTraces).toHaveLength(5);
+
+    stepPathTracesImpl(mockCtx, 0.25);
+    expect(activePathTraces).toHaveLength(5);
+    stepPathTracesImpl(mockCtx, 0.3); // 0.55s > 0.50s maxAge -> all expired cleanly
+    expect(activePathTraces).toHaveLength(0);
+
+    // Reduced motion blocks spawning AND clears in-flight traces immediately
+    spawnPathTraceImpl(
+      mockCtx,
+      [
+        { x: 0.5, y: 0.5 },
+        { x: 3.5, y: 0.5 },
+      ],
+      2,
+      0
+    );
+    expect(activePathTraces).toHaveLength(1);
+    mockCtx.lastOptions = { reducedMotion: true };
+    stepPathTracesImpl(mockCtx, 1 / 60);
+    expect(activePathTraces).toHaveLength(0);
+    spawnPathTraceImpl(
+      mockCtx,
+      [
+        { x: 0.5, y: 0.5 },
+        { x: 3.5, y: 0.5 },
+      ],
+      2,
+      0
+    );
+    expect(activePathTraces).toHaveLength(0);
   });
 });

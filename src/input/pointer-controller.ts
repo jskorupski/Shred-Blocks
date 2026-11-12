@@ -13,9 +13,12 @@ import {
   snapGroupToNearestGrid,
   sweepBlockToTarget,
 } from '../core/physics';
+import { getActiveColor, getShape } from '../core/polyomino';
 import type { BoardState, InputMode, RocketAxis } from '../core/types';
+import type { PathWaypoint } from '../render/pass2-drag-fx';
 import {
   type BoardInputCallbacks,
+  buildCommittedMoveTrace,
   executeBoosterTargetTap,
   type HoverState,
   handleBoardKeyDown,
@@ -30,6 +33,7 @@ export class BoardInputController {
   private readonly callbacks: BoardInputCallbacks;
 
   private activePointerId: number | null = null;
+  private targetingPointerId: number | null = null;
   private activeBlockId: number | null = null;
   private selectedBlockId: number | null = null;
 
@@ -38,6 +42,8 @@ export class BoardInputController {
   private hoverRow = -1;
   private hoverCol = -1;
   private hoverBlockId: number | null = null;
+  private dragLeftOrigin = false;
+  private dragWaypoints: PathWaypoint[] = [];
 
   private grabOffsetX = 0;
   private grabOffsetY = 0;
@@ -55,6 +61,7 @@ export class BoardInputController {
   private readonly onPointerMoveBound: (e: PointerEvent) => void;
   private readonly onPointerUpBound: (e: PointerEvent) => void;
   private readonly onPointerCancelBound: (e: PointerEvent) => void;
+  private readonly onPointerLeaveBound: () => void;
   private readonly onBlurBound: () => void;
   private readonly onVisibilityChangeBound: () => void;
   private readonly onKeyDownBound: (e: KeyboardEvent) => void;
@@ -67,6 +74,7 @@ export class BoardInputController {
     this.onPointerMoveBound = (e) => this.handlePointerMove(e);
     this.onPointerUpBound = (e) => this.handlePointerUp(e);
     this.onPointerCancelBound = (e) => this.handlePointerCancel(e);
+    this.onPointerLeaveBound = () => this.handlePointerLeave();
     this.onBlurBound = () => this.cancelActiveDrag();
     this.onVisibilityChangeBound = () => {
       if (typeof document !== 'undefined' && document.hidden) {
@@ -84,6 +92,7 @@ export class BoardInputController {
     this.canvas.addEventListener('pointerup', this.onPointerUpBound);
     this.canvas.addEventListener('pointercancel', this.onPointerCancelBound);
     this.canvas.addEventListener('lostpointercapture', this.onPointerCancelBound);
+    this.canvas.addEventListener('pointerleave', this.onPointerLeaveBound);
 
     if (typeof window !== 'undefined') {
       window.addEventListener('blur', this.onBlurBound);
@@ -101,6 +110,7 @@ export class BoardInputController {
     this.canvas.removeEventListener('pointerup', this.onPointerUpBound);
     this.canvas.removeEventListener('pointercancel', this.onPointerCancelBound);
     this.canvas.removeEventListener('lostpointercapture', this.onPointerCancelBound);
+    this.canvas.removeEventListener('pointerleave', this.onPointerLeaveBound);
 
     if (typeof window !== 'undefined') {
       window.removeEventListener('blur', this.onBlurBound);
@@ -120,6 +130,10 @@ export class BoardInputController {
     if (mode !== 'DRAG') {
       this.cancelActiveDrag();
     }
+    this.targetingPointerId = null;
+    this.hoverRow = -1;
+    this.hoverCol = -1;
+    this.hoverBlockId = null;
     this.inputMode = mode;
     this.emitHoverState();
   }
@@ -165,7 +179,18 @@ export class BoardInputController {
       rocketAxis: this.rocketAxis,
       selectedBlockId: this.selectedBlockId,
       activeBlockId: this.activeBlockId,
+      dragLeftOrigin: this.dragLeftOrigin,
     };
+  }
+
+  private handlePointerLeave(): void {
+    if (this.targetingPointerId !== null || this.activePointerId !== null) return;
+    if (this.hoverRow !== -1 || this.hoverCol !== -1 || this.hoverBlockId !== null) {
+      this.hoverRow = -1;
+      this.hoverCol = -1;
+      this.hoverBlockId = null;
+      this.emitHoverState();
+    }
   }
 
   private emitHoverState(): void {
@@ -201,15 +226,34 @@ export class BoardInputController {
   private handlePointerDown(e: PointerEvent): void {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
 
-    // UX-08 Single-Pointer Lock: ignore secondary pointers while a drag is active
-    if (this.activePointerId !== null) return;
+    // UX-08 Single-Pointer Lock: ignore secondary pointers while a drag or Rocket press-aim is active
+    if (this.activePointerId !== null || this.targetingPointerId !== null) return;
 
     const pt = this.clientToBoardCoords(e.clientX, e.clientY);
     if (!pt) return;
 
     const board = this.callbacks.getBoard();
 
-    // Handle Booster Targeting Modes (UX-04)
+    // Handle Booster Targeting Modes (UX-04): Rocket supports Press-Slide-to-Aim + Release-to-Fire!
+    if (this.inputMode === 'TARGET_ROCKET') {
+      const r = Math.floor(pt.y);
+      const c = Math.floor(pt.x);
+      if (r < 0 || r >= board.rows || c < 0 || c >= board.cols) {
+        this.setInputMode('DRAG');
+        return;
+      }
+      this.targetingPointerId = e.pointerId;
+      try {
+        this.canvas.setPointerCapture?.(e.pointerId);
+      } catch {
+        // Ignore in synthetic test dispatch
+      }
+      this.hoverRow = r;
+      this.hoverCol = c;
+      this.hoverBlockId = null;
+      this.emitHoverState();
+      return;
+    }
     if (this.inputMode !== 'DRAG') {
       this.handleBoosterTargetTap(board, pt.x, pt.y);
       return;
@@ -261,6 +305,9 @@ export class BoardInputController {
     this.lastTickCellRow = Math.round(picked.y);
 
     this.groupStartCoords.clear();
+    this.dragLeftOrigin = false;
+    const pickedShape = getShape(picked.shapeId);
+    this.dragWaypoints = [{ x: picked.col + pickedShape.cols * 0.5, y: picked.row + pickedShape.rows * 0.5 }];
     const group = getMovedGroupBlocks(board, picked.id);
     for (const b of group) {
       this.groupStartCoords.set(b.id, { row: b.row, col: b.col });
@@ -276,8 +323,11 @@ export class BoardInputController {
   private handlePointerMove(e: PointerEvent): void {
     const board = this.callbacks.getBoard();
 
-    // Update hover preview when not actively dragging
+    // Update hover or Rocket slide-aim preview when not actively dragging a block
     if (this.activePointerId === null || this.inputMode !== 'DRAG') {
+      if (this.targetingPointerId !== null && e.pointerId !== this.targetingPointerId) {
+        return;
+      }
       const pt = this.clientToBoardCoords(e.clientX, e.clientY);
       if (pt) {
         const r = Math.floor(pt.y);
@@ -289,9 +339,17 @@ export class BoardInputController {
         const nextBlockId = picked ? picked.id : null;
 
         if (nextRow !== this.hoverRow || nextCol !== this.hoverCol || nextBlockId !== this.hoverBlockId) {
+          const lineChanged =
+            this.inputMode === 'TARGET_ROCKET' &&
+            this.targetingPointerId !== null &&
+            inBounds &&
+            (this.rocketAxis === 'ROW' ? nextRow !== this.hoverRow : nextCol !== this.hoverCol);
           this.hoverRow = nextRow;
           this.hoverCol = nextCol;
           this.hoverBlockId = nextBlockId;
+          if (lineChanged) {
+            this.callbacks.sound?.playSlideTick();
+          }
           this.emitHoverState();
         }
       }
@@ -332,6 +390,9 @@ export class BoardInputController {
     }
 
     const blockId = this.activeBlockId;
+    const leadBlockForAnchor = board.blocks.find((b) => b.id === blockId);
+    const leadShape = leadBlockForAnchor ? getShape(leadBlockForAnchor.shapeId) : null;
+    const anchorOff = leadShape ? { x: leadShape.cols * 0.5, y: leadShape.rows * 0.5 } : { x: 0.5, y: 0.5 };
 
     for (const sample of samples) {
       const pt = this.clientToBoardCoords(sample.clientX, sample.clientY);
@@ -353,6 +414,7 @@ export class BoardInputController {
             this.lastTickCellRow = cellR;
             this.callbacks.sound?.playSlideTick();
           }
+          this.recordDragCellStep(cellR, cellC, anchorOff.x, anchorOff.y);
 
           const capture = checkMidDragGateCapture(
             board,
@@ -377,6 +439,20 @@ export class BoardInputController {
       this.lastLeadX = sweepRes.leadX;
       this.lastLeadY = sweepRes.leadY;
 
+      const startLead = this.groupStartCoords.get(blockId);
+      if (
+        startLead &&
+        (Math.round(sweepRes.leadX) !== startLead.col || Math.round(sweepRes.leadY) !== startLead.row)
+      ) {
+        this.dragLeftOrigin = true;
+      }
+      this.recordDragCellStep(
+        Math.round(sweepRes.leadY),
+        Math.round(sweepRes.leadX),
+        anchorOff.x,
+        anchorOff.y
+      );
+
       // F-01: Immediate Mid-Drag Gate Capture
       if (sweepRes.capturedGateIndex >= 0) {
         this.finalizeDragMove(board, blockId, true);
@@ -387,11 +463,64 @@ export class BoardInputController {
     this.callbacks.onBoardChanged?.();
   }
 
+  /**
+   * Records exact integer grid corridor steps with full cycle erasure:
+   * - Eliminates sub-pixel finger jitter inside open rooms so path traces stay grid-centered.
+   * - Automatically erases any exploratory detour or closed loop if the block revisits an earlier cell
+   *   (including returning to its original starting spot), so the post-commit trace cleanly confirms
+   *   the net corridor from Origin -> Final Destination / Shred Gate.
+   */
+  private recordDragCellStep(cellR: number, cellC: number, offX: number, offY: number): void {
+    const wx = cellC + offX;
+    const wy = cellR + offY;
+    for (let i = 0; i < this.dragWaypoints.length; i++) {
+      if (Math.abs(this.dragWaypoints[i].x - wx) < 0.05 && Math.abs(this.dragWaypoints[i].y - wy) < 0.05) {
+        this.dragWaypoints.length = i + 1;
+        return;
+      }
+    }
+    const tail = this.dragWaypoints[this.dragWaypoints.length - 1];
+    if (tail) {
+      const prevC = Math.round(tail.x - offX);
+      const prevR = Math.round(tail.y - offY);
+      if (prevC !== cellC && prevR !== cellR) {
+        // Orthogonalize a diagonal bevel jump across its shared corner cell
+        this.dragWaypoints.push({ x: cellC + offX, y: prevR + offY });
+      }
+    }
+    this.dragWaypoints.push({ x: wx, y: wy });
+  }
+
   private handlePointerUp(e: PointerEvent): void {
+    if (this.targetingPointerId !== null) {
+      if (e.pointerId !== this.targetingPointerId) return;
+      this.targetingPointerId = null;
+      try {
+        this.canvas.releasePointerCapture?.(e.pointerId);
+      } catch {
+        // Ignore
+      }
+      const pt = this.clientToBoardCoords(e.clientX, e.clientY);
+      const board = this.callbacks.getBoard();
+      if (!pt) {
+        this.setInputMode('DRAG');
+        return;
+      }
+      const r = Math.floor(pt.y);
+      const c = Math.floor(pt.x);
+      if (r < 0 || r >= board.rows || c < 0 || c >= board.cols) {
+        this.setInputMode('DRAG');
+        return;
+      }
+      this.handleBoosterTargetTap(board, pt.x, pt.y);
+      return;
+    }
+
     if (this.activePointerId === null || e.pointerId !== this.activePointerId) return;
 
     const board = this.callbacks.getBoard();
     const blockId = this.activeBlockId;
+    this.activePointerId = null;
 
     try {
       this.canvas.releasePointerCapture?.(e.pointerId);
@@ -402,12 +531,18 @@ export class BoardInputController {
     if (blockId !== null) {
       this.finalizeDragMove(board, blockId, false);
     } else {
-      this.activePointerId = null;
       this.emitHoverState();
     }
   }
 
   private handlePointerCancel(e: PointerEvent): void {
+    if (this.targetingPointerId !== null && e.pointerId === this.targetingPointerId) {
+      this.targetingPointerId = null;
+      this.hoverRow = -1;
+      this.hoverCol = -1;
+      this.emitHoverState();
+      return;
+    }
     if (this.activePointerId === null || e.pointerId !== this.activePointerId) return;
     this.cancelActiveDrag();
   }
@@ -449,8 +584,19 @@ export class BoardInputController {
     }
     rebuildOccupancyGrid(board);
 
+    const preShapeId = lead ? lead.shapeId : '1x1';
+    const preColor = lead ? getActiveColor(lead.colorStack, lead.colorCursor) : 1;
+    const preStart = lead ? this.groupStartCoords.get(lead.id) : undefined;
+    const savedWaypoints = this.dragWaypoints.slice();
+    const wasDragLeftOrigin = this.dragLeftOrigin;
+
     this.activePointerId = null;
     this.activeBlockId = null;
+    this.dragLeftOrigin = false;
+    this.dragWaypoints.length = 0;
+    this.hoverRow = -1;
+    this.hoverCol = -1;
+    this.hoverBlockId = null;
     this.groupStartCoords.clear();
 
     const effVelX = Math.hypot(this.lastVelX, this.lastVelY) > 1e-4 ? this.lastVelX : this.lastPullX;
@@ -488,9 +634,10 @@ export class BoardInputController {
       }
     }
 
-    // If a boundary-aligned block was pulled outward toward an eligible gate without changing integer cells,
-    // allow commitBlockMove to evaluate the outward exit (`DRAG-03`).
-    if (!changedFromStart && Math.hypot(this.lastPullX, this.lastPullY) >= 0.08) {
+    // If a boundary-aligned block was pulled outward toward an eligible gate without changing integer cells
+    // (and was NOT deliberately returned to origin after leaving to cancel the move), allow commitBlockMove
+    // to evaluate the outward exit (`DRAG-03`, `ORIGIN-GHOST-01`).
+    if (!changedFromStart && !wasDragLeftOrigin && Math.hypot(this.lastPullX, this.lastPullY) >= 0.08) {
       for (const b of group) {
         const gIdx = findEligibleGateForBlockAt(board, b, b.row, b.col, effVelX, effVelY);
         if (gIdx >= 0 && board.gates[gIdx]) {
@@ -515,6 +662,31 @@ export class BoardInputController {
         effVelY
       );
       this.playOutcomeAudio(outcome);
+      if (preStart) {
+        const afterLead = board.blocks.find((b) => b.id === blockId);
+        const endR = afterLead ? afterLead.row : snappedRow;
+        const endC = afterLead ? afterLead.col : snappedCol;
+        const gateIdx = afterLead ? afterLead.shredGateIndex : -1;
+        const wasShreddedOrPeeled =
+          gateIdx >= 0 ||
+          outcome.clearedBlockIds.includes(blockId) ||
+          outcome.peeledBlockIds.includes(blockId);
+        const movedToDifferentCell = endR !== preStart.row || endC !== preStart.col;
+        if (wasShreddedOrPeeled || (outcome.moved && movedToDifferentCell)) {
+          const trace = buildCommittedMoveTrace(
+            board,
+            preShapeId,
+            preStart.row,
+            preStart.col,
+            endR,
+            endC,
+            preColor,
+            gateIdx,
+            savedWaypoints
+          );
+          if (trace) this.callbacks.onPathTrace?.(trace);
+        }
+      }
       this.emitHoverState();
       this.callbacks.onMoveCommitted?.(outcome);
       this.callbacks.onBoardChanged?.();
@@ -546,7 +718,13 @@ export class BoardInputController {
     }
 
     this.activePointerId = null;
+    this.targetingPointerId = null;
     this.activeBlockId = null;
+    this.dragLeftOrigin = false;
+    this.dragWaypoints.length = 0;
+    this.hoverRow = -1;
+    this.hoverCol = -1;
+    this.hoverBlockId = null;
     this.groupStartCoords.clear();
     this.emitHoverState();
     this.callbacks.onBoardChanged?.();
@@ -569,6 +747,17 @@ export class BoardInputController {
       getInputMode: () => this.inputMode,
       setInputMode: (mode) => this.setInputMode(mode),
       toggleRocketAxis: () => this.toggleRocketAxis(),
+      getHoverPos: () => ({ row: this.hoverRow, col: this.hoverCol }),
+      setHoverPos: (row, col) => {
+        this.hoverRow = row;
+        this.hoverCol = col;
+      },
+      fireRocketAtHover: () => {
+        const board = this.callbacks.getBoard();
+        if (this.hoverRow >= 0 && this.hoverCol >= 0) {
+          this.handleBoosterTargetTap(board, this.hoverCol + 0.5, this.hoverRow + 0.5);
+        }
+      },
       getSelectedBlockId: () => this.selectedBlockId,
       setSelectedBlockId: (id) => {
         this.selectedBlockId = id;

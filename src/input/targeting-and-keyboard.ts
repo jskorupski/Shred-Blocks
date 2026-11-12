@@ -26,6 +26,7 @@ import type {
   PlayMode,
   RocketAxis,
 } from '../core/types';
+import type { PathWaypoint } from '../render/pass2-drag-fx';
 
 export const HIT_SLOP_HALO = 0.32;
 export const MONO_PRIORITY_WEIGHT = 1.3;
@@ -38,6 +39,14 @@ export interface BoosterTargetPayload {
   axis: RocketAxis;
 }
 
+export interface CommittedPathTraceInfo {
+  waypoints: PathWaypoint[];
+  colorId: ColorId;
+  zOffset: number;
+  spanCols: number;
+  spanRows: number;
+}
+
 export interface HoverState {
   inputMode: InputMode;
   hoverRow: number;
@@ -46,6 +55,7 @@ export interface HoverState {
   rocketAxis: RocketAxis;
   selectedBlockId: number | null;
   activeBlockId: number | null;
+  dragLeftOrigin?: boolean;
 }
 
 export interface BoardInputCallbacks {
@@ -58,6 +68,8 @@ export interface BoardInputCallbacks {
   onBeforeMoveCommit?: (board: BoardState) => void;
   /** Called after a move is committed (either mid-drag gate capture or grid snap on release/keyboard) */
   onMoveCommitted?: (outcome: CommitMoveOutcome) => void;
+  /** Called after a move or shred commits so the renderer can trace the path taken (`MYSTIC-TRACE-01`) */
+  onPathTrace?: (trace: CommittedPathTraceInfo) => void;
   /** Called when a player taps an immobile block (Stone, Frozen, Chained, Roped) */
   onImmobileBlockTap?: (block: BlockState) => void;
   /** Called when a player taps a closed Sealed Mystery Vault lid (`bar.isVault`) */
@@ -271,12 +283,163 @@ export function executeBoosterTargetTap(
   callbacks.onBoardChanged?.();
 }
 
+export function buildCommittedMoveTrace(
+  board: BoardState,
+  shapeId: string,
+  startRow: number,
+  startCol: number,
+  endRow: number,
+  endCol: number,
+  colorId: ColorId,
+  shredGateIndex: number,
+  rawWaypoints?: ReadonlyArray<PathWaypoint>
+): CommittedPathTraceInfo | null {
+  // Only emit a confirmation flourish when the piece actually shredded/peeled into a gate
+  // OR locked into a final cell strictly different from its original starting cell
+  if (shredGateIndex < 0 && startRow === endRow && startCol === endCol) {
+    return null;
+  }
+  const shape = getShape(shapeId);
+  const off = { x: shape.cols * 0.5, y: shape.rows * 0.5 };
+  const startPt: PathWaypoint = { x: startCol + off.x, y: startRow + off.y };
+  const endPt: PathWaypoint = { x: endCol + off.x, y: endRow + off.y };
+  let pts: PathWaypoint[] = [startPt];
+  if (startRow !== endRow || startCol !== endCol) {
+    // Always compute the cleanest shortest obstacle-respecting corridor from Origin -> Final Destination
+    // (using rawWaypoints only as a tie-breaker when two equal-length corridors wrap around an island),
+    // so exploratory detours or mid-drag backtracking never clutter the confirmation flourish.
+    const visitedHint = new Set<number>();
+    if (rawWaypoints) {
+      for (const wp of rawWaypoints) {
+        visitedHint.add(Math.round(wp.y - off.y) * 32 + Math.round(wp.x - off.x));
+      }
+    }
+    const anchorCell = shape.cells[0] ?? [0, 0];
+    const er = endRow + anchorCell[0];
+    const ec = endCol + anchorCell[1];
+    const endBlockId =
+      er >= 0 && er < board.rows && ec >= 0 && ec < board.cols ? board.occupancy[er * board.cols + ec] : -999;
+    const canOccupy = (r: number, c: number): boolean => {
+      for (const [dr, dc] of shape.cells) {
+        const rr = r + dr;
+        const cc = c + dc;
+        if (rr < 0 || rr >= board.rows || cc < 0 || cc >= board.cols) return false;
+        const occ = board.occupancy[rr * board.cols + cc];
+        if (occ !== 0 && occ !== endBlockId) return false;
+      }
+      return true;
+    };
+    const parent = new Map<number, number>();
+    const startKey = startRow * 32 + startCol;
+    const goalKey = endRow * 32 + endCol;
+    const q: number[] = [startKey];
+    parent.set(startKey, -1);
+    const baseDirs = [
+      [0, 1],
+      [0, -1],
+      [1, 0],
+      [-1, 0],
+    ];
+    while (q.length > 0) {
+      const cur = q.shift() ?? startKey;
+      if (cur === goalKey) break;
+      const cr = Math.floor(cur / 32);
+      const cc = cur % 32;
+      const neighbors: number[] = [];
+      for (const [dr, dc] of baseDirs) {
+        const nr = cr + dr;
+        const nc = cc + dc;
+        const nk = nr * 32 + nc;
+        if (!parent.has(nk) && canOccupy(nr, nc)) {
+          neighbors.push(nk);
+        }
+      }
+      neighbors.sort((a, b) => (visitedHint.has(b) ? 1 : 0) - (visitedHint.has(a) ? 1 : 0));
+      for (const nk of neighbors) {
+        parent.set(nk, cur);
+        q.push(nk);
+      }
+    }
+    if (parent.has(goalKey)) {
+      const revCells: Array<{ r: number; c: number }> = [];
+      let cur = goalKey;
+      while (cur !== -1) {
+        revCells.push({ r: Math.floor(cur / 32), c: cur % 32 });
+        cur = parent.get(cur) ?? -1;
+      }
+      const gridCells = revCells.reverse();
+      // Obstacle-safe swept diagonal string-pulling: collapse orthogonal stair-steps into smooth
+      // diagonal glides whenever the block's swept footprint clears all intermediate grid cells.
+      const canSweepDirect = (ra: number, ca: number, rb: number, cb: number): boolean => {
+        const steps = Math.max(Math.abs(rb - ra), Math.abs(cb - ca)) * 4;
+        for (let s = 1; s < steps; s++) {
+          const rf = ra + ((rb - ra) * s) / steps;
+          const cf = ca + ((cb - ca) * s) / steps;
+          const r0 = Math.floor(rf + 1e-5);
+          const r1 = Math.ceil(rf - 1e-5);
+          const c0 = Math.floor(cf + 1e-5);
+          const c1 = Math.ceil(cf - 1e-5);
+          if (!canOccupy(r0, c0) || !canOccupy(r0, c1) || !canOccupy(r1, c0) || !canOccupy(r1, c1)) {
+            return false;
+          }
+        }
+        return true;
+      };
+      pts = [{ x: gridCells[0].c + off.x, y: gridCells[0].r + off.y }];
+      let idx = 0;
+      while (idx < gridCells.length - 1) {
+        let nextIdx = idx + 1;
+        for (let probe = gridCells.length - 1; probe > idx + 1; probe--) {
+          if (canSweepDirect(gridCells[idx].r, gridCells[idx].c, gridCells[probe].r, gridCells[probe].c)) {
+            nextIdx = probe;
+            break;
+          }
+        }
+        pts.push({ x: gridCells[nextIdx].c + off.x, y: gridCells[nextIdx].r + off.y });
+        idx = nextIdx;
+      }
+    } else if (rawWaypoints && rawWaypoints.length >= 2) {
+      pts = rawWaypoints.slice();
+      pts[0] = startPt;
+    } else {
+      pts = [startPt, { x: endPt.x, y: startPt.y }, endPt];
+    }
+  }
+
+  const lastRecorded = pts[pts.length - 1];
+  if (Math.hypot(endPt.x - lastRecorded.x, endPt.y - lastRecorded.y) >= 0.08) {
+    pts.push(endPt);
+  } else {
+    pts[pts.length - 1] = endPt;
+  }
+
+  if (shredGateIndex >= 0 && board.gates[shredGateIndex]) {
+    const [nx, ny] = getGateOutwardNormal(board.gates[shredGateIndex].edge);
+    if (pts.length === 1 || Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y) < 0.12) {
+      pts[0] = { x: startPt.x - nx * 0.18, y: startPt.y - ny * 0.18 };
+    }
+    pts.push({ x: endPt.x + nx * 0.52, y: endPt.y + ny * 0.52 });
+  }
+
+  if (pts.length < 2) return null;
+  return {
+    waypoints: pts,
+    colorId,
+    zOffset: 0,
+    spanCols: shape.cols,
+    spanRows: shape.rows,
+  };
+}
+
 export interface KeyboardStepContext {
   canvas: HTMLElement;
   callbacks: BoardInputCallbacks;
   getInputMode: () => InputMode;
   setInputMode: (mode: InputMode) => void;
   toggleRocketAxis: () => void;
+  getHoverPos: () => { row: number; col: number };
+  setHoverPos: (row: number, col: number) => void;
+  fireRocketAtHover: () => void;
   getSelectedBlockId: () => number | null;
   setSelectedBlockId: (id: number | null) => void;
   emitHoverState: () => void;
@@ -289,6 +452,9 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
     getInputMode,
     setInputMode,
     toggleRocketAxis,
+    getHoverPos,
+    setHoverPos,
+    fireRocketAtHover,
     getSelectedBlockId,
     setSelectedBlockId,
     emitHoverState,
@@ -323,6 +489,15 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
   if ((key === ' ' || key === 'x' || key === 'X') && inputMode === 'TARGET_ROCKET') {
     e.preventDefault();
     toggleRocketAxis();
+    return;
+  }
+
+  if (key === 'Enter' && inputMode === 'TARGET_ROCKET') {
+    const cur = getHoverPos();
+    if (cur.row >= 0 && cur.col >= 0) {
+      e.preventDefault();
+      fireRocketAtHover();
+    }
     return;
   }
 
@@ -361,6 +536,20 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
 
   if (dRow !== 0 || dCol !== 0) {
     e.preventDefault();
+    if (inputMode === 'TARGET_ROCKET') {
+      const cur = getHoverPos();
+      const baseR = cur.row >= 0 ? cur.row : Math.floor(board.rows * 0.5);
+      const baseC = cur.col >= 0 ? cur.col : Math.floor(board.cols * 0.5);
+      const nextR = cur.row < 0 ? baseR : Math.max(0, Math.min(board.rows - 1, baseR + dRow));
+      const nextC = cur.col < 0 ? baseC : Math.max(0, Math.min(board.cols - 1, baseC + dCol));
+      setHoverPos(nextR, nextC);
+      callbacks.sound?.playSlideTick();
+      emitHoverState();
+      return;
+    }
+    if (inputMode !== 'DRAG') {
+      return;
+    }
     let block = board.blocks.find(
       (b) => b.id === getSelectedBlockId() && b.status === 'ACTIVE' && isBlockMovable(board, b.id)
     );
@@ -370,6 +559,10 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
     }
     if (!block) return;
 
+    const preRow = block.row;
+    const preCol = block.col;
+    const preShapeId = block.shapeId;
+    const preColor = getActiveColor(block.colorStack, block.colorCursor);
     callbacks.onBeforeMoveCommit?.(board);
     const group = getMovedGroupBlocks(board, block.id);
     let targetRow = block.row + dRow;
@@ -399,6 +592,12 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
     );
     if (outcome.moved) {
       playOutcomeAudioHelper(callbacks.sound, outcome);
+      const afterBlk = board.blocks.find((b) => b.id === block.id);
+      const endR = afterBlk ? afterBlk.row : targetRow;
+      const endC = afterBlk ? afterBlk.col : targetCol;
+      const gateIdx = afterBlk ? afterBlk.shredGateIndex : -1;
+      const trace = buildCommittedMoveTrace(board, preShapeId, preRow, preCol, endR, endC, preColor, gateIdx);
+      if (trace) callbacks.onPathTrace?.(trace);
       callbacks.onMoveCommitted?.(outcome);
     } else {
       block.reboundTimerMs = 160;

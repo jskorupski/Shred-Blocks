@@ -14,6 +14,9 @@ import {
 import type { AtlasTextureData, AtlasUVRegion } from './atlas-3d';
 import type { Camera3D } from './camera-3d';
 import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
+import { executeBenchmarkFramesImpl, type PathWaypoint, type VisualPathTrace } from './pass2-drag-fx';
+
+export { executeBenchmarkFramesImpl, type PathWaypoint, type VisualPathTrace };
 
 export const MAX_PARTICLES = 2048;
 export const PARTICLE_STRIDE = 14; // x, y, z, vx, vy, vz, r, g, b, scale, age, maxAge, rotAngle, rotSpeed
@@ -195,6 +198,10 @@ export function getStoneThemeMineralTint(
 
 export interface RenderSceneOptions {
   draggedBlockId?: number | null;
+  /** True only when the player is actively holding/dragging a block (never true for idle `board.hintMove`) */
+  isLiveDrag?: boolean;
+  /** True once a live drag has moved >= 1 cell away from its starting anchor during the current gesture */
+  dragLeftOrigin?: boolean;
   dragTargetRow?: number | null;
   dragTargetCol?: number | null;
   dragEligibleGateIndex?: number | null;
@@ -419,6 +426,8 @@ export interface RenderPassContext {
   uBlockSeed: WebGLUniformLocation | null;
   uClipPlane: WebGLUniformLocation | null;
   uCapColor: WebGLUniformLocation | null;
+  uTraceCount: WebGLUniformLocation | null;
+  uTracePts: WebGLUniformLocation | null;
   readonly particlePool: Float32Array;
   readonly particleInstanceData: Float32Array;
   activeParticleCount: number;
@@ -462,6 +471,7 @@ export interface RenderPassContext {
   readonly roomAwakenMap: Map<number, number>;
   readonly activeVisualShreds: VisualShredAnim[];
   readonly activeShockwaves: VisualShockwave[];
+  readonly activePathTraces: VisualPathTrace[];
   readonly blockBounceMap: Map<number, number>;
   boardShakeTimer: number;
   boardShakeDirX: number;
@@ -497,6 +507,13 @@ export interface RenderPassContext {
     minRadius?: number,
     maxRadius?: number,
     maxAge?: number
+  ): void;
+  spawnPathTrace(
+    waypoints: ReadonlyArray<PathWaypoint>,
+    colorId: ColorId,
+    z?: number,
+    spanCols?: number,
+    spanRows?: number
   ): void;
   drawMesh(
     gl: WebGL2RenderingContext,
@@ -730,55 +747,4 @@ export function drawBadgeMedallion3DImpl(
     0
   );
   return zBase + 0.086;
-}
-
-export async function executeBenchmarkFramesImpl(
-  rctx: RenderPassContext & { render(board: BoardState, options?: RenderSceneOptions): void },
-  lastBoard: BoardState | null,
-  frames: number
-): Promise<Benchmark120HzResult> {
-  const count = Math.max(10, frames);
-  const samples = new Float32Array(count);
-
-  if (rctx.activeParticleCount < 60 && lastBoard) {
-    rctx.spawnParticlesAt(lastBoard.cols * 0.5, lastBoard.rows * 0.5, 0.45, 1, 60, 0, -1);
-  }
-  if (lastBoard) {
-    rctx.render(lastBoard, { ...rctx.lastOptions, dtSec: 1 / 120 });
-    rctx.gl?.finish();
-  }
-
-  for (let i = 0; i < count; i++) {
-    const t0 = performance.now();
-    if (lastBoard) {
-      rctx.render(lastBoard, {
-        ...rctx.lastOptions,
-        dtSec: 1 / 120,
-      });
-    }
-    rctx.gl?.flush();
-    const workMs = Math.max(0.01, performance.now() - t0);
-    samples[i] = workMs;
-  }
-
-  let sum = 0;
-  let maxWorkMs = 0;
-  for (let i = 0; i < count; i++) {
-    sum += samples[i];
-    if (samples[i] > maxWorkMs) maxWorkMs = samples[i];
-  }
-  samples.sort();
-  const p95WorkMs = Number(samples[Math.min(count - 1, Math.floor(count * 0.95))].toFixed(3));
-  const p99WorkMs = Number(samples[Math.min(count - 1, Math.floor(count * 0.99))].toFixed(3));
-  const avgWorkMs = Number((sum / count).toFixed(3));
-
-  return {
-    framesExecuted: count,
-    avgWorkMs,
-    p95WorkMs,
-    p99WorkMs,
-    maxWorkMs: Number(maxWorkMs.toFixed(3)),
-    passes120HzBudget: p95WorkMs <= 8.33,
-    passes60HzBudget: p95WorkMs <= 16.67,
-  };
 }

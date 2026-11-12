@@ -34,8 +34,8 @@ Before editing code, shaders, levels, styles, icons, or storage in any domain be
 
 | Reference File | Load Before Editing... | Key Specs Inside |
 | :--- | :--- | :--- |
-| **[`docs/PHYSICS_AND_MECHANICS.md`](docs/PHYSICS_AND_MECHANICS.md)** | `src/core/*`, `src/input/*`, `src/render/camera-3d.ts` | Grid/3D math, `screenToBoardRayPlane`, swept 2D glide & corner bevels (`DRAG-02/04`), gate span/axis clearance, mid-drag capture, Mystery Vault stasis (`VAULT-01/02`), 9-step `resolveClearCascade`, `C1-03` 4-entry-point parity. |
-| **[`docs/RENDERING_AND_SHADERS.md`](docs/RENDERING_AND_SHADERS.md)** | `src/render/*`, `src/audio/*`, title/relic CSS & FX | 4-Pass WebGL2 & Canvas2D parity, `plinthSpans` 120Hz rule, Z-layer table (`0.000 .. zCbSymbol = 0.692`), 5 skins (`classic_studs` default, `relic_stone` `250c` worn chamfers + `runeDist`), 5 tray materials, Satin Astrolabe shader, zero-filter `#game-canvas`, `.astrolabe-backlight-halo`, prewarmed `0.58s` `RELIC-AWAKEN-01` burst, `IDLE-01..06`, `fxRandom()`. |
+| **[`docs/PHYSICS_AND_MECHANICS.md`](docs/PHYSICS_AND_MECHANICS.md)** | `src/core/*`, `src/input/*`, `src/render/camera-3d.ts` | Grid/3D math, `screenToBoardRayPlane`, swept 2D glide & corner bevels (`DRAG-02/04`), gate span/axis clearance, mid-drag capture, Mystery Vault stasis (`VAULT-01/02`), `ROCKET-AIM-01`, `ORIGIN-GHOST-01`, `MYSTIC-TRACE-01` corridor, 9-step `resolveClearCascade`, `C1-03` 4-entry-point parity. |
+| **[`docs/RENDERING_AND_SHADERS.md`](docs/RENDERING_AND_SHADERS.md)** | `src/render/*`, `src/audio/*`, title/relic CSS & FX | 4-Pass WebGL2 & Canvas2D parity, `plinthSpans` 120Hz rule, Z-layer table (`0.000 .. zCbSymbol = 0.692`), 5 skins (`classic_studs` default, `relic_stone` `250c` worn chamfers + `runeDist`), 5 tray materials, single-quad `u_materialStyle = 8` tapered motion-blur smear (`MYSTIC-TRACE-01`), Satin Astrolabe shader, zero-filter `#game-canvas`, `.astrolabe-backlight-halo`, prewarmed `0.58s` `RELIC-AWAKEN-01` burst, `IDLE-01..06`, `fxRandom()`. |
 | **[`docs/PROGRESSION_AND_ECONOMY.md`](docs/PROGRESSION_AND_ECONOMY.md)** | `src/levels/*`, `src/core/board*.ts`, rewards/chests | 6 epochs (`1..300` + `301+`), `RAMP-01` `decPos === 6` breathers, `RAMP-02..05` modifier/fuse budgets, `L1–12` / `L13–25` / `L26+` rules, Challenge/Zen/Timed math, coalescing, `STARS-SLACK-01`, `TIMED-BOMB-01`, `STUCK-01`, Economy v2 payouts & chests. |
 | **[`docs/UI_PWA_STORAGE_AND_SEO.md`](docs/UI_PWA_STORAGE_AND_SEO.md)** | `index.html`, `public/*`, `src/ui/*`, `src/styles/*`, `src/storage/*`, `scripts/generate-icons.ts`, `vite.config.ts` | Title FTUE/returning dock (`TITLE-DOCK-FIT-01`), `TYPOGRAPHY-01`, `UI-DEPTH-01`, `UI-BTN-COLOR-01` + `@media (hover: hover)`, O(1) Linked Sanctuary Map (`MAP-LINKED-PATH-01`), `VIEWPORT-01`, `NAV-HISTORY-01`, Zen Mystic icons (`r <= 190` maskable, `180×180` iOS), Cloudflare Pages `favicon.ico` (`16/32/48`) + `1200×630` `og-image.png` + `_headers` / `robots.txt` / `sitemap.xml` / JSON-LD (`SEO-OG-FAVICON-01`), `PWA-UPDATE-01`, dual-layer `SB1-...` 53-bit save codec (`STOR-01..02`, `qrCompact`), `SAVE-SEC-01` CSP. |
 
@@ -52,11 +52,11 @@ Every repository text/SVG file (except `package-lock.json`) is enforced `<= 800 
 | [`src/styles/main.css`](src/styles/main.css) & [`src/styles/*.css`](src/styles/) | Ordered CSS barrel: `tokens-and-shell`, `screen-home`, `roadmap-path`, `screen-game`, `booster-dock`, `themes-and-nav`, `dialogs`, `title-and-a11y`. |
 | [`src/core/*.ts`](src/core/) | `types`, `polyomino` (19 shapes), `physics` & `room-and-occupancy`, `gate-clearance` & `shred-side-effects`, `board` & `board-state`, `fx-random`. |
 | [`src/levels/*.ts`](src/levels/) | `catalog` & `curated-early` (`1..300` + O(1) `getCampaignRoadmapMeta`), `generator*` (`82..300` & Endless `301+`), `solver` (Zobrist A\* `solveBoard` & hints). |
-| [`src/render/*.ts`](src/render/) | `camera-3d`, `atlas-3d`, `mesh-generator` & `mesh-primitives`, `renderer-3d`, `render-types`, `shaders-*`, `pass1..3*`, `particle-fx`, `relic-awakening-fx`, `canvas2d-fallback`. |
+| [`src/render/*.ts`](src/render/) | `camera-3d`, `atlas-3d`, `mesh-generator` & `mesh-primitives`, `renderer-3d`, `render-types`, `shaders-*`, `pass1..3*`, `path-trace-ribbon`, `particle-fx`, `relic-awakening-fx`, `canvas2d-fallback`. |
 | [`src/input/*.ts`](src/input/) & [`src/audio/*.ts`](src/audio/) | Pointer/touch drag controller (`pointer-controller`, `targeting-and-keyboard`) and procedural Web Audio synthesizer (`synth`, `synth-voices`). |
 | [`src/storage/*.ts`](src/storage/) | `save-manager` (`localStorage` + `IndexedDB`), `save-code` (53-bit `SB1-...` + LZ77 + CRC32), `qr-svg` (ISO 18004 QR SVG). |
 | [`public/*`](public/) & [`scripts/*`](scripts/) | Zen Mystic `icon*.{svg,png}`, `apple-touch-icon.png`, `favicon.ico` / `favicon-*.png`, `og-image.png`, `_headers`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `sw.js`, `fonts/*.woff2`, `generate-icons.ts`, `visual-harness.ts`. |
-| [`tests/unit/*.test.ts`](tests/unit/), [`tests/e2e/*.spec.ts`](tests/e2e/), [`tests/visual/*`](tests/visual/) | 6 Vitest unit/solver/security suites (`59+` tests), 24 Playwright E2E specs, and 18 deterministic visual golden snapshots. |
+| [`tests/unit/*.test.ts`](tests/unit/), [`tests/e2e/*.spec.ts`](tests/e2e/), [`tests/visual/*`](tests/visual/) | 6 Vitest unit/solver/security suites (`63+` tests), 25 Playwright E2E specs, and 18 deterministic visual golden snapshots. |
 
 ---
 
@@ -65,9 +65,9 @@ Every repository text/SVG file (except `package-lock.json`) is enforced `<= 800 
 Run this sequence before concluding code, level, shader, icon, or style changes:
 
 1. **`npm run lint`** (`BypassSandbox: false`): Biome check across all files in `< 200ms` with `0` errors (`npm run lint:fix` to auto-format). No `biome-ignore` suppressions in `src/**/*.ts`.
-2. **`npm run test:unit`** (`BypassSandbox: false`): Passes all `59+` unit, 300-level solver, security, SEO/favicon, and `ARCH-ERGONOMICS-01` tests across 6 suites.
+2. **`npm run test:unit`** (`BypassSandbox: false`): Passes all `63+` unit, 300-level solver, security, SEO/favicon, and `ARCH-ERGONOMICS-01` tests across 6 suites.
 3. **`npm run build`** (`BypassSandbox: false`): `tsc --noEmit && vite build` (`0` errors, stamps `dist/sw.js` & `dist/version.json`). **Always build immediately before Playwright E2E, visual goldens, or `visual-harness.ts`**, which serve `dist/` via `vite preview`.
-4. **`./node_modules/.bin/playwright test`** (`BypassSandbox: true`): Passes all `24` E2E playtests (Desktop Chrome + Mobile Portrait).
+4. **`./node_modules/.bin/playwright test`** (`BypassSandbox: true`): Passes all `25` E2E playtests (Desktop Chrome + Mobile Portrait).
 5. **Visual Verification (when touching UI/CSS/3D/shaders/icons)**:
    - `./node_modules/.bin/playwright test -c playwright.visual.config.ts` (`BypassSandbox: true`, `18` deterministic snapshots; `--update-snapshots` after inspecting intentional changes).
    - `./node_modules/.bin/tsx scripts/generate-icons.ts` (`BypassSandbox: false`, regenerates icons, `favicon.ico`, `og-image.png`, and `29-launcher-icons-preview.png`).

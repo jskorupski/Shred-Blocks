@@ -57,6 +57,8 @@ export interface ShredBlocksDebugBridge {
   run120HzBenchmark: (frames?: number) => Promise<Benchmark120HzResult>;
   simulateContextLoss: () => void;
   boardToScreen: (boardX: number, boardY: number) => { x: number; y: number };
+  getHoverState: () => HoverState;
+  getActivePathTraceCount: () => number;
   /** VISUAL-GOLDEN-01: pause the rAF loop and render one frame at a fixed shader time (`null` resumes live time) */
   freezeTime: (timeSec: number | null) => void;
   /** VISUAL-GOLDEN-01: while frozen, deterministically step simulation + render `frames` frames of `dtSec` */

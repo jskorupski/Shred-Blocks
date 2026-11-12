@@ -99,6 +99,7 @@ function executeUndoBoosterImpl(app: BoosterAppContext): void {
     app.preRestartUndoStack = [];
     app.board.bombsInert = app.saveManager.getPayload().settings.playMode === 'ZEN';
     app.levelOutcomeHandled = false;
+    app.renderer.clearPathTraces();
     app.sound.playBooster('UNDO');
     app.showGameToast('↩️ Restored board before restart!');
     app.syncInGameHud();
@@ -126,6 +127,7 @@ function executeUndoBoosterImpl(app: BoosterAppContext): void {
   app.board = previous;
   app.levelOutcomeHandled = false;
   app.lastPointerActivityMs = performance.now();
+  app.renderer.clearPathTraces();
   app.refreshAutoGuideMove();
   app.sound.playBooster('UNDO');
   app.syncInGameHud();

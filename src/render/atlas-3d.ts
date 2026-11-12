@@ -527,6 +527,41 @@ const ATLAS_SLOTS: GlyphSlotSpec[] = [
       ctx.restore();
     },
   },
+  {
+    // Mid-drag origin footprint return glyph (`↩`, `ORIGIN-GHOST-01`)
+    keys: ['BADGE_RETURN', 'RETURN_HOME', '↩'],
+    glyph: '↩',
+    drawCustom: (ctx, cx, cy, r) => {
+      ctx.save();
+      const arcR = r * 0.44;
+      const arcCx = cx + r * 0.16;
+      const arcCy = cy + r * 0.06;
+      const tipX = cx - r * 0.66;
+      const topY = arcCy - arcR;
+      const botY = arcCy + arcR;
+      const drawReturnStroke = (strokeStyle: string, width: number) => {
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.16, botY);
+        ctx.lineTo(arcCx, botY);
+        ctx.arc(arcCx, arcCy, arcR, Math.PI * 0.5, -Math.PI * 0.5, true);
+        ctx.lineTo(tipX + r * 0.12, topY);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(tipX + r * 0.36, topY - r * 0.28);
+        ctx.lineTo(tipX, topY);
+        ctx.lineTo(tipX + r * 0.36, topY + r * 0.28);
+        ctx.stroke();
+      };
+      drawReturnStroke('rgba(11, 15, 29, 0.85)', 10.5);
+      drawReturnStroke('#FFFFFF', 5.6);
+      ctx.restore();
+    },
+  },
 ];
 
 let cachedAtlasData: AtlasTextureData | null = null;

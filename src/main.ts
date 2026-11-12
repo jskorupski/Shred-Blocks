@@ -9,8 +9,14 @@ import {
   isBoardFailed,
   isBoardWon,
 } from './core/board';
+import { getActiveColor } from './core/polyomino';
 import type { BlockState, BoardState, BoosterType, PlayMode, SavePayloadV1 } from './core/types';
-import { BoardInputController, type BoosterTargetPayload, type HoverState } from './input/pointer-controller';
+import {
+  BoardInputController,
+  type BoosterTargetPayload,
+  buildCommittedMoveTrace,
+  type HoverState,
+} from './input/pointer-controller';
 import { getLevelSpec } from './levels/catalog';
 import { findNextHintMove } from './levels/solver';
 import { Renderer3D } from './render/renderer-3d';
@@ -153,6 +159,23 @@ export class ShredBlocksApp implements AppViewContext {
       },
       onMoveCommitted: (outcome) => {
         this.handleMoveCommitted(outcome);
+      },
+      onPathTrace: (trace) => {
+        if (this.saveManager.getPayload().settings.reducedMotion) return;
+        const first = trace.waypoints[0];
+        const r = Math.max(0, Math.min(this.board.rows - 1, Math.floor(first?.y ?? 0)));
+        const c = Math.max(0, Math.min(this.board.cols - 1, Math.floor(first?.x ?? 0)));
+        const roomVis = this.renderer.getRoomVisualState(
+          this.board,
+          this.board.roomMap[r * this.board.cols + c] ?? 0
+        );
+        this.renderer.spawnPathTrace(
+          trace.waypoints,
+          trace.colorId,
+          roomVis.zOffset,
+          trace.spanCols,
+          trace.spanRows
+        );
       },
       onImmobileBlockTap: (block) => {
         this.handleImmobileBlockTap(block);
@@ -301,6 +324,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.runTouchedZen = this.saveManager.getPayload().settings.playMode === 'ZEN';
     this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
     this.bombTickAccumulatorSec = 0;
+    this.renderer.clearPathTraces();
     this.inputController.cancelTargeting();
     this.refreshAutoGuideMove();
     this.syncInGameHud();
@@ -324,6 +348,11 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   public commitMove(blockId: number, targetRow: number, targetCol: number): CommitMoveOutcome {
+    const preBlock = this.board.blocks.find((b) => b.id === blockId);
+    const preRow = preBlock ? preBlock.row : targetRow;
+    const preCol = preBlock ? preBlock.col : targetCol;
+    const preShapeId = preBlock ? preBlock.shapeId : '1x1';
+    const preColor = preBlock ? getActiveColor(preBlock.colorStack, preBlock.colorCursor) : 1;
     this.pushUndoSnapshot(this.board);
     const playMode = this.saveManager.getPayload().settings.playMode;
     // Zero velocity: programmatic/auto-solve moves must not bias corner gate selection toward RIGHT/BOTTOM
@@ -331,6 +360,35 @@ export class ShredBlocksApp implements AppViewContext {
     if (!outcome.moved) {
       this.undoStack.pop();
     } else {
+      if (!this.saveManager.getPayload().settings.reducedMotion && preBlock) {
+        const afterBlk = this.board.blocks.find((b) => b.id === blockId);
+        const endR = afterBlk ? afterBlk.row : targetRow;
+        const endC = afterBlk ? afterBlk.col : targetCol;
+        const gateIdx = afterBlk ? afterBlk.shredGateIndex : -1;
+        const trace = buildCommittedMoveTrace(
+          this.board,
+          preShapeId,
+          preRow,
+          preCol,
+          endR,
+          endC,
+          preColor,
+          gateIdx
+        );
+        if (trace) {
+          const roomVis = this.renderer.getRoomVisualState(
+            this.board,
+            this.board.roomMap[preRow * this.board.cols + preCol] ?? 0
+          );
+          this.renderer.spawnPathTrace(
+            trace.waypoints,
+            trace.colorId,
+            roomVis.zOffset,
+            trace.spanCols,
+            trace.spanRows
+          );
+        }
+      }
       if (outcome.clearedBlockIds.length > 0) {
         this.sound.playShred(0);
       } else if (outcome.peeledBlockIds.length > 0) {

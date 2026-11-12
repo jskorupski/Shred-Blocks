@@ -9,6 +9,7 @@ import {
   type GateState,
   type ParticleStyleId,
 } from '../core/types';
+import { stepPathTracesImpl } from './pass2-drag-fx';
 import {
   allocParticleSlot,
   INSTANCE_STRIDE,
@@ -234,7 +235,8 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
     rctx.boardShakeTimer = Math.max(0, rctx.boardShakeTimer - dt);
   }
 
-  // Step expanding 3D shockwave rings
+  // Step expanding 3D shockwave rings & post-move mystic fissure traces
+  stepPathTracesImpl(rctx, dt);
   for (let i = rctx.activeShockwaves.length - 1; i >= 0; i--) {
     const sw = rctx.activeShockwaves[i];
     sw.age += dt;
@@ -551,6 +553,7 @@ export function detectAutomaticShredEventsImpl(
   if (isLevelChange || isUndoOrRestart) {
     syncSnapshotsImpl(rctx, board);
     rctx.roomAwakenMap.clear();
+    rctx.activePathTraces.length = 0;
     if (isLevelChange) {
       rctx.activeVisualShreds.length = 0;
       rctx.activeShockwaves.length = 0;

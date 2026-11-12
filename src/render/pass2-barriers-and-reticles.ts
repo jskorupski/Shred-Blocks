@@ -1,13 +1,8 @@
-import { findEligibleGateForBlockAt, getGateOutwardNormal } from '../core/gate-clearance';
-import {
-  canGroupOccupyOffset,
-  getMovedGroupBlocks,
-  isBlockInLockedRoom,
-  isRoomUnlocked,
-} from '../core/physics';
+import { isBlockInLockedRoom, isRoomUnlocked } from '../core/physics';
 import { getActiveColor, getShape } from '../core/polyomino';
 import type { BoardState, ColorId } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
+import { renderActiveDragReticleAndOriginFootprint, renderMysticPathTraces3D } from './pass2-drag-fx';
 import type { RenderPassContext, RenderSceneOptions, TrayPalette } from './render-types';
 
 export function renderPass1PortcullisBarriers(
@@ -419,100 +414,15 @@ export function renderPass2ReticleAndPromptsImpl(
     if ((options.blueprintMix ?? 0) < 0.999) renderShockwaveRings(rctx, gl);
     return;
   }
-  // 2A. Active Drag Floor Target Reticle & Gate Alignment Beam (`UX-01`)
-  let draggedId = options.draggedBlockId ?? null;
-  if (draggedId === null) {
-    const lifted = board.blocks.find((b) => b.status === 'ACTIVE' && b.liftAlpha > 0.1);
-    if (lifted) draggedId = lifted.id;
-  }
-
-  if (draggedId !== null) {
-    const group = getMovedGroupBlocks(board, draggedId);
-    const lead = group.find((b) => b.id === draggedId) ?? group[0];
-    if (lead) {
-      let dRow =
-        options.dragTargetRow !== undefined && options.dragTargetRow !== null
-          ? options.dragTargetRow - lead.row
-          : Math.round(lead.y - lead.row);
-      let dCol =
-        options.dragTargetCol !== undefined && options.dragTargetCol !== null
-          ? options.dragTargetCol - lead.col
-          : Math.round(lead.x - lead.col);
-
-      if (!canGroupOccupyOffset(board, group, dRow, dCol)) {
-        dRow = 0;
-        dCol = 0;
-      }
-
-      for (const b of group) {
-        const shape = getShape(b.shapeId);
-        const activeColor: ColorId = getActiveColor(b.colorStack, b.colorCursor);
-        const [cr, cg, cb] = rctx.getColorRgb(activeColor, highContrast);
-        const snapRow = b.row + dRow;
-        const snapCol = b.col + dCol;
-
-        for (const [dr, dc] of shape.cells) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.overlayQuad,
-            snapCol + dc + 0.05,
-            snapRow + dr + 0.05,
-            0.012,
-            0.9,
-            0.9,
-            1.0,
-            cr,
-            cg,
-            cb,
-            0.28 + 0.16 * pulse,
-            0,
-            0,
-            4
-          );
-        }
-
-        // Gate Alignment Beam projecting to any eligible gate at the snapped landing footprint
-        const eligibleGateIdx =
-          options.dragEligibleGateIndex !== undefined && options.dragEligibleGateIndex !== null
-            ? options.dragEligibleGateIndex
-            : findEligibleGateForBlockAt(board, b, snapRow, snapCol);
-
-        if (eligibleGateIdx >= 0 && board.gates[eligibleGateIdx]) {
-          const gate = board.gates[eligibleGateIdx];
-          const [nx, ny] = getGateOutwardNormal(gate.edge);
-          const beamCx = snapCol + shape.cols * 0.5 + nx * 0.35;
-          const beamCy = snapRow + shape.rows * 0.5 + ny * 0.35;
-          const beamW = gate.edge === 'TOP' || gate.edge === 'BOTTOM' ? shape.cols * 0.75 : 0.65;
-          const beamH = gate.edge === 'LEFT' || gate.edge === 'RIGHT' ? shape.rows * 0.75 : 0.65;
-
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.overlayQuad,
-            beamCx - beamW * 0.5,
-            beamCy - beamH * 0.5,
-            0.02,
-            beamW,
-            beamH,
-            1.0,
-            Math.min(1, cr + 0.25),
-            Math.min(1, cg + 0.25),
-            Math.min(1, cb + 0.25),
-            0.55 + 0.25 * pulse,
-            0,
-            0,
-            4
-          );
-        }
-      }
-    }
-  }
+  // 2A. Active Drag Floor Target Reticle, Origin Ghost Footprint & Gate Alignment Beam (`UX-01`, `ORIGIN-GHOST-01`)
+  const draggedId = renderActiveDragReticleAndOriginFootprint(rctx, gl, board, options, highContrast, pulse);
 
   // 2B. Booster Targeting Highlights (`TARGET_HAMMER`, `TARGET_ROCKET`, `TARGET_VACUUM`)
   const inputMode = options.inputMode ?? 'DRAG';
   if (inputMode === 'TARGET_ROCKET') {
     const axis = options.rocketAxis ?? 'ROW';
-    const hRow = options.hoverRow ?? Math.floor(board.rows * 0.5);
-    const hCol = options.hoverCol ?? Math.floor(board.cols * 0.5);
+    const hRow = options.hoverRow ?? -1;
+    const hCol = options.hoverCol ?? -1;
     if (axis === 'ROW' && hRow >= 0 && hRow < board.rows) {
       for (let c = 0; c < board.cols; c++) {
         if (board.occupancy[hRow * board.cols + c] === -1) continue;
@@ -755,7 +665,10 @@ export function renderPass2ReticleAndPromptsImpl(
     }
   }
 
-  // 2D. Expanding 3D Knock-On & Shredding Shockwave Rings (`rctx.activeShockwaves`, `R3D-08`)
+  // 2D. Post-Move / Post-Shred Mystic Fissure Path-Tracing Flourish (`MYSTIC-TRACE-01`)
+  renderMysticPathTraces3D(rctx, gl, options, highContrast);
+
+  // 2E. Expanding 3D Knock-On & Shredding Shockwave Rings (`rctx.activeShockwaves`, `R3D-08`)
   renderShockwaveRings(rctx, gl);
 }
 

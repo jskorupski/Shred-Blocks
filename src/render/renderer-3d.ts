@@ -31,6 +31,7 @@ import {
   renderPass1PortcullisBarriers,
   renderPass2ReticleAndPromptsImpl,
 } from './pass2-barriers-and-reticles';
+import { spawnPathTraceImpl } from './pass2-drag-fx';
 import { renderPass3BlocksImpl } from './pass3-block-shells';
 import {
   renderPass4ParticlesImpl,
@@ -52,11 +53,13 @@ import {
   MAX_PARTICLES,
   MAX_SMOKE_PUFFS,
   PARTICLE_STRIDE,
+  type PathWaypoint,
   QualityGovernor,
   type RenderPassContext,
   type RenderSceneOptions,
   TRAY_PALETTES,
   type TrayPalette,
+  type VisualPathTrace,
   type VisualShockwave,
   type VisualShredAnim,
 } from './render-types';
@@ -101,6 +104,8 @@ export class Renderer3D implements RenderPassContext {
   private uUvRect: WebGLUniformLocation | null = null;
   private uColor: WebGLUniformLocation | null = null;
   public uCapColor: WebGLUniformLocation | null = null;
+  public uTraceCount: WebGLUniformLocation | null = null;
+  public uTracePts: WebGLUniformLocation | null = null;
   public uClipPlane: WebGLUniformLocation | null = null;
   public uUseClipPlane: WebGLUniformLocation | null = null;
   public uBlockSeed: WebGLUniformLocation | null = null;
@@ -138,6 +143,7 @@ export class Renderer3D implements RenderPassContext {
   public readonly roomAwakenMap = new Map<number, number>();
   public readonly activeVisualShreds: VisualShredAnim[] = [];
   public readonly activeShockwaves: VisualShockwave[] = [];
+  public readonly activePathTraces: VisualPathTrace[] = [];
   public readonly blockBounceMap = new Map<number, number>();
   public boardShakeTimer = 0;
   public boardShakeDirX = 0;
@@ -399,6 +405,9 @@ export class Renderer3D implements RenderPassContext {
     this.uStoneTint = gl.getUniformLocation(mainProg, 'u_stoneTint');
     this.uTrayMaterial = gl.getUniformLocation(mainProg, 'u_trayMaterial');
     this.uHighContrast = gl.getUniformLocation(mainProg, 'u_highContrast');
+    this.uTraceCount = gl.getUniformLocation(mainProg, 'u_traceCount');
+    this.uTracePts =
+      gl.getUniformLocation(mainProg, 'u_tracePts[0]') ?? gl.getUniformLocation(mainProg, 'u_tracePts');
 
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
     this.uPartStyle = gl.getUniformLocation(partProg, 'u_particleStyle');
@@ -499,18 +508,18 @@ export class Renderer3D implements RenderPassContext {
     spawnParticlesAtImpl(this, worldX, worldY, worldZ, colorId, count, dirX, dirY, particleStyle);
   }
 
-  public spawnShockwave(
-    cx: number,
-    cy: number,
-    z: number,
-    r: number,
-    g: number,
-    b: number,
-    minRadius = 0.28,
-    maxRadius = 1.65,
-    maxAge = 0.42
+  public spawnShockwave(...args: Parameters<RenderPassContext['spawnShockwave']>): void {
+    spawnShockwaveImpl(this, ...args);
+  }
+
+  public spawnPathTrace(
+    waypoints: ReadonlyArray<PathWaypoint>,
+    colorId: ColorId,
+    z = 0,
+    spanCols = 1,
+    spanRows = 1
   ): void {
-    spawnShockwaveImpl(this, cx, cy, z, r, g, b, minRadius, maxRadius, maxAge);
+    spawnPathTraceImpl(this, waypoints, colorId, z, spanCols, spanRows);
   }
 
   public spawnVictoryCelebrationBurst(board: BoardState): void {
@@ -604,6 +613,7 @@ export class Renderer3D implements RenderPassContext {
     this.particlePoolCount = 0;
     this.particleWriteCursor = 0;
     this.activeShockwaves.length = 0;
+    this.activePathTraces.length = 0;
     this.activeVisualShreds.length = 0;
     this.blockBounceMap.clear();
     this.boardShakeTimer = 0;
@@ -673,54 +683,20 @@ export class Renderer3D implements RenderPassContext {
     gl.drawElements(gl.TRIANGLES, handle.indexCount, gl.UNSIGNED_SHORT, 0);
   }
 
-  public drawAtlasBadge(
-    gl: WebGL2RenderingContext,
-    regionKey: string,
-    cx: number,
-    cy: number,
-    z: number,
-    size: number,
-    r = 1,
-    g = 1,
-    b = 1,
-    a = 1
-  ): void {
-    drawAtlasBadgeImpl(this, this.atlasData, gl, regionKey, cx, cy, z, size, r, g, b, a);
+  public drawAtlasBadge(...args: Parameters<RenderPassContext['drawAtlasBadge']>): void {
+    drawAtlasBadgeImpl(this, this.atlasData, ...args);
   }
 
-  public drawNumberBadges(
-    ...[gl, value, cx, cy, z, digitSize, r, g, b]: [
-      WebGL2RenderingContext,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number?,
-      number?,
-      number?,
-    ]
-  ): void {
-    drawNumberBadgesImpl(this, gl, value, cx, cy, z, digitSize, r, g, b);
+  public clearPathTraces(): void {
+    this.activePathTraces.length = 0;
   }
 
-  public drawBadgeMedallion3D(
-    ...[gl, cx, cy, zBase, w, h, fr, fg, fb, rr, rg, rb]: [
-      WebGL2RenderingContext,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number?,
-      number?,
-      number?,
-    ]
-  ): number {
-    return drawBadgeMedallion3DImpl(this, gl, cx, cy, zBase, w, h, fr, fg, fb, rr, rg, rb);
+  public drawNumberBadges(...args: Parameters<RenderPassContext['drawNumberBadges']>): void {
+    drawNumberBadgesImpl(this, ...args);
+  }
+
+  public drawBadgeMedallion3D(...args: Parameters<RenderPassContext['drawBadgeMedallion3D']>): number {
+    return drawBadgeMedallion3DImpl(this, ...args);
   }
 
   private renderWebGL2(board: BoardState, options: RenderSceneOptions, dtSec = 1 / 60): void {

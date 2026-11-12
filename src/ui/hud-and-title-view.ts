@@ -89,7 +89,7 @@ export function syncBoosterTargetingBannerImpl(hoverState: HoverState): void {
     textEl.textContent = '🔨 Tap any block, crate, or locked gate to smash';
     axisBtn.hidden = true;
   } else if (hoverState.inputMode === 'TARGET_ROCKET') {
-    textEl.textContent = `🚀 Tap any cell to blast its entire ${hoverState.rocketAxis === 'ROW' ? 'ROW' : 'COLUMN'}`;
+    textEl.textContent = `🚀 Aim & release to blast entire ${hoverState.rocketAxis === 'ROW' ? 'ROW' : 'COLUMN'}`;
     axisBtn.hidden = false;
     axisBtn.textContent = hoverState.rocketAxis === 'ROW' ? 'Axis: ↔ ROW' : 'Axis: ↕ COL';
   } else if (hoverState.inputMode === 'TARGET_VACUUM') {
@@ -539,6 +539,8 @@ export function buildRenderOptionsImpl(
 
   return {
     draggedBlockId: activeBlockId,
+    isLiveDrag: hover.activeBlockId !== null,
+    dragLeftOrigin: hover.activeBlockId !== null ? Boolean(hover.dragLeftOrigin) : false,
     dragTargetRow,
     dragTargetCol,
     dragEligibleGateIndex,
