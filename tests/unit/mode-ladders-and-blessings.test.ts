@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  applyBoosterHammer,
+  applyBoosterHint,
+  commitBlockMove,
+  computeEarnedStars,
+  isBoardWon,
+} from '../../src/core/board';
+import {
   carryLiveResourcesIntoUndo,
   cloneBoardState,
   createBoardState,
@@ -16,6 +23,7 @@ import {
   migrateLegacyEconomy,
   SAVE_STORAGE_KEY,
   SaveManager,
+  UNDER_PAR_ORACLE_COINS,
   ZEN_MAX_CONSECUTIVE_SKIPS,
 } from '../../src/storage/save-manager';
 
@@ -359,5 +367,107 @@ describe('MAP-MODE-SPLIT-01, ZEN-STARS-01 & SAVE-COMPAT-01: Per-Mode Ladders, Ze
     const boosterMutated = createBoardState(getLevelSpec(1));
     boosterMutated.sessionBlocksShredded = 1;
     expect(isBoardRunStarted(boosterMutated)).toBe(true);
+  });
+
+  it('UNDER-PAR-ORACLE-01: rewards booster-free Under-Par clears (Level 312 in 15/16 moves) once per stage, blocks Hint+Undo or booster washing, and round-trips [0xa7, 0x55] SB1 save codes', () => {
+    const spec312 = getLevelSpec(312);
+    const board = createBoardState(spec312);
+    expect(board.parMoves).toBe(16);
+
+    const underParLine: ReadonlyArray<readonly [number, number, number]> = [
+      [10, 7, 6],
+      [12, 7, 4],
+      [3, 6, 6],
+      [9, 7, 1],
+      [4, 8, 0],
+      [5, 7, 1],
+      [10, 7, 0],
+      [7, 5, 7],
+      [11, 5, 7],
+      [6, 4, 0],
+      [2, 4, 0],
+      [1, 0, 3],
+      [8, 0, 4],
+      [10, 5, 0],
+      [12, 0, 4],
+    ];
+    for (const [blockId, r, c] of underParLine) {
+      const out = commitBlockMove(board, blockId, r, c, 'CHALLENGE');
+      expect(out.moved).toBe(true);
+    }
+    expect(isBoardWon(board)).toBe(true);
+    expect(board.movesCommitted).toBe(15);
+    expect(board.powerUpsUsed).toBe(0);
+
+    const mgr = new SaveManager();
+    mgr.setCurrentLevel(312, true);
+    const stars = computeEarnedStars(board, 'CHALLENGE', false);
+    expect(stars).toBe(3);
+
+    // 1. First pure Under-Par clear awards +50 Coins + 1 UNCOMMON+ Power-Up and stamps underParCleared
+    const win1 = mgr.recordLevelWin(
+      312,
+      board.movesCommitted,
+      45,
+      board.sessionBlocksShredded,
+      stars,
+      board.parMoves,
+      board.difficulty,
+      false,
+      (board.powerUpsUsed ?? 0) === 0 && (board.continuesUsed ?? 0) === 0
+    );
+    expect(win1.underPar).toBe(true);
+    expect(win1.firstUnderPar).toBe(true);
+    expect(win1.underParMovesSaved).toBe(1);
+    expect(win1.underParCoins).toBe(UNDER_PAR_ORACLE_COINS);
+    expect(win1.underParBooster).not.toBeNull();
+    expect(win1.underParBooster).not.toBe('UNDO'); // Milestone-grade drop guarantees UNCOMMON+
+    expect(mgr.getPayload().levelRecords[312]?.underParCleared).toBe(true);
+
+    // 2. Replaying Level 312 Under Par keeps the Easter Egg celebration (`underPar: true`) with 0 repeat bounty farming
+    const coinsBeforeEncore = mgr.getPayload().coins;
+    const boostersBeforeEncore = { ...mgr.getPayload().boosters };
+    const win2 = mgr.recordLevelWin(312, 15, 42, 4, 3, 16, board.difficulty, false, true);
+    expect(win2.underPar).toBe(true);
+    expect(win2.firstUnderPar).toBe(false);
+    expect(win2.underParCoins).toBe(0);
+    expect(win2.underParBooster).toBeNull();
+    expect(mgr.getPayload().coins - coinsBeforeEncore).toBe(win2.baseCoins);
+    expect(mgr.getPayload().boosters).toEqual(boostersBeforeEncore);
+
+    // 3. Hint + Undo and destructive boosters increment `powerUpsUsed` and survive `carryLiveResourcesIntoUndo`
+    const bHint = createBoardState(getLevelSpec(2));
+    const snapBeforeHint = cloneBoardState(bHint);
+    applyBoosterHint(bHint, 'CHALLENGE', {
+      blockId: bHint.blocks[0].id,
+      targetRow: 0,
+      targetCol: 0,
+      exitsGateIndex: 0,
+    });
+    expect(bHint.powerUpsUsed).toBe(1);
+    carryLiveResourcesIntoUndo(snapBeforeHint, bHint, 'CHALLENGE');
+    expect(snapBeforeHint.powerUpsUsed).toBe(1);
+
+    const bHammer = createBoardState(getLevelSpec(1));
+    expect(
+      applyBoosterHammer(bHammer, bHammer.blocks[0].row, bHammer.blocks[0].col, bHammer.blocks[0].id)
+    ).toBe(true);
+    expect(bHammer.powerUpsUsed).toBe(1);
+
+    // Disqualified runs (power-up used or Zen mode) never trigger `underPar`
+    const assistedWin = mgr.recordLevelWin(10, 4, 20, 4, 3, 6, 'NORMAL', false, false);
+    expect(assistedWin.underPar).toBe(false);
+    expect(assistedWin.underParCoins).toBe(0);
+    expect(mgr.getPayload().levelRecords[10]?.underParCleared).toBeUndefined();
+
+    const zenWin = mgr.recordLevelWin(11, 4, 20, 4, 0, 6, 'NORMAL', true, true);
+    expect(zenWin.underPar).toBe(false);
+    expect(mgr.getPayload().levelRecords[11]?.underParCleared).toBeUndefined();
+
+    // 4. Binary `SB1-...` save code round-trips `underParCleared: true` via `[0xa7, 0x55]` trailer
+    const code = encodeSaveCode(mgr.getPayload());
+    const decoded = decodeSaveCode(code);
+    expect(decoded.levelRecords[312]?.underParCleared).toBe(true);
+    expect(decoded.levelRecords[10]?.underParCleared).toBeUndefined();
   });
 });

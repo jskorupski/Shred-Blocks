@@ -151,6 +151,7 @@ function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
     if (typeof r.zenBestMoves === 'number' && Number.isFinite(r.zenBestMoves))
       clean.zenBestMoves = clampNum(r.zenBestMoves, 0, MAX_SAVE_COUNTER, 0);
     if (typeof r.zenSkipped === 'boolean') clean.zenSkipped = r.zenSkipped;
+    if (typeof r.underParCleared === 'boolean') clean.underParCleared = r.underParCleared;
     levelRecords[id] = clean;
   }
 

@@ -52,8 +52,20 @@ dialog::backdrop {
 }
 
 .victory-dialog-card {
+  position: relative;
+  overflow-x: hidden;
   padding: 0.9rem 1.02rem;
   gap: 0.56rem;
+}
+
+.victory-fx-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: inherit;
 }
 
 .victory-header {
@@ -231,6 +243,133 @@ dialog::backdrop {
   font-size: 1.05rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.stat-value-under-par {
+  color: #7ef7eb;
+}
+
+/* Under-Par Oracle Easter Egg Reliquary Plaque (`UNDER-PAR-ORACLE-01`) */
+#dialog-victory[data-under-par="true"] .victory-dialog-card {
+  border-color: rgba(126, 247, 235, 0.46);
+  background:
+    radial-gradient(ellipse 88% 42% at 50% 0%, rgba(103, 245, 232, 0.16) 0%, transparent 72%),
+    rgba(26, 20, 48, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(214, 255, 250, 0.24),
+    0 20px 48px rgba(0, 0, 0, 0.62),
+    0 0 28px rgba(72, 232, 214, 0.18);
+}
+
+body.high-contrast #dialog-victory[data-under-par="true"] .victory-dialog-card {
+  background: #0b0918;
+  border: 2px solid #fde047;
+  box-shadow: none;
+}
+
+#dialog-victory[data-under-par="true"] .victory-crest-ornament {
+  color: #7ef7eb;
+  filter: drop-shadow(0 0 12px rgba(103, 245, 232, 0.48));
+  animation-duration: 10s;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+.under-par-easter-egg:not([hidden]) {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.16rem;
+  padding: 0.48rem 0.72rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg var(--in-oklab), rgba(14, 58, 66, 0.88) 0%, rgba(44, 34, 82, 0.88) 100%);
+  border: 1px solid rgba(114, 245, 232, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(214, 255, 250, 0.22),
+    0 2px 10px rgba(48, 214, 198, 0.18);
+  text-align: center;
+  scale: 1;
+  animation: underParReveal 340ms cubic-bezier(0.34, 1.45, 0.64, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.under-par-easter-egg:not([hidden])::after {
+  content: "";
+  position: absolute;
+  inset: -20% auto -20% -35%;
+  width: 32%;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(204, 255, 250, 0.28) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  translate: 0 0;
+  animation: underParSheenSweep 1.15s cubic-bezier(0.22, 1, 0.36, 1) 0.28s 1 both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+body.reduced-motion .under-par-easter-egg:not([hidden]),
+body.reduced-motion .under-par-easter-egg:not([hidden])::after {
+  animation: none;
+}
+
+@keyframes underParSheenSweep {
+  from {
+    translate: 0 0;
+    opacity: 0.95;
+  }
+  to {
+    translate: 460% 0;
+    opacity: 0;
+  }
+}
+
+body.high-contrast .under-par-easter-egg:not([hidden]) {
+  background: #0b1324;
+  border: 2px solid #fde047;
+  box-shadow: none;
+}
+
+.under-par-kicker {
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7ef7eb;
+}
+
+.under-par-detail {
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #fef3c7;
+  text-wrap: pretty;
+}
+
+@keyframes underParReveal {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
 }
 
 .text-gold {
@@ -529,134 +668,6 @@ dialog::backdrop {
   .code-textarea {
     font-size: 1rem;
   }
-}
-
-.button-row-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.qr-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.72rem;
-  padding-top: 0.22rem;
-}
-
-.qr-box {
-  width: 120px;
-  height: 120px;
-  background: #ffffff;
-  color: #0f172a;
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  padding: 4px;
-  flex-shrink: 0;
-}
-
-.qr-box svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.qr-caption {
-  font-size: 0.73rem;
-  color: var(--text-muted);
-}
-
-.transfer-status {
-  margin: 0;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: #f3d27a;
-}
-
-.import-diff-panel {
-  background: rgba(20, 15, 38, 0.85);
-  border: 1px solid rgba(229, 178, 93, 0.45);
-  border-radius: var(--radius-md);
-  padding: 0.62rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.diff-heading {
-  margin: 0;
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: #f3d27a;
-}
-
-.diff-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-}
-
-.diff-col {
-  background: var(--surface-subtle);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 0.48rem;
-}
-
-.diff-col-incoming {
-  background: rgba(40, 181, 167, 0.1);
-}
-
-.diff-col h5 {
-  margin: 0 0 0.3rem;
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.diff-list {
-  margin: 0;
-  padding-left: 1rem;
-  font-size: 0.73rem;
-  line-height: 1.45;
-}
-
-/* Install Guide Steps */
-.install-steps-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0.58rem;
-}
-
-.install-step-card {
-  background: var(--surface-subtle);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 0.7rem;
-}
-
-.install-step-card h3 {
-  margin: 0 0 0.36rem;
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
-  font-variation-settings:
-    "SOFT" 40,
-    "WONK" 0;
-  font-size: 0.88rem;
-  font-weight: 600;
-}
-
-.install-step-card ol {
-  margin: 0;
-  padding-left: 1.15rem;
-  font-size: 0.76rem;
-  line-height: 1.45;
-  color: var(--text-secondary);
 }
 
 /* Contextual In-Flow App Update Notification Banner (STOR-03 / PWA-UPDATE-01) */

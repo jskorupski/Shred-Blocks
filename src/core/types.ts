@@ -465,6 +465,8 @@ export interface BoardState {
   freezeRemainingSec: number;
   /** Paid Continues used on this board (`STARS-SLACK-01`): any Continue caps the clear at `1★` */
   continuesUsed?: number;
+  /** Paid gameplay Power-Ups (`HINT`, `HAMMER`, `ROCKET`, `VACUUM`) activated on this board (`UNDER-PAR-ORACLE-01`) */
+  powerUpsUsed?: number;
   /** Zen Sanctuary (`ZEN-CALM-01`): bomb fuses are inert (never tick, never detonate) while the run is in Zen */
   bombsInert?: boolean;
   timerRunning: boolean;
@@ -564,6 +566,8 @@ export interface LevelRecord {
   timedBestTimeSec?: number;
   zenBestMoves?: number;
   zenSkipped?: boolean;
+  /** True once beaten strictly Under Par (`moves < parMoves`) in Challenge/Timed with zero Power-Ups or Continues (`UNDER-PAR-ORACLE-01`) */
+  underParCleared?: boolean;
 }
 
 export interface SavePayloadV1 {

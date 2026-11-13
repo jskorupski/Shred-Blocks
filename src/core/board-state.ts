@@ -305,6 +305,7 @@ export function createBoardState(spec: LevelSpec): BoardState {
     timeLimitSec,
     timeRemainingSec: timeLimitSec,
     freezeRemainingSec: 0,
+    powerUpsUsed: 0,
     timerRunning: false,
     movesCommitted: 0,
     sessionBlocksShredded: 0,
@@ -355,6 +356,7 @@ export function carryLiveResourcesIntoUndo(restored: BoardState, live: BoardStat
   restored.bombsInert = live.bombsInert;
   restored.freeMovesRemaining = Math.max(restored.freeMovesRemaining, live.freeMovesRemaining);
   restored.continuesUsed = Math.max(restored.continuesUsed ?? 0, live.continuesUsed ?? 0);
+  restored.powerUpsUsed = Math.max(restored.powerUpsUsed ?? 0, live.powerUpsUsed ?? 0);
   if (live.moveLimit > restored.moveLimit) {
     const bonusMoves = live.moveLimit - restored.moveLimit;
     restored.moveLimit = live.moveLimit;
@@ -426,6 +428,7 @@ export function isBoardRunStarted(board: BoardState): boolean {
     board.freezeRemainingSec > 0 ||
     board.hintMove !== null ||
     (board.continuesUsed ?? 0) > 0 ||
+    (board.powerUpsUsed ?? 0) > 0 ||
     board.timerRunning
   );
 }

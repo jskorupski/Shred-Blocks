@@ -204,6 +204,7 @@ export function applyBoosterHint(
   } else {
     board.freeMovesRemaining += 2;
   }
+  board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
   board.lastMovedBlockId = 0;
   if (hintMove !== undefined) {
     board.hintMove = hintMove;
@@ -324,6 +325,7 @@ export function applyBoosterHammer(
       (b) => b.id === blockId && b.status === 'ACTIVE' && !isBlockInLockedRoom(board, b)
     );
     if (directBlock) {
+      board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
       destroyOrPeelBlockByBooster(board, directBlock);
       return true;
     }
@@ -336,6 +338,7 @@ export function applyBoosterHammer(
         (bar) => !bar.open && bar.cells.some(([br, bc]) => br === row && bc === col)
       );
       if (hitBarrier) {
+        board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
         board.lastMovedBlockId = 0;
         hitBarrier.shredsRemaining = 0;
         hitBarrier.lockId = 0;
@@ -363,6 +366,7 @@ export function applyBoosterHammer(
         isRoomUnlocked(board, board.roomMap[c.row * board.cols + c.col] ?? 0)
     );
     if (crate) {
+      board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
       board.lastMovedBlockId = 0;
       crate.hp = 0;
       crate.destroyed = true;
@@ -385,6 +389,7 @@ export function applyBoosterHammer(
         (b) => b.id === occ && b.status === 'ACTIVE' && !isBlockInLockedRoom(board, b)
       );
       if (block) {
+        board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
         destroyOrPeelBlockByBooster(board, block);
         return true;
       }
@@ -427,6 +432,7 @@ export function applyBoosterHammer(
       row < gate.spanStart + gate.spanLength;
 
     if (hitsTop || hitsBottom || hitsLeft || hitsRight) {
+      board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
       board.lastMovedBlockId = 0;
       gate.iceCount = 0;
       gate.shutterLockColor = 0;
@@ -496,6 +502,7 @@ export function applyBoosterRocket(board: BoardState, row: number, col: number, 
   }
 
   if (affected) {
+    board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
     board.lastMovedBlockId = 0;
   }
   rebuildOccupancyGrid(board);
@@ -528,6 +535,7 @@ export function applyBoosterVacuum(board: BoardState, targetColor: ColorId): boo
   );
   if (matchingBlocks.length === 0) return false;
 
+  board.powerUpsUsed = (board.powerUpsUsed ?? 0) + 1;
   board.lastMovedBlockId = 0;
   for (const b of matchingBlocks) {
     destroyOrPeelBlockByBooster(board, b);

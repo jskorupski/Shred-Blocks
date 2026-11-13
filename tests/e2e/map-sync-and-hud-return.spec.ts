@@ -281,4 +281,70 @@ test.describe('Sanctuary Map Auto-Scroll, Filter Reset & HUD Title Return', () =
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openModal('failure'));
     expect((await checkZoomBlockedOnSelector('#dialog-failure .dialog-card')).touchAction).toBe('pan-y');
   });
+
+  test('UNDER-PAR-ORACLE-01: celebrates booster-free Under-Par clear on Level 312 (15 / Par 16), grants one-time +50 Coin & Uncommon+ Booster bounty, and stamps ✦ Under Par on Map', async ({
+    page,
+  }) => {
+    await bootWithMultiModeSave(page);
+
+    const playLevel312UnderPar = async () => {
+      await page.evaluate(() => {
+        const moves: Array<[number, number, number]> = [
+          [10, 7, 6],
+          [12, 7, 4],
+          [3, 6, 6],
+          [9, 7, 1],
+          [4, 8, 0],
+          [5, 7, 1],
+          [10, 7, 0],
+          [7, 5, 7],
+          [11, 5, 7],
+          [6, 4, 0],
+          [2, 4, 0],
+          [1, 0, 3],
+          [8, 0, 4],
+          [10, 5, 0],
+          [12, 0, 4],
+        ];
+        for (const [id, r, c] of moves) {
+          window.__SHREDBLOCKS_DEBUG__.commitMove(id, r, c);
+        }
+      });
+    };
+
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(312));
+    await playLevel312UnderPar();
+
+    const victoryDialog = page.locator('#dialog-victory');
+    await expect(victoryDialog).toBeVisible();
+    await expect(victoryDialog).toHaveAttribute('data-under-par', 'true');
+    await expect(page.locator('#dialog-victory .victory-dialog-card > #victory-fx-canvas')).toHaveAttribute(
+      'data-fx-mode',
+      'under-par'
+    );
+    await expect(page.locator('#victory-title')).toHaveText('✦ Level 312 · Under Par!');
+    await expect(page.locator('#victory-moves')).toHaveText('15 / Par 16 (−1)');
+    await expect(page.locator('#victory-under-par-banner')).toBeVisible();
+    await expect(page.locator('#victory-under-par-banner')).toContainText('SECRET FEAT · ORACLE OUTSMARTED');
+    await expect(page.locator('#victory-under-par-banner')).toContainText('Bounty: +50 Coins & +1');
+    await expect(page.locator('#victory-coins-breakdown')).toContainText('✦ Oracle Bounty: +50');
+
+    // Replay Level 312 Under Par: Easter Egg UI still celebrates, while stage bounty is NOT farmed a second time
+    await page.locator('#btn-victory-replay').click();
+    await expect(victoryDialog).toBeHidden();
+    await playLevel312UnderPar();
+
+    await expect(victoryDialog).toBeVisible();
+    await expect(page.locator('#victory-under-par-banner')).toContainText(
+      'Oracle Encore — Stage Bounty Claimed'
+    );
+    await expect(page.locator('#victory-coins-breakdown')).not.toContainText('Oracle Bounty');
+
+    // Return to Sanctuary Map: Level 312 displays the `✦ Under Par` badge
+    await page.locator('#btn-victory-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    const card312 = page.locator('.level-node-card[data-level-id="312"]');
+    await expect(card312).toBeVisible();
+    await expect(card312.locator('.node-flag-badge.flag-under-par')).toHaveText('✦ Under Par');
+  });
 });

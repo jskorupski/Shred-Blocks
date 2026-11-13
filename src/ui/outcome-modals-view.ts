@@ -16,9 +16,11 @@ import { type AppViewContext, BOOSTER_DISPLAY_NAMES, getPlayModeMeta } from './c
  */
 
 export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinRewardSummary): void {
+  const dialogVictory = document.getElementById('dialog-victory');
   const titleEl = document.getElementById('victory-title');
   const subtitleEl = document.getElementById('victory-subtitle');
   const starsEl = document.getElementById('victory-stars');
+  const underParBannerEl = document.getElementById('victory-under-par-banner');
   const movesEl = document.getElementById('victory-moves');
   const coinsTotalEl = document.getElementById('victory-coins-total');
   const breakdownEl = document.getElementById('victory-coins-breakdown');
@@ -30,24 +32,54 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
 
   const save = app.saveManager.getPayload();
   const modeInfo = getPlayModeMeta(save.settings.playMode);
+  const isUnderPar = Boolean(summary.underPar);
+  const movesSaved = summary.underParMovesSaved ?? Math.max(0, app.board.parMoves - app.board.movesCommitted);
+
+  dialogVictory?.setAttribute('data-under-par', isUnderPar ? 'true' : 'false');
+
   const nextLevelBtn = document.getElementById('btn-next-level');
   if (nextLevelBtn) {
     nextLevelBtn.textContent = `${modeInfo.icon} ▶ Next Level`;
   }
 
   if (titleEl) {
-    titleEl.textContent = `Level ${app.board.levelId} Cleared!`;
+    titleEl.textContent = isUnderPar
+      ? `✦ Level ${app.board.levelId} · Under Par!`
+      : `Level ${app.board.levelId} Cleared!`;
   }
   if (subtitleEl) {
     subtitleEl.textContent = summary.zenClear
       ? summary.zenStarAwarded
         ? '★ +1 Gold Star Earned in Zen Sanctuary! Every 3 unique Zen clears awards a Gold Star.'
         : `🌿 Tranquil Zen Clear — ★ ${save.zenStarProgress}/3 toward next Gold Star · Blessings ${save.zenBlessings}/3`
-      : summary.starsEarned === 3
-        ? 'Flawless 3-Star Shredder Mastery!'
-        : summary.starsEarned === 2
-          ? 'Great Job! Clear in fewer moves for 3 Stars!'
-          : 'Stage Complete! Clear closer to Par for 3 Stars!';
+      : isUnderPar
+        ? `Astrolabe Outsmarted — ${movesSaved} ${movesSaved === 1 ? 'move' : 'moves'} faster than the Sanctuary solver!`
+        : summary.starsEarned === 3
+          ? 'Flawless 3-Star Shredder Mastery!'
+          : summary.starsEarned === 2
+            ? 'Great Job! Clear in fewer moves for 3 Stars!'
+            : 'Stage Complete! Clear closer to Par for 3 Stars!';
+  }
+  if (underParBannerEl) {
+    if (isUnderPar) {
+      const kicker = document.createElement('span');
+      kicker.className = 'under-par-kicker';
+      kicker.textContent = '✦ SECRET FEAT · ORACLE OUTSMARTED';
+      const detail = document.createElement('span');
+      detail.className = 'under-par-detail';
+      if (summary.firstUnderPar && summary.underParBooster) {
+        const bName = BOOSTER_DISPLAY_NAMES[summary.underParBooster];
+        const bRarity = BOOSTER_RARITY[summary.underParBooster];
+        detail.textContent = `Solved in ${app.board.movesCommitted} vs. Par ${app.board.parMoves}! Bounty: +${summary.underParCoins ?? 0} Coins & +1 ${bName} [${bRarity}]`;
+      } else {
+        detail.textContent = `Solved in ${app.board.movesCommitted} vs. Par ${app.board.parMoves}! Oracle Encore — Stage Bounty Claimed`;
+      }
+      underParBannerEl.replaceChildren(kicker, detail);
+      underParBannerEl.hidden = false;
+    } else {
+      underParBannerEl.replaceChildren();
+      underParBannerEl.hidden = true;
+    }
   }
   if (starsEl) {
     if (summary.zenClear) {
@@ -70,7 +102,10 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
     }
   }
   if (movesEl) {
-    movesEl.textContent = `${app.board.movesCommitted} / Par ${app.board.parMoves}`;
+    movesEl.textContent = isUnderPar
+      ? `${app.board.movesCommitted} / Par ${app.board.parMoves} (−${movesSaved})`
+      : `${app.board.movesCommitted} / Par ${app.board.parMoves}`;
+    movesEl.classList.toggle('stat-value-under-par', isUnderPar);
   }
   if (coinsTotalEl) {
     coinsTotalEl.textContent = `+${summary.totalCoinsEarned} Coins`;
@@ -87,6 +122,7 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
     ];
     if (summary.starCoins > 0) parts.push(`New Stars: +${summary.starCoins}`);
     if (summary.streakCoins > 0) parts.push(`Flow Streak: +${summary.streakCoins}`);
+    if ((summary.underParCoins ?? 0) > 0) parts.push(`✦ Oracle Bounty: +${summary.underParCoins}`);
     if (summary.chestCoins > 0) parts.push(`Chests: +${summary.chestCoins}`);
     breakdownEl.textContent = parts.join(' • ');
   }

@@ -236,6 +236,40 @@ export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earne
   });
 }
 
+/**
+ * Under-Par Oracle Chime (`UNDER-PAR-ORACLE-01`):
+ * Crystalline Lydian `#11` astral bell cascade (`F#6 -> G6 -> B6 -> D7 -> F#7 -> G7`)
+ * layered right after the victory fanfare peak to celebrate outsmarting the Sanctuary solver.
+ */
+export function playUnderParOracleVoice(ctx: AudioContext, outGain: GainNode): void {
+  const now = ctx.currentTime;
+  const bells: ReadonlyArray<{ t: number; f: number; dur: number; amp: number }> = [
+    { t: 0.34, f: 1479.98, dur: 0.44, amp: 0.14 }, // F#6 (Lydian #11 sparkle)
+    { t: 0.44, f: 1567.98, dur: 0.46, amp: 0.15 }, // G6
+    { t: 0.54, f: 1975.53, dur: 0.5, amp: 0.16 }, // B6
+    { t: 0.65, f: 2349.32, dur: 0.54, amp: 0.15 }, // D7
+    { t: 0.77, f: 2959.96, dur: 0.62, amp: 0.14 }, // F#7
+    { t: 0.91, f: 3135.96, dur: 0.82, amp: 0.17 }, // G7
+  ];
+  for (const bell of bells) {
+    const t = now + bell.t;
+    for (const detune of [-4, 4]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(bell.f, t);
+      osc.detune.setValueAtTime(detune, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(bell.amp * 0.6, t + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + bell.dur);
+      osc.connect(gain);
+      gain.connect(outGain);
+      osc.start(t);
+      osc.stop(t + bell.dur + 0.02);
+    }
+  }
+}
+
 export function playLossBuzzerVoice(ctx: AudioContext, sfxGain: GainNode): void {
   const now = ctx.currentTime;
   const notes = [392.0, 311.13, 261.63];

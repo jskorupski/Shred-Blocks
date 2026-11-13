@@ -7,6 +7,7 @@ import {
   playLossBuzzerVoice,
   playRelicAwakenVoice,
   playShredStyleOvertoneVoice,
+  playUnderParOracleVoice,
   playWinFanfareVoices,
   scheduleAmbientStepVoice,
 } from './synth-voices';
@@ -568,6 +569,25 @@ export class SoundEngine {
     if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
 
     playWinFanfareVoices(ctx, outGain, earnedStars);
+  }
+
+  /**
+   * 10b. Under-Par Oracle Chime (`UNDER-PAR-ORACLE-01`):
+   * Shimmering Lydian `#11` astral bell cascade layered over the win fanfare when beating Par booster-free.
+   */
+  public playUnderParOracleChime(): void {
+    this.triggerHaptic([14, 24, 14, 24, 32], 74);
+    if (!this.sfxEnabled && !this.musicEnabled) return;
+    const ctx = this.ensureContext();
+    const outGain = this.sfxEnabled ? this.sfxGain : this.musicGain;
+    if (!ctx || !outGain) return;
+    if (ctx.state !== 'running' && ctx.currentTime === 0) {
+      void ctx.resume().catch(() => {});
+      return;
+    }
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+
+    playUnderParOracleVoice(ctx, outGain);
   }
 
   /**

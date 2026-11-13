@@ -406,6 +406,19 @@
   border: 1px solid rgba(72, 232, 206, 0.28);
 }
 
+.node-flag-badge.flag-under-par {
+  background: linear-gradient(135deg var(--in-oklab), rgba(14, 62, 68, 0.9) 0%, rgba(56, 40, 88, 0.9) 100%);
+  color: #fef08a;
+  border: 1px solid rgba(126, 247, 235, 0.56);
+  box-shadow: inset 0 1px 0 rgba(224, 255, 250, 0.22);
+}
+
+body.high-contrast .node-flag-badge.flag-under-par {
+  background: #0b1324;
+  color: #fde047;
+  border: 1px solid #fde047;
+}
+
 .node-flag-badge.flag-zen {
   background: rgba(16, 48, 38, 0.74);
   color: #a7f3d0;
@@ -644,7 +657,8 @@ body.reduced-motion .roadmap-archive-btn {
   .level-node-card.current-level {
     padding-inline-start: calc(0.38rem - 2.5px);
   }
-  .node-flag-badge.flag-completed {
+  .node-flag-badge.flag-completed,
+  .node-flag-badge.flag-under-par {
     padding: 0.07rem 0.3rem;
     font-size: 0.58rem;
   }

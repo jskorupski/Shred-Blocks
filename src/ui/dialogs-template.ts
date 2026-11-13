@@ -7,6 +7,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
     <!-- 1. Victory Modal (#dialog-victory) -->
     <dialog id="dialog-victory" class="game-dialog" closedby="none" aria-labelledby="victory-title">
       <div class="dialog-card victory-dialog-card">
+        <canvas id="victory-fx-canvas" class="victory-fx-canvas" aria-hidden="true"></canvas>
         <div class="dialog-header victory-header">
           <svg
             id="victory-crest-ornament"
@@ -33,6 +34,8 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         </div>
 
         <div id="victory-stars" class="victory-stars" aria-label="Earned Stars"><span class="star-slot earned">★</span><span class="star-slot earned">★</span><span class="star-slot earned">★</span></div>
+
+        <div id="victory-under-par-banner" class="under-par-easter-egg" hidden></div>
 
         <div class="victory-stats-grid">
           <div class="stat-box">

@@ -5,6 +5,9 @@ const MAX_MODE_LEVEL = 999_999;
 
 export const MODE_SPLIT_TRAILER_MAGIC_0 = 0xa6;
 export const MODE_SPLIT_TRAILER_MAGIC_1 = 0x4d; // 'M' — distinguishes mode-split trailer from synthetic test trailers
+export const UNDER_PAR_TRAILER_MAGIC_0 = 0xa7;
+export const UNDER_PAR_TRAILER_MAGIC_1 = 0x55; // 'U' — optional sparse Under-Par Oracle trailer (`UNDER-PAR-ORACLE-01`)
+export const UNDER_PAR_ORACLE_COINS = 50;
 
 export function createDefaultModeState(): ModeStateMap {
   return {
@@ -318,6 +321,24 @@ export function packModeSplitTrailer(
       writeVarint(out, Math.max(0, Math.round(item.rec.zenBestMoves ?? 0)));
     }
   }
+
+  // Optional `[0xa7, 0x55]` ('U') Under-Par Oracle trailer (`UNDER-PAR-ORACLE-01`):
+  // Omitted when zero stages have `underParCleared` so existing save streams stay byte-identical.
+  const underParIds: number[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    if (payload.levelRecords[ids[i]]?.underParCleared) {
+      underParIds.push(ids[i]);
+    }
+  }
+  if (underParIds.length > 0) {
+    out.push(UNDER_PAR_TRAILER_MAGIC_0, UNDER_PAR_TRAILER_MAGIC_1);
+    writeVarint(out, underParIds.length);
+    let prevUpId = 0;
+    for (const id of underParIds) {
+      writeVarint(out, id - prevUpId);
+      prevUpId = id;
+    }
+  }
 }
 
 export interface UnpackedModeSplitFields {
@@ -427,6 +448,30 @@ export function unpackModeSplitTrailer(
     }
   }
 
+  const upPos = getPos();
+  if (
+    upPos + 1 < rawBytes.length &&
+    rawBytes[upPos] === UNDER_PAR_TRAILER_MAGIC_0 &&
+    rawBytes[upPos + 1] === UNDER_PAR_TRAILER_MAGIC_1
+  ) {
+    advancePos(2);
+    const upCount = readVarint();
+    if (upCount > ids.length) {
+      onCorrupt('Under-par trailer count exceeds record count.');
+    }
+    let prevUpId = 0;
+    for (let i = 0; i < upCount; i++) {
+      const delta = readVarint();
+      if (delta < 1 || prevUpId + delta > MAX_MODE_LEVEL) {
+        onCorrupt('Invalid under-par trailer ID delta.');
+      }
+      prevUpId += delta;
+      if (levelRecords[prevUpId]) {
+        levelRecords[prevUpId].underParCleared = true;
+      }
+    }
+  }
+
   return {
     modeLadderVersion,
     modeState,
@@ -443,12 +488,16 @@ export interface ModeWinEvaluation {
   starsImproved: number;
   zenStarAwarded: boolean;
   zenBlessingAwarded: boolean;
+  underPar: boolean;
+  firstUnderPar: boolean;
+  underParMovesSaved: number;
   commitRecordAndLadders: () => void;
 }
 
 /**
  * Evaluates per-mode first-clear status, additive per-mode star improvements (`Challenge` + `Timed` + `Zen`),
- * Zen Stars (`1 ★ / 3 unique clears`, `ZEN-STARS-01`), and Zen Blessings (`1 / 4 unique clears`, cap `3`).
+ * Zen Stars (`1 ★ / 3 unique clears`, `ZEN-STARS-01`), Zen Blessings (`1 / 4 unique clears`, cap `3`),
+ * and pure booster-free Under-Par Oracle feats (`UNDER-PAR-ORACLE-01`).
  */
 export function evaluateModeLevelWin(
   payload: SavePayloadV1,
@@ -456,7 +505,9 @@ export function evaluateModeLevelWin(
   moves: number,
   timeSec: number,
   stars: 0 | 1 | 2 | 3,
-  isZenRun: boolean
+  isZenRun: boolean,
+  pureUnderParEligible = false,
+  parMoves?: number
 ): ModeWinEvaluation {
   const targetMode: PlayMode = isZenRun
     ? 'ZEN'
@@ -507,12 +558,28 @@ export function evaluateModeLevelWin(
     starsImproved = Math.max(0, stars - prevChallengeStars);
   }
 
+  const underParMovesSaved =
+    !isZenRun &&
+    pureUnderParEligible &&
+    stars === 3 &&
+    parMoves !== undefined &&
+    parMoves > 1 &&
+    moves > 0 &&
+    moves < parMoves
+      ? parMoves - moves
+      : 0;
+  const underPar = underParMovesSaved > 0;
+  const firstUnderPar = underPar && !prev?.underParCleared;
+
   return {
     targetMode,
     isFirstClear,
     starsImproved,
     zenStarAwarded,
     zenBlessingAwarded,
+    underPar,
+    firstUnderPar,
+    underParMovesSaved,
     commitRecordAndLadders: () => {
       const nextChallengeStars =
         targetMode === 'CHALLENGE' ? Math.max(prevChallengeStars, stars) : prev?.challengeStars;
@@ -559,6 +626,9 @@ export function evaluateModeLevelWin(
       } else {
         if (prev?.zenBestMoves !== undefined) nextRecord.zenBestMoves = prev.zenBestMoves;
         if (prev?.zenSkipped) nextRecord.zenSkipped = true;
+      }
+      if (underPar || prev?.underParCleared) {
+        nextRecord.underParCleared = true;
       }
 
       payload.levelRecords[levelId] = nextRecord;

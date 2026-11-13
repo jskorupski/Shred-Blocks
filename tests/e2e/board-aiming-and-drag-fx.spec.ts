@@ -304,4 +304,98 @@ test.describe('Board Aiming, Mid-Drag Origin Ghost Footprint & Mystic Path-Traci
 
     expect(errors).toEqual([]);
   });
+
+  test('Responsive hint, helper, and booster targeting banners stay symmetrically centered without diagonal wrapping across viewports', async ({
+    page,
+  }) => {
+    await bootIntoGameLevel(page, 28);
+
+    // 1. Mobile Portrait (430x932 & 360x740): Rocket, Hammer, Vacuum stack symmetrically around the banner's center axis
+    for (const vp of [
+      { width: 430, height: 932 },
+      { width: 360, height: 740 },
+    ]) {
+      await page.setViewportSize(vp);
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(28));
+
+      // Onboarding #unlock-toast is centered within viewport with centered text
+      await expect(page.locator('#unlock-toast')).toBeVisible();
+      const unlockGeom = await page.evaluate(() => {
+        const el = document.getElementById('unlock-toast');
+        if (!el) throw new Error('Missing #unlock-toast');
+        const r = el.getBoundingClientRect();
+        return {
+          centerX: r.left + r.width / 2,
+          left: r.left,
+          right: r.right,
+          textAlign: getComputedStyle(el).textAlign,
+          vw: window.innerWidth,
+        };
+      });
+      expect(Math.abs(unlockGeom.centerX - vp.width / 2)).toBeLessThanOrEqual(3);
+      expect(unlockGeom.left).toBeGreaterThanOrEqual(4);
+      expect(unlockGeom.right).toBeLessThanOrEqual(vp.width - 4);
+      expect(unlockGeom.textAlign).toBe('center');
+
+      for (const boosterBtn of ['#btn-booster-rocket', '#btn-booster-hammer', '#btn-booster-vacuum']) {
+        await page.locator(boosterBtn).click();
+        await expect(page.locator('#booster-target-banner')).toBeVisible();
+        const geom = await page.evaluate(() => {
+          const banner = document.getElementById('booster-target-banner');
+          const instr = document.getElementById('booster-target-text');
+          const actions = banner?.querySelector<HTMLElement>('.target-actions');
+          if (!banner || !instr || !actions) throw new Error('Missing targeting banner elements');
+          const b = banner.getBoundingClientRect();
+          const i = instr.getBoundingClientRect();
+          const a = actions.getBoundingClientRect();
+          return {
+            bannerCenterX: b.left + b.width / 2,
+            instrCenterX: i.left + i.width / 2,
+            actionsCenterX: a.left + a.width / 2,
+            bannerLeft: b.left,
+            bannerRight: b.right,
+            actionsTop: a.top,
+            instrBottom: i.bottom,
+          };
+        });
+        expect(Math.abs(geom.bannerCenterX - vp.width / 2)).toBeLessThanOrEqual(3);
+        expect(Math.abs(geom.instrCenterX - geom.bannerCenterX)).toBeLessThanOrEqual(3);
+        expect(Math.abs(geom.actionsCenterX - geom.bannerCenterX)).toBeLessThanOrEqual(3);
+        expect(geom.actionsTop).toBeGreaterThanOrEqual(geom.instrBottom - 2);
+        expect(geom.bannerLeft).toBeGreaterThanOrEqual(4);
+        expect(geom.bannerRight).toBeLessThanOrEqual(vp.width - 4);
+        await page.locator('#btn-cancel-booster').click();
+        await expect(page.locator('#booster-target-banner')).toBeHidden();
+      }
+    }
+
+    // 2. Desktop (1280x800) & Mobile Landscape (844x390): Rocket targeting banner sits on a single shrink-wrapped centered row
+    for (const vp of [
+      { width: 1280, height: 800 },
+      { width: 844, height: 390 },
+    ]) {
+      await page.setViewportSize(vp);
+      await page.locator('#btn-booster-rocket').click();
+      await expect(page.locator('#booster-target-banner')).toBeVisible();
+      const rowGeom = await page.evaluate(() => {
+        const banner = document.getElementById('booster-target-banner');
+        const instr = document.getElementById('booster-target-text');
+        const actions = banner?.querySelector<HTMLElement>('.target-actions');
+        if (!banner || !instr || !actions) throw new Error('Missing targeting banner elements');
+        const b = banner.getBoundingClientRect();
+        const i = instr.getBoundingClientRect();
+        const a = actions.getBoundingClientRect();
+        return {
+          bannerCenterX: b.left + b.width / 2,
+          bannerWidth: b.width,
+          instrCenterY: i.top + i.height / 2,
+          actionsCenterY: a.top + a.height / 2,
+        };
+      });
+      expect(Math.abs(rowGeom.bannerCenterX - vp.width / 2)).toBeLessThanOrEqual(3);
+      expect(Math.abs(rowGeom.instrCenterY - rowGeom.actionsCenterY)).toBeLessThanOrEqual(6);
+      expect(rowGeom.bannerWidth).toBeLessThan(600);
+      await page.locator('#btn-cancel-booster').click();
+    }
+  });
 });

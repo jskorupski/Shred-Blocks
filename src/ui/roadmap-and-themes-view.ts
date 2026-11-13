@@ -302,9 +302,10 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
     rightCluster.append(badgeSpan);
 
     if (isCompleted) {
+      const underPar = Boolean(record?.underParCleared);
       const doneFlag = document.createElement('span');
-      doneFlag.className = 'node-flag-badge flag-completed';
-      doneFlag.textContent = '✓ Cleared';
+      doneFlag.className = `node-flag-badge ${underPar ? 'flag-under-par' : 'flag-completed'}`;
+      doneFlag.textContent = underPar ? '✦ Under Par' : '✓ Cleared';
       rightCluster.append(doneFlag);
     } else if (isZenNode) {
       const zenFlag = document.createElement('span');

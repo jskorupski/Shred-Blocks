@@ -81,6 +81,7 @@ import {
   scheduleStuckBoardCheckImpl,
 } from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
+import { startVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
 
 export * from './ui/catalog-meta';
 
@@ -500,6 +501,8 @@ export class ShredBlocksApp implements AppViewContext {
   private handleLevelVictory(): void {
     const playMode = this.saveManager.getPayload().settings.playMode;
     const zenClear = playMode === 'ZEN' || this.runTouchedZen;
+    const pureBoosterFreeRun =
+      !zenClear && (this.board.powerUpsUsed ?? 0) === 0 && (this.board.continuesUsed ?? 0) === 0;
     const earnedStars = computeEarnedStars(this.board, playMode, this.runTouchedZen);
     this.sound.playWinFanfare(earnedStars);
     this.renderer.spawnVictoryCelebrationBurst(this.board);
@@ -512,11 +515,23 @@ export class ShredBlocksApp implements AppViewContext {
       earnedStars,
       this.board.parMoves,
       this.board.difficulty,
-      zenClear
+      zenClear,
+      pureBoosterFreeRun
     );
+    if (summary.underPar) {
+      this.sound.playUnderParOracleChime();
+    }
 
     populateVictoryModalImpl(this, summary);
     this.openModal('victory');
+    const postSave = this.saveManager.getPayload();
+    startVictoryModalFx({
+      isUnderPar: Boolean(summary.underPar),
+      earnedStars,
+      equippedParticle: postSave.equippedParticle,
+      reducedMotion: postSave.settings.reducedMotion,
+      frozen: this.frozenTimeSec !== null,
+    });
     this.renderRoadmap();
   }
 
@@ -596,6 +611,7 @@ export class ShredBlocksApp implements AppViewContext {
   public freezeTime(timeSec: number | null): void {
     this.frozenTimeSec = timeSec;
     if (timeSec !== null) {
+      stopVictoryModalFx();
       this.renderer.resetTransientFx();
       this.renderNow(0, timeSec);
     }
@@ -656,6 +672,7 @@ export class ShredBlocksApp implements AppViewContext {
     openModalImpl(this, id);
   }
   public closeAllModals(): void {
+    stopVictoryModalFx();
     closeAllModalsImpl();
   }
   private setupDialogLightDismiss(): void {
