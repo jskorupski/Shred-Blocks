@@ -237,6 +237,9 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
               class="code-textarea"
               rows="2"
               readonly
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
               aria-label="Current Save Code"
             ></textarea>
             <div class="button-row-wrap">
@@ -282,6 +285,9 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
               id="save-code-input"
               class="code-textarea"
               rows="2"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
               placeholder="Paste SB1-... save code or JSON here"
               aria-label="Save Code or JSON to Import"
             ></textarea>

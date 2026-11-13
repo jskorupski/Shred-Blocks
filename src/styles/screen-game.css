@@ -4,6 +4,11 @@
 
 #screen-game {
   max-width: 720px;
+  touch-action: none;
+}
+
+#screen-game * {
+  touch-action: none;
 }
 
 .hud-top-bar {

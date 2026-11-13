@@ -414,3 +414,90 @@ export function renderStructuredBannerText(el: HTMLElement, text: string): void 
     el.textContent = text;
   }
 }
+
+let zoomLockInstalled = false;
+
+/**
+ * Installs capture-phase anti-zoom guards (`VIEWPORT-ZOOM-LOCK-01`) across all screens and
+ * Top-Layer `<dialog>` modals so iOS Safari, iOS Home Screen WebClips, iPadOS, Android PWAs, and
+ * Desktop trackpads never accidentally pinch-zoom or double-tap-zoom parts of the game offscreen.
+ */
+export function installNativeAppZoomLock(onViewportReset: () => void): void {
+  if (zoomLockInstalled || typeof window === 'undefined' || typeof document === 'undefined') return;
+  zoomLockInstalled = true;
+
+  const preventGestureZoom = (e: Event) => {
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+  };
+
+  // 1. iOS / iPadOS / macOS WebKit GestureEvents (blocks split-element & standalone WebClip pinch-zoom)
+  document.addEventListener('gesturestart', preventGestureZoom, { passive: false, capture: true });
+  document.addEventListener('gesturechange', preventGestureZoom, { passive: false, capture: true });
+  document.addEventListener('gestureend', preventGestureZoom, { passive: false, capture: true });
+
+  // 2. Multi-touch pinch guard (`touches.length > 1` or WebKit `TouchEvent.scale !== 1`)
+  const blockMultiTouchPinch = (e: TouchEvent) => {
+    const scale = (e as TouchEvent & { scale?: number }).scale;
+    if (e.touches.length > 1 || (typeof scale === 'number' && scale > 0 && Math.abs(scale - 1) > 0.01)) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    }
+  };
+  document.addEventListener('touchstart', blockMultiTouchPinch, { passive: false, capture: true });
+  document.addEventListener('touchmove', blockMultiTouchPinch, { passive: false, capture: true });
+
+  // 3. Desktop trackpad pinch-zoom & Ctrl+wheel zoom guard (leaves 2-finger scrolling `ctrlKey: false` intact)
+  window.addEventListener(
+    'wheel',
+    (e: WheelEvent) => {
+      if (e.ctrlKey && e.cancelable) {
+        e.preventDefault();
+      }
+    },
+    { passive: false, capture: true }
+  );
+
+  // 4. Legacy double-click zoom guard (leaves editable `<input>` / `<textarea>` word selection intact)
+  document.addEventListener(
+    'dblclick',
+    (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    },
+    { passive: false, capture: true }
+  );
+
+  // 5. iOS virtual-keyboard dismiss scroll recovery (`#level-jump-input`, `#save-code-input`, `#select-quality-tier`)
+  document.addEventListener(
+    'focusout',
+    (e: FocusEvent) => {
+      const prev = e.target;
+      if (
+        !(prev instanceof HTMLInputElement) &&
+        !(prev instanceof HTMLTextAreaElement) &&
+        !(prev instanceof HTMLSelectElement)
+      ) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (
+          active instanceof HTMLInputElement ||
+          active instanceof HTMLTextAreaElement ||
+          active instanceof HTMLSelectElement
+        ) {
+          return;
+        }
+        window.scrollTo(0, 0);
+        onViewportReset();
+      });
+    },
+    { passive: true, capture: true }
+  );
+}

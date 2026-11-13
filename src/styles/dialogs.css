@@ -27,8 +27,10 @@ dialog::backdrop {
   max-height: min(92dvh, calc(var(--app-height, 100dvh) - 1rem));
   width: 100%;
   margin: auto;
-  user-select: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
+  user-select: none;
 }
 
 .dialog-card {
@@ -42,6 +44,11 @@ dialog::backdrop {
   gap: 0.72rem;
   max-height: min(90dvh, calc(var(--app-height, 100dvh) - 1.5rem));
   overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.dialog-card * {
+  touch-action: pan-y;
 }
 
 .victory-dialog-card {
@@ -511,6 +518,17 @@ dialog::backdrop {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.72rem;
   resize: vertical;
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent iOS WebKit auto-zoom (`font-size >= 16px`) when focusing Settings `<select>` or Save/Load `<textarea>` */
+@media (pointer: coarse) {
+  .select-tactile,
+  .code-textarea {
+    font-size: 1rem;
+  }
 }
 
 .button-row-wrap {

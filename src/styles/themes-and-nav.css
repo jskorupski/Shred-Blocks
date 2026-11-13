@@ -43,6 +43,11 @@
   color: var(--text-secondary);
 }
 
+.theme-category,
+.theme-category * {
+  touch-action: pan-y;
+}
+
 .theme-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

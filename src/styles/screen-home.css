@@ -434,10 +434,15 @@
   align-items: center;
   gap: 0.28rem;
   overflow-x: auto;
+  touch-action: pan-x;
   flex: 1 1 0;
   min-width: 0;
   padding-bottom: 2px;
   scrollbar-width: none;
+}
+
+.filter-pills * {
+  touch-action: pan-x;
 }
 
 @supports not (scrollbar-width: none) {
@@ -529,6 +534,25 @@
   border-color: transparent;
 }
 
+/* Prevent iOS WebKit input-focus viewport auto-zoom (`font-size >= 16px` on touch devices) */
+@media (pointer: coarse) {
+  .input-compact {
+    width: 68px;
+    font-size: 1rem;
+  }
+}
+
+:where(
+  .home-global-strip,
+  .home-global-strip *,
+  .map-mode-tabs,
+  .map-mode-tabs *,
+  .hero-launch-card,
+  .hero-launch-card *
+) {
+  touch-action: none;
+}
+
 /* Linked Sanctuary Path & Grouped Stage Flights (`MAP-LINKED-PATH-01`) */
 .roadmap-scroll {
   position: relative;
@@ -537,6 +561,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-gutter: stable both-edges;
   padding-block: 0.42rem 1.4rem;
   padding-inline: 0.78rem;
@@ -544,6 +569,10 @@
   flex-direction: column;
   align-items: stretch;
   gap: 0.56rem;
+}
+
+.roadmap-scroll * {
+  touch-action: pan-y;
 }
 
 @media (max-width: 520px) {

@@ -9,7 +9,7 @@
     />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=5.0"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>ShredBlocks: Color Jam — Free 3D Block Puzzle Game</title>
     <meta
@@ -277,7 +277,7 @@
                 </div>
                 <div class="level-jump-box">
                   <label for="level-jump-input" class="sr-only">Jump to Level</label>
-                  <input type="number" id="level-jump-input" min="1" max="999999" placeholder="Lvl #" class="input-compact" />
+                  <input type="number" id="level-jump-input" min="1" max="999999" inputmode="numeric" enterkeyhint="go" placeholder="Lvl #" class="input-compact" />
                   <button type="button" id="btn-level-jump" class="btn-tactile btn-secondary btn-compact">
                     Go
                   </button>

@@ -438,13 +438,25 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(fs.existsSync(path.join(repoRoot, 'public/sitemap.xml'))).toBe(true);
 
     const tokensCss = fs.readFileSync(path.join(repoRoot, 'src/styles/tokens-and-shell.css'), 'utf8');
+    expect(indexHtml).toContain('maximum-scale=1.0');
+    expect(indexHtml).toContain('user-scalable=no');
     expect(tokensCss).toContain('--app-height');
     expect(tokensCss).toContain('height: var(--app-height, 100%)');
+    expect(tokensCss).toContain('touch-action: pan-x pan-y');
+    expect(tokensCss).toContain('-webkit-text-size-adjust: 100%');
     expect(tokensCss).toContain('--font-logo');
     expect(tokensCss).toContain('font-family: "Fraunces"');
     expect(tokensCss).toContain('font-family: "Plus Jakarta Sans"');
     expect(tokensCss).toContain('font-size-adjust: from-font');
     expect(tokensCss).toContain('inset 0 1px 0');
+
+    // VIEWPORT-ZOOM-LOCK-01: Never use `touch-action: manipulation` (which permits pinch-zoom) or `auto` in app CSS
+    for (const cssFile of fs.readdirSync(path.join(repoRoot, 'src/styles'))) {
+      if (!cssFile.endsWith('.css')) continue;
+      const cssBody = fs.readFileSync(path.join(repoRoot, 'src/styles', cssFile), 'utf8');
+      expect(cssBody).not.toMatch(/touch-action:\s*(auto|manipulation)/);
+      expect(cssBody).not.toMatch(/touch-action:[^;]*pinch-zoom/);
+    }
 
     const gameCss = fs.readFileSync(path.join(repoRoot, 'src/styles/screen-game.css'), 'utf8');
     expect(gameCss).toContain('container-type: size');

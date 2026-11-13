@@ -116,6 +116,11 @@
 *::after {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  /* Native-App Anti-Zoom Baseline (`VIEWPORT-ZOOM-LOCK-01`):
+     Omits `pinch-zoom` (and `auto` / `manipulation`) on every element across all screens and
+     Top-Layer `<dialog>` modals so GPU compositors suppress pinch-to-zoom and double-tap zoom
+     while preserving WebKit ancestor-intersection compatibility for `pan-x` / `pan-y` scroll containers. */
+  touch-action: pan-x pan-y;
 }
 
 html,
@@ -133,6 +138,8 @@ body {
   line-height: 1.45;
   overflow: hidden;
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -210,12 +217,26 @@ body {
   padding-right: var(--safe-right);
   overflow: hidden;
   overscroll-behavior: none;
-  user-select: none;
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
+  user-select: none;
 }
 
 #app-shell img {
   -webkit-user-drag: none;
+}
+
+:where(
+  .top-economy-bar,
+  .top-economy-bar *,
+  .bottom-tab-bar,
+  .bottom-tab-bar *,
+  .game-toast,
+  .game-toast *,
+  .pwa-update-toast,
+  .pwa-update-toast *
+) {
+  touch-action: none;
 }
 
 /* Preserve native text selection & copy-paste on inputs and copy-worthy content (browser-ui-theming) */
@@ -233,8 +254,9 @@ body {
   .install-step-card p,
   .install-step-card ol
 ) {
-  user-select: text;
+  -webkit-touch-callout: default;
   -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Sanctuary Scrollbars (customize-scrollbar-color-and-thickness & adapt-scrollbar-to-contrast-preferences) */

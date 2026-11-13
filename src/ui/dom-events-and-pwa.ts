@@ -3,6 +3,7 @@ import type { PlayMode, QualityTier, SavePayloadV1 } from '../core/types';
 import {
   type AppViewContext,
   type BeforeInstallPromptEvent,
+  installNativeAppZoomLock,
   MAX_ENDLESS_LEVEL,
   PWA_INSTALLED_STORAGE_KEY,
 } from './catalog-meta';
@@ -554,8 +555,9 @@ export function syncViewportGeometryImpl(app: AppViewContext): void {
   const clientH = docEl.clientHeight || window.innerHeight || 0;
   const innerH = window.innerHeight || clientH;
   const vv = window.visualViewport;
-  const vvH = vv && vv.height > 0 ? vv.height : innerH;
-  const vvOffsetTop = vv && vv.offsetTop > 0 ? Math.round(vv.offsetTop) : 0;
+  const unzoomedVv = !vv || !(vv.scale > 0) || Math.abs(vv.scale - 1) < 0.02;
+  const vvH = vv && vv.height > 0 && unzoomedVv ? vv.height : innerH;
+  const vvOffsetTop = vv && vv.offsetTop > 0 && unzoomedVv ? Math.round(vv.offsetTop) : 0;
 
   let effectiveHeight = Math.round(Math.min(clientH, innerH, vvH));
   const isMobileOrStandalone =
@@ -650,6 +652,7 @@ function shouldAutoApplyWaitingWorker(app: AppViewContext): boolean {
 }
 
 export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
+  installNativeAppZoomLock(() => app.syncViewportGeometry());
   app.syncViewportGeometry();
   app.syncInstallUiVisibility();
   app.syncPwaUpdateBanner();
