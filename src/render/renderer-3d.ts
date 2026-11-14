@@ -497,7 +497,7 @@ export class Renderer3D implements RenderPassContext {
 
   private syncRectAndFraming(rows: number, cols: number) {
     const now = performance.now();
-    if (!this.lastCanvasRect || this.lastCanvasRect.width <= 0 || now - this.lastRectReadMs > 16) {
+    if (!this.lastCanvasRect || this.lastCanvasRect.width <= 0 || now - this.lastRectReadMs > 250) {
       this.lastCanvasRect = this.canvas.getBoundingClientRect();
       this.lastRectReadMs = now;
     }

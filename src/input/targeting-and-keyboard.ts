@@ -84,6 +84,8 @@ export interface BoardInputCallbacks {
   onHoverChanged?: (state: HoverState) => void;
   /** Optional guard returning whether keyboard/pointer board controls are currently active */
   isBoardInteractive?: () => boolean;
+  /** Called during continuous drag updates when HUD/inventory state did not change */
+  onDragFrame?: () => void;
   /** Called during drag updates */
   onBoardChanged?: () => void;
 }

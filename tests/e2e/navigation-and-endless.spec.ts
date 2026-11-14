@@ -243,7 +243,7 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     expect(titleState.haloAnim).toBe('mysticRelicAura');
     expect(titleState.stageIsolation).toBe('isolate');
     expect(titleState.godRaysAnim).toBe('mysticGodRays');
-    expect(titleState.godRaysBlend).toBe('screen');
+    expect(titleState.godRaysBlend).toBe('normal');
 
     // Verify subtle levitating/twisting + pulsating glow animates live frames on Title Screen
     const frameA = await page.evaluate(

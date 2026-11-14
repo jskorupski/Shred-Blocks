@@ -324,7 +324,9 @@ export class BoardInputController {
 
     this.callbacks.sound?.playPickup();
     this.emitHoverState();
-    this.callbacks.onBoardChanged?.();
+    if (!this.callbacks.onHoverChanged) {
+      this.callbacks.onBoardChanged?.();
+    }
   }
 
   private handlePointerMove(e: PointerEvent): void {
@@ -469,7 +471,8 @@ export class BoardInputController {
       }
     }
 
-    this.callbacks.onBoardChanged?.();
+    if (this.callbacks.onDragFrame) this.callbacks.onDragFrame();
+    else this.callbacks.onBoardChanged?.();
   }
 
   /**

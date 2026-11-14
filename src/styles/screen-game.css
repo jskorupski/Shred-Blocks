@@ -21,6 +21,7 @@
   border-radius: 0;
   box-shadow: none;
   flex-shrink: 0;
+  will-change: opacity;
   transition:
     opacity 0.28s ease,
     visibility 0.28s ease;
@@ -539,8 +540,17 @@
   }
 }
 
+.sacred-geometry-ornament .ornament-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
 .sacred-geometry-ornament .ornament-outer-wheel {
-  transform-origin: 300px 300px;
+  transform-origin: 50% 50%;
+  will-change: transform;
   animation: astrolabeSpin 34s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -548,7 +558,8 @@
 }
 
 .sacred-geometry-ornament .ornament-inner-star {
-  transform-origin: 300px 300px;
+  transform-origin: 50% 50%;
+  will-change: transform;
   animation: astrolabeSpinReverse 46s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -602,19 +613,19 @@
 /* Title-Screen Relic Volumetric God Rays (`MYSTIC-RELIC-01`, `PERF-TRANSITION-01`) */
 @keyframes mysticGodRays {
   from {
-    rotate: 0deg;
+    transform: rotate(0deg);
   }
   to {
-    rotate: 360deg;
+    transform: rotate(360deg);
   }
 }
 
 @keyframes mysticGodRaysCounter {
   from {
-    rotate: 360deg;
+    transform: rotate(360deg);
   }
   to {
-    rotate: 0deg;
+    transform: rotate(0deg);
   }
 }
 
@@ -623,9 +634,10 @@
   content: "";
   position: absolute;
   pointer-events: none;
-  mix-blend-mode: screen;
+  mix-blend-mode: normal;
+  will-change: transform, opacity;
   opacity: 0;
-  transition: opacity 0.95s cubic-bezier(0.37, 0, 0.22, 1);
+  transition: opacity 0.58s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 #screen-game .board-stage::before {
@@ -692,7 +704,9 @@
 
 #screen-game.title-backdrop-mode .board-stage::before {
   opacity: 0.78;
-  will-change: rotate, opacity;
+}
+
+#screen-game:is(.title-backdrop-mode, .relic-awakening-burst) .board-stage::before {
   animation: mysticGodRays 38s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -701,7 +715,9 @@
 
 #screen-game.title-backdrop-mode .board-stage::after {
   opacity: 0.36;
-  will-change: rotate, opacity;
+}
+
+#screen-game:is(.title-backdrop-mode, .relic-awakening-burst) .board-stage::after {
   animation: mysticGodRaysCounter 52s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;

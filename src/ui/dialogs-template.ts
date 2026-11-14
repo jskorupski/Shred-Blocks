@@ -440,3 +440,40 @@ export function ensureDialogsMounted(): void {
   if (document.getElementById('dialog-victory')) return;
   document.body.insertAdjacentHTML('beforeend', DIALOGS_AND_TOAST_TEMPLATE);
 }
+
+const PREWARM_DIALOG_IDS = [
+  'dialog-victory',
+  'dialog-failure',
+  'dialog-pause',
+  'dialog-save-transfer',
+  'dialog-install',
+] as const;
+
+let dialogsLayoutPrewarmed = false;
+
+/**
+ * Forces one offscreen hidden layout pass on each closed modal dialog during idle time
+ * so first open never hits cold Blink Top-Layer style/layout/font-shaping costs.
+ */
+export function prewarmDialogsLayout(): void {
+  if (dialogsLayoutPrewarmed || typeof document === 'undefined') return;
+  ensureDialogsMounted();
+  const toWarm: HTMLDialogElement[] = [];
+  for (const id of PREWARM_DIALOG_IDS) {
+    const dlg = document.getElementById(id) as HTMLDialogElement | null;
+    if (dlg && !dlg.open) {
+      dlg.classList.add('dialog-prewarm');
+      toWarm.push(dlg);
+    }
+  }
+  try {
+    for (const dlg of toWarm) {
+      void dlg.offsetHeight;
+    }
+    dialogsLayoutPrewarmed = true;
+  } finally {
+    for (const dlg of toWarm) {
+      dlg.classList.remove('dialog-prewarm');
+    }
+  }
+}

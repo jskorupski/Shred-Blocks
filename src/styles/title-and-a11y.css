@@ -35,6 +35,7 @@
   pointer-events: none;
   z-index: 1;
   opacity: 0;
+  will-change: opacity, scale;
   background: radial-gradient(
     50% 50% at 50% 50%,
     rgba(255, 236, 178, 0.64) 0%,
@@ -87,15 +88,11 @@
 }
 
 .sacred-geometry-ornament {
-  transition: color 1.05s cubic-bezier(0.37, 0, 0.22, 1);
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
+  transition: none;
 }
 
 #screen-game.title-backdrop-mode .astrolabe-backlight-halo {
   opacity: 1;
-  will-change: opacity, scale;
   animation: mysticRelicAura 3.8s ease-in-out infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -108,7 +105,6 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
 }
 
 #screen-game.relic-awakening-burst:not(.title-backdrop-mode) .astrolabe-backlight-halo {
-  will-change: opacity, scale;
   background: radial-gradient(
     50% 50% at 50% 50%,
     rgba(255, 234, 248, 0.8) 0%,
@@ -194,9 +190,7 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
   container: title-card / inline-size;
   margin-top: auto;
   width: min(100%, 408px);
-  background: rgba(24, 18, 46, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, rgba(28, 21, 54, 0.95) 0%, rgba(20, 15, 40, 0.96) 100%);
   border: 1px solid rgba(246, 213, 168, 0.18);
   border-radius: var(--radius-lg);
   box-shadow:

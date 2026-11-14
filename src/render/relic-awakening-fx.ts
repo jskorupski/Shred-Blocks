@@ -358,11 +358,18 @@ export function warmUpWebGLPipelinesImpl(
   );
   gl.uniform1i(rctx.uUseClipPlane, 0);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.uniform1i(rctx.uTraceCount, 2);
+  if (rctx.uTracePts) {
+    gl.uniform4fv(rctx.uTracePts, new Float32Array([0, 0, 0.5, 0.1, 1, 0, 0.5, 0.1]));
+  }
+  rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 8);
   gl.uniform1i(rctx.uTraceCount, 0);
   gl.uniform4f(rctx.uClipPlane, 0.2, 0.2, 1.0, 0.0);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 9);
   gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 4);
+  rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 7);
   gl.enable(gl.CULL_FACE);
 
   if (h.program && h.vao && h.instanceBuffer && h.smokeVao && h.smokeInstanceBuffer) {
@@ -377,6 +384,11 @@ export function warmUpWebGLPipelinesImpl(
     gl.drawElementsInstanced(gl.TRIANGLES, h.indexCount, gl.UNSIGNED_SHORT, 0, 1);
 
     gl.depthMask(false);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(h.uStyle, 4);
+    gl.drawElementsInstanced(gl.TRIANGLES, h.indexCount, gl.UNSIGNED_SHORT, 0, 1);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
     gl.disable(gl.CULL_FACE);
     gl.bindVertexArray(h.smokeVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, h.smokeInstanceBuffer);

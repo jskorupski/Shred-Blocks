@@ -9,6 +9,7 @@ import {
   playShredStyleOvertoneVoice,
   playUnderParOracleVoice,
   playWinFanfareVoices,
+  prewarmSharedNoiseBuffer,
   scheduleAmbientStepVoice,
 } from './synth-voices';
 
@@ -33,6 +34,8 @@ export class SoundEngine {
 
   // Ambient music scheduler state
   private musicTimerId: ReturnType<typeof setInterval> | null = null;
+  private prewarmTimerId: ReturnType<typeof setTimeout> | null = null;
+  private prewarmIdleId: number | null = null;
   private nextNoteTime = 0;
   private musicStep = 0;
   private chordIndex = 0;
@@ -54,18 +57,59 @@ export class SoundEngine {
     this.boundVisibilityChange = () => this.handleVisibilityChange();
 
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      window.addEventListener('pointerdown', this.boundUnlock, { passive: true });
-      window.addEventListener('keydown', this.boundUnlock, { passive: true });
+      window.addEventListener('pointerdown', this.boundUnlock, { capture: true, passive: true });
+      window.addEventListener('keydown', this.boundUnlock, { capture: true, passive: true });
       document.addEventListener('visibilitychange', this.boundVisibilityChange);
       this.syncAudioSessionType();
+      this.scheduleIdlePrewarm();
     }
+  }
+
+  private scheduleIdlePrewarm(): void {
+    if (!this.sfxEnabled && !this.musicEnabled) return;
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') return;
+    const runPrewarm = () => {
+      this.prewarmIdleId = null;
+      this.prewarmTimerId = null;
+      if (this.ctx || this.isDocumentHidden) return;
+      const ctx = this.ensureContext();
+      if (ctx) {
+        try {
+          getOrCreateRelicAwakenNoiseBuffer(ctx);
+          prewarmSharedNoiseBuffer(ctx);
+        } catch {
+          // Ignore on restricted environments
+        }
+      }
+    };
+    this.prewarmTimerId = setTimeout(() => {
+      this.prewarmTimerId = null;
+      const ric = (
+        window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }
+      ).requestIdleCallback;
+      if (typeof ric === 'function') {
+        this.prewarmIdleId = ric(runPrewarm, { timeout: 600 });
+      } else {
+        runPrewarm();
+      }
+    }, 180);
   }
 
   public destroy(): void {
     this.stopMusicLoop();
+    if (this.prewarmTimerId !== null) {
+      clearTimeout(this.prewarmTimerId);
+      this.prewarmTimerId = null;
+    }
+    if (this.prewarmIdleId !== null && typeof window !== 'undefined') {
+      const cancelIdle = (window as unknown as { cancelIdleCallback?: (id: number) => void })
+        .cancelIdleCallback;
+      if (typeof cancelIdle === 'function') cancelIdle(this.prewarmIdleId);
+      this.prewarmIdleId = null;
+    }
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      window.removeEventListener('pointerdown', this.boundUnlock);
-      window.removeEventListener('keydown', this.boundUnlock);
+      window.removeEventListener('pointerdown', this.boundUnlock, { capture: true });
+      window.removeEventListener('keydown', this.boundUnlock, { capture: true });
       document.removeEventListener('visibilitychange', this.boundVisibilityChange);
     }
     if (this.ctx && this.ctx.state !== 'closed') {
@@ -171,6 +215,7 @@ export class SoundEngine {
         source.connect(ctx.destination);
         source.start(0);
         getOrCreateRelicAwakenNoiseBuffer(ctx);
+        prewarmSharedNoiseBuffer(ctx);
       } catch {
         // Ignore
       }

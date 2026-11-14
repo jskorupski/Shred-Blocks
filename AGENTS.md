@@ -57,7 +57,7 @@ Every repository text/SVG file (except `package-lock.json`) is enforced `<= 800 
 | [`src/input/*.ts`](src/input/) & [`src/audio/*.ts`](src/audio/) | Pointer/touch drag controller (`pointer-controller`, `targeting-and-keyboard`) and procedural Web Audio synthesizer (`synth`, `synth-voices`). |
 | [`src/storage/*.ts`](src/storage/) | `save-manager` (`localStorage` + `IndexedDB`), `save-mode-ladders` (`modeState` + `[0xa6, 0x4d]` trailer), `save-code` & `save-lz77-crc` (53-bit `SB1-...` + LZ77 + CRC32), `qr-svg` (ISO 18004 QR SVG). |
 | [`public/*`](public/) & [`scripts/*`](scripts/) | Zen Mystic `icon*.{svg,png}`, `apple-touch-icon.png`, `favicon.ico` / `favicon-*.png`, `og-image.png`, `_headers`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `sw.js`, `fonts/*.woff2`, `generate-icons.ts`, `visual-harness.ts`. |
-| [`tests/unit/*.test.ts`](tests/unit/), [`tests/e2e/*.spec.ts`](tests/e2e/), [`tests/visual/*`](tests/visual/) | 9 Vitest unit/solver/canon/security/FX/ladder suites (`80+` tests), 5 Playwright E2E suites (`42+` playtests across Desktop + Mobile), and 18 deterministic visual golden snapshots. |
+| [`tests/unit/*.test.ts`](tests/unit/), [`tests/e2e/*.spec.ts`](tests/e2e/), [`tests/visual/*`](tests/visual/) | 10 Vitest unit/solver/canon/security/FX/perf/ladder suites (`85+` tests), 5 Playwright E2E suites (`48` playtests across Desktop + Mobile), and 18 deterministic visual golden snapshots. |
 
 ---
 
@@ -71,9 +71,9 @@ Every repository text/SVG file (except `package-lock.json`) is enforced `<= 800 
      4. *100% Booster-Free Solvability & Faucet/Sink Equilibrium*: Every stage stays `solveBoard()`-solvable without boosters while booster sinks (`60..350c`), Continue (`150c` / `1 🌿`), and cosmetics (`250..1200c`) stay balanced against first-clear vs. `20%` replay rewards.
      5. *Append-Only Save Conservation (`SAVE-COMPAT-01`)*: Existing `v1`, `0xa5`, and `[0xa6, 0x4d]` saves migrate losslessly without resetting earned currency, stars, or unlocks.
 1. **`npm run lint`** (`BypassSandbox: false`): Biome check across all files in `< 200ms` with `0` errors (`npm run lint:fix` to auto-format). No `biome-ignore` suppressions in `src/**/*.ts`.
-2. **`npm run test:unit`** (`BypassSandbox: false`): Passes all `80+` unit, 300-level solver, canonical seed/replay (`LEVEL-CANON-01`, `SOLVABILITY-01`), ladder/anti-exploit, security, SEO/favicon, and `ARCH-ERGONOMICS-01` tests across 9 suites.
+2. **`npm run test:unit`** (`BypassSandbox: false`): Passes all `85+` unit, 300-level solver, canonical seed/replay (`LEVEL-CANON-01`, `SOLVABILITY-01`), ladder/anti-exploit, perf/prewarm, security, SEO/favicon, and `ARCH-ERGONOMICS-01` tests across 10 suites.
 3. **`npm run build`** (`BypassSandbox: false`): `tsc --noEmit && vite build` (`0` errors, stamps `dist/sw.js` & `dist/version.json`). **Always build immediately before Playwright E2E, visual goldens, or `visual-harness.ts`**, which serve `dist/` via `vite preview`.
-4. **`./node_modules/.bin/playwright test`** (`BypassSandbox: true`): Passes all `40+` E2E playtests (Desktop Chrome + Mobile Portrait).
+4. **`./node_modules/.bin/playwright test`** (`BypassSandbox: true`): Passes all `48` E2E playtests (Desktop Chrome + Mobile Portrait).
 5. **Visual Verification (when touching UI/CSS/3D/shaders/icons)**:
    - `./node_modules/.bin/playwright test -c playwright.visual.config.ts` (`BypassSandbox: true`, `18` deterministic snapshots; `--update-snapshots` after inspecting intentional changes).
    - `./node_modules/.bin/tsx scripts/generate-icons.ts` (`BypassSandbox: false`, regenerates icons, `favicon.ico`, `og-image.png`, and `29-launcher-icons-preview.png`).

@@ -29,7 +29,7 @@ import {
   type ModalId,
   type ShredBlocksDebugBridge,
 } from './ui/catalog-meta';
-import { ensureDialogsMounted } from './ui/dialogs-template';
+import { ensureDialogsMounted, prewarmDialogsLayout } from './ui/dialogs-template';
 import {
   bindDomEventsImpl,
   checkForPwaUpdateImpl,
@@ -81,7 +81,7 @@ import {
   scheduleStuckBoardCheckImpl,
 } from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
-import { startVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
+import { prewarmVictoryModalFx, startVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
 
 export * from './ui/catalog-meta';
 
@@ -212,6 +212,10 @@ export class ShredBlocksApp implements AppViewContext {
         this.syncBoosterTargetingBanner(hoverState);
         this.renderNow();
       },
+      onDragFrame: () => {
+        this.lastPointerActivityMs = performance.now();
+        this.renderNow();
+      },
       onBoardChanged: () => {
         this.lastPointerActivityMs = performance.now();
         this.syncInGameHud();
@@ -269,6 +273,27 @@ export class ShredBlocksApp implements AppViewContext {
     });
 
     this.startAnimationLoop();
+    this.scheduleIdleUiPrewarm();
+  }
+
+  /**
+   * Primes closed modal Top-Layer layout and the Victory 2D FX canvas during post-boot idle
+   * so opening Victory, Failure, or Settings for the first time hits zero cold layout/surface stalls.
+   */
+  private scheduleIdleUiPrewarm(): void {
+    if (typeof window === 'undefined') return;
+    const runWarmup = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      prewarmDialogsLayout();
+      prewarmVictoryModalFx();
+    };
+    window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(runWarmup, { timeout: 600 });
+      } else {
+        window.requestAnimationFrame(runWarmup);
+      }
+    }, 220);
   }
 
   // ===========================================================================
@@ -532,7 +557,6 @@ export class ShredBlocksApp implements AppViewContext {
       reducedMotion: postSave.settings.reducedMotion,
       frozen: this.frozenTimeSec !== null,
     });
-    this.renderRoadmap();
   }
 
   private handleLevelFailure(reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES'): void {

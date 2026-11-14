@@ -68,6 +68,24 @@ export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockStat
   }
 }
 
+function setAttrIfChanged(el: Element | null, attr: string, value: string): void {
+  if (el && el.getAttribute(attr) !== value) {
+    el.setAttribute(attr, value);
+  }
+}
+
+function setTextIfChanged(el: Element | null, text: string): void {
+  if (el && el.textContent !== text) {
+    el.textContent = text;
+  }
+}
+
+function setClassIfChanged(el: Element | null, className: string): void {
+  if (el && el.className !== className) {
+    el.className = className;
+  }
+}
+
 export function syncBoosterTargetingBannerImpl(hoverState: HoverState): void {
   const banner = document.getElementById('booster-target-banner');
   const textEl = document.getElementById('booster-target-text');
@@ -77,32 +95,44 @@ export function syncBoosterTargetingBannerImpl(hoverState: HoverState): void {
   const rocketBtn = document.getElementById('btn-booster-rocket');
   const vacuumBtn = document.getElementById('btn-booster-vacuum');
 
-  hammerBtn?.classList.toggle('active-targeting', hoverState.inputMode === 'TARGET_HAMMER');
-  rocketBtn?.classList.toggle('active-targeting', hoverState.inputMode === 'TARGET_ROCKET');
-  vacuumBtn?.classList.toggle('active-targeting', hoverState.inputMode === 'TARGET_VACUUM');
+  const isHammer = hoverState.inputMode === 'TARGET_HAMMER';
+  const isRocket = hoverState.inputMode === 'TARGET_ROCKET';
+  const isVacuum = hoverState.inputMode === 'TARGET_VACUUM';
+  if (hammerBtn && hammerBtn.classList.contains('active-targeting') !== isHammer) {
+    hammerBtn.classList.toggle('active-targeting', isHammer);
+  }
+  if (rocketBtn && rocketBtn.classList.contains('active-targeting') !== isRocket) {
+    rocketBtn.classList.toggle('active-targeting', isRocket);
+  }
+  if (vacuumBtn && vacuumBtn.classList.contains('active-targeting') !== isVacuum) {
+    vacuumBtn.classList.toggle('active-targeting', isVacuum);
+  }
 
   if (!banner || !textEl || !axisBtn) return;
 
   if (hoverState.inputMode === 'DRAG') {
-    banner.hidden = true;
+    if (!banner.hidden) banner.hidden = true;
     return;
   }
 
-  banner.hidden = false;
+  if (banner.hidden) banner.hidden = false;
   const unlockToast = document.getElementById('unlock-toast');
-  if (unlockToast) {
+  if (unlockToast && !unlockToast.hidden) {
     unlockToast.hidden = true;
   }
-  if (hoverState.inputMode === 'TARGET_HAMMER') {
-    textEl.textContent = '🔨 Tap any block, crate, or locked gate to smash';
-    axisBtn.hidden = true;
-  } else if (hoverState.inputMode === 'TARGET_ROCKET') {
-    textEl.textContent = `🚀 Aim & release to blast entire ${hoverState.rocketAxis === 'ROW' ? 'ROW' : 'COLUMN'}`;
-    axisBtn.hidden = false;
-    axisBtn.textContent = hoverState.rocketAxis === 'ROW' ? 'Axis: ↔ ROW' : 'Axis: ↕ COL';
-  } else if (hoverState.inputMode === 'TARGET_VACUUM') {
-    textEl.textContent = '🧲 Tap any unlocked colored block to vacuum all matching blocks';
-    axisBtn.hidden = true;
+  if (isHammer) {
+    setTextIfChanged(textEl, '🔨 Tap any block, crate, or locked gate to smash');
+    if (!axisBtn.hidden) axisBtn.hidden = true;
+  } else if (isRocket) {
+    setTextIfChanged(
+      textEl,
+      `🚀 Aim & release to blast entire ${hoverState.rocketAxis === 'ROW' ? 'ROW' : 'COLUMN'}`
+    );
+    if (axisBtn.hidden) axisBtn.hidden = false;
+    setTextIfChanged(axisBtn, hoverState.rocketAxis === 'ROW' ? 'Axis: ↔ ROW' : 'Axis: ↕ COL');
+  } else if (isVacuum) {
+    setTextIfChanged(textEl, '🧲 Tap any unlocked colored block to vacuum all matching blocks');
+    if (!axisBtn.hidden) axisBtn.hidden = true;
   }
 }
 
@@ -382,22 +412,23 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   const playMode = save.settings.playMode;
 
   const appShell = document.getElementById('app-shell');
-  if (appShell) {
-    appShell.setAttribute('data-play-mode', playMode);
-  }
-  document.body.setAttribute('data-play-mode', playMode);
+  setAttrIfChanged(appShell, 'data-play-mode', playMode);
+  setAttrIfChanged(document.body, 'data-play-mode', playMode);
 
   // Skips exist strictly in Zen Mode and cap at 3 consecutive un-cleared skips (`ZEN-SKIP-GUARD-01`)
   const isZenMode = playMode === 'ZEN';
   const skipAllowed = canSkipZenLevel(save, app.board.levelId);
   const skipHudBtn = document.getElementById('btn-skip-hud') as HTMLButtonElement | null;
   const pauseSkipBtn = document.getElementById('btn-pause-skip') as HTMLButtonElement | null;
+  const skipCapReached = isZenMode && !skipAllowed;
   for (const btn of [skipHudBtn, pauseSkipBtn]) {
     if (!btn) continue;
-    btn.hidden = !isZenMode;
-    btn.disabled = !isZenMode;
-    btn.setAttribute('aria-disabled', isZenMode && !skipAllowed ? 'true' : 'false');
-    btn.classList.toggle('skip-cap-reached', isZenMode && !skipAllowed);
+    if (btn.hidden !== !isZenMode) btn.hidden = !isZenMode;
+    if (btn.disabled !== !isZenMode) btn.disabled = !isZenMode;
+    setAttrIfChanged(btn, 'aria-disabled', skipCapReached ? 'true' : 'false');
+    if (btn.classList.contains('skip-cap-reached') !== skipCapReached) {
+      btn.classList.toggle('skip-cap-reached', skipCapReached);
+    }
   }
 
   const titleEl = document.getElementById('hud-level-title');
@@ -415,57 +446,57 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   const movesPill = document.getElementById('hud-moves-pill');
   const timerPill = document.getElementById('hud-timer-pill');
 
-  if (titleEl) {
-    titleEl.textContent = `Level ${app.board.levelId} — ${app.board.name}`;
-  }
+  setTextIfChanged(titleEl, `Level ${app.board.levelId} — ${app.board.name}`);
   if (diffEl) {
-    diffEl.textContent = app.board.difficulty.replace('_', ' ');
-    diffEl.className = `badge-difficulty diff-${app.board.difficulty.toLowerCase()}`;
+    setTextIfChanged(diffEl, app.board.difficulty.replace('_', ' '));
+    setClassIfChanged(diffEl, `badge-difficulty diff-${app.board.difficulty.toLowerCase()}`);
   }
-  if (coinsInline) {
-    coinsInline.textContent = `${save.coins}`;
-  }
+  setTextIfChanged(coinsInline, `${save.coins}`);
   const modeMeta = {
     CHALLENGE: { icon: '⚔️', hero: 'Challenge', wing: 'Challenge', full: 'Challenge Mode' },
     ZEN: { icon: '🌿', hero: 'Zen', wing: 'Zen', full: 'Zen Mode' },
     TIMED: { icon: '⏱', hero: 'Speed Rush', wing: 'Rush', full: 'Speed Rush Mode' },
   } as const;
-  if (modeBtn) {
-    modeBtn.setAttribute('data-mode', playMode);
-  }
-  if (modeIcon) modeIcon.textContent = modeMeta[playMode].icon;
-  if (modeText) modeText.textContent = modeMeta[playMode].hero;
+  setAttrIfChanged(modeBtn, 'data-mode', playMode);
+  setTextIfChanged(modeIcon, modeMeta[playMode].icon);
+  setTextIfChanged(modeText, modeMeta[playMode].hero);
   const modeOrder = ['CHALLENGE', 'ZEN', 'TIMED'] as const;
   const modeIdx = modeOrder.indexOf(playMode);
   const prevMode = modeOrder[(modeIdx + 2) % 3];
   const nextMode = modeOrder[(modeIdx + 1) % 3];
-  if (prevIcon) prevIcon.textContent = modeMeta[prevMode].icon;
-  if (prevLabel) prevLabel.textContent = modeMeta[prevMode].wing;
-  if (prevBtn) prevBtn.title = `Switch to ${modeMeta[prevMode].full}`;
-  if (nextIcon) nextIcon.textContent = modeMeta[nextMode].icon;
-  if (nextLabel) nextLabel.textContent = modeMeta[nextMode].wing;
-  if (nextBtn) nextBtn.title = `Switch to ${modeMeta[nextMode].full}`;
+  setTextIfChanged(prevIcon, modeMeta[prevMode].icon);
+  setTextIfChanged(prevLabel, modeMeta[prevMode].wing);
+  const prevTitle = `Switch to ${modeMeta[prevMode].full}`;
+  if (prevBtn && prevBtn.title !== prevTitle) prevBtn.title = prevTitle;
+  setTextIfChanged(nextIcon, modeMeta[nextMode].icon);
+  setTextIfChanged(nextLabel, modeMeta[nextMode].wing);
+  const nextTitle = `Switch to ${modeMeta[nextMode].full}`;
+  if (nextBtn && nextBtn.title !== nextTitle) nextBtn.title = nextTitle;
 
   if (movesPill) {
     if (playMode === 'CHALLENGE') {
       if (app.board.freeMovesRemaining > 0) {
-        movesPill.textContent = `Moves Left: ${app.board.movesRemaining} (+${app.board.freeMovesRemaining} Free)`;
-        movesPill.className = 'tabular-metric moves-pill moves-bonus';
+        setTextIfChanged(
+          movesPill,
+          `Moves Left: ${app.board.movesRemaining} (+${app.board.freeMovesRemaining} Free)`
+        );
+        setClassIfChanged(movesPill, 'tabular-metric moves-pill moves-bonus');
       } else {
-        movesPill.textContent = `Moves Left: ${app.board.movesRemaining}`;
-        movesPill.className =
+        setTextIfChanged(movesPill, `Moves Left: ${app.board.movesRemaining}`);
+        const nextMovesClass =
           app.board.movesRemaining <= 1
             ? 'tabular-metric moves-pill moves-critical'
             : app.board.movesRemaining <= 3
               ? 'tabular-metric moves-pill moves-low'
               : 'tabular-metric moves-pill';
+        setClassIfChanged(movesPill, nextMovesClass);
       }
     } else {
-      movesPill.textContent = `Moves: ${app.board.movesCommitted} / Par ${app.board.parMoves}`;
-      movesPill.className = 'tabular-metric moves-pill';
+      setTextIfChanged(movesPill, `Moves: ${app.board.movesCommitted} / Par ${app.board.parMoves}`);
+      setClassIfChanged(movesPill, 'tabular-metric moves-pill');
     }
   }
-  if (timerPill) {
+  if (timerPill && timerPill.hidden !== (playMode !== 'TIMED')) {
     timerPill.hidden = playMode !== 'TIMED';
   }
   app.syncTimerPillOnly();
@@ -480,39 +511,44 @@ export function syncInGameHudImpl(app: AppViewContext): void {
     const rarity = BOOSTER_RARITY[type].toLowerCase();
 
     if (btnEl) {
-      btnEl.classList.remove(
-        'rarity-common',
-        'rarity-uncommon',
-        'rarity-rare',
-        'rarity-epic',
-        'rarity-legendary'
-      );
-      btnEl.classList.add(`rarity-${rarity}`);
-      btnEl.classList.toggle('locked-booster', !unlocked);
-      btnEl.setAttribute('data-rarity', BOOSTER_RARITY[type]);
+      const rarityClass = `rarity-${rarity}`;
+      if (!btnEl.classList.contains(rarityClass)) {
+        btnEl.classList.remove(
+          'rarity-common',
+          'rarity-uncommon',
+          'rarity-rare',
+          'rarity-epic',
+          'rarity-legendary'
+        );
+        btnEl.classList.add(rarityClass);
+      }
+      if (btnEl.classList.contains('locked-booster') === unlocked) {
+        btnEl.classList.toggle('locked-booster', !unlocked);
+      }
+      setAttrIfChanged(btnEl, 'data-rarity', BOOSTER_RARITY[type]);
     }
 
     if (!badgeEl) return;
 
     if (!unlocked) {
-      badgeEl.textContent = `Lvl ${BOOSTER_UNLOCK_LEVEL[type]}`;
-      badgeEl.className = 'booster-badge badge-locked';
+      setTextIfChanged(badgeEl, `Lvl ${BOOSTER_UNLOCK_LEVEL[type]}`);
+      setClassIfChanged(badgeEl, 'booster-badge badge-locked');
       return;
     }
 
     if (type === 'UNDO' && app.freeUndosRemaining > 0) {
-      badgeEl.textContent = `FREE (${app.freeUndosRemaining})`;
-      badgeEl.className = 'booster-badge badge-free';
+      setTextIfChanged(badgeEl, `FREE (${app.freeUndosRemaining})`);
+      setClassIfChanged(badgeEl, 'booster-badge badge-free');
       return;
     }
 
     const count = save.boosters[type] ?? 0;
     if (count > 0) {
-      badgeEl.textContent = String(count);
-      badgeEl.className = `booster-badge badge-rarity-${rarity}`;
+      setTextIfChanged(badgeEl, String(count));
+      setClassIfChanged(badgeEl, `booster-badge badge-rarity-${rarity}`);
     } else {
-      badgeEl.textContent = `${UI_BOOSTER_PRICES[type]} Coins`;
-      badgeEl.className = 'booster-badge badge-coin';
+      setTextIfChanged(badgeEl, `${UI_BOOSTER_PRICES[type]} Coins`);
+      setClassIfChanged(badgeEl, 'booster-badge badge-coin');
     }
   };
 

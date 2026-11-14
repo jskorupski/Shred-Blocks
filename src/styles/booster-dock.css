@@ -105,6 +105,7 @@
   border-radius: 0;
   box-shadow: none;
   flex-shrink: 0;
+  will-change: opacity;
   transition:
     opacity 0.28s ease,
     visibility 0.28s ease;
@@ -459,6 +460,7 @@ body.high-contrast .target-instruction {
   pointer-events: none;
   z-index: 0;
   opacity: 0;
+  will-change: opacity;
   background: radial-gradient(
     ellipse 88% 64% at 50% 48%,
     rgba(246, 189, 96, 0.28) 0%,
@@ -478,6 +480,7 @@ body:not(.high-contrast) #app-shell[data-title-open="true"]::before {
   pointer-events: none;
   z-index: 0;
   opacity: 1;
+  will-change: opacity;
   transition: opacity 1.05s cubic-bezier(0.37, 0, 0.22, 1);
 }
 

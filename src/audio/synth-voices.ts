@@ -25,6 +25,14 @@ function getSharedNoiseBuffer(ctx: AudioContext, minDurationSec: number): AudioB
   return buffer;
 }
 
+/**
+ * Pre-generates and caches the shared white-noise PCM buffer on `ctx` during idle warm-up
+ * so first pickup, slide, or shred SFX never allocates samples on the interaction frame.
+ */
+export function prewarmSharedNoiseBuffer(ctx: AudioContext): void {
+  getSharedNoiseBuffer(ctx, 0.35);
+}
+
 export function playFilteredNoiseBurstVoice(
   ctx: AudioContext,
   sfxGain: GainNode,

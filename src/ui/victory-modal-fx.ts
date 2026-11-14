@@ -99,6 +99,23 @@ export function stopVictoryModalFx(): void {
 }
 
 /**
+ * Pre-acquires the 2D canvas context and allocates the initial backing store for `#victory-fx-canvas`
+ * while the Victory dialog is still closed so first-clear fireworks incur zero surface setup stall.
+ */
+export function prewarmVictoryModalFx(): void {
+  if (activeRafId !== null || typeof document === 'undefined') return;
+  const canvas = document.getElementById('victory-fx-canvas') as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  if (canvas.width < 64 || canvas.height < 64) {
+    canvas.width = 360;
+    canvas.height = 420;
+  }
+  ctx.clearRect(0, 0, 1, 1);
+}
+
+/**
  * Renders celebratory 2D sacred-geometry & jewel particle FX directly inside `.victory-dialog-card`
  * (`#victory-fx-canvas`) so players see immediate, zero-delay visual feedback on top of the modal card
  * rather than hidden behind its backdrop (`UNDER-PAR-ORACLE-01`).
@@ -133,8 +150,12 @@ export function startVictoryModalFx(options: {
   const w = Math.max(240, Math.round(cardRect.width || card.clientWidth || 360));
   const h = Math.max(220, Math.round(cardRect.height || card.clientHeight || 420));
   const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
+  const targetW = Math.round(w * dpr);
+  const targetH = Math.round(h * dpr);
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
 
   const crestRect = document.getElementById('victory-crest-ornament')?.getBoundingClientRect();
   const cx =
