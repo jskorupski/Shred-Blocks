@@ -12,6 +12,7 @@ import {
   VIEWPORT_PRESETS,
 } from '../../scripts/lib/agent-harness';
 import { formatProbeHelp, PROBE_SCENES, parseProbeCliArgs } from '../../scripts/ui-probe';
+import { SINGLE_BUNDLE_WARNING_LIMIT_KB } from '../../vite.config';
 
 describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNESS-01)', () => {
   it('AGENT-HARNESS-01: parses quick, matrix, named preset, and custom WxH viewport specs', () => {
@@ -185,5 +186,13 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     expect(playbook).toContain('seedPlayerSave');
     expect(playbook).toContain('auditViewportGeometry');
     expect(playbook).toContain('VIEWPORT_PRESETS');
+
+    // 4. BUNDLE-BUDGET-01: 1,000 kB (1 MB) single-bundle warning threshold & user-escalation contract stay synced
+    expect(SINGLE_BUNDLE_WARNING_LIMIT_KB).toBe(1000);
+    const viteConfigText = fs.readFileSync(path.join(repoRoot, 'vite.config.ts'), 'utf8');
+    const agentsMdText = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+    expect(viteConfigText).toContain('chunkSizeWarningLimit: SINGLE_BUNDLE_WARNING_LIMIT_KB');
+    expect(agentsMdText).toContain('BUNDLE-BUDGET-01');
+    expect(playbook).toContain('BUNDLE-BUDGET-01');
   });
 });

@@ -104,6 +104,14 @@ export const FRAME_GUARD_HEADERS = {
   'X-Frame-Options': 'SAMEORIGIN',
 };
 
+/**
+ * Single-bundle offline-PWA warning threshold in kB of minified uncompressed JS (`BUNDLE-BUDGET-01`).
+ * ShredBlocks intentionally ships one atomic SW-precached JS bundle (~70% renders Frame-0 3D Title Screen;
+ * zero external runtime dependencies or asset packs). `1000` kB (`1 MB` minified, ~`300 kB` gzipped) marks
+ * the mobile parse/transfer inflection point where staged code-splitting is worth discussing with the user.
+ */
+export const SINGLE_BUNDLE_WARNING_LIMIT_KB = 1000;
+
 export default defineConfig({
   base: '/',
   define: {
@@ -116,6 +124,7 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: false,
     minify: 'esbuild',
+    chunkSizeWarningLimit: SINGLE_BUNDLE_WARNING_LIMIT_KB,
   },
   server: {
     host: '127.0.0.1',
