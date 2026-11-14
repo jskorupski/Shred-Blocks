@@ -196,9 +196,10 @@ void main() {
     float ang = atan(v_localPos.y, v_localPos.x) + 1.5708;
     float starR = mix(0.2, 0.49, pow(0.5 + 0.5 * cos(ang * 5.0), 1.35));
     float starMask = smoothstep(starR + 0.048, starR - 0.032, r);
-    float foil = 0.76 + 0.54 * pow(abs(dot(N, L)), 1.6);
-    float centerGlint = smoothstep(0.24, 0.0, r) * 0.28;
-    vec3 col = mix(v_color * foil, vec3(1.0, 0.96, 0.82), 0.24 + centerGlint);
+    float bevel = 0.88 + 0.12 * smoothstep(starR, starR * 0.42, r);
+    float foil = (0.78 + 0.52 * pow(abs(dot(N, L)), 1.6)) * bevel;
+    float centerGlint = smoothstep(0.22, 0.0, r) * 0.24;
+    vec3 col = mix(v_color * foil, vec3(1.0, 0.96, 0.84), 0.11 + centerGlint);
     outColor = vec4(clamp(col, 0.0, 1.0), starMask * 0.96 * v_fade);
     return;
   } else if (u_particleStyle == 2) {
@@ -242,7 +243,8 @@ void main() {
     float corona = (exp(-d * d * 24.0) * (0.35 + 0.65 * tailT) + headOrb * 0.55) * edgeMask;
     float core = (exp(-d * d * 180.0) * tailT + exp(-dot(headDelta, headDelta) * 110.0) * 0.95) * edgeMask;
     float strobe = 0.56 + 0.44 * sin(phase * 2.1);
-    vec3 sparkHue = mix(v_color, vec3(0.10, 0.84, 1.0), 0.60);
+    float isGilded = step(0.85, v_color.r) * step(0.75, v_color.g) * step(v_color.b, 0.65);
+    vec3 sparkHue = mix(v_color, mix(vec3(0.10, 0.84, 1.0), vec3(1.0, 0.92, 0.52), isGilded), 0.60);
     vec3 col = mix(sparkHue, vec3(0.99, 0.998, 1.0), clamp(core * v_fade, 0.0, 1.0));
     float alpha = clamp((corona * 0.66 + core * 0.86) * strobe, 0.0, 0.98) * v_fade;
     outColor = vec4(clamp(col, 0.0, 1.0), alpha);

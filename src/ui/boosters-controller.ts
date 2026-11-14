@@ -54,6 +54,7 @@ function ensureBoosterAvailable(app: BoosterAppContext, type: BoosterType): bool
 }
 
 export function activateBoosterImpl(app: BoosterAppContext, type: BoosterType): void {
+  if (app.levelOutcomeHandled) return;
   const save = app.saveManager.getPayload();
   const effectiveLevel = getEffectiveBoosterUnlockLevel(save, app.board.levelId);
   if (!isBoosterUnlocked(type, effectiveLevel)) {

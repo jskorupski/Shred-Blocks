@@ -226,6 +226,8 @@ export interface RenderSceneOptions {
   qualityTier?: QualityTier;
   dtSec?: number;
   timeSec?: number;
+  /** `OUTCOME-TRANSITION-01`: lifetime decay multiplier (`1.8` behind outcome modals) so airborne FX arc naturally while dissolving cleanly */
+  fxDecayMul?: number;
   /** `0.0` = full 3D tactile gameplay, `1.0` = Sacred-Geometry Astrolabe Wall-Scroll Diagram preview */
   blueprintMix?: number;
   autoGuideMove?: {
@@ -265,6 +267,12 @@ export interface VisualShockwave {
   maxAge: number;
   minRadius: number;
   maxRadius: number;
+  nx?: number;
+  ny?: number;
+  feathered?: boolean;
+  peakAlpha?: number;
+  inwardFloor?: number;
+  goldShimmer?: number;
 }
 
 export interface RenderPassContext {

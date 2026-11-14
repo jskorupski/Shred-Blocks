@@ -4,6 +4,8 @@ import type { Benchmark120HzResult, PerfTelemetry, QualityTier } from '../core/t
 export interface RafTickTelemetryOptions {
   /** True when user input, drag, block bounce, particles, or transition motion is active. */
   isInteractiveMotion: boolean;
+  /** True while a pointer or drag is actively engaged on the board (when Android Chrome/LTPO boosts to 120Hz). */
+  isPointerEngaged?: boolean;
   /** True while a top-layer `<dialog>` (`Pause`, `Victory`, `Failure`, `Save`) is open. */
   isModalOpen: boolean;
   /** True when off-board (`Home` / `Themes`) or paused/frozen (`render` suppressed). */
@@ -13,19 +15,22 @@ export interface RafTickTelemetryOptions {
 const WORK_BUFFER_SIZE = 120;
 const RAF_BUFFER_SIZE = 72;
 const BALANCED_60_RENDER_MIN_INTERVAL_MS = 12.5;
-const ACTIVE_REFRESH_HYSTERESIS_THRESHOLD_HZ = 78;
+const HIGH_RATE_RAF_THRESHOLD_MS = 10.5;
+const SUB_60_STALL_THRESHOLD_MS = 22.0;
 
 /**
  * Two-Tier Adaptive `120fps / 60fps` Quality Governor (`VER-03`).
  *
- * Combines three signals so both CPU-bound, GPU-bound, and 60Hz-locked mobile browsers behave properly:
- * 1. `workDurationMs` ring (`p95WorkMs`): catches heavy JS/GL submission bottlenecks (> 7.8ms).
- * 2. Active `requestAnimationFrame` cadence (`activeRafRing`): distinguishes genuine high-refresh
- *    screens (e.g. S24 Ultra LTPO 120Hz during touch/motion) from 60Hz-locked WebKit/PWA environments
- *    (e.g. iPhone 13 Pro Safari WebApp with "Prefer Page Rendering Updates near 60fps"), ignoring idle
- *    static screens and open dialogs so LTPO idle refresh drops never erase active 120fps telemetry.
- * 3. Active missed-vsync ratio (`missedFrameRatio`): detects GPU raster/fillrate stalls even when async
- *    WebGL draw calls return quickly to JavaScript.
+ * Mobile LTPO / ProMotion browsers (e.g. Android Chrome on S24 Ultra) dynamically step `rAF` between
+ * `120Hz` (`8.33ms`) during active touch-drag and `60Hz` (`16.67ms`) immediately on finger lift.
+ * Rather than guessing panel refresh caps from mixed 60/120Hz intervals:
+ * 1. `AUTO` defaults to `ULTRA_120` (unthrottled vsync, crisp `2.5` DPR, `60` particles) and ONLY steps
+ *    down to `BALANCED_60` when genuine sub-60fps distress occurs (`>= 20%` of active frames `> 22ms`,
+ *    or `p95WorkMs > 11ms`). Both `120Hz` (`8.33ms`) and `60Hz` (`16.67ms`) count as 100% healthy.
+ * 2. Manual/active `BALANCED_60` paces renders using the instantaneous live `rAF` interval (`< 10.5ms`),
+ *    cleanly halving `120Hz` drags to `60fps` while never dropping `60Hz` frames.
+ * 3. `cadenceRing` samples active pointer/drag and high-rate ticks separately from finger-up cooldowns so
+ *    reaching for Settings (`#dialog-pause`) never decays `120fps (120Hz)` telemetry down to `60`.
  */
 export class QualityGovernor {
   private readonly workRing = new Float32Array(WORK_BUFFER_SIZE);
@@ -34,13 +39,17 @@ export class QualityGovernor {
   private workSampleCount = 0;
 
   private readonly activeRafRing = new Float32Array(RAF_BUFFER_SIZE);
-  private readonly rafScratch = new Float32Array(RAF_BUFFER_SIZE);
   private rafWriteCursor = 0;
   private rafSampleCount = 0;
 
+  private readonly cadenceRing = new Float32Array(RAF_BUFFER_SIZE);
+  private readonly rafScratch = new Float32Array(RAF_BUFFER_SIZE);
+  private cadenceWriteCursor = 0;
+  private cadenceSampleCount = 0;
+
   private cachedWorkStats = { avgWorkMs: 0.8, p95WorkMs: 1.2, p99WorkMs: 1.5, maxWorkMs: 1.8 };
   private workStatsDirty = false;
-  private cachedRafStats = { displayHz: 120, medianDeltaMs: 8.33, missedRatio: 0 };
+  private cachedRafStats = { displayHz: 120, medianDeltaMs: 8.33, sub60StallRatio: 0 };
   private rafStatsDirty = false;
 
   private preferredTier: QualityTier = 'AUTO';
@@ -50,7 +59,10 @@ export class QualityGovernor {
   private dpr = 1;
 
   private lastRafTimestamp = 0;
+  private lastValidRafDeltaMs = 0;
   private lastRenderedRafTimestamp = 0;
+  private seenPointerOrHighRate = false;
+  private lastTickSampledCadence = false;
   private measuredFps = 60;
   private hasMeasuredFpsSample = false;
   private measuredRenderFps = 60;
@@ -69,6 +81,12 @@ export class QualityGovernor {
       this.autoUpgradeCooldownTicks = 0;
     } else if (tier === 'BALANCED_60') {
       this.activeTier = 'BALANCED_60';
+      if (this.hasMeasuredRenderFps && this.measuredRenderFps > 60) {
+        this.measuredRenderFps = 60;
+      }
+      if (this.hasMeasuredFpsSample && this.measuredFps > 60) {
+        this.measuredFps = 60;
+      }
     } else {
       this.evaluateAutoTier();
     }
@@ -76,6 +94,10 @@ export class QualityGovernor {
 
   public getPreferredTier(): QualityTier {
     return this.preferredTier;
+  }
+
+  public didLastTickSampleCadence(): boolean {
+    return this.lastTickSampledCadence;
   }
 
   public setBackend(backend: 'WEBGPU' | 'WEBGL2' | 'CANVAS2D'): void {
@@ -102,39 +124,57 @@ export class QualityGovernor {
   }
 
   /**
-   * Records genuine `requestAnimationFrame` intervals during active gameplay motion and updates
-   * `activeFps`, `displayHz`, and `AUTO` quality selection. Open dialogs & suspended off-board views
-   * freeze FPS/refresh readings so static LTPO power-saving never overwrites gameplay telemetry.
+   * Records genuine `requestAnimationFrame` intervals during active gameplay motion.
+   * - `activeRafRing` tracks sub-60fps frame stalls (`> 22ms`) for `AUTO` fallback.
+   * - `cadenceRing` tracks active touch/drag and high-rate (`> 95Hz`) intervals so finger-up LTPO
+   *   `60Hz` power-saving never decays active `120fps (120Hz)` telemetry before opening Settings.
    */
   public recordRafTick(rafTimestampMs: number, opts: RafTickTelemetryOptions): void {
     const prevTs = this.lastRafTimestamp;
     this.lastRafTimestamp = rafTimestampMs;
+    this.lastTickSampledCadence = false;
     if (prevTs <= 0) return;
 
     const delta = rafTimestampMs - prevTs;
     // Ignore background-tab resumes or degenerate duplicate callbacks
     if (delta < 3 || delta > 200) return;
+    this.lastValidRafDeltaMs = delta;
 
     if (opts.isModalOpen || opts.isSuspended) {
       return;
     }
 
     this.totalRafTicksObserved++;
-    const inStartupWarmup = this.totalRafTicksObserved <= 24;
-    if (opts.isInteractiveMotion || inStartupWarmup) {
-      const instFps = 1000 / delta;
-      if (!this.hasMeasuredFpsSample) {
-        this.measuredFps = instFps;
-        this.hasMeasuredFpsSample = true;
-      } else {
-        const blend = instFps > this.measuredFps ? 0.24 : 0.14;
-        this.measuredFps = this.measuredFps * (1 - blend) + instFps * blend;
-      }
-
+    if (opts.isInteractiveMotion) {
       this.activeRafRing[this.rafWriteCursor] = delta;
       this.rafWriteCursor = (this.rafWriteCursor + 1) % RAF_BUFFER_SIZE;
       if (this.rafSampleCount < RAF_BUFFER_SIZE) this.rafSampleCount++;
       this.rafStatsDirty = true;
+
+      const isHighRateTick = delta < HIGH_RATE_RAF_THRESHOLD_MS;
+      if (opts.isPointerEngaged || isHighRateTick) {
+        this.seenPointerOrHighRate = true;
+      }
+      const shouldSampleCadence =
+        Boolean(opts.isPointerEngaged) || isHighRateTick || !this.seenPointerOrHighRate;
+      if (shouldSampleCadence) {
+        this.lastTickSampledCadence = true;
+        const instFps = 1000 / delta;
+        if (!this.hasMeasuredFpsSample) {
+          this.measuredFps = instFps;
+          this.hasMeasuredFpsSample = true;
+        } else {
+          const blend = instFps > this.measuredFps ? 0.24 : 0.14;
+          this.measuredFps = this.measuredFps * (1 - blend) + instFps * blend;
+        }
+
+        this.cadenceRing[this.cadenceWriteCursor] = delta;
+        this.cadenceWriteCursor = (this.cadenceWriteCursor + 1) % RAF_BUFFER_SIZE;
+        if (this.cadenceSampleCount < RAF_BUFFER_SIZE) this.cadenceSampleCount++;
+      }
+    } else if (!this.hasMeasuredFpsSample && this.totalRafTicksObserved === 2) {
+      this.measuredFps = 1000 / delta;
+      this.hasMeasuredFpsSample = true;
     }
 
     if (this.autoUpgradeCooldownTicks > 0) {
@@ -150,15 +190,19 @@ export class QualityGovernor {
 
   /**
    * Decides whether a given `rAF` tick should submit a full scene render.
-   * When `BALANCED_60` is active on a high-refresh screen (`>= 78Hz`), skips intermediate 120Hz
-   * sub-frames (`< 12.5ms` since last render) while preserving every single frame on 60Hz screens.
+   * When `BALANCED_60` is active and the live `rAF` interval itself is high-rate (`< 10.5ms`, `> 95Hz`),
+   * skips intermediate sub-frames (`< 12.5ms` since last render) while never skipping 60Hz ticks.
    */
   public shouldRenderOnRaf(rafTimestampMs: number, forceImmediate = false): boolean {
     if (forceImmediate || this.activeTier === 'ULTRA_120' || this.lastRenderedRafTimestamp <= 0) {
       return true;
     }
-    const rafStats = this.getRafStats();
-    if (rafStats.displayHz < ACTIVE_REFRESH_HYSTERESIS_THRESHOLD_HZ) {
+    const liveDelta =
+      this.lastRafTimestamp > 0 && rafTimestampMs > this.lastRafTimestamp
+        ? rafTimestampMs - this.lastRafTimestamp
+        : this.lastValidRafDeltaMs;
+    const isHighRateTick = liveDelta > 0 && liveDelta < HIGH_RATE_RAF_THRESHOLD_MS;
+    if (!isHighRateTick) {
       return true;
     }
     return rafTimestampMs - this.lastRenderedRafTimestamp >= BALANCED_60_RENDER_MIN_INTERVAL_MS;
@@ -182,7 +226,7 @@ export class QualityGovernor {
 
   /**
    * Accumulates frame `dtSec` and returns the combined delta to render on this rAF tick, or `0` when
-   * off-board, settled behind an open top-layer modal, or intentionally paced at 60Hz under `BALANCED_60`.
+   * off-board, settled behind an open top-layer modal (`!hasVisualFx`), or paced at 60Hz under `BALANCED_60`.
    */
   public consumeRenderStep(
     rafTimestampMs: number,
@@ -190,7 +234,7 @@ export class QualityGovernor {
     state: {
       canvasVisible: boolean;
       modalOpen: boolean;
-      victoryOpen: boolean;
+      victoryOpen?: boolean;
       hasVisualFx: boolean;
       forceSettle: boolean;
     }
@@ -200,8 +244,8 @@ export class QualityGovernor {
       return 0;
     }
     this.pendingRenderDtSec = Math.min(0.1, this.pendingRenderDtSec + dtSec);
-    const shouldDrawBehindModal =
-      !state.modalOpen || state.forceSettle || (!state.victoryOpen && state.hasVisualFx);
+    // OUTCOME-TRANSITION-01: keep stepping residual airborne FX behind outcome modals until dissolved, then sleep at 0fps
+    const shouldDrawBehindModal = !state.modalOpen || state.forceSettle || state.hasVisualFx;
     if (!shouldDrawBehindModal || !this.shouldRenderOnRaf(rafTimestampMs, state.forceSettle)) {
       return 0;
     }
@@ -247,35 +291,26 @@ export class QualityGovernor {
     }
 
     const work = this.getWorkStats();
-    const hasRafEvidence = this.rafSampleCount >= 24;
     const raf = this.getRafStats();
 
-    const cpuOverBudget = this.workSampleCount >= 24 && work.p95WorkMs > 7.8;
-    const confirmedSixtyHzCap = hasRafEvidence && raf.displayHz <= 72;
-    const gpuJankOverBudget =
-      hasRafEvidence &&
-      this.rafSampleCount >= 36 &&
-      raf.displayHz > 75 &&
-      this.activeTier === 'ULTRA_120' &&
-      raf.missedRatio >= 0.16;
+    // Downgrade ONLY on genuine sub-60fps distress (>22ms frame stalls or heavy >11ms JS/GL work)
+    const cpuOverBudget = this.workSampleCount >= 24 && work.p95WorkMs > 11.0;
+    const sub60StallOverBudget = this.rafSampleCount >= 36 && raf.sub60StallRatio >= 0.2;
 
-    if (cpuOverBudget || confirmedSixtyHzCap || gpuJankOverBudget) {
+    if (cpuOverBudget || sub60StallOverBudget) {
       if (this.activeTier === 'ULTRA_120') {
         this.activeTier = 'BALANCED_60';
-        if (cpuOverBudget || gpuJankOverBudget) {
-          this.downgradeCount++;
-          // Exponential hold prevents thrashing 60 <-> 120Hz on thermal/GPU-limited devices
-          this.autoUpgradeCooldownTicks = Math.min(1800, 240 * 2 ** (this.downgradeCount - 1));
-        }
+        this.downgradeCount++;
+        // Exponential hold prevents thrashing on thermally-limited or overloaded devices
+        this.autoUpgradeCooldownTicks = Math.min(1800, 240 * 2 ** (this.downgradeCount - 1));
       }
       return;
     }
 
     if (this.activeTier === 'BALANCED_60' && this.autoUpgradeCooldownTicks === 0) {
-      const displaySupportsUltra = !hasRafEvidence || raf.displayHz >= 85;
-      const cpuHealthy = this.workSampleCount < 24 || work.p95WorkMs < 4.8;
-      const gpuHealthy = !hasRafEvidence || raf.missedRatio < 0.06;
-      if (displaySupportsUltra && cpuHealthy && gpuHealthy) {
+      const cpuHealthy = this.workSampleCount < 24 || work.p95WorkMs < 6.5;
+      const stallsCleared = this.rafSampleCount < 24 || raf.sub60StallRatio < 0.05;
+      if (cpuHealthy && stallsCleared) {
         this.activeTier = 'ULTRA_120';
       }
     }
@@ -334,17 +369,29 @@ export class QualityGovernor {
   private getRafStats() {
     if (!this.rafStatsDirty) return this.cachedRafStats;
     this.rafStatsDirty = false;
-    const count = this.rafSampleCount;
-    if (count < 4) return this.cachedRafStats;
+
+    const activeCount = this.rafSampleCount;
+    let stalls = 0;
+    for (let i = 0; i < activeCount; i++) {
+      if (this.activeRafRing[i] > SUB_60_STALL_THRESHOLD_MS) stalls++;
+    }
+    const sub60StallRatio = activeCount > 0 ? stalls / activeCount : 0;
+
+    const cadCount = this.cadenceSampleCount;
+    const srcRing = cadCount >= 4 ? this.cadenceRing : this.activeRafRing;
+    const count = cadCount >= 4 ? cadCount : activeCount;
+    if (count < 4) {
+      this.cachedRafStats = { ...this.cachedRafStats, sub60StallRatio };
+      return this.cachedRafStats;
+    }
 
     for (let i = 0; i < count; i++) {
-      this.rafScratch[i] = this.activeRafRing[i];
+      this.rafScratch[i] = srcRing[i];
     }
     const sub = this.rafScratch.subarray(0, count);
     sub.sort();
 
-    // Lower-quartile-biased median resists occasional dropped vsync spikes inflating nominal period
-    const nomIdx = Math.min(count - 1, Math.floor(count * 0.35));
+    const nomIdx = Math.min(count - 1, Math.floor(count * 0.25));
     const medianDeltaMs = Math.max(4, sub[nomIdx]);
     const rawHz = 1000 / medianDeltaMs;
     const snappedHz =
@@ -356,17 +403,10 @@ export class QualityGovernor {
             ? 60
             : Math.round(rawHz);
 
-    const expectedPeriodMs = 1000 / Math.max(30, snappedHz);
-    const stallThresholdMs = expectedPeriodMs * 1.48;
-    let missed = 0;
-    for (let i = 0; i < count; i++) {
-      if (this.activeRafRing[i] > stallThresholdMs) missed++;
-    }
-
     this.cachedRafStats = {
       displayHz: Math.min(240, Math.max(30, snappedHz)),
       medianDeltaMs,
-      missedRatio: missed / count,
+      sub60StallRatio,
     };
     return this.cachedRafStats;
   }
@@ -374,7 +414,8 @@ export class QualityGovernor {
   public getTelemetry(): PerfTelemetry {
     const stats = this.getWorkStats();
     const raf = this.getRafStats();
-    const effectiveDisplayHz = this.rafSampleCount >= 4 ? raf.displayHz : 60;
+    const hasCadence = this.cadenceSampleCount >= 4 || this.rafSampleCount >= 4;
+    const effectiveDisplayHz = hasCadence ? raf.displayHz : 60;
     const rawFps = this.hasMeasuredRenderFps
       ? this.measuredRenderFps
       : this.hasMeasuredFpsSample

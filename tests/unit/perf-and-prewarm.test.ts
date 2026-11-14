@@ -7,11 +7,32 @@ import { describe, expect, it } from 'vitest';
 declare const process: { cwd: () => string };
 
 import { playFilteredNoiseBurstVoice, prewarmSharedNoiseBuffer } from '../../src/audio/synth-voices';
+import { createBoardState } from '../../src/core/board';
+import { getLevelSpec } from '../../src/levels/catalog';
 import { Camera3D } from '../../src/render/camera-3d';
+import {
+  spawnBombDetonationBurstImpl,
+  spawnParticlesAtImpl,
+  stepParticlesImpl,
+} from '../../src/render/particle-fx';
 import { QualityGovernor } from '../../src/render/quality-governor';
 import { warmUpWebGLPipelinesImpl } from '../../src/render/relic-awakening-fx';
-import type { RenderPassContext } from '../../src/render/render-types';
+import {
+  INSTANCE_STRIDE,
+  MAX_PARTICLES,
+  MAX_SMOKE_PUFFS,
+  PARTICLE_STRIDE,
+  type RenderPassContext,
+} from '../../src/render/render-types';
 import { prewarmDialogsLayout } from '../../src/ui/dialogs-template';
+import {
+  BOMB_DETONATION_BEAT_MS,
+  cancelPendingOutcomeTransition,
+  FAILURE_SETTLE_BEAT_MS,
+  flushPendingOutcomeTransition,
+  isOutcomeTransitionPending,
+  VICTORY_MODAL_BEAT_MS,
+} from '../../src/ui/outcome-modals-view';
 import {
   prewarmVictoryModalFx,
   startVictoryModalFx,
@@ -267,7 +288,7 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
 
     expect(scissoredRect).toEqual([0, 0, 1, 1]);
     expect(traceCounts).toContain(2);
-    expect(drawnStyles).toEqual(expect.arrayContaining([0, 4, 7, 8, 9]));
+    expect(drawnStyles).toEqual(expect.arrayContaining([0, 4, 7, 8, 9, 10]));
     expect(particleStyles).toEqual(expect.arrayContaining([0, 4]));
   });
 
@@ -298,7 +319,7 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     expect(winBody).not.toContain('this.renderRoadmap(');
   });
 
-  it('QualityGovernor AUTO adapts cleanly to 60Hz browsers, GPU missed-vsync stalls, and LTPO modal freeze', () => {
+  it('QualityGovernor AUTO keeps ULTRA_120 on healthy 60Hz/LTPO phones and downgrades only on <60fps distress', () => {
     const gov = new QualityGovernor();
     gov.setPreference('AUTO');
 
@@ -306,9 +327,30 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     let t = 1000;
     for (let i = 0; i < 40; i++) {
       t += 8.33;
-      gov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
+      gov.recordRafTick(t, {
+        isInteractiveMotion: true,
+        isPointerEngaged: true,
+        isModalOpen: false,
+        isSuspended: false,
+      });
       gov.recordFrameWork(1.4, t, false);
-      gov.markFrameRendered(t, true);
+      gov.markFrameRendered(t, gov.didLastTickSampleCadence());
+    }
+    expect(gov.getActiveTier()).toBe('ULTRA_120');
+    expect(gov.getTelemetry().fps).toBeGreaterThanOrEqual(115);
+    expect(gov.getTelemetry().displayHz).toBe(120);
+
+    // Simulate Android Chrome dropping rAF to 60Hz for 1.0s on finger-up while shred particles finish & user taps Settings
+    for (let i = 0; i < 60; i++) {
+      t += 16.67;
+      gov.recordRafTick(t, {
+        isInteractiveMotion: true,
+        isPointerEngaged: false,
+        isModalOpen: false,
+        isSuspended: false,
+      });
+      gov.recordFrameWork(0.4, t, false);
+      gov.markFrameRendered(t, gov.didLastTickSampleCadence());
     }
     expect(gov.getActiveTier()).toBe('ULTRA_120');
     expect(gov.getTelemetry().fps).toBeGreaterThanOrEqual(115);
@@ -322,32 +364,38 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     expect(gov.getTelemetry().fps).toBeGreaterThanOrEqual(115);
     expect(gov.getTelemetry().displayHz).toBe(120);
 
-    // 2. 60Hz-locked WebKit/Safari environment selects BALANCED_60 cleanly so DPR caps at 1.75
+    // 2. Healthy 60Hz WebKit/Safari environment (steady 16.67ms, ~1.0ms work) keeps crisp ULTRA_120 quality at 60fps
     const safariGov = new QualityGovernor();
     safariGov.setPreference('AUTO');
-    t = 2000;
-    for (let i = 0; i < 40; i++) {
+    t = 3000;
+    for (let i = 0; i < 45; i++) {
       t += 16.67;
-      safariGov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
-      safariGov.recordFrameWork(1.8, t, false);
-      safariGov.markFrameRendered(t, true);
+      safariGov.recordRafTick(t, {
+        isInteractiveMotion: true,
+        isPointerEngaged: true,
+        isModalOpen: false,
+        isSuspended: false,
+      });
+      safariGov.recordFrameWork(1.0, t, false);
+      safariGov.markFrameRendered(t, safariGov.didLastTickSampleCadence());
     }
-    expect(safariGov.getActiveTier()).toBe('BALANCED_60');
-    expect(safariGov.getTargetMaxDpr()).toBe(1.75);
+    expect(safariGov.getActiveTier()).toBe('ULTRA_120');
+    expect(safariGov.getTargetMaxDpr()).toBe(2.5);
     expect(safariGov.getTelemetry().displayHz).toBe(60);
     expect(safariGov.getTelemetry().fps).toBe(60);
 
-    // 3. GPU-bound 120Hz device with tiny JS work (1.2ms) but frequent missed vsyncs (>25%) drops to BALANCED_60 cleanly
-    const gpuStalledGov = new QualityGovernor();
-    gpuStalledGov.setPreference('AUTO');
-    t = 3000;
-    for (let i = 0; i < 52; i++) {
-      // Nominal 8.33ms cadence with 30% missed-vsync spikes (16.67ms) even though JS work is only 1.2ms
-      t += i % 3 === 0 ? 16.67 : 8.33;
-      gpuStalledGov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
-      gpuStalledGov.recordFrameWork(1.2, t, false);
+    // 3. Genuine sub-60fps distress (>22ms frame stalls >=20% of active frames, even with tiny JS work) downgrades to BALANCED_60
+    const sub60StalledGov = new QualityGovernor();
+    sub60StalledGov.setPreference('AUTO');
+    t = 5000;
+    for (let i = 0; i < 48; i++) {
+      // 33% of frames stall to 28ms (~35fps dropped 60Hz vsyncs)
+      t += i % 3 === 0 ? 28.0 : 16.67;
+      sub60StalledGov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
+      sub60StalledGov.recordFrameWork(1.2, t, false);
     }
-    expect(gpuStalledGov.getActiveTier()).toBe('BALANCED_60');
+    expect(sub60StalledGov.getActiveTier()).toBe('BALANCED_60');
+    expect(sub60StalledGov.getTargetMaxDpr()).toBe(1.75);
   });
 
   it('BALANCED_60 paces renders on 120Hz displays, never drops 60Hz displays, and suspends behind settled modals', () => {
@@ -380,12 +428,20 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     });
     expect(paintedDt).toBeCloseTo(0.01667, 4);
 
-    // Open Victory dialog suspends settled 3D background rendering cleanly once forceSettle drains
-    const settledVictoryDt = gov.consumeRenderStep(t + 40, 0.016, {
+    // OUTCOME-TRANSITION-01: airborne FX behind an open modal keep stepping until dissolved, then sleep at 0fps
+    const dissolvingVictoryDt = gov.consumeRenderStep(t + 40, 0.016, {
       canvasVisible: true,
       modalOpen: true,
-      victoryOpen: true,
       hasVisualFx: true,
+      forceSettle: false,
+    });
+    expect(dissolvingVictoryDt).toBeCloseTo(0.016, 4);
+    gov.markFrameRendered(t + 40, false);
+
+    const settledVictoryDt = gov.consumeRenderStep(t + 60, 0.016, {
+      canvasVisible: true,
+      modalOpen: true,
+      hasVisualFx: false,
       forceSettle: false,
     });
     expect(settledVictoryDt).toBe(0);
@@ -414,6 +470,7 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     let saveCalls = 0;
     let restoreCalls = 0;
     let drawImageCalls = 0;
+    let clearRectCalls = 0;
     const rafQueue: Array<(ms: number) => void> = [];
 
     const makeMockCtx = () => ({
@@ -423,7 +480,9 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
       globalAlpha: 1,
       globalCompositeOperation: 'source-over',
       setTransform: () => {},
-      clearRect: () => {},
+      clearRect: () => {
+        clearRectCalls++;
+      },
       beginPath: () => {},
       closePath: () => {},
       moveTo: () => {},
@@ -514,6 +573,207 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
       expect(saveCalls).toBe(0);
       expect(restoreCalls).toBe(0);
 
+      const repoRoot = path.resolve(process.cwd());
+      const outcomeTs = fs.readFileSync(path.join(repoRoot, 'src/ui/outcome-modals-view.ts'), 'utf8');
+      expect(outcomeTs).not.toContain('spawnVictoryCelebrationBurst');
+
+      stopVictoryModalFx();
+
+      // Verify 60Hz BALANCED_60 never drops a jittered 12.2ms tick, while 120Hz (8.33ms) BALANCED_60 halves to 60fps
+      rafQueue.length = 0;
+      startVictoryModalFx({
+        isUnderPar: false,
+        earnedStars: 3,
+        equippedParticle: 'pixel_sparks',
+        reducedMotion: false,
+        frozen: false,
+        activeTier: 'BALANCED_60',
+      });
+      clearRectCalls = 0;
+      rafQueue.shift()?.(2000);
+      rafQueue.shift()?.(2012.2);
+      expect(clearRectCalls).toBe(2);
+      rafQueue.shift()?.(2020.53); // +8.33ms (<10.5ms high-rate tick): skipped
+      expect(clearRectCalls).toBe(2);
+      rafQueue.shift()?.(2028.86); // +16.66ms since last paint: rendered
+      expect(clearRectCalls).toBe(3);
+      stopVictoryModalFx();
+    } finally {
+      if (prevWindow === undefined) delete (globalThis as { window?: unknown }).window;
+      else (globalThis as { window?: unknown }).window = prevWindow;
+      if (prevDocument === undefined) delete (globalThis as { document?: unknown }).document;
+      else (globalThis as { document?: unknown }).document = prevDocument;
+      globalThis.requestAnimationFrame = prevRaf;
+      globalThis.cancelAnimationFrame = prevCancelRaf;
+    }
+  });
+
+  it('OUTCOME-TRANSITION-01: accelerates particle age decay 1.8x at 1.0x velocity, spawns 3D bomb bursts, and normalizes 0.935x card scale', () => {
+    expect(VICTORY_MODAL_BEAT_MS).toBe(290);
+    expect(FAILURE_SETTLE_BEAT_MS).toBe(220);
+    expect(BOMB_DETONATION_BEAT_MS).toBe(350);
+    expect(isOutcomeTransitionPending()).toBe(false);
+    cancelPendingOutcomeTransition();
+    flushPendingOutcomeTransition();
+
+    const makeMockParticleRctx = (fxDecayMul = 1.0, reducedMotion = false): RenderPassContext => {
+      const gov = new QualityGovernor();
+      const ctx = {
+        canvas: {} as HTMLCanvasElement,
+        camera: new Camera3D(),
+        qualityGovernor: gov,
+        gl: null,
+        ctx2d: null,
+        uUseClipPlane: null,
+        uBlockSeed: null,
+        uClipPlane: null,
+        uCapColor: null,
+        uTraceCount: null,
+        uTracePts: null,
+        particlePool: new Float32Array(MAX_PARTICLES * PARTICLE_STRIDE),
+        particleInstanceData: new Float32Array(MAX_PARTICLES * INSTANCE_STRIDE),
+        activeParticleCount: 0,
+        hasGameplayParticles: false,
+        smokeInstanceData: new Float32Array(MAX_SMOKE_PUFFS * INSTANCE_STRIDE),
+        activeSmokeCount: 0,
+        particlePoolCount: 0,
+        particleWriteCursor: 0,
+        lastBoardLevelId: 1,
+        lastSessionShredded: 0,
+        lastMovesCommitted: 0,
+        blockLayerSnapshots: new Map(),
+        crateSnapshots: new Map(),
+        gateSnapshots: new Map(),
+        elevatorSnapshots: new Map(),
+        barrierSnapshots: new Map(),
+        roomAwakenMap: new Map(),
+        activeVisualShreds: [],
+        activeShockwaves: [],
+        activeGateBursts: [],
+        activePathTraces: [],
+        blockBounceMap: new Map(),
+        boardShakeTimer: 0,
+        boardShakeDirX: 0,
+        boardShakeDirY: 0,
+        ambientMoteAccumSec: 0,
+        lastOptions: { fxDecayMul, reducedMotion, equippedParticle: 'micro_cubes' },
+        getColorRgb: () => [0.9, 0.25, 0.25] as [number, number, number],
+        spawnParticlesAt: (...args: Parameters<RenderPassContext['spawnParticlesAt']>) =>
+          spawnParticlesAtImpl(ctx, ...args),
+        spawnShockwave: (
+          cx: number,
+          cy: number,
+          z: number,
+          r: number,
+          g: number,
+          b: number,
+          minRadius = 0.28,
+          maxRadius = 1.65,
+          maxAge = 0.42
+        ) => {
+          if (ctx.lastOptions.reducedMotion) return;
+          ctx.activeShockwaves.push({ cx, cy, z, r, g, b, age: 0.001, maxAge, minRadius, maxRadius });
+        },
+        spawnPathTrace: () => {},
+      } as unknown as RenderPassContext;
+      return ctx;
+    };
+
+    // 1. Compare 1.0x vs 1.8x fxDecayMul: age advances 1.8x faster while physical displacement stays natural
+    const ctxNormal = makeMockParticleRctx(1.0, false);
+    const ctxDissolve = makeMockParticleRctx(1.8, false);
+    ctxNormal.particlePool[0] = 2.0;
+    ctxNormal.particlePool[3] = 4.0; // vx = 4.0
+    ctxNormal.particlePool[9] = 0.1; // gameplay cube scale
+    ctxNormal.particlePool[10] = 0.1; // initial age
+    ctxNormal.particlePool[11] = 1.0; // maxAge
+    ctxNormal.particlePoolCount = 1;
+
+    ctxDissolve.particlePool.set(ctxNormal.particlePool);
+    ctxDissolve.particlePoolCount = 1;
+
+    stepParticlesImpl(ctxNormal, 0.02);
+    stepParticlesImpl(ctxDissolve, 0.02);
+
+    expect(ctxDissolve.particlePool[0]).toBeCloseTo(ctxNormal.particlePool[0], 5);
+    expect(ctxNormal.particlePool[10]).toBeCloseTo(0.12, 5);
+    expect(ctxDissolve.particlePool[10]).toBeCloseTo(0.136, 5);
+
+    // 2. Bomb detonation burst spawns shockwaves, particles, bounce, and recoil (and stationary seal under reducedMotion)
+    const bombBoard = createBoardState(getLevelSpec(1));
+    bombBoard.blocks[0].bombMax = 6;
+    bombBoard.blocks[0].bombCount = 0;
+
+    const ctxBomb = makeMockParticleRctx(1.0, false);
+    spawnBombDetonationBurstImpl(ctxBomb, bombBoard);
+    expect(ctxBomb.activeShockwaves.length).toBe(2);
+    expect(ctxBomb.particlePoolCount).toBeGreaterThan(20);
+    expect(ctxBomb.boardShakeTimer).toBeCloseTo(0.24, 5);
+    expect(ctxBomb.blockBounceMap.get(bombBoard.blocks[0].id)).toBeCloseTo(0.38, 5);
+
+    const ctxBombReduced = makeMockParticleRctx(1.0, true);
+    spawnBombDetonationBurstImpl(ctxBombReduced, bombBoard);
+    expect(ctxBombReduced.activeShockwaves.length).toBe(0);
+    expect(ctxBombReduced.particlePoolCount).toBe(0);
+    expect(ctxBombReduced.boardShakeTimer).toBe(0);
+    expect(ctxBombReduced.activeGateBursts.length).toBe(1);
+    expect(ctxBombReduced.activeGateBursts[0]?.mode).toBe('REDUCED_MOTION_SEAL');
+
+    // 3. Frame-0 `scale: 0.96` entrance on `.victory-dialog-card` still sizes #victory-fx-canvas to 1.0x layout width
+    const fxCanvas = {
+      width: 0,
+      height: 0,
+      dataset: {} as Record<string, string>,
+      getContext: () => ({
+        clearRect: () => {},
+        setTransform: () => {},
+        drawImage: () => {},
+        beginPath: () => {},
+        arc: () => {},
+        fill: () => {},
+        stroke: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        closePath: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+    };
+    const prevWindow = (globalThis as { window?: unknown }).window;
+    const prevDocument = (globalThis as { document?: unknown }).document;
+    const prevRaf = globalThis.requestAnimationFrame;
+    const prevCancelRaf = globalThis.cancelAnimationFrame;
+    (globalThis as { window?: unknown }).window = { devicePixelRatio: 2 };
+    (globalThis as { document?: unknown }).document = {
+      body: { classList: { contains: () => false } },
+      createElement: () => fxCanvas,
+      getElementById: (id: string) => {
+        if (id === 'dialog-victory') {
+          return {
+            open: true,
+            querySelector: () => ({
+              clientWidth: 400,
+              clientHeight: 440,
+              getBoundingClientRect: () => ({ left: 8, top: 8, width: 384, height: 422.4 }),
+            }),
+          };
+        }
+        if (id === 'victory-fx-canvas') return fxCanvas;
+        return null;
+      },
+    };
+    globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+    try {
+      startVictoryModalFx({
+        isUnderPar: false,
+        earnedStars: 3,
+        equippedParticle: 'micro_cubes',
+        reducedMotion: false,
+        frozen: false,
+        activeTier: 'ULTRA_120',
+      });
+      expect(fxCanvas.width).toBe(800);
+      expect(fxCanvas.height).toBe(880);
       stopVictoryModalFx();
     } finally {
       if (prevWindow === undefined) delete (globalThis as { window?: unknown }).window;

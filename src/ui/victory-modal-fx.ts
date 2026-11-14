@@ -189,8 +189,13 @@ export function startVictoryModalFx(options: {
 
   const isBalancedTier = options.activeTier === 'BALANCED_60';
   const cardRect = card.getBoundingClientRect();
-  const w = Math.max(240, Math.round(cardRect.width || card.clientWidth || 360));
-  const h = Math.max(220, Math.round(cardRect.height || card.clientHeight || 420));
+  // Normalize against unscaled layout box (`clientWidth`) so frame-0 `scale: 0.96` entrance never shrinks canvas
+  const layoutW = card.clientWidth || cardRect.width || 360;
+  const layoutH = card.clientHeight || cardRect.height || 420;
+  const scaleInvX = cardRect.width > 0 ? layoutW / cardRect.width : 1;
+  const scaleInvY = cardRect.height > 0 ? layoutH / cardRect.height : 1;
+  const w = Math.max(240, Math.round(layoutW));
+  const h = Math.max(220, Math.round(layoutH));
   const dpr = Math.min(isBalancedTier ? 1.75 : 2, Math.max(1, window.devicePixelRatio || 1));
   const targetW = Math.round(w * dpr);
   const targetH = Math.round(h * dpr);
@@ -201,17 +206,25 @@ export function startVictoryModalFx(options: {
 
   const crestRect = document.getElementById('victory-crest-ornament')?.getBoundingClientRect();
   const cx =
-    crestRect && crestRect.width > 0 ? crestRect.left - cardRect.left + crestRect.width * 0.5 : w * 0.5;
-  const cy = crestRect && crestRect.height > 0 ? crestRect.top - cardRect.top + crestRect.height * 0.5 : 42;
+    crestRect && crestRect.width > 0
+      ? (crestRect.left - cardRect.left + crestRect.width * 0.5) * scaleInvX
+      : w * 0.5;
+  const cy =
+    crestRect && crestRect.height > 0
+      ? (crestRect.top - cardRect.top + crestRect.height * 0.5) * scaleInvY
+      : 42;
 
   const bannerEl = document.getElementById('victory-under-par-banner');
   const bannerRect = bannerEl && !bannerEl.hidden ? bannerEl.getBoundingClientRect() : null;
-  const bx = bannerRect && bannerRect.width > 0 ? bannerRect.left - cardRect.left : w * 0.14;
-  const bw = bannerRect && bannerRect.width > 0 ? bannerRect.width : w * 0.72;
+  const bx = bannerRect && bannerRect.width > 0 ? (bannerRect.left - cardRect.left) * scaleInvX : w * 0.14;
+  const bw = bannerRect && bannerRect.width > 0 ? bannerRect.width * scaleInvX : w * 0.72;
   const by =
-    bannerRect && bannerRect.height > 0 ? bannerRect.top - cardRect.top + bannerRect.height * 0.5 : 156;
+    bannerRect && bannerRect.height > 0
+      ? (bannerRect.top - cardRect.top + bannerRect.height * 0.5) * scaleInvY
+      : 156;
 
   const highContrast = document.body.classList.contains('high-contrast');
+  const enterOffset = options.frozen ? 0 : 0.075;
   const particles: ModalFxParticle[] = [];
   const rings: ModalShockRing[] = [];
   const bolts: ModalLightningBolt[] = [];
@@ -223,7 +236,7 @@ export function startVictoryModalFx(options: {
         y: cy,
         r0: 14,
         r1: Math.min(w * 0.62, 230),
-        delay: 0,
+        delay: enterOffset,
         dur: 0.76,
         color: '#7ef7eb',
         lineWidth: 2.1,
@@ -234,7 +247,7 @@ export function startVictoryModalFx(options: {
         y: cy,
         r0: 10,
         r1: Math.min(w * 0.52, 195),
-        delay: 0.14,
+        delay: enterOffset + 0.14,
         dur: 0.78,
         color: '#fde047',
         lineWidth: 1.7,
@@ -259,7 +272,7 @@ export function startVictoryModalFx(options: {
         size: kind === 'spark' ? 4.2 + fxRandom() * 2.4 : 5.4 + fxRandom() * 3.8,
         rot: fxRandom() * Math.PI * 2,
         vRot: (fxRandom() - 0.5) * 6.5,
-        delay: fxRandom() * 0.06,
+        delay: enterOffset + fxRandom() * 0.06,
         age: 0,
         life: 1.05 + fxRandom() * 0.55,
         color,
@@ -314,7 +327,7 @@ export function startVictoryModalFx(options: {
       y: cy,
       r0: 12,
       r1: Math.min(w * 0.48, 165),
-      delay: 0,
+      delay: enterOffset,
       dur: 0.62,
       color: '#f6ce76',
       lineWidth: 1.75,
@@ -337,7 +350,7 @@ export function startVictoryModalFx(options: {
         }
         bolts.push({
           pts,
-          delay: b * 0.025,
+          delay: enterOffset + b * 0.025,
           dur: 0.36,
           color: b % 2 === 0 ? '#7ef7eb' : '#fde047',
         });
@@ -368,7 +381,7 @@ export function startVictoryModalFx(options: {
         size: isBubble ? 5.2 + fxRandom() * 4.4 : 4.4 + fxRandom() * 3.2,
         rot: fxRandom() * Math.PI * 2,
         vRot: (fxRandom() - 0.5) * 7.0,
-        delay: fxRandom() * 0.08,
+        delay: enterOffset + fxRandom() * 0.08,
         age: 0,
         life: 0.88 + fxRandom() * 0.45,
         color,
@@ -381,6 +394,7 @@ export function startVictoryModalFx(options: {
   const sunburstSprite = options.isUnderPar && !highContrast ? createSunburstSprite(dpr) : null;
   const totalDuration = options.isUnderPar ? 2.55 : 1.55;
   let elapsed = 0;
+  let prevRafMs = 0;
   let lastPaintMs = 0;
   canvas.dataset.fxRunning = 'true';
 
@@ -389,7 +403,11 @@ export function startVictoryModalFx(options: {
       stopVictoryModalFx();
       return;
     }
-    if (lastPaintMs > 0 && isBalancedTier && nowMs - lastPaintMs < 12.5) {
+    const rafStepMs = prevRafMs > 0 ? nowMs - prevRafMs : 0;
+    prevRafMs = nowMs;
+    const isHighRateTick = rafStepMs > 0 && rafStepMs < 10.5;
+    // Pace to 60fps ONLY when live rAF ticks arrive above ~95Hz (< 10.5ms); never drops 60Hz ticks.
+    if (lastPaintMs > 0 && isBalancedTier && isHighRateTick && nowMs - lastPaintMs < 12.5) {
       activeRafId = requestAnimationFrame(frame);
       return;
     }

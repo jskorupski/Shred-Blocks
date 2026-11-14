@@ -23,8 +23,9 @@ export interface VisualGateBurst {
   nx: number;
   ny: number;
   style: ParticleStyleId;
-  mode: 'PLASMA_ARCS' | 'REDUCED_MOTION_SEAL';
+  mode: 'PLASMA_ARCS' | 'REDUCED_MOTION_SEAL' | 'JAW_CORONA';
   seed: number;
+  isSecondaryCrown?: boolean;
 }
 
 export function spawnGateBurst(rctx: RenderPassContext, burst: VisualGateBurst): void {
@@ -285,50 +286,88 @@ export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingC
   gl.disable(gl.CULL_FACE);
 
   for (const gb of rctx.activeGateBursts) {
+    if (gb.age <= 0) continue;
     const t = Math.min(1, gb.age / gb.maxAge);
-    if (gb.mode === 'PLASMA_ARCS') {
+    if (gb.mode === 'JAW_CORONA') {
       gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-      const cyanR = 0.08;
-      const cyanG = 0.78;
-      const cyanB = 1.0;
-      const tintR = Math.min(1, gb.r * 0.88 + 0.12);
-      const tintG = Math.min(1, gb.g * 0.85 + 0.15);
-      const tintB = Math.min(1, gb.b * 0.85 + 0.18);
-
       const hasOutward = Math.hypot(gb.nx, gb.ny) > 0.1;
-      const jawSpan = Math.min(2.15, Math.max(0.95, gb.spanLength * 0.8));
+      const jawSpan = Math.min(2.2, Math.max(0.85, gb.spanLength * 0.84));
       const jawRot = hasOutward ? Math.atan2(gb.ny, gb.nx) + Math.PI * 0.5 : 0;
-
-      // 1. Gate-jaw arc-welder flash: explosive contact flare + secondary re-strike surges + smooth decay
-      const initialFlash = Math.exp(-t * 9.5);
-      const dA = (t - 0.24) * 11.0;
-      const dB = (t - 0.46) * 11.5;
-      const surgeFlashA = 0.52 * Math.exp(-(dA * dA));
-      const surgeFlashB = 0.32 * Math.exp(-(dB * dB));
-      const jawFlicker = 0.76 + 0.24 * Math.sin(gb.age * 74.0 + gb.seed);
-      const jawPower = Math.min(1, (initialFlash + surgeFlashA + surgeFlashB) * jawFlicker * (1 - t * 0.88));
+      const surge = Math.sin(Math.min(1, t * 3.4) * Math.PI * 0.5) * (1 - t) ** 1.35;
       drawJawCoronaFlash3D(
         rctx,
         gl,
         gb.cx,
         gb.cy,
-        gb.z - 0.015,
-        hasOutward ? jawSpan * 0.46 : 0.14,
-        0.44 + 0.22 * initialFlash,
+        gb.z,
+        hasOutward ? jawSpan * 0.45 : 0.16,
+        (gb.isSecondaryCrown ? 0.28 : 0.42) + 0.14 * surge,
         jawRot,
-        cyanR,
-        cyanG,
-        cyanB,
-        tintR,
-        tintG,
-        tintB,
-        0.52 + 0.48 * initialFlash,
-        jawPower * 0.94,
+        gb.r,
+        gb.g,
+        gb.b,
+        1.0,
+        0.9,
+        0.56,
+        gb.isSecondaryCrown ? 0.34 : 0.62,
+        surge * (gb.isSecondaryCrown ? 0.54 : 0.76),
         gb.seed * 0.13
       );
+      gl.uniform1i(rctx.uTraceCount, 0);
+      gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      continue;
+    }
 
-      // 2. Well-separated hero plasma leaders + corner snap arcs (staggered so silhouettes stay crisp, never stacked)
+    if (gb.mode === 'PLASMA_ARCS') {
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+      const isCrown = Boolean(gb.isSecondaryCrown);
+      const cyanR = isCrown ? gb.r : 0.08;
+      const cyanG = isCrown ? gb.g : 0.78;
+      const cyanB = isCrown ? gb.b : 1.0;
+      const tintR = isCrown ? 1.0 : Math.min(1, gb.r * 0.88 + 0.12);
+      const tintG = isCrown ? 0.94 : Math.min(1, gb.g * 0.85 + 0.15);
+      const tintB = isCrown ? 0.58 : Math.min(1, gb.b * 0.85 + 0.18);
+
+      const hasOutward = Math.hypot(gb.nx, gb.ny) > 0.1;
+      const jawSpan = Math.min(2.15, Math.max(0.95, gb.spanLength * 0.8));
+      const jawRot = hasOutward ? Math.atan2(gb.ny, gb.nx) + Math.PI * 0.5 : 0;
+
+      // 1. Gate-jaw arc-welder flash (primary burst only so celebratory crown never double-exposes jaw to solid white)
+      if (!isCrown) {
+        const initialFlash = Math.exp(-t * 9.5);
+        const dA = (t - 0.24) * 11.0;
+        const dB = (t - 0.46) * 11.5;
+        const surgeFlashA = 0.52 * Math.exp(-(dA * dA));
+        const surgeFlashB = 0.32 * Math.exp(-(dB * dB));
+        const jawFlicker = 0.76 + 0.24 * Math.sin(gb.age * 74.0 + gb.seed);
+        const jawPower = Math.min(
+          1,
+          (initialFlash + surgeFlashA + surgeFlashB) * jawFlicker * (1 - t * 0.88)
+        );
+        drawJawCoronaFlash3D(
+          rctx,
+          gl,
+          gb.cx,
+          gb.cy,
+          gb.z - 0.015,
+          hasOutward ? jawSpan * 0.46 : 0.14,
+          0.44 + 0.22 * initialFlash,
+          jawRot,
+          cyanR,
+          cyanG,
+          cyanB,
+          tintR,
+          tintG,
+          tintB,
+          0.52 + 0.48 * initialFlash,
+          jawPower * 0.9,
+          gb.seed * 0.13
+        );
+      }
+
+      // 2. Well-separated hero plasma leaders + corner snap arcs (crown interleaves between primary angles)
       const outwardSpecs: ReadonlyArray<[number, number, number, number, number, number, boolean]> = [
         // [latFrac, angOff, len, glowR, startDelaySec, durFrac, withForks]
         [-0.38, -0.84, 1.78, 0.36, 0.055, 0.88, true],
@@ -345,10 +384,12 @@ export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingC
       const ty = gb.nx;
 
       for (let k = 0; k < channelCount; k++) {
-        const latFrac = hasOutward ? outwardSpecs[k][0] : 0;
-        const angOff = hasOutward ? outwardSpecs[k][1] : (k * Math.PI) / 2 + (gb.seed % 17) * 0.14;
-        const baseLen = hasOutward ? outwardSpecs[k][2] : 1.82;
-        const baseGlowR = hasOutward ? outwardSpecs[k][3] : 0.38;
+        const crownShift = isCrown ? (k % 2 === 0 ? 0.27 : -0.27) : 0;
+        const latFrac = hasOutward ? outwardSpecs[k][0] * (isCrown ? 0.82 : 1) : 0;
+        const angOff =
+          (hasOutward ? outwardSpecs[k][1] : (k * Math.PI) / 2 + (gb.seed % 17) * 0.14) + crownShift;
+        const baseLen = (hasOutward ? outwardSpecs[k][2] : 1.82) * (isCrown ? 0.94 : 1);
+        const baseGlowR = (hasOutward ? outwardSpecs[k][3] : 0.38) * (isCrown ? 0.74 : 1);
         const delaySec = hasOutward ? outwardSpecs[k][4] : (k % 3) * 0.028;
         const durSec = gb.maxAge * (hasOutward ? outwardSpecs[k][5] : 0.92);
         const withForks = hasOutward ? outwardSpecs[k][6] : true;
@@ -422,7 +463,12 @@ export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingC
 
     // Stationary WCAG 2.3.3 Reduced-Motion Gate Seals (distinct per equipped Shred Animation)
     const sealAlpha = (1 - t * t) * 0.86;
-    const halfSpan = Math.min(0.75, gb.spanLength * 0.36);
+    const halfSpan = Math.min(0.82, gb.spanLength * 0.36);
+    if (gb.isSecondaryCrown) {
+      // Final-clear inner Sanctuary Gold crest centered cleanly without overlapping outer flanking seals
+      rctx.drawAtlasBadge(gl, 'BADGE_STAR', gb.cx, gb.cy, gb.z + 0.03, 0.66, 1.0, 0.9, 0.56, sealAlpha);
+      continue;
+    }
     if (gb.style === 'soap_bubbles') {
       rctx.drawMesh(
         gl,
@@ -439,7 +485,7 @@ export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingC
         sealAlpha,
         0,
         0,
-        4
+        10
       );
       rctx.drawMesh(
         gl,
@@ -456,10 +502,10 @@ export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingC
         sealAlpha * 0.9,
         0,
         0,
-        4
+        10
       );
     } else if (gb.style === 'star_confetti') {
-      rctx.drawAtlasBadge(gl, 'BADGE_STAR', gb.cx, gb.cy, gb.z + 0.03, 0.62, 1.0, 0.88, 0.38, sealAlpha);
+      rctx.drawAtlasBadge(gl, 'BADGE_STAR', gb.cx, gb.cy, gb.z + 0.02, 0.56, 1.0, 0.89, 0.52, sealAlpha);
       for (const sgn of [-1, 1]) {
         const ox = gb.isHoriz ? sgn * halfSpan : 0;
         const oy = gb.isHoriz ? 0 : sgn * halfSpan;
@@ -468,7 +514,7 @@ export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingC
           'BADGE_STAR',
           gb.cx + ox,
           gb.cy + oy,
-          gb.z + 0.02,
+          gb.z + 0.015,
           0.42,
           gb.r,
           gb.g,
@@ -562,6 +608,7 @@ export function renderGateBurstsCanvas2D(
   if (rctx.activeGateBursts.length === 0) return;
   ctx.save();
   for (const gb of rctx.activeGateBursts) {
+    if (gb.age <= 0) continue;
     const t = Math.min(1, gb.age / gb.maxAge);
     const alpha = Math.max(0, (1 - t * t) * 0.85);
     const pt = project(gb.cx, gb.cy, gb.z);

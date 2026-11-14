@@ -765,7 +765,7 @@ export class BoardInputController {
   }
 
   private playOutcomeAudio(outcome: CommitMoveOutcome): void {
-    playOutcomeAudioHelper(this.callbacks.sound, outcome);
+    playOutcomeAudioHelper(this.callbacks.sound, outcome, this.callbacks.getBoard());
   }
 
   private handleKeyDown(e: KeyboardEvent): void {

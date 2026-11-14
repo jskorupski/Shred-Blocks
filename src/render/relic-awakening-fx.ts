@@ -370,6 +370,7 @@ export function warmUpWebGLPipelinesImpl(
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 4);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 7);
+  rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 10);
   gl.enable(gl.CULL_FACE);
 
   if (h.program && h.vao && h.instanceBuffer && h.smokeVao && h.smokeInstanceBuffer) {

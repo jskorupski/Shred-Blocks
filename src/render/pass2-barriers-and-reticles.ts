@@ -676,10 +676,49 @@ function renderShockwaveRings(rctx: RenderPassContext, gl: WebGL2RenderingContex
   if (rctx.activeShockwaves.length > 0) {
     gl.depthMask(false);
     gl.disable(gl.CULL_FACE);
+    const tray = rctx.lastOptions.equippedTray ?? 'industrial_slate';
+    const isLightTray =
+      !rctx.lastOptions.highContrast &&
+      (tray === 'frosted_quartz' || tray === 'mint_studio' || tray === 'warm_birch');
+    let usedFeatheredClip = false;
     for (const sw of rctx.activeShockwaves) {
+      if (sw.age <= 0) continue;
       const progress = Math.min(1, sw.age / sw.maxAge);
       const eased = 1 - (1 - progress) * (1 - progress);
       const radius = sw.minRadius + (sw.maxRadius - sw.minRadius) * eased;
+      if (sw.feathered) {
+        usedFeatheredClip = true;
+        const peak = sw.peakAlpha ?? 0.68;
+        const fade = 1 - progress * progress;
+        const shimmerPhase = sw.goldShimmer ? sw.goldShimmer + sw.age * 8.5 : 0;
+        if (shimmerPhase > 0) {
+          gl.uniform3f(
+            rctx.uCapColor,
+            isLightTray ? 0.92 : 1.0,
+            isLightTray ? 0.62 : 0.89,
+            isLightTray ? 0.12 : 0.46
+          );
+        }
+        gl.uniform4f(rctx.uClipPlane, sw.nx ?? 0, sw.ny ?? 0, sw.inwardFloor ?? 0.58, shimmerPhase);
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.overlayQuad,
+          sw.cx - radius,
+          sw.cy - radius,
+          sw.z,
+          radius * 2,
+          radius * 2,
+          1.0,
+          sw.r,
+          sw.g,
+          sw.b,
+          fade * peak,
+          0,
+          0,
+          10
+        );
+        continue;
+      }
       const alpha = (1 - progress) * 0.88;
       rctx.drawMesh(
         gl,
@@ -698,6 +737,9 @@ function renderShockwaveRings(rctx: RenderPassContext, gl: WebGL2RenderingContex
         0,
         4
       );
+    }
+    if (usedFeatheredClip) {
+      gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
     }
     gl.enable(gl.CULL_FACE);
     gl.depthMask(true);

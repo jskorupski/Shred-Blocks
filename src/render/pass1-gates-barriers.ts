@@ -406,7 +406,9 @@ export function renderPass1WallsAndGates(
     // Spinning 3D Shredder Roller cylinder + Breathing Threshold Floor Aura (`IDLE-03`)
     const gateReady =
       gate.shutterOpen && gate.shutterLockColor === 0 && gate.iceCount <= 0 && !gateVis.isLocked;
-    const isGateActivelyShredding = rctx.activeVisualShreds.some((a) => a.gateIndex === gate.index);
+    const isGateActivelyShredding =
+      rctx.activeVisualShreds.some((a) => a.gateIndex === gate.index) ||
+      rctx.activeGateBursts.some((gb) => gb.age > 0 && Math.hypot(gb.cx - rollerX, gb.cy - rollerY) < 0.85);
     const isGateDragTargeted = rctx.lastOptions.dragEligibleGateIndex === gate.index;
     const gatePulse = !rctx.lastOptions.reducedMotion
       ? 0.5 + 0.5 * Math.sin(timeSec * 2.2 + gate.index * 1.4)

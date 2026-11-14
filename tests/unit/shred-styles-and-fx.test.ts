@@ -696,4 +696,102 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
       }
     }
   });
+
+  it('FINAL-SHRED-CRESCENDO-01: elevates the game-winning shred across all 5 particle themes and Reduced Motion', () => {
+    setFxRandomSeed(2028);
+    const styles: ParticleStyleId[] = [
+      'micro_cubes',
+      'star_confetti',
+      'pixel_sparks',
+      'soap_bubbles',
+      'lightning_bolts',
+    ];
+    const twoBlockSpec: LevelSpec = {
+      id: 992,
+      name: 'Final Shred Crescendo Check',
+      difficulty: 'NORMAL',
+      rows: 5,
+      cols: 5,
+      blocks: [
+        { id: 1, shapeId: '1x1', row: 1, col: 1, colorStack: [1] },
+        { id: 2, shapeId: '1x1', row: 1, col: 3, colorStack: [2] },
+      ],
+      gates: [
+        { edge: 'TOP', spanStart: 1, spanLength: 1, colorQueue: [1] },
+        { edge: 'TOP', spanStart: 3, spanLength: 1, colorQueue: [2] },
+      ],
+    };
+
+    for (const style of styles) {
+      const board = createBoardState(twoBlockSpec);
+      const rctx = createMockParticleContext(false);
+      rctx.lastOptions = { equippedParticle: style, reducedMotion: false };
+      detectAutomaticShredEventsImpl(rctx, board, rctx.lastOptions);
+
+      // 1st shred (non-final): baseline particle count, shockwaves, roller spin & recoil
+      commitBlockMove(board, 1, 0, 1, 'CHALLENGE');
+      detectAutomaticShredEventsImpl(rctx, board, rctx.lastOptions);
+      const midCount = rctx.particlePoolCount;
+      const midShockwaves = rctx.activeShockwaves.length;
+      const noGold = rctx.activeShockwaves.every((sw) => !sw.goldShimmer && (sw.peakAlpha ?? 0) >= 0.4);
+      expect(Math.max(...rctx.activeShockwaves.map((sw) => sw.peakAlpha ?? 0)), style).toBeGreaterThan(0.65);
+      expect(noGold, style).toBe(true);
+      const midBursts = rctx.activeGateBursts.length;
+      expect(board.gates[0].rollerPhase).toBeCloseTo(2.2, 4);
+      expect(rctx.boardShakeTimer).toBeCloseTo(0.16, 4);
+
+      rctx.particlePoolCount = 0;
+      rctx.particleWriteCursor = 0;
+      rctx.activeShockwaves.length = 0;
+      rctx.activeGateBursts.length = 0;
+
+      // 2nd shred (board won!): 3 staggered gold-shimmer gate rings, jaw corona & sympathetic gate resonance
+      commitBlockMove(board, 2, 0, 3, 'CHALLENGE');
+      detectAutomaticShredEventsImpl(rctx, board, rctx.lastOptions);
+      expect(rctx.particlePoolCount, style).toBeGreaterThan(Math.floor(midCount * 1.65));
+      expect(rctx.activeShockwaves.length, style).toBe(3);
+      for (const sw of rctx.activeShockwaves) {
+        expect(sw.feathered && sw.z <= 0.05 && (sw.goldShimmer ?? 0) >= 1 && sw.cy < 0.25, style).toBe(true);
+        expect(sw.maxRadius, style).toBeLessThanOrEqual(2.2);
+      }
+      expect(board.gates[1].rollerPhase, style).toBeCloseTo(4.4, 4);
+      expect(rctx.boardShakeTimer, style).toBeCloseTo(0.22, 4);
+      expect(rctx.activeGateBursts, style).toHaveLength(style === 'lightning_bolts' ? 3 : 2);
+      if (style === 'lightning_bolts') {
+        expect(midShockwaves).toBe(2);
+        expect(midBursts).toBe(1);
+      }
+      expect(rctx.activeGateBursts.some((gb) => gb.mode === 'JAW_CORONA')).toBe(true);
+      let goldHighlights = 0;
+      for (let i = 0; i < rctx.particlePoolCount; i++) {
+        const idx = i * PARTICLE_STRIDE;
+        expect(rctx.particlePool[idx + 1], style).toBeLessThanOrEqual(0.02);
+        expect(rctx.particlePool[idx + 4], style).toBeLessThan(-0.5);
+        if (rctx.particlePool[idx + 6] >= 0.99 && rctx.particlePool[idx + 7] >= 0.85) {
+          goldHighlights++;
+        }
+      }
+      expect(goldHighlights, style).toBeGreaterThanOrEqual(8);
+    }
+
+    // Reduced Motion final clear: elevated z >= 0.68 dual stationary Gate Seals above 0.64 housing, 0 flying particles, 0 shockwaves, 0 shake
+    const rmBoard = createBoardState(twoBlockSpec);
+    const rmCtx = createMockParticleContext(true);
+    rmCtx.lastOptions = { equippedParticle: 'star_confetti', reducedMotion: true };
+    detectAutomaticShredEventsImpl(rmCtx, rmBoard, rmCtx.lastOptions);
+    commitBlockMove(rmBoard, 1, 0, 1, 'CHALLENGE');
+    detectAutomaticShredEventsImpl(rmCtx, rmBoard, rmCtx.lastOptions);
+    expect(rmCtx.activeGateBursts).toHaveLength(1);
+    expect(rmCtx.activeGateBursts[0].z).toBeGreaterThanOrEqual(0.68);
+    rmCtx.activeGateBursts.length = 0;
+    commitBlockMove(rmBoard, 2, 0, 3, 'CHALLENGE');
+    detectAutomaticShredEventsImpl(rmCtx, rmBoard, rmCtx.lastOptions);
+    expect(rmCtx.activeGateBursts).toHaveLength(2);
+    expect(rmCtx.activeGateBursts[0].z).toBeGreaterThanOrEqual(0.68);
+    expect(rmCtx.activeGateBursts[1].z).toBeGreaterThanOrEqual(0.68);
+    expect(rmCtx.particlePoolCount).toBe(0);
+    expect(rmCtx.activeShockwaves).toHaveLength(0);
+    expect(rmCtx.boardShakeTimer).toBe(0);
+    setFxRandomSeed(null);
+  });
 });

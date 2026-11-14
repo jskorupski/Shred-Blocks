@@ -5,6 +5,7 @@ import {
   applyBoosterVacuum,
   type CommitMoveOutcome,
   commitBlockMove,
+  isBoardWon,
 } from '../core/board';
 import { findEligibleGateForBlockAt, getGateOutwardNormal } from '../core/gate-clearance';
 import {
@@ -185,11 +186,16 @@ export function pickBlockAtBoardPoint(board: BoardState, boardX: number, boardY:
   return candidates[0].block;
 }
 
-export function playOutcomeAudioHelper(sound: SoundEngine | undefined, outcome: CommitMoveOutcome): void {
+export function playOutcomeAudioHelper(
+  sound: SoundEngine | undefined,
+  outcome: CommitMoveOutcome,
+  board?: BoardState
+): void {
   if (!sound) return;
   if (outcome.clearedBlockIds.length > 0) {
+    const won = board ? isBoardWon(board) : false;
     outcome.clearedBlockIds.forEach((_, idx) => {
-      sound.playShred(idx);
+      sound.playShred(idx, undefined, won && idx === outcome.clearedBlockIds.length - 1);
     });
   } else if (outcome.peeledBlockIds.length > 0) {
     sound.playLayerPeel();
@@ -604,7 +610,7 @@ export function handleBoardKeyDown(e: KeyboardEvent, ctx: KeyboardStepContext): 
       dRow
     );
     if (outcome.moved) {
-      playOutcomeAudioHelper(callbacks.sound, outcome);
+      playOutcomeAudioHelper(callbacks.sound, outcome, board);
       const afterBlk = board.blocks.find((b) => b.id === block.id);
       const endR = afterBlk ? afterBlk.row : targetRow;
       const endC = afterBlk ? afterBlk.col : targetCol;

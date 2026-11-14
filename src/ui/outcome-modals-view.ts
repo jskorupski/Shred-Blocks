@@ -1,6 +1,8 @@
 import { computeEarnedStars, isBoardDeadlocked, isBoardWon } from '../core/board';
 import { hasFinalTouchGrace } from '../core/board-state';
+import type { PlayMode } from '../core/types';
 import { solveBoard } from '../levels/solver';
+import { spawnBombDetonationBurstImpl } from '../render/particle-fx';
 import {
   BOOSTER_RARITY,
   CONTINUE_COIN_COST,
@@ -11,10 +13,49 @@ import { type AppViewContext, BOOSTER_DISPLAY_NAMES, getPlayModeMeta } from './c
 import { startVictoryModalFx } from './victory-modal-fx';
 
 /**
- * Level outcome feedback (`ECON-V2` victory rewards, `OUT_OF_MOVES` / `TIME_OUT` / `BOMB_EXPLODED` failure options,
- * `FINAL-TOUCH-01` grace hints, and `STUCK-01` provably-unsolvable warnings), extracted from `hud-and-title-view.ts`
- * (`ARCH-ERGONOMICS-01`); imported directly by `main.ts`.
+ * Level outcome feedback & board-to-dialog choreography (`OUTCOME-TRANSITION-01`, `ECON-V2`,
+ * `OUT_OF_MOVES` / `TIME_OUT` / `BOMB_EXPLODED`, `FINAL-TOUCH-01`, `STUCK-01`), extracted from
+ * `hud-and-title-view.ts` (`ARCH-ERGONOMICS-01`); imported directly by `main.ts`.
  */
+
+/** `OUTCOME-TRANSITION-01`: 220ms gate-roller shred + 70ms celebratory bloom before overlapped 360ms Victory dissolve */
+export const VICTORY_MODAL_BEAT_MS = 290;
+/** `OUTCOME-TRANSITION-01`: brief board settle beat on Out of Moves / Time's Up before 360ms Failure dissolve */
+export const FAILURE_SETTLE_BEAT_MS = 220;
+/** `OUTCOME-TRANSITION-01`: 3D crimson-amber shockwave + radial burst beat on Bomb Exploded before Failure dissolve */
+export const BOMB_DETONATION_BEAT_MS = 350;
+
+let pendingOutcomeTimerId: ReturnType<typeof setTimeout> | null = null;
+let pendingOutcomeAction: (() => void) | null = null;
+
+export function isOutcomeTransitionPending(): boolean {
+  return pendingOutcomeTimerId !== null;
+}
+
+export function cancelPendingOutcomeTransition(): void {
+  if (pendingOutcomeTimerId !== null) {
+    clearTimeout(pendingOutcomeTimerId);
+    pendingOutcomeTimerId = null;
+  }
+  pendingOutcomeAction = null;
+}
+
+export function flushPendingOutcomeTransition(): void {
+  const action = pendingOutcomeAction;
+  cancelPendingOutcomeTransition();
+  if (action) {
+    action();
+  }
+}
+
+function shouldSkipOutcomeBeat(frozenTimeSec: number | null, reducedMotion: boolean): boolean {
+  if (frozenTimeSec !== null || reducedMotion) return true;
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinRewardSummary): void {
   const dialogVictory = document.getElementById('dialog-victory');
@@ -180,14 +221,17 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
 }
 
 export function handleLevelVictoryImpl(app: AppViewContext, frozenTimeSec: number | null): void {
+  cancelPendingOutcomeTransition();
+  app.inputController.cancelActiveDrag?.();
+  app.inputController.cancelTargeting();
+
   const playMode = app.saveManager.getPayload().settings.playMode;
   const zenClear = playMode === 'ZEN' || app.runTouchedZen;
   const pureBoosterFreeRun =
     !zenClear && (app.board.powerUpsUsed ?? 0) === 0 && (app.board.continuesUsed ?? 0) === 0;
   const earnedStars = computeEarnedStars(app.board, playMode, app.runTouchedZen);
-  app.sound.playWinFanfare(earnedStars);
-  app.renderer.spawnVictoryCelebrationBurst(app.board);
   const elapsedSec = Math.max(1, Math.round(app.board.timeLimitSec - app.board.timeRemainingSec));
+  // Persist rewards synchronously at t=0ms so closing the app or navigating mid-shred never drops progress
   const summary = app.saveManager.recordLevelWin(
     app.board.levelId,
     app.board.movesCommitted,
@@ -199,31 +243,65 @@ export function handleLevelVictoryImpl(app: AppViewContext, frozenTimeSec: numbe
     zenClear,
     pureBoosterFreeRun
   );
-  if (summary.underPar) {
-    app.sound.playUnderParOracleChime();
-  }
 
   populateVictoryModalImpl(app, summary);
-  app.openModal('victory');
   const postSave = app.saveManager.getPayload();
-  startVictoryModalFx({
-    isUnderPar: Boolean(summary.underPar),
-    earnedStars,
-    equippedParticle: postSave.equippedParticle,
-    reducedMotion: postSave.settings.reducedMotion,
-    frozen: frozenTimeSec !== null,
-    activeTier: app.renderer.getQualityGovernor().getActiveTier(),
-  });
+  const boardAtWin = app.board;
+
+  const presentVictoryModal = () => {
+    if (
+      app.board !== boardAtWin ||
+      !app.levelOutcomeHandled ||
+      app.activeScreen !== 'game' ||
+      app.titleOverlayOpen
+    ) {
+      return;
+    }
+    const latestSave = app.saveManager.getPayload();
+    app.sound.playWinFanfare(earnedStars);
+    if (summary.underPar) {
+      app.sound.playUnderParOracleChime();
+    }
+    app.openModal('victory');
+    startVictoryModalFx({
+      isUnderPar: Boolean(summary.underPar),
+      earnedStars,
+      equippedParticle: latestSave.equippedParticle,
+      reducedMotion: latestSave.settings.reducedMotion,
+      frozen: frozenTimeSec !== null,
+      activeTier: app.renderer.getQualityGovernor().getActiveTier(),
+    });
+  };
+
+  if (shouldSkipOutcomeBeat(frozenTimeSec, postSave.settings.reducedMotion)) {
+    presentVictoryModal();
+    return;
+  }
+
+  pendingOutcomeAction = presentVictoryModal;
+  pendingOutcomeTimerId = setTimeout(() => {
+    pendingOutcomeTimerId = null;
+    pendingOutcomeAction = null;
+    presentVictoryModal();
+  }, VICTORY_MODAL_BEAT_MS);
 }
 
 export function handleLevelFailureImpl(
   app: AppViewContext,
-  reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES'
+  reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES',
+  frozenTimeSec: number | null = null
 ): void {
-  app.sound.playLossBuzzer();
-  app.saveManager.recordLevelLoss();
+  cancelPendingOutcomeTransition();
   // A timeout/bomb can fire mid-drag in TIMED: drop the held block so release can't "win" behind the modal
   app.inputController.cancelActiveDrag?.();
+  app.inputController.cancelTargeting();
+  app.saveManager.recordLevelLoss();
+
+  if (reason === 'BOMB_EXPLODED') {
+    spawnBombDetonationBurstImpl(app.renderer, app.board);
+    app.renderNow();
+    app.sound.playLossBuzzer();
+  }
 
   const save = app.saveManager.getPayload();
   const playMode = save.settings.playMode;
@@ -280,7 +358,80 @@ export function handleLevelFailureImpl(
           : `➕ +20 Seconds (${CONTINUE_COIN_COST} Coins)`;
   }
 
-  app.openModal('failure');
+  const boardAtLoss = app.board;
+  const presentFailureModal = () => {
+    if (
+      app.board !== boardAtLoss ||
+      !app.levelOutcomeHandled ||
+      app.activeScreen !== 'game' ||
+      app.titleOverlayOpen
+    ) {
+      return;
+    }
+    if (reason !== 'BOMB_EXPLODED') {
+      app.sound.playLossBuzzer();
+    }
+    app.openModal('failure');
+  };
+
+  if (shouldSkipOutcomeBeat(frozenTimeSec, save.settings.reducedMotion)) {
+    presentFailureModal();
+    return;
+  }
+
+  const beatMs = reason === 'BOMB_EXPLODED' ? BOMB_DETONATION_BEAT_MS : FAILURE_SETTLE_BEAT_MS;
+  pendingOutcomeAction = presentFailureModal;
+  pendingOutcomeTimerId = setTimeout(() => {
+    pendingOutcomeTimerId = null;
+    pendingOutcomeAction = null;
+    presentFailureModal();
+  }, beatMs);
+}
+
+function applyContinueRescueToBoard(app: AppViewContext, playMode: PlayMode): void {
+  app.board.continuesUsed = (app.board.continuesUsed ?? 0) + 1; // STARS-SLACK-01: caps this clear at 1★
+  if (playMode === 'CHALLENGE') {
+    app.board.movesRemaining = Math.max(5, app.board.movesRemaining + 5);
+    app.board.moveLimit += 5;
+  } else if (playMode === 'TIMED') {
+    app.board.timeRemainingSec = Math.max(20, app.board.timeRemainingSec + 20);
+  }
+  for (const b of app.board.blocks) {
+    if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
+      b.bombCount = Math.max(5, b.bombMax);
+    }
+  }
+  app.levelOutcomeHandled = false;
+  app.board.timerRunning = true;
+  app.closeAllModals();
+  app.sound.playBooster('HINT');
+  app.syncAllUiFromSave();
+  app.renderNow();
+}
+
+export function continueFailedLevelImpl(app: AppViewContext): void {
+  const save = app.saveManager.getPayload();
+  if (save.coins < CONTINUE_COIN_COST || !app.saveManager.buyBoosterWithCoins('HINT', CONTINUE_COIN_COST)) {
+    app.showGameToast(
+      `Need ${CONTINUE_COIN_COST} Coins — Retry for FREE or bank a 🌿 Zen Blessing in Zen Mode!`
+    );
+    return;
+  }
+  app.saveManager.spendBooster('HINT');
+  applyContinueRescueToBoard(app, save.settings.playMode);
+}
+
+export function useZenBlessingContinueImpl(app: AppViewContext): void {
+  const save = app.saveManager.getPayload();
+  if (save.settings.playMode === 'ZEN' || !app.saveManager.consumeZenBlessing()) {
+    return;
+  }
+  applyContinueRescueToBoard(app, save.settings.playMode);
+  app.showGameToast(
+    save.settings.playMode === 'TIMED'
+      ? '🌿 Zen Blessing used — +20 Seconds granted (Free)!'
+      : '🌿 Zen Blessing used — +5 Moves granted (Free)!'
+  );
 }
 
 /**

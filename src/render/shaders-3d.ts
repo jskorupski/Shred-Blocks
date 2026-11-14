@@ -203,7 +203,7 @@ void main() {
     float sheath = exp(-dMin * dMin * mix(20.0, 10.0, surgeWave)) * (1.0 - dMin);
     float core = exp(-dMin * dMin * mix(155.0, 32.0, surgeWave)) * (1.0 - dMin);
     vec3 outerHue = mix(u_color.rgb, u_capColor, 0.38);
-    vec3 midHue = mix(u_color.rgb, vec3(0.32, 0.92, 1.0), 0.58);
+    vec3 midHue = mix(u_color.rgb, mix(vec3(0.32, 0.92, 1.0), vec3(1.0, 0.94, 0.58), step(0.65, u_color.r)), 0.58);
     vec3 col = mix(outerHue, midHue, clamp(sheath * 1.3, 0.0, 1.0));
     float hotness = clamp(u_color.a * (0.82 + 0.45 * surgeWave), 0.0, 1.0);
     col = mix(col, vec3(0.99, 0.998, 1.0), clamp(core * (1.1 + 0.5 * surgeWave) * hotness * hotness, 0.0, 1.0));
@@ -237,6 +237,21 @@ void main() {
       flatRgb = mix(flatRgb, vec3(0.76, 0.66, 0.52), u_blueprintMix * 0.88);
     }
     outColor = vec4(flatRgb, u_color.a * mix(1.0, 0.52, u_blueprintMix));
+    return;
+  }
+
+  if (u_materialStyle == 10) {
+    vec2 q = (v_uv - 0.5) * 2.0;
+    float d = length(q), hasGold = step(0.01, u_clipPlane.w), innerD = mix(0.50, 0.64, hasGold);
+    if (d <= innerD || d >= 1.0) { outColor = vec4(0.0); return; }
+    float wake = pow(sin(((d - innerD) / (1.0 - innerD)) * 3.14159265), 1.6), ang = atan(q.y, q.x);
+    float fan = mix(1.0, u_clipPlane.z + (1.0 - u_clipPlane.z) * smoothstep(-0.55, 0.45, dot(q / d, u_clipPlane.xy)), step(0.05, dot(u_clipPlane.xy, u_clipPlane.xy)));
+    float shimmer = 0.5 + 0.31 * sin(ang * 5.0 + u_clipPlane.w) + 0.19 * sin(ang * 11.0 - u_clipPlane.w * 1.35);
+    vec3 baseRgb = mix(u_color.rgb, min(vec3(1.0), u_color.rgb * 0.76 + 0.34), wake * 0.38);
+    float glint = shimmer * shimmer * wake;
+    vec3 goldRgb = mix(u_capColor, vec3(1.0, 0.96, 0.82), shimmer * 0.48);
+    vec3 waveRgb = mix(baseRgb, goldRgb, hasGold * 0.56 * glint);
+    outColor = vec4(waveRgb, min(1.0, u_color.a * (1.0 + hasGold * 0.28 * glint)) * wake * fan * mix(1.0, 0.52, u_blueprintMix));
     return;
   }
 

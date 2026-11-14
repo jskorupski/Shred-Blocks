@@ -182,7 +182,8 @@ async function runVisualHarness(): Promise<void> {
       window.__SHREDBLOCKS_DEBUG__.loadLevel(1);
       window.__SHREDBLOCKS_DEBUG__.autoSolveCurrentLevel();
     });
-    await mobilePage.waitForTimeout(150);
+    await mobilePage.locator('#dialog-victory').waitFor({ state: 'visible' });
+    await mobilePage.waitForTimeout(220);
     await mobilePage.screenshot({
       path: join(ARTIFACT_SCRATCH_DIR, '07-dialog-victory-mobile.png'),
     });

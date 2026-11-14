@@ -1,4 +1,6 @@
-import { getGateActiveColor, getGateOutwardNormal } from '../core/gate-clearance';
+import { isBoardWon } from '../core/board';
+import { fxRandom } from '../core/fx-random';
+import { getGateActiveColor } from '../core/gate-clearance';
 import { getBlockRoomId } from '../core/physics';
 import { getActiveColor, getShape } from '../core/polyomino';
 import type { BlockState, BoardState, ColorId, GateState, ParticleStyleId } from '../core/types';
@@ -14,6 +16,7 @@ import {
 } from './render-types';
 import {
   computeGateShredContactPoint,
+  spawnGateBurst,
   spawnStyledParticlesImpl,
   spawnStyledShredShockwavesAndGateFx,
   stepGateBurstsImpl,
@@ -67,79 +70,9 @@ export function spawnShockwaveImpl(
   });
 }
 
-/**
- * Triggers a multi-wave celebratory 3D confetti & golden shockwave fountain across the sanctuary
- * courtyard when a level is won.
- */
-export function spawnVictoryCelebrationBurstImpl(rctx: RenderPassContext, board: BoardState): void {
-  const style = rctx.lastOptions.equippedParticle ?? 'star_confetti';
-  const centerCx = board.cols * 0.5;
-  const centerCy = board.rows * 0.5;
-
-  // 3 concentric golden & turquoise shockwave rings
-  rctx.spawnShockwave(
-    centerCx,
-    centerCy,
-    0.35,
-    1.0,
-    0.85,
-    0.28,
-    0.3,
-    Math.max(board.cols, board.rows) * 0.72,
-    0.65
-  );
-  rctx.spawnShockwave(
-    centerCx,
-    centerCy,
-    0.42,
-    0.18,
-    0.88,
-    0.78,
-    0.15,
-    Math.max(board.cols, board.rows) * 0.55,
-    0.52
-  );
-
-  // Center courtyard multi-color fountain
-  const celebrationColors: ColorId[] = [4, 1, 2, 3, 7, 8];
-  for (let i = 0; i < celebrationColors.length; i++) {
-    const angle = (i / celebrationColors.length) * Math.PI * 2;
-    const ox = Math.cos(angle) * 0.85;
-    const oy = Math.sin(angle) * 0.85;
-    rctx.spawnParticlesAt(
-      centerCx + ox,
-      centerCy + oy,
-      0.52,
-      celebrationColors[i],
-      28,
-      Math.cos(angle) * 0.5,
-      Math.sin(angle) * 0.5,
-      style
-    );
-  }
-
-  // Perimeter gate fireworks
-  for (const gate of board.gates) {
-    const cId = getGateActiveColor(gate);
-    const isHoriz = gate.edge === 'TOP' || gate.edge === 'BOTTOM';
-    const gx = isHoriz
-      ? gate.spanStart + gate.spanLength * 0.5
-      : gate.edge === 'LEFT'
-        ? gate.edgeLine
-        : gate.edgeLine + 1;
-    const gy = !isHoriz
-      ? gate.spanStart + gate.spanLength * 0.5
-      : gate.edge === 'TOP'
-        ? gate.edgeLine
-        : gate.edgeLine + 1;
-    const [nx, ny] = getGateOutwardNormal(gate.edge);
-    rctx.spawnParticlesAt(gx, gy, 0.55, cId, 24, -nx * 0.6, -ny * 0.6, style);
-  }
-}
-
 export function spawnBlockShredBurstImpl(
   rctx: RenderPassContext,
-  _board: BoardState,
+  board: BoardState,
   block: BlockState,
   gate?: GateState,
   colorOverride?: ColorId
@@ -154,17 +87,67 @@ export function spawnBlockShredBurstImpl(
   );
   const colorId: ColorId = colorOverride ?? getActiveColor(block.colorStack, block.colorCursor);
   const pStyle = rctx.lastOptions.equippedParticle ?? 'micro_cubes';
-  spawnStyledShredShockwavesAndGateFx(rctx, emitX, emitY, colorId, gate, pStyle);
-  rctx.spawnParticlesAt(
-    emitX,
-    emitY,
-    0.42,
-    colorId,
-    rctx.qualityGovernor.getBurstParticleCount(Boolean(rctx.lastOptions.reducedMotion)) + 18,
-    nx,
-    ny,
-    pStyle
-  );
+  const reduced = Boolean(rctx.lastOptions.reducedMotion);
+  const isFinalClear = isBoardWon(board);
+  const baseBurst = rctx.qualityGovernor.getBurstParticleCount(reduced) + 18;
+  spawnStyledShredShockwavesAndGateFx(rctx, emitX, emitY, colorId, gate, pStyle, isFinalClear);
+  if (isFinalClear) {
+    const finalCount =
+      pStyle === 'soap_bubbles' ? Math.round(baseBurst * 1.28) : Math.round(baseBurst * 1.82);
+    spawnStyledParticlesImpl(rctx, emitX, emitY, 0.44, colorId, finalCount, nx, ny, pStyle, true);
+  } else {
+    const midCount = pStyle === 'soap_bubbles' ? Math.round(baseBurst * 0.68) : baseBurst;
+    rctx.spawnParticlesAt(emitX, emitY, 0.42, colorId, midCount, nx, ny, pStyle);
+  }
+}
+
+export function spawnBombDetonationBurstImpl(rctx: RenderPassContext, board: BoardState): void {
+  const pStyle = rctx.lastOptions.equippedParticle ?? 'micro_cubes';
+  const reduced = Boolean(rctx.lastOptions.reducedMotion);
+  let detonatedAny = false;
+
+  for (const b of board.blocks) {
+    if (b.status !== 'ACTIVE' || b.bombMax <= 0 || b.bombCount > 0) continue;
+    detonatedAny = true;
+    const shape = getShape(b.shapeId);
+    const cx = b.x + shape.cols * 0.5;
+    const cy = b.y + shape.rows * 0.5;
+
+    if (reduced) {
+      // WCAG 2.3.3: stationary crimson seal highlights the detonated bomb with zero flying projectiles
+      spawnGateBurst(rctx, {
+        cx,
+        cy,
+        z: 0.66,
+        r: 1.0,
+        g: 0.24,
+        b: 0.2,
+        age: 0.001,
+        maxAge: 0.36,
+        spanLength: Math.max(shape.cols, shape.rows) * 0.9,
+        isHoriz: shape.cols >= shape.rows,
+        nx: 0,
+        ny: 0,
+        style: pStyle,
+        mode: 'REDUCED_MOTION_SEAL',
+        seed: Math.floor(fxRandom() * 1000),
+      });
+      continue;
+    }
+
+    rctx.spawnShockwave(cx, cy, 0.58, 1.0, 0.24, 0.18, 0.26, 2.35, 0.44);
+    rctx.spawnShockwave(cx, cy, 0.62, 1.0, 0.78, 0.24, 0.14, 1.28, 0.3);
+    const baseCount = Math.max(18, Math.round(rctx.qualityGovernor.getBurstParticleCount(false) * 0.65));
+    rctx.spawnParticlesAt(cx, cy, 0.54, 1, baseCount, 0, 0, pStyle);
+    rctx.spawnParticlesAt(cx, cy, 0.58, 6, Math.max(8, Math.round(baseCount * 0.45)), 0, 0, pStyle);
+    rctx.blockBounceMap.set(b.id, 0.38);
+  }
+
+  if (detonatedAny && !reduced) {
+    rctx.boardShakeTimer = 0.24;
+    rctx.boardShakeDirX = 0.8;
+    rctx.boardShakeDirY = 0.6;
+  }
 }
 
 export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void {
@@ -183,20 +166,22 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
     rctx.qualityGovernor.setActiveParticles(0);
     return;
   }
+  const decayMul = Math.max(1, rctx.lastOptions.fxDecayMul ?? 1);
+  const ageDt = Math.min(0.09, dt * decayMul);
   const maxActive = rctx.qualityGovernor.getMaxActiveParticles();
   let active = 0;
 
   // Step micro-recoil board shake timer
   if (rctx.boardShakeTimer > 0) {
-    rctx.boardShakeTimer = Math.max(0, rctx.boardShakeTimer - dt);
+    rctx.boardShakeTimer = Math.max(0, rctx.boardShakeTimer - ageDt);
   }
 
   // Step expanding 3D shockwave rings, gate bursts & post-move mystic fissure traces
-  stepPathTracesImpl(rctx, dt);
-  stepGateBurstsImpl(rctx, dt);
+  stepPathTracesImpl(rctx, ageDt);
+  stepGateBurstsImpl(rctx, ageDt);
   for (let i = rctx.activeShockwaves.length - 1; i >= 0; i--) {
     const sw = rctx.activeShockwaves[i];
-    sw.age += dt;
+    sw.age += ageDt;
     if (sw.age >= sw.maxAge) {
       rctx.activeShockwaves.splice(i, 1);
     }
@@ -204,7 +189,7 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
 
   // Step knock-on block scale-bounce animations
   for (const [bid, rem] of rctx.blockBounceMap.entries()) {
-    const next = rem - dt;
+    const next = rem - ageDt;
     if (next <= 0) {
       rctx.blockBounceMap.delete(bid);
     } else {
@@ -233,7 +218,7 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
     const maxAge = pool[idx + 11];
     if (age <= 0 || age >= maxAge) continue;
 
-    const nextAge = age + dt;
+    const nextAge = age + ageDt;
     if (nextAge >= maxAge || active + activeSmoke >= maxActive) {
       pool[idx + 10] = 0;
       continue;
@@ -520,6 +505,8 @@ export function detectAutomaticShredEventsImpl(
   }
 
   // 1. Diff Block Shreds, Layer Peels, Generator Spawns, Ice Thaws, Key Unlocks, Rope Cuts & Elevator Shifts
+  const boardWonNow = isBoardWon(board);
+  let sympatheticGatesTriggered = false;
   for (const b of board.blocks) {
     const prev = rctx.blockLayerSnapshots.get(b.id);
     const curColor: ColorId = getActiveColor(b.colorStack, b.colorCursor);
@@ -540,10 +527,11 @@ export function detectAutomaticShredEventsImpl(
       const peeled = b.colorCursor > prev.cursor;
       const cleared = prev.status === 'ACTIVE' && b.status !== 'ACTIVE';
       if (peeled || cleared) {
+        const isFinalClear = cleared && boardWonNow;
         const gate = b.shredGateIndex >= 0 ? board.gates[b.shredGateIndex] : undefined;
         const { emitX, emitY, nx, ny } = computeGateShredContactPoint(b.x, b.y, shape.cols, shape.rows, gate);
         if (gate) {
-          gate.rollerPhase += 2.2;
+          gate.rollerPhase += isFinalClear ? 4.4 : 2.2;
         }
         if (b.shredGateIndex >= 0 && gate) {
           rctx.activeVisualShreds.push({
@@ -556,19 +544,61 @@ export function detectAutomaticShredEventsImpl(
             isOuterPeelOnly: peeled && !cleared,
           });
         }
-        spawnStyledShredShockwavesAndGateFx(rctx, emitX, emitY, prev.color, gate, pStyle);
-        rctx.spawnParticlesAt(
-          emitX,
-          emitY,
-          0.42,
-          prev.color,
-          rctx.qualityGovernor.getBurstParticleCount(Boolean(options.reducedMotion)) + 16,
-          nx,
-          ny,
-          pStyle
-        );
-        if (!options.reducedMotion) {
-          rctx.boardShakeTimer = 0.16;
+        const reduced = Boolean(options.reducedMotion);
+        const baseBurst = rctx.qualityGovernor.getBurstParticleCount(reduced) + 16;
+        spawnStyledShredShockwavesAndGateFx(rctx, emitX, emitY, prev.color, gate, pStyle, isFinalClear);
+        if (isFinalClear) {
+          const finalCount =
+            pStyle === 'soap_bubbles' ? Math.round(baseBurst * 1.28) : Math.round(baseBurst * 1.82);
+          spawnStyledParticlesImpl(rctx, emitX, emitY, 0.44, prev.color, finalCount, nx, ny, pStyle, true);
+          if (!reduced && !sympatheticGatesTriggered) {
+            sympatheticGatesTriggered = true;
+            let symIdx = 0;
+            for (let gi = 0; gi < board.gates.length && symIdx < 3; gi++) {
+              const g = board.gates[gi];
+              if (gi === b.shredGateIndex || !g.shutterOpen || g.shutterLockColor > 0 || g.iceCount > 0) {
+                continue;
+              }
+              const isHoriz = g.edge === 'TOP' || g.edge === 'BOTTOM';
+              const gx = isHoriz
+                ? g.spanStart + g.spanLength * 0.5
+                : g.edge === 'LEFT'
+                  ? g.edgeLine
+                  : g.edgeLine + 1;
+              const gy = !isHoriz
+                ? g.spanStart + g.spanLength * 0.5
+                : g.edge === 'TOP'
+                  ? g.edgeLine
+                  : g.edgeLine + 1;
+              const gnx = g.edge === 'LEFT' ? -1 : g.edge === 'RIGHT' ? 1 : 0;
+              const gny = g.edge === 'TOP' ? -1 : g.edge === 'BOTTOM' ? 1 : 0;
+              spawnGateBurst(rctx, {
+                cx: gx,
+                cy: gy,
+                z: 0.67,
+                r: 1.0,
+                g: 0.89,
+                b: 0.54,
+                age: -(0.055 + symIdx * 0.038),
+                maxAge: 0.42,
+                spanLength: g.spanLength,
+                isHoriz,
+                nx: gnx,
+                ny: gny,
+                style: pStyle,
+                mode: 'JAW_CORONA',
+                seed: Math.floor(fxRandom() * 1000),
+                isSecondaryCrown: true,
+              });
+              symIdx++;
+            }
+          }
+        } else {
+          const midCount = pStyle === 'soap_bubbles' ? Math.round(baseBurst * 0.68) : baseBurst;
+          rctx.spawnParticlesAt(emitX, emitY, 0.42, prev.color, midCount, nx, ny, pStyle);
+        }
+        if (!reduced) {
+          rctx.boardShakeTimer = isFinalClear ? 0.22 : 0.16;
           rctx.boardShakeDirX = nx !== 0 ? nx : 0.7;
           rctx.boardShakeDirY = ny !== 0 ? ny : 0.7;
         }

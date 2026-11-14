@@ -660,6 +660,13 @@ export function buildRenderOptionsImpl(
     }
   }
 
+  const outcomeModalOpen =
+    typeof document !== 'undefined' &&
+    Boolean(
+      (document.getElementById('dialog-victory') as HTMLDialogElement | null)?.open ||
+        (document.getElementById('dialog-failure') as HTMLDialogElement | null)?.open
+    );
+
   return {
     draggedBlockId: activeBlockId,
     isLiveDrag: hover.activeBlockId !== null,
@@ -680,6 +687,7 @@ export function buildRenderOptionsImpl(
     reducedMotion: save.settings.reducedMotion,
     qualityTier: save.settings.qualityTier,
     blueprintMix: app.titleOverlayOpen ? 1.0 : app.blueprintMix ** 1.5,
+    fxDecayMul: outcomeModalOpen ? 1.4 : 1.0,
     dtSec,
     timeSec,
   };

@@ -14,7 +14,7 @@ import { getLevelSpec } from '../levels/catalog';
 import { solveBoard } from '../levels/solver';
 import { generateQrSvg } from '../storage/qr-svg';
 import { decodeSaveCode, validateSavePayloadV1 } from '../storage/save-code';
-import { CONTINUE_COIN_COST, extractImportCodeFromHash, migrateLegacyEconomy } from '../storage/save-manager';
+import { extractImportCodeFromHash, migrateLegacyEconomy } from '../storage/save-manager';
 import {
   type AppHistoryState,
   type AppViewContext,
@@ -23,6 +23,14 @@ import {
   renderStructuredBannerText,
   type ShredBlocksDebugBridge,
 } from './catalog-meta';
+import {
+  cancelPendingOutcomeTransition,
+  continueFailedLevelImpl,
+  isOutcomeTransitionPending,
+  useZenBlessingContinueImpl,
+} from './outcome-modals-view';
+
+export { continueFailedLevelImpl, useZenBlessingContinueImpl };
 
 export function getModalElement(id: ModalId): HTMLDialogElement | null {
   return document.getElementById(`dialog-${id}`) as HTMLDialogElement | null;
@@ -34,6 +42,14 @@ export function isAnyModalOpenImpl(): boolean {
 }
 
 export function openModalImpl(app: AppViewContext, id: ModalId): void {
+  if (
+    id === 'pause' &&
+    isOutcomeTransitionPending() &&
+    app.activeScreen === 'game' &&
+    !app.titleOverlayOpen
+  ) {
+    return;
+  }
   app.inputController.cancelTargeting();
   app.closeAllModals();
   const dialog = getModalElement(id);
@@ -60,6 +76,7 @@ export function openModalImpl(app: AppViewContext, id: ModalId): void {
 }
 
 export function closeAllModalsImpl(): void {
+  cancelPendingOutcomeTransition();
   const ids: ModalId[] = ['victory', 'failure', 'pause', 'save-transfer', 'install'];
   for (const id of ids) {
     const dlg = getModalElement(id);
@@ -277,7 +294,9 @@ export function checkUrlHashForSaveImportImpl(app: AppViewContext): void {
 export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, silent = false): void {
   const prevSave = app.saveManager.getPayload();
   const prevMode = prevSave.settings.playMode;
-  const fromOutcomeModal = Boolean(getModalElement('failure')?.open || getModalElement('victory')?.open);
+  const fromOutcomeModal = Boolean(
+    getModalElement('failure')?.open || getModalElement('victory')?.open || isOutcomeTransitionPending()
+  );
 
   if (prevMode === nextMode && !fromOutcomeModal && app.boardPlayMode === nextMode) {
     if (app.activeScreen === 'home' && !app.titleOverlayOpen) {
@@ -477,52 +496,6 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
   };
 }
 
-function applyContinueRescueToBoard(app: AppViewContext, playMode: PlayMode): void {
-  app.board.continuesUsed = (app.board.continuesUsed ?? 0) + 1; // STARS-SLACK-01: caps this clear at 1★
-  if (playMode === 'CHALLENGE') {
-    app.board.movesRemaining = Math.max(5, app.board.movesRemaining + 5);
-    app.board.moveLimit += 5;
-  } else if (playMode === 'TIMED') {
-    app.board.timeRemainingSec = Math.max(20, app.board.timeRemainingSec + 20);
-  }
-  for (const b of app.board.blocks) {
-    if (b.status === 'ACTIVE' && b.bombMax > 0 && b.bombCount <= 0) {
-      b.bombCount = Math.max(5, b.bombMax);
-    }
-  }
-  app.levelOutcomeHandled = false;
-  app.board.timerRunning = true;
-  app.closeAllModals();
-  app.sound.playBooster('HINT');
-  app.syncAllUiFromSave();
-  app.renderNow();
-}
-
-export function continueFailedLevelImpl(app: AppViewContext): void {
-  const save = app.saveManager.getPayload();
-  if (save.coins < CONTINUE_COIN_COST || !app.saveManager.buyBoosterWithCoins('HINT', CONTINUE_COIN_COST)) {
-    app.showGameToast(
-      `Need ${CONTINUE_COIN_COST} Coins — Retry for FREE or bank a 🌿 Zen Blessing in Zen Mode!`
-    );
-    return;
-  }
-  app.saveManager.spendBooster('HINT');
-  applyContinueRescueToBoard(app, save.settings.playMode);
-}
-
-export function useZenBlessingContinueImpl(app: AppViewContext): void {
-  const save = app.saveManager.getPayload();
-  if (save.settings.playMode === 'ZEN' || !app.saveManager.consumeZenBlessing()) {
-    return;
-  }
-  applyContinueRescueToBoard(app, save.settings.playMode);
-  app.showGameToast(
-    save.settings.playMode === 'TIMED'
-      ? '🌿 Zen Blessing used — +20 Seconds granted (Free)!'
-      : '🌿 Zen Blessing used — +5 Moves granted (Free)!'
-  );
-}
-
 function isAppHistoryState(val: unknown): val is AppHistoryState {
   if (!val || typeof val !== 'object') return false;
   const candidate = val as Partial<AppHistoryState>;
@@ -579,6 +552,7 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
 }
 
 export function openTitleScreenImpl(app: AppViewContext): void {
+  cancelPendingOutcomeTransition();
   app.titleOverlayOpen = true;
   app.blueprintMix = 1.0;
   if (app.toastTimerId !== null) {
@@ -671,6 +645,7 @@ export function switchScreenImpl(
     gameEl?.classList.remove('relic-awakening-burst');
   }
   if (screen !== 'game') {
+    cancelPendingOutcomeTransition();
     app.inputController.cancelTargeting();
     app.blueprintMix = 0;
     app.renderer.resetTransientFx();

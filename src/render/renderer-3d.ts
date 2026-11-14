@@ -27,7 +27,6 @@ import {
   spawnBlockShredBurstImpl,
   spawnParticlesAtImpl,
   spawnShockwaveImpl,
-  spawnVictoryCelebrationBurstImpl,
   stepParticlesImpl,
 } from './particle-fx';
 import { renderPass1Courtyard } from './pass1-courtyard';
@@ -561,10 +560,6 @@ export class Renderer3D implements RenderPassContext {
 
   public spawnPathTrace(...args: Parameters<RenderPassContext['spawnPathTrace']>): void {
     spawnPathTraceImpl(this, ...args);
-  }
-
-  public spawnVictoryCelebrationBurst(board: BoardState): void {
-    spawnVictoryCelebrationBurstImpl(this, board);
   }
 
   public spawnRelicAwakeningBurst(board: BoardState): void {

@@ -59,7 +59,6 @@ import {
   checkUrlHashForSaveImportImpl,
   closeAllModalsImpl,
   confirmPendingSaveImportImpl,
-  continueFailedLevelImpl,
   createDebugBridgeImpl,
   dismissTitleScreenImpl,
   isAnyModalOpenImpl,
@@ -72,13 +71,16 @@ import {
   switchPlayModeImpl,
   switchScreenImpl,
   updateTelemetryReadoutImpl,
-  useZenBlessingContinueImpl,
 } from './ui/modals-and-save-transfer';
 import {
+  cancelPendingOutcomeTransition,
+  continueFailedLevelImpl,
+  flushPendingOutcomeTransition,
   handleLevelFailureImpl,
   handleLevelVictoryImpl,
   notifyFinalTouchImpl,
   scheduleStuckBoardCheckImpl,
+  useZenBlessingContinueImpl,
 } from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
 import { prewarmVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
@@ -122,6 +124,8 @@ export class ShredBlocksApp implements AppViewContext {
   public unlockToastTimerId: ReturnType<typeof setTimeout> | null = null;
   public cachedAutoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null = null;
   public lastPointerActivityMs = performance.now();
+  private lastDragFrameMs = 0;
+  private isPointerDownOnCanvas = false;
   public currentLevelHasUnlockNote = false;
   public pendingImportPayload: SavePayloadV1 | null = null;
   public pendingImportRawCode: string | null = null;
@@ -199,7 +203,12 @@ export class ShredBlocksApp implements AppViewContext {
         return this.executeTargetedBooster(type, target);
       },
       isBoardInteractive: () => {
-        return this.activeScreen === 'game' && !this.titleOverlayOpen && !this.isAnyModalOpen();
+        return (
+          this.activeScreen === 'game' &&
+          !this.titleOverlayOpen &&
+          !this.isAnyModalOpen() &&
+          !this.levelOutcomeHandled
+        );
       },
       onShortcutAction: (action) => {
         if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
@@ -217,7 +226,9 @@ export class ShredBlocksApp implements AppViewContext {
         }
       },
       onDragFrame: () => {
-        this.lastPointerActivityMs = performance.now();
+        const now = performance.now();
+        this.lastPointerActivityMs = now;
+        this.lastDragFrameMs = now;
         if (this.frozenTimeSec !== null) {
           this.renderNow(0, this.frozenTimeSec);
         }
@@ -231,20 +242,27 @@ export class ShredBlocksApp implements AppViewContext {
       },
     });
 
+    const clearCanvasPointer = () => {
+      this.isPointerDownOnCanvas = false;
+    };
     canvas.addEventListener(
       'pointerdown',
       () => {
+        this.isPointerDownOnCanvas = true;
         this.lastPointerActivityMs = performance.now();
       },
       { passive: true }
     );
+    window.addEventListener('pointerup', clearCanvasPointer, { passive: true });
+    window.addEventListener('pointercancel', clearCanvasPointer, { passive: true });
+    window.addEventListener('blur', clearCanvasPointer);
 
-    this.bindDomEvents();
+    bindDomEventsImpl(this);
     if (typeof __SHREDBLOCKS_LAN_DEVTOOLS__ !== 'undefined' && __SHREDBLOCKS_LAN_DEVTOOLS__) {
       mountLanDevTools(this);
     }
-    this.setupDialogLightDismiss();
-    this.setupPwaAndServiceWorker();
+    setupDialogLightDismissImpl();
+    setupPwaAndServiceWorkerImpl(this);
 
     this.saveManager.onChange(() => {
       this.syncAllUiFromSave();
@@ -310,6 +328,7 @@ export class ShredBlocksApp implements AppViewContext {
 
   public loadLevel(levelId: number, switchToGameScreen = true, persistLevel = true): void {
     const cleanId = Math.max(1, Math.floor(levelId));
+    cancelPendingOutcomeTransition();
     this.inputController.cancelTargeting();
     const spec = getLevelSpec(cleanId);
     const save = this.saveManager.getPayload();
@@ -366,9 +385,10 @@ export class ShredBlocksApp implements AppViewContext {
 
   public restartCurrentLevel(): void {
     if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
+    cancelPendingOutcomeTransition();
     this.sound.playButtonTap();
     this.inputController.cancelTargeting();
-    if (this.board.movesCommitted > 0 || this.undoStack.length > 0) {
+    if (!isBoardWon(this.board) && (this.board.movesCommitted > 0 || this.undoStack.length > 0)) {
       this.preRestartSnapshot = cloneBoardState(this.board);
       this.preRestartUndoStack = this.undoStack.slice();
       this.preRestartFreeUndos = this.freeUndosRemaining;
@@ -393,7 +413,7 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   public skipCurrentLevel(): void {
-    if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
+    if (this.activeScreen !== 'game' || this.titleOverlayOpen || this.levelOutcomeHandled) return;
     const save = this.saveManager.getPayload();
     if (save.settings.playMode !== 'ZEN') {
       return;
@@ -463,7 +483,7 @@ export class ShredBlocksApp implements AppViewContext {
         }
       }
       if (outcome.clearedBlockIds.length > 0) {
-        this.sound.playShred(0);
+        this.sound.playShred(0, undefined, isBoardWon(this.board));
       } else if (outcome.peeledBlockIds.length > 0) {
         this.sound.playLayerPeel();
       } else {
@@ -536,7 +556,7 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   private handleLevelFailure(reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES'): void {
-    handleLevelFailureImpl(this, reason);
+    handleLevelFailureImpl(this, reason, this.frozenTimeSec);
   }
 
   public continueFailedLevel(): void {
@@ -590,10 +610,13 @@ export class ShredBlocksApp implements AppViewContext {
       const canvasVisible = this.activeScreen === 'game' || this.titleOverlayOpen;
       const modalOpen = this.isAnyModalOpen();
       const hasVisualFx = canvasVisible && hasActiveVisualFxImpl(this.renderer, this.blueprintMix);
+      const isPointerEngaged =
+        canvasVisible && !modalOpen && (this.isPointerDownOnCanvas || nowMs - this.lastDragFrameMs < 100);
       const isInteractiveMotion =
         canvasVisible &&
         !modalOpen &&
-        (nowMs - this.lastPointerActivityMs < 950 ||
+        (isPointerEngaged ||
+          nowMs - this.lastPointerActivityMs < 240 ||
           hasVisualFx ||
           (!this.titleOverlayOpen &&
             this.board.timerRunning &&
@@ -601,24 +624,22 @@ export class ShredBlocksApp implements AppViewContext {
 
       governor.recordRafTick(nowMs, {
         isInteractiveMotion,
+        isPointerEngaged,
         isModalOpen: modalOpen,
         isSuspended: !canvasVisible,
       });
 
       stepSimulationImpl(this, dtSec);
-      const victoryOpen =
-        modalOpen && ((document.getElementById('dialog-victory') as HTMLDialogElement | null)?.open ?? false);
       const drawDt = governor.consumeRenderStep(nowMs, dtSec, {
         canvasVisible,
         modalOpen,
-        victoryOpen,
         hasVisualFx,
         forceSettle: this.modalSettleFrames > 0,
       });
       if (drawDt > 0) {
         if (this.modalSettleFrames > 0) this.modalSettleFrames--;
         this.renderNow(drawDt, nowMs * 0.001);
-        governor.markFrameRendered(nowMs, isInteractiveMotion);
+        governor.markFrameRendered(nowMs, isInteractiveMotion && governor.didLastTickSampleCadence());
       }
 
       const pauseDialog = document.getElementById('dialog-pause') as HTMLDialogElement | null;
@@ -642,6 +663,7 @@ export class ShredBlocksApp implements AppViewContext {
   public freezeTime(timeSec: number | null): void {
     this.frozenTimeSec = timeSec;
     if (timeSec !== null) {
+      flushPendingOutcomeTransition();
       stopVictoryModalFx();
       this.renderer.resetTransientFx();
       this.renderNow(0, timeSec);
@@ -712,9 +734,6 @@ export class ShredBlocksApp implements AppViewContext {
     this.renderer.getQualityGovernor().resetPendingRenderDt();
     closeAllModalsImpl();
   }
-  private setupDialogLightDismiss(): void {
-    setupDialogLightDismissImpl();
-  }
   public previewSaveImport(rawInput: string): boolean {
     return previewSaveImportImpl(this, rawInput);
   }
@@ -732,9 +751,6 @@ export class ShredBlocksApp implements AppViewContext {
     showUnlockNoteIfPresentImpl(this, note);
   }
 
-  private bindDomEvents(): void {
-    bindDomEventsImpl(this);
-  }
   public isPwaInstalled(): boolean {
     return isPwaInstalledImpl(this);
   }
@@ -755,9 +771,6 @@ export class ShredBlocksApp implements AppViewContext {
   }
   public handleInstallAction(): Promise<void> {
     return handleInstallActionImpl(this);
-  }
-  private setupPwaAndServiceWorker(): void {
-    setupPwaAndServiceWorkerImpl(this);
   }
 
   // ===========================================================================
