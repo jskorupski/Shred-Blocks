@@ -686,6 +686,28 @@ body:not(.high-contrast)[data-play-mode="TIMED"] #btn-themes-resume-game {
   flex: 1 1 auto;
 }
 
+@media (max-height: 500px) {
+  .themes-preview-card {
+    margin: 0.22rem 0.65rem 0.2rem;
+    padding: 0.3rem 0.5rem;
+    gap: 0.48rem;
+  }
+  .themes-preview-stage {
+    min-height: 82px;
+    height: 88px;
+  }
+  .themes-preview-combo {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.18rem;
+  }
+  .preview-combo-chip {
+    flex: 1 1 0;
+    padding: 0.1rem 0.26rem;
+    font-size: 0.62rem;
+  }
+}
+
 /* Accessibility: High Contrast & Reduced Motion Overrides */
 body.high-contrast .cosmetics-drawer,
 body.high-contrast .themes-preview-card,

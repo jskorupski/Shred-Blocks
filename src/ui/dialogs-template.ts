@@ -491,7 +491,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
       </div>
     </dialog>
 
-    <!-- Contextual In-Flow App Update Notification Banner (STOR-03 / PWA-UPDATE-01) -->
+    <!-- Global In-Flow App Update Notification Banner (STOR-03 / PWA-UPDATE-01) -->
     <div id="pwa-update-toast" class="pwa-update-toast" role="status" aria-live="polite" hidden>
       <div class="pwa-update-meta">
         <span class="pwa-update-badge"><span class="pwa-update-dot" aria-hidden="true"></span>NEW</span>

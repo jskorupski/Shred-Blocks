@@ -664,6 +664,7 @@ export function switchScreenImpl(
     app.checkForPwaUpdate(false);
   } else if (screen === 'themes') {
     app.renderThemesStudio();
+    app.checkForPwaUpdate(false);
   } else if (screen === 'game') {
     if (!preserveAwakeningBurst || app.renderer.canvas.width <= 64) {
       app.renderer.resize();

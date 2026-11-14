@@ -8,7 +8,7 @@ import {
   PWA_INSTALLED_STORAGE_KEY,
 } from './catalog-meta';
 import { handlePopstateNavigationImpl, refreshSaveTransferModalImpl } from './modals-and-save-transfer';
-import { bindThemesAndCosmeticsEventsImpl } from './themes-studio-view';
+import { bindThemesAndCosmeticsEventsImpl, refreshThemesPreviewIfActive } from './themes-studio-view';
 
 export function bindDomEventsImpl(app: AppViewContext): void {
   // Sacred-Geometry Title Crest Overlay Actions
@@ -582,17 +582,19 @@ export function syncPwaUpdateBannerImpl(app: AppViewContext): void {
     return;
   }
 
-  if (app.activeScreen === 'home') {
-    const homeDash = document.querySelector('.home-dashboard');
-    if (homeDash && toast.parentElement !== homeDash) {
-      homeDash.prepend(toast);
-    }
-    toast.hidden = !shouldShow;
-    return;
+  // Mount as a flush sub-header banner directly below `.top-economy-bar` on active menu screens
+  // (outside `#map-mode-tabs`/`#map-mode-panel` while keeping the top app bar stationary)
+  const activeSectionId = app.activeScreen === 'themes' ? 'screen-themes' : 'screen-home';
+  const topBar = document.querySelector(`#${activeSectionId} > .top-economy-bar`);
+  if (topBar && toast.previousElementSibling !== topBar) {
+    topBar.after(toast);
   }
-
-  // Never show update banner during active gameplay (#screen-game) or Themes Studio
-  toast.hidden = true;
+  const wasHidden = toast.hidden;
+  const showOnMenuShell = shouldShow && app.activeScreen !== 'game';
+  toast.hidden = !showOnMenuShell;
+  if (wasHidden !== toast.hidden && app.activeScreen === 'themes') {
+    refreshThemesPreviewIfActive(app);
+  }
 }
 
 export function checkForPwaUpdateImpl(app: AppViewContext, force = false): void {
@@ -618,7 +620,7 @@ export function checkForPwaUpdateImpl(app: AppViewContext, force = false): void 
 }
 
 function shouldAutoApplyWaitingWorker(app: AppViewContext): boolean {
-  if (app.board.movesCommitted > 0 || app.isAnyModalOpen()) {
+  if (isBoardRunStarted(app.board) || app.isAnyModalOpen()) {
     return false;
   }
   const isUntouchedColdBootOnTitle =
@@ -627,7 +629,7 @@ function shouldAutoApplyWaitingWorker(app: AppViewContext): boolean {
     typeof performance !== 'undefined' &&
     performance.now() <= SW_COLD_BOOT_AUTO_UPDATE_WINDOW_MS;
   const isLongIdleResumeOnMenu =
-    (app.titleOverlayOpen || app.activeScreen === 'home') &&
+    (app.titleOverlayOpen || app.activeScreen !== 'game') &&
     app.lastBackgroundedAtMs > 0 &&
     Date.now() - app.lastBackgroundedAtMs >= SW_LONG_IDLE_AUTO_UPDATE_MS;
   return isUntouchedColdBootOnTitle || isLongIdleResumeOnMenu;
@@ -654,9 +656,13 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
   let refreshing = false;
   let swActivationApproved = false;
   const triggerWaitingWorkerActivation = () => {
-    if (!app.waitingServiceWorker) return;
+    const worker = app.waitingServiceWorker ?? app.swRegistration?.waiting ?? null;
+    if (!worker) {
+      if (app.swRegistration) window.location.reload();
+      return;
+    }
     swActivationApproved = true;
-    app.waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+    worker.postMessage({ type: 'SKIP_WAITING' });
   };
 
   document.addEventListener('visibilitychange', () => {
@@ -665,7 +671,7 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
       return;
     }
     app.syncViewportGeometry();
-    if (app.titleOverlayOpen || app.activeScreen === 'home') {
+    if (app.titleOverlayOpen || app.activeScreen !== 'game') {
       if (app.waitingServiceWorker && shouldAutoApplyWaitingWorker(app)) {
         triggerWaitingWorkerActivation();
         return;

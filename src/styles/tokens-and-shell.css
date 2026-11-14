@@ -462,6 +462,40 @@ body {
   }
 }
 
+@media (max-width: 360px) {
+  .top-economy-bar {
+    flex-wrap: wrap;
+    gap: 0.22rem;
+    padding: 0.32rem 0.38rem;
+  }
+  .brand-cluster {
+    gap: 0.24rem;
+  }
+  .brand-icon {
+    width: 20px;
+    height: 20px;
+  }
+  .brand-title {
+    font-size: 0.82rem;
+  }
+  .economy-pills {
+    gap: 0.26rem;
+    padding: 0.16rem 0.32rem;
+  }
+  .econ-pill {
+    font-size: 0.68rem;
+    gap: 0.12rem;
+  }
+  .econ-pill:not(:last-child)::after {
+    margin-left: 0.16rem;
+  }
+  #btn-install-header {
+    padding: 0.18rem 0.34rem;
+    min-height: 28px;
+    font-size: 0.64rem;
+  }
+}
+
 .econ-coins {
   color: #f3d27a;
 }

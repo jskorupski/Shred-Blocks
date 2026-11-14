@@ -67,6 +67,7 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
       '41',
       '--mode',
       'timed',
+      '--pwa-update',
       '--high-contrast',
       '--colorblind',
       '--reduced-motion',
@@ -84,6 +85,7 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     expect(parsed.viewports.map((v) => v.width)).toEqual([320, 667, 1280]);
     expect(parsed.levelId).toBe(41);
     expect(parsed.mode).toBe('TIMED');
+    expect(parsed.pwaUpdate).toBe(true);
     expect(parsed.highContrast).toBe(true);
     expect(parsed.colorblind).toBe(true);
     expect(parsed.reducedMotion).toBe(true);
@@ -97,6 +99,7 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     const helpParsed = parseProbeCliArgs(['--help']);
     expect(helpParsed.help).toBe(true);
     const helpText = formatProbeHelp();
+    expect(helpText).toContain('--pwa-update');
     for (const scene of PROBE_SCENES) {
       expect(helpText).toContain(scene);
     }

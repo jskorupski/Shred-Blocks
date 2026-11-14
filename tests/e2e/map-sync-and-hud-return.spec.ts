@@ -670,4 +670,126 @@ test.describe('Sanctuary Map Auto-Scroll, Filter Reset & HUD Title Return', () =
       }
     }
   });
+
+  test('PWA-UPDATE-01 & VIEWPORT-MATRIX-01: global update banner mounts flush below top header outside folder tabs and fits 320x568 & 667x375 without vertical overflow', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const save = {
+        schemaVersion: 1,
+        appId: 'shredblocks-color-jam',
+        writeSeq: 12,
+        updatedAt: Date.now() + 30_000,
+        highestLevelUnlocked: 14,
+        currentLevelId: 14,
+        coins: 450,
+        settings: { sfxEnabled: false, musicEnabled: false, hapticsEnabled: false },
+      };
+      window.localStorage.setItem('shredblocks.save.v1', JSON.stringify(save));
+    });
+    const checkBannerSlot = (sid: 'screen-home' | 'screen-themes', nid: string) =>
+      page.evaluate(
+        ([s, nId]) => {
+          const toast = document.getElementById('pwa-update-toast');
+          const header = document.querySelector<HTMLElement>(`#${s} > .top-economy-bar`);
+          const next = document.getElementById(nId);
+          if (!toast || !header || !next) return null;
+          const [t, h, n] = [toast, header, next].map((el) => el.getBoundingClientRect());
+          return {
+            parentId: toast.parentElement?.id ?? '',
+            insideTabPanel: Boolean(document.getElementById('map-mode-panel')?.contains(toast)),
+            belowHeader: t.top >= h.bottom - 1,
+            aboveNext: t.bottom <= n.top + 1,
+            widthDeltaPx: Math.abs(Math.round(t.width - h.width)),
+          };
+        },
+        [sid, nid] as const
+      );
+
+    await page.goto('/');
+    await expect(page.locator('#title-overlay')).toBeVisible();
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPwaUpdateBannerVisible(true));
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+
+    const slotOk = { insideTabPanel: false, belowHeader: true, aboveNext: true, widthDeltaPx: 0 };
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home'));
+    await expect(page.locator('#screen-home')).toBeVisible();
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+    expect(await checkBannerSlot('screen-home', 'map-mode-tabs')).toEqual({
+      parentId: 'screen-home',
+      ...slotOk,
+    });
+
+    await page.locator('#map-tab-zen').click();
+    await page.locator('#map-tab-timed').click();
+    await page.locator('#tab-btn-themes').click();
+    await expect(page.locator('#screen-themes')).toBeVisible();
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+    expect(await checkBannerSlot('screen-themes', 'themes-preview-card')).toEqual({
+      parentId: 'screen-themes',
+      ...slotOk,
+    });
+
+    await page.locator('#tab-btn-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+
+    for (const vp of [
+      { label: '320x568', width: 320, height: 568 },
+      { label: '667x375-landscape', width: 667, height: 375 },
+    ]) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      const homeAudit = await page.evaluate(() => {
+        const toast = document.getElementById('pwa-update-toast');
+        const label = toast?.querySelector<HTMLElement>('.pwa-update-label');
+        const list = document.getElementById('roadmap-list');
+        return {
+          hOverflow: document.documentElement.scrollWidth - window.innerWidth,
+          vOverflow: document.documentElement.scrollHeight - window.innerHeight,
+          toastVisible: Boolean(toast && !toast.hidden),
+          labelUntruncated: Boolean(label && label.scrollWidth <= label.clientWidth + 1),
+          roadmapHeight: list?.clientHeight ?? 0,
+        };
+      });
+      expect(
+        homeAudit.hOverflow <= 0 &&
+          homeAudit.vOverflow <= 1 &&
+          homeAudit.toastVisible &&
+          homeAudit.labelUntruncated,
+        `${vp.label} home layout: ${JSON.stringify(homeAudit)}`
+      ).toBe(true);
+      expect(homeAudit.roadmapHeight, `${vp.label} home roadmapHeight`).toBeGreaterThanOrEqual(80);
+
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openTitleScreen());
+      await expect(page.locator('#title-overlay')).toBeVisible();
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      const titleAudit = await page.evaluate(() => {
+        const inView = (el: Element | null) => {
+          const r = el?.getBoundingClientRect();
+          return Boolean(r && r.top >= -1 && r.bottom <= window.innerHeight + 1);
+        };
+        return {
+          hOverflow: document.documentElement.scrollWidth - window.innerWidth,
+          vOverflow: document.documentElement.scrollHeight - window.innerHeight,
+          cardOk: inView(document.querySelector('.title-crest-card')),
+          toastOk: inView(document.getElementById('pwa-update-toast')),
+        };
+      });
+      expect(titleAudit, `${vp.label} title`).toEqual({
+        hOverflow: 0,
+        vOverflow: 0,
+        cardOk: true,
+        toastOk: true,
+      });
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home'));
+    }
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.openTitleScreen());
+    const beforePlayCanvas = await page.locator('#game-canvas').evaluate((el) => el.getBoundingClientRect());
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('game', false));
+    await expect(page.locator('#pwa-update-toast')).toBeHidden();
+    const afterPlayCanvas = await page.locator('#game-canvas').evaluate((el) => el.getBoundingClientRect());
+    expect(Math.abs(beforePlayCanvas.top - afterPlayCanvas.top)).toBeLessThanOrEqual(0.5);
+  });
 });

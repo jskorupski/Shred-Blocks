@@ -699,85 +699,10 @@ legend.pause-section-label {
   text-overflow: ellipsis;
 }
 
-/* Contextual In-Flow App Update Notification Banner (STOR-03 / PWA-UPDATE-01) */
-.pwa-update-toast {
-  position: relative;
-  width: min(100%, 1120px);
-  background: rgba(68, 44, 16, 0.88);
-  border: none;
-  border-left: 3px solid #ffbe0b;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: 0.36rem 0.56rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.42rem;
-  font-family: var(--font-ui);
-  font-size: 0.75rem;
-  font-weight: 600;
-  flex-shrink: 0;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.title-overlay > .pwa-update-toast {
-  width: min(100%, 404px);
-}
-
-.pwa-update-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.38rem;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.pwa-update-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.24rem;
-  padding: 0.1rem 0.36rem;
-  border-radius: var(--radius-xs);
-  background: rgba(255, 190, 11, 0.22);
-  border: none;
-  color: #ffe89e;
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.pwa-update-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ffbe0b;
-  flex-shrink: 0;
-}
-
-.pwa-update-label {
-  color: #fffbeb;
-  font-size: 0.74rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pwa-toast-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.26rem;
-  flex-shrink: 0;
-}
-
-.pwa-btn-update,
-.pwa-btn-later {
-  min-height: 28px;
-  padding: 0.16rem 0.48rem;
-  font-size: 0.68rem;
-  border-radius: var(--radius-xs);
+@media (max-width: 560px) {
+  .dialog-actions-grid:not(.pause-primary-grid):not(.pause-utility-grid):not(.pause-dev-grid) {
+    grid-template-columns: 1fr;
+  }
 }
 
 dialog.dialog-prewarm {

@@ -555,8 +555,14 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     expect(pass3Blocks).toContain('const isStoneRuin =');
 
     const dialogsCss = fs.readFileSync(path.join(repoRoot, 'src/styles/dialogs.css'), 'utf8');
-    expect(dialogsCss).toContain('.pwa-update-badge');
+    const themesNavCss = fs.readFileSync(path.join(repoRoot, 'src/styles/themes-and-nav.css'), 'utf8');
+    const pwaTs = fs.readFileSync(path.join(repoRoot, 'src/ui/dom-events-and-pwa.ts'), 'utf8');
+    expect(themesNavCss).toContain('.pwa-update-badge');
     expect(dialogsCss).not.toContain('bottom: calc(4.2rem + var(--safe-bottom))');
+    expect(themesNavCss).not.toContain('bottom: calc(4.2rem + var(--safe-bottom))');
+    expect(pwaTs).toContain('topBar.after(toast)');
+    expect(pwaTs).not.toContain('homeDash.prepend(toast)');
+    expect(pwaTs).toContain('isBoardRunStarted(app.board)');
   });
 
   it('ARCH-ERGONOMICS-01: enforces single-call agentic file-size limits (<= 800 lines and <= 45,000 bytes) across all repository source, style, test, script, and doc files', () => {

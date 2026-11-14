@@ -48,6 +48,7 @@ export interface ProbeCliOptions {
   viewports: ViewportPreset[];
   levelId: number;
   mode: PlayMode;
+  pwaUpdate: boolean;
   highContrast: boolean;
   colorblind: boolean;
   reducedMotion: boolean;
@@ -71,6 +72,7 @@ export function formatProbeHelp(): string {
     '  --viewports <spec>   "quick", "matrix", preset names, or WxH list [default: quick]',
     '  --level <n>          Stage ID to load for gameplay/modal scenes [default: 12]',
     '  --mode <mode>        CHALLENGE | ZEN | TIMED [default: CHALLENGE]',
+    '  --pwa-update         Show the global PWA Update Ready banner on compatible scenes',
     '  --high-contrast      Enable High Contrast mode',
     '  --colorblind         Enable Colorblind symbols mode',
     '  --reduced-motion     Enable Reduced Motion mode',
@@ -91,6 +93,7 @@ export function parseProbeCliArgs(argv: readonly string[]): ProbeCliOptions {
   let viewportRaw = 'quick';
   let levelId = 12;
   let mode: PlayMode = 'CHALLENGE';
+  let pwaUpdate = false;
   let highContrast = false;
   let colorblind = false;
   let reducedMotion = false;
@@ -144,6 +147,9 @@ export function parseProbeCliArgs(argv: readonly string[]): ProbeCliOptions {
         i++;
         break;
       }
+      case '--pwa-update':
+        pwaUpdate = true;
+        break;
       case '--high-contrast':
         highContrast = true;
         break;
@@ -204,6 +210,7 @@ export function parseProbeCliArgs(argv: readonly string[]): ProbeCliOptions {
     viewports: parseViewportSpec(viewportRaw),
     levelId,
     mode,
+    pwaUpdate,
     highContrast,
     colorblind,
     reducedMotion,
@@ -326,6 +333,10 @@ async function navigateToScene(page: Page, scene: ProbeScene, opts: ProbeCliOpti
         window.__SHREDBLOCKS_DEBUG__.openModal('install');
       });
       break;
+  }
+
+  if (opts.pwaUpdate) {
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPwaUpdateBannerVisible(true));
   }
 
   await page.waitForTimeout(160);

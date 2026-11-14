@@ -466,9 +466,52 @@ export async function auditViewportGeometry(
         }
       }
     } else {
-      const activeRoot =
-        document.querySelector<HTMLElement>('#title-overlay:not(.hidden)') ??
-        document.querySelector<HTMLElement>('.screen.active');
+      const titleOpen = document.querySelector<HTMLElement>('#title-overlay:not([hidden])');
+      const activeRoot = titleOpen ?? document.getElementById('app-shell');
+
+      if (document.documentElement.scrollHeight > height + 1 || Math.round(window.scrollY) > 0) {
+        outOfBoundsControls.push('doc-vertical-scroll');
+      }
+
+      if (titleOpen) {
+        for (const ch of Array.from(titleOpen.children)) {
+          if (ch.hasAttribute('hidden')) continue;
+          const cs = getComputedStyle(ch);
+          if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+          const r = ch.getBoundingClientRect();
+          if (r.top < -2 || r.bottom > height + 2) {
+            const cls = (ch.getAttribute('class') || '').trim().split(/\s+/)[0];
+            outOfBoundsControls.push(`clipped:${ch.id ? `#${ch.id}` : cls || ch.tagName.toLowerCase()}`);
+          }
+        }
+      } else {
+        const pwaToast = document.getElementById('pwa-update-toast');
+        if (pwaToast && !pwaToast.hidden) {
+          const r = pwaToast.getBoundingClientRect();
+          if (r.left < -2 || r.right > width + 2 || r.top < -2 || r.bottom > height + 2) {
+            outOfBoundsControls.push('clipped:#pwa-update-toast');
+          }
+          const labelEl = pwaToast.querySelector<HTMLElement>('.pwa-update-label');
+          if (labelEl && labelEl.scrollWidth > labelEl.clientWidth + 1) {
+            outOfBoundsControls.push('truncated:pwa-update-label');
+          }
+        }
+        const homeScreen = document.getElementById('screen-home');
+        if (homeScreen && !homeScreen.hidden) {
+          const roadmapList = document.getElementById('roadmap-list');
+          if (roadmapList && roadmapList.clientHeight < 64) {
+            outOfBoundsControls.push('crushed:#roadmap-list');
+          }
+        }
+        const themesScreen = document.getElementById('screen-themes');
+        if (themesScreen && !themesScreen.hidden) {
+          const themesScroll = themesScreen.querySelector<HTMLElement>('.themes-scroll');
+          if (themesScroll && themesScroll.clientHeight < 64) {
+            outOfBoundsControls.push('crushed:.themes-scroll');
+          }
+        }
+      }
+
       if (activeRoot) {
         const controls = activeRoot.querySelectorAll('button, select, input:not([type="checkbox"])');
         for (const ctrl of controls) {

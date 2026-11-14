@@ -578,46 +578,13 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
   transform: translateY(1px);
 }
 
-.title-utility-pill:focus-visible,
-:where(
-  .chip-filter,
-  .level-node-card,
-  .booster-btn,
-  .tab-item,
-  .setting-row input[type="checkbox"],
-  .select-tactile
-):focus-visible {
+.title-utility-pill:focus-visible {
   outline: 1.5px solid var(--accent-gold);
   outline-offset: 2px;
 }
 
 /* Responsive Mobile Portrait refinements (390x844 & 360x640) */
 @media (max-width: 560px) {
-  .top-economy-bar {
-    padding: 0.42rem 0.58rem;
-  }
-
-  .brand-subtitle {
-    display: none;
-  }
-
-  .hero-launch-card {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 0.58rem 0.75rem;
-    gap: 0.48rem;
-  }
-
-  .btn-hero {
-    width: 100%;
-    min-height: 42px;
-    padding: 0.52rem 1rem;
-  }
-
-  .dialog-actions-grid:not(.pause-primary-grid):not(.pause-utility-grid):not(.pause-dev-grid) {
-    grid-template-columns: 1fr;
-  }
-
   .title-crest-card {
     padding: 0.62rem 0.76rem 0.6rem;
     gap: 0.42rem;
@@ -653,6 +620,47 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
   .btn-title-hero {
     min-height: 38px;
     font-size: 0.85rem;
+  }
+}
+
+@media (max-height: 500px) {
+  .title-overlay {
+    padding-top: calc(0.22rem + var(--safe-top));
+    padding-bottom: calc(0.28rem + var(--safe-bottom));
+    gap: 0.16rem;
+  }
+  .title-crest-banner,
+  .title-overlay:has(:where(.pwa-update-toast:not([hidden]))) .title-crest-banner {
+    padding: 0.16rem 0.75rem 0.2rem;
+    gap: 0.04rem;
+  }
+  .title-astrolabe-wrap {
+    width: 24px;
+    height: 24px;
+  }
+  .title-overlay:has(:where(.pwa-update-toast:not([hidden]))) .title-astrolabe-wrap {
+    display: none;
+  }
+  .title-crest-heading {
+    font-size: clamp(1.6rem, 5.2dvh + 0.48rem, 2.05rem);
+  }
+  .title-crest-card {
+    padding: 0.32rem 0.58rem;
+    gap: 0.2rem;
+  }
+  .title-returning-plaque {
+    padding: 0.24rem 0.48rem;
+    gap: 0.08rem;
+  }
+  .btn-title-hero {
+    min-height: 34px;
+    font-size: 0.82rem;
+  }
+  .title-utility-pill,
+  .title-dock-bar:has(> .title-utility-row > .title-install-pill:not([hidden])) .title-utility-pill {
+    min-height: 32px;
+    padding: 0.18rem 0.22rem;
+    gap: 0.06rem;
   }
 }
 

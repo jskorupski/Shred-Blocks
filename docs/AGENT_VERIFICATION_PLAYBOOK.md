@@ -46,9 +46,9 @@ Before writing any custom Playwright script, check if [`scripts/ui-probe.ts`](..
 ./node_modules/.bin/tsx scripts/ui-probe.ts --scene game --level 91 --mode TIMED --high-contrast --colorblind --lan --out-dir <artifact-dir>
 ```
 
-* **Built-in `--scene` targets**: `title`, `title-returning`, `home`, `game`, `pause`, `pause-owned`, `pause-expanded`, `themes`, `themes-locked`, `victory`, `failure`, `save-transfer`, `install`.
+* **Built-in `--scene` targets**: `title`, `title-returning`, `home`, `game`, `pause`, `pause-owned`, `pause-expanded`, `themes`, `themes-locked`, `victory`, `failure`, `save-transfer`, `install` (append `--pwa-update` to show `#pwa-update-toast` on compatible scenes).
 * **Built-in `--viewports` specs**: `quick` (`390x844`, `667x375`, `1280x800`), `matrix` (all 8 `VIEWPORT-MATRIX-01` tiers: `320x568`, `360x640`, `390x844`, `480x800`, `667x375`, `844x390`, `768x1024`, `1280x800`), individual preset keys (`ultra-compact`, `compact`, `mobile`, `mid-split`, `landscape-se`, `landscape`, `tablet`, `desktop`, `desktop-wide`), or custom `WxH` dimensions (`412x915,1024x768`).
-* **Automated Geometry Gate**: Every capture runs `auditViewportGeometry()` checking `docOverflowPx <= 0`, `.dialog-card` horizontal fit, top-to-bottom `.dialog-card` scroll reachability, non-truncated `.setting-row > span` labels, and zero protruding controls. Pass `--no-strict-audit` when intentionally capturing a broken layout before fixing it.
+* **Automated Geometry Gate**: Every capture runs `auditViewportGeometry()` checking `docOverflowPx <= 0`, zero unwanted document/shell vertical scroll, `#pwa-update-toast` & `#title-overlay` bounds/label truncation, `.dialog-card` horizontal fit, top-to-bottom `.dialog-card` scroll reachability, non-truncated `.setting-row > span` labels, and zero protruding controls. Pass `--no-strict-audit` when intentionally capturing a broken layout before fixing it.
 
 ---
 
