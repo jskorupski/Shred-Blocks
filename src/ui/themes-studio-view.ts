@@ -208,6 +208,16 @@ function requestPreviewFrames(app: AppViewContext, minFrames = 3): void {
 }
 
 /**
+ * Re-renders `#themes-preview-canvas` immediately when `#screen-themes` is active so live A11y toggles
+ * (`colorblindSymbols`, `highContrast`, `reducedMotion`), quality changes, or save syncs stay 100% in sync.
+ */
+export function refreshThemesPreviewIfActive(app: AppViewContext): void {
+  if (app.activeScreen === 'themes' && !app.titleOverlayOpen) {
+    requestPreviewFrames(app, 3);
+  }
+}
+
+/**
  * Suspends or activates the Live 3D Showcase Diorama loop when entering/leaving `#screen-themes`,
  * resetting any unowned `previewOverride` on exit so locked previews never leak into gameplay.
  */

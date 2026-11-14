@@ -390,4 +390,71 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
       }
     }
   });
+
+  it('WOOD-GRAIN-01 & THEME-A11Y-STUDIO-SYNC-01: offsets carved_wood grain per u_blockSeed, tempers plastic vibrancy into stained hardwood, and preserves >= 3:1 Colorblind contrast', () => {
+    expect(MAIN_FRAGMENT_SHADER).toContain('WOOD-GRAIN-01');
+    expect(MAIN_FRAGMENT_SHADER).toContain('u_blockSeed * 0.618034');
+    expect(MAIN_FRAGMENT_SHADER).toContain('vec2(19.7, 13.3) * u_blockSeed');
+
+    // Verify per-block grain domain coordinates never collide across distinct block IDs at identical localPos
+    const sampleWoodCoord = (seed: number, lx: number, ly: number): [number, number] => {
+      const swap = (seed * 0.618034) % 1 >= 0.5;
+      const wx0 = swap ? ly : lx;
+      const wy0 = swap ? lx : ly;
+      const sx = Math.sin(seed * 1.37 + 3.1) * 43758.5453;
+      const hx = sx - Math.floor(sx);
+      const ang = (hx - 0.5) * 0.3;
+      const cA = Math.cos(ang);
+      const sA = Math.sin(ang);
+      return [cA * wx0 - sA * wy0 + 19.7 * seed, sA * wx0 + cA * wy0 + 13.3 * seed];
+    };
+    for (let id = 1; id <= 8; id++) {
+      const a = sampleWoodCoord(id, 0.5, 0.5);
+      const b = sampleWoodCoord(id + 1, 0.5, 0.5);
+      expect(Math.hypot(a[0] - b[0], a[1] - b[1])).toBeGreaterThan(15);
+    }
+
+    const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
+    const srgbToLin = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const relLum = ([r, g, b]: readonly [number, number, number]): number =>
+      0.2126 * srgbToLin(r) + 0.7152 * srgbToLin(g) + 0.0722 * srgbToLin(b);
+
+    const evalWoodStain = (
+      inRgb: readonly [number, number, number],
+      hc: boolean
+    ): [number, number, number] => {
+      const luma = 0.299 * inRgb[0] + 0.587 * inRgb[1] + 0.114 * inRgb[2];
+      const satMix = hc ? 0.9 : 0.78;
+      const mul = hc ? 0.84 : 0.74;
+      const walnutMul = (hc ? 0.08 : 0.13) * (0.55 + 0.45 * luma);
+      const walnut = [0.34, 0.23, 0.14] as const;
+      const stained = [0, 1, 2].map((i) => {
+        const dye = luma * (1 - satMix) + inRgb[i] * satMix;
+        return clamp01(dye * mul + walnut[i] * walnutMul);
+      }) as [number, number, number];
+      const litMul = hc ? 1.18 : 1.12;
+      return stained.map((c) => clamp01(c * litMul + 0.015)) as [number, number, number];
+    };
+
+    const colorIds: ColorId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    for (const id of colorIds) {
+      // Standard mode wood must be grounded below neon-plastic 0.92 peak saturation while keeping clear hue
+      const stdTop = evalWoodStain(COLOR_PALETTE[id].rgb, false);
+      expect(Math.max(stdTop[0], stdTop[1], stdTop[2])).toBeLessThan(0.88);
+
+      // Colorblind mode + High-Contrast Colorblind mode must maintain >= 3.0:1 WCAG 1.4.11 non-text sigil contrast
+      for (const hc of [false, true]) {
+        const woodCb = evalWoodStain(hc ? COLOR_PALETTE[id].cbHcRgb : COLOR_PALETTE[id].cbRgb, hc);
+        const glyph = getToneOnToneGlyphRgb(id, hc, false).map((c) => clamp01(c * 1.12 + 0.02)) as [
+          number,
+          number,
+          number,
+        ];
+        const l1 = relLum(woodCb);
+        const l2 = relLum(glyph);
+        const cr = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+        expect(cr).toBeGreaterThanOrEqual(3.0);
+      }
+    }
+  });
 });

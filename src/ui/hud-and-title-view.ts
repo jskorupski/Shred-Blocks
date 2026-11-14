@@ -33,7 +33,7 @@ import {
   getPlayModeMeta,
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
-import { syncPauseCosmeticsDrawerImpl } from './themes-studio-view';
+import { refreshThemesPreviewIfActive, syncPauseCosmeticsDrawerImpl } from './themes-studio-view';
 
 export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockState): void {
   if (isBlockInLockedRoom(app.board, block)) {
@@ -412,6 +412,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (hudMusicBtn) hudMusicBtn.textContent = save.settings.musicEnabled ? '🎵' : '🔕';
 
   app.syncInGameHud();
+  refreshThemesPreviewIfActive(app);
 }
 
 export function syncInGameHudImpl(app: AppViewContext): void {

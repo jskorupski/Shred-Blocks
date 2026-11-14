@@ -294,33 +294,33 @@ void main() {
     specPower = 88.0;
     specStrength = u_highContrast == 1 ? 0.48 : 0.75;
   } else if (u_materialStyle == 2) {
-    // carved_wood (WOOD-GRAIN-01): stained hardwood with noise-warped latewood rings, pores, and bent knots
-    vec3 wq = v_localPos;
+    // carved_wood (WOOD-GRAIN-01): per-block seeded plank cut/angle/offset + deeply stained hand-rubbed hardwood
+    vec2 seedH = hashRelic22(vec2(u_blockSeed * 1.37 + 3.1, u_blockSeed * 2.91 + 11.7));
+    vec2 wp0 = fract(u_blockSeed * 0.618034) >= 0.5 ? v_localPos.yx : v_localPos.xy;
+    float wAng = (seedH.x - 0.5) * 0.30, cA = cos(wAng), sA = sin(wAng);
+    vec2 wq = mat2(cA, -sA, sA, cA) * wp0 + vec2(19.7, 13.3) * u_blockSeed + seedH * 17.0;
     float figureWarp = relicNoise(vec2(wq.x * 0.55, wq.y * 1.8) + 3.7) * 1.1 + relicNoise(vec2(wq.x * 1.6, wq.y * 4.0)) * 0.3;
-    vec2 knotCell = floor(wq.xy * vec2(0.55, 0.8));
-    vec2 knotHash = hashRelic22(knotCell + 17.0);
-    vec2 knotPos = (knotCell + 0.25 + 0.5 * knotHash) / vec2(0.55, 0.8);
-    vec2 knotRel = (wq.xy - knotPos) * vec2(0.8, 1.7);
-    float knotDist = length(knotRel);
-    float hasKnot = step(0.55, hashRelic22(knotCell + 5.0).x);
+    vec2 knotCell = floor(wq * vec2(0.46, 0.68));
+    vec2 knotPos = (knotCell + 0.25 + 0.5 * hashRelic22(knotCell + 17.0)) / vec2(0.46, 0.68);
+    vec2 knotRel = (wq - knotPos) * vec2(0.8, 1.7);
+    float knotDist = length(knotRel), hasKnot = step(0.66, hashRelic22(knotCell + 5.0).x);
     float knotBend = hasKnot * 0.55 * exp(-knotDist * knotDist * 9.0) * sign(knotRel.y + 1e-4);
-    float ringCoord = wq.y * 11.0 + figureWarp * 2.2 + (wq.z - 0.3) * 3.0 + knotBend * 6.0;
-    float ringPhase = fract(ringCoord);
-    float latewood = smoothstep(0.78, 0.9, ringPhase) * (1.0 - smoothstep(0.95, 1.0, ringPhase));
-    float earlywood = 1.0 - latewood;
+    float ringCoord = wq.y * (8.6 + seedH.y * 3.8) + figureWarp * 2.2 + (v_localPos.z - 0.3) * 3.0 + knotBend * 6.0, ringPhase = fract(ringCoord);
+    float latewood = smoothstep(0.78, 0.9, ringPhase) * (1.0 - smoothstep(0.95, 1.0, ringPhase)), earlywood = 1.0 - latewood;
     float fibers = relicNoise(vec2(wq.x * 3.0, wq.y * 140.0 + figureWarp * 30.0)) - 0.5;
     float pores = smoothstep(0.7, 0.93, relicNoise(vec2(wq.x * 10.0, wq.y * 210.0 + figureWarp * 40.0)));
     float streak = relicNoise(vec2(wq.x * 0.5, wq.y * 9.0 + figureWarp)) - 0.5;
     float knotRings = hasKnot * exp(-knotDist * knotDist * 22.0) * (0.5 + 0.5 * sin(knotDist * 70.0));
-    float knotCore = hasKnot * (1.0 - smoothstep(0.07, 0.14, knotDist));
-    float knotHalo = hasKnot * exp(-knotDist * knotDist * 14.0) * 0.6;
-    float woodAmp = u_highContrast == 1 ? 0.45 : 1.0;
-    vec3 stained = mix(base, base * vec3(1.05, 0.9, 0.74) + vec3(0.045, 0.026, 0.006), 0.42);
-    float woodLum =
-      1.0 + (-latewood * 0.2 + fibers * 0.07 - pores * 0.08 + streak * 0.1 - knotHalo * 0.16 - knotRings * 0.12 - knotCore * 0.45) * woodAmp;
-    base = clamp(stained * woodLum, 0.0, 1.0);
-    specPower = 22.0;
-    specStrength = 0.13 + earlywood * 0.05;
+    float knotCore = hasKnot * (1.0 - smoothstep(0.07, 0.14, knotDist)), knotHalo = hasKnot * exp(-knotDist * knotDist * 14.0) * 0.6;
+    float hcW = float(u_highContrast), woodAmp = mix(1.0, 0.45, hcW), lumaW = dot(base, vec3(0.299, 0.587, 0.114));
+    vec3 dyeW = mix(vec3(lumaW), base, mix(0.78, 0.90, hcW));
+    vec3 stained = clamp(dyeW * mix(0.74, 0.84, hcW) + vec3(0.34, 0.23, 0.14) * mix(0.13, 0.08, hcW) * (0.55 + 0.45 * lumaW), 0.0, 1.0);
+    float darkPool = clamp((latewood * 0.22 + pores * 0.09 + knotHalo * 0.18 + knotRings * 0.14 + knotCore * 0.48) * woodAmp, 0.0, 0.72);
+    vec3 deepGrain = stained * stained * vec3(0.64, 0.52, 0.40) + vec3(0.026, 0.015, 0.006);
+    float edgeRub = clamp(v_uv.x, 0.0, 1.0) * 0.06 * (1.0 - hcW * 0.5);
+    base = clamp(mix(stained, deepGrain, darkPool) * (1.0 + (fibers * 0.07 + streak * 0.10) * woodAmp - edgeRub), 0.0, 1.0);
+    specPower = 18.0;
+    specStrength = 0.065 + earlywood * 0.035;
   } else if (u_materialStyle == 6) {
     // relic_stone (BLOCK-STONE-01, default skin): smoothly worn-down, aged colored stone (terracotta sandstone,
     // lapis bluestone, celadon jadeite, ochre travertine) with fine mineral speckle, tiny sparse pores, a faint

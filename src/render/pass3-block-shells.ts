@@ -356,6 +356,7 @@ export function renderPass3BlocksImpl(
     if (layersLeft > 1) {
       const innerColor = block.colorStack[block.colorCursor + 1] ?? activeColor;
       const [ir, ig, ib] = rctx.getColorRgb(innerColor, highContrast);
+      gl.uniform1f(rctx.uBlockSeed, (block.id + 37) % 97);
       rctx.drawMesh(
         gl,
         meshPair.meshInnerCore,

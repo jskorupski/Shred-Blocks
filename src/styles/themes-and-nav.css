@@ -127,9 +127,10 @@
 
 .swatch-carved_wood {
   background:
-    radial-gradient(ellipse 5px 8px at 66% 58%, rgba(62, 28, 10, 0.72) 0 45%, transparent 100%),
-    repeating-linear-gradient(180deg, transparent 0 3px, rgba(92, 46, 16, 0.3) 0 4px),
-    linear-gradient(100deg var(--in-oklab), #d59d5c 0%, #b8763a 48%, #985b28 100%);
+    radial-gradient(ellipse 5px 8px at 66% 58%, rgba(42, 18, 6, 0.76) 0 45%, transparent 100%),
+    repeating-linear-gradient(180deg, transparent 0 3px, rgba(58, 26, 8, 0.36) 0 4px),
+    linear-gradient(100deg var(--in-oklab), #a86834 0%, #7d4620 48%, #582e13 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(42, 18, 6, 0.44);
 }
 
 .swatch-neon_cyber {
