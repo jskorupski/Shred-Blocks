@@ -61,6 +61,7 @@ export function openModalImpl(app: AppViewContext, id: ModalId): void {
     if (navSec) {
       navSec.hidden = app.activeScreen !== 'game' || app.titleOverlayOpen;
     }
+    app.syncInstallUiVisibility();
     syncPauseCosmeticsDrawerImpl(app, true);
     updateTelemetryReadoutImpl(app);
   } else if (id === 'save-transfer') {

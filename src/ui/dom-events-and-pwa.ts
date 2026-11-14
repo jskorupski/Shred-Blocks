@@ -441,13 +441,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   });
 
   document.getElementById('btn-trigger-native-install')?.addEventListener('click', async () => {
-    if (!app.deferredInstallPrompt) return;
-    await app.deferredInstallPrompt.prompt();
-    const choice = await app.deferredInstallPrompt.userChoice;
-    if (choice.outcome === 'accepted') {
-      app.markPwaInstalled();
-    }
-    app.deferredInstallPrompt = null;
+    await promptNativeInstall(app);
     app.closeAllModals();
   });
 
@@ -458,6 +452,33 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   window.addEventListener('popstate', (event) => {
     handlePopstateNavigationImpl(app, event);
   });
+}
+
+function setInstalledStorageFlag(installed: boolean): void {
+  try {
+    if (installed) window.localStorage.setItem(PWA_INSTALLED_STORAGE_KEY, '1');
+    else window.localStorage.removeItem(PWA_INSTALLED_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+async function promptNativeInstall(app: AppViewContext): Promise<'handled' | 'fallback'> {
+  const deferred = app.deferredInstallPrompt;
+  if (!deferred) return 'fallback';
+  try {
+    await deferred.prompt();
+    const choice = await deferred.userChoice;
+    app.deferredInstallPrompt = null;
+    if (choice.outcome === 'accepted') app.markPwaInstalled();
+    else app.syncInstallUiVisibility();
+    app.closeAllModals();
+    return 'handled';
+  } catch {
+    app.deferredInstallPrompt = null;
+    app.syncInstallUiVisibility();
+    return 'fallback';
+  }
 }
 
 export function isPwaInstalledImpl(app: AppViewContext): boolean {
@@ -471,11 +492,7 @@ export function isPwaInstalledImpl(app: AppViewContext): boolean {
 
   if (standaloneMedia || iosStandalone || twaReferrer) {
     app.pwaInstalledDetected = true;
-    try {
-      window.localStorage.setItem(PWA_INSTALLED_STORAGE_KEY, '1');
-    } catch {
-      // Ignore storage errors
-    }
+    setInstalledStorageFlag(true);
     return true;
   }
 
@@ -492,11 +509,7 @@ export function isPwaInstalledImpl(app: AppViewContext): boolean {
 
 export function markPwaInstalledImpl(app: AppViewContext): void {
   app.pwaInstalledDetected = true;
-  try {
-    window.localStorage.setItem(PWA_INSTALLED_STORAGE_KEY, '1');
-  } catch {
-    // Ignore storage errors
-  }
+  setInstalledStorageFlag(true);
   app.syncInstallUiVisibility();
 }
 
@@ -504,26 +517,17 @@ export function syncInstallUiVisibilityImpl(app: AppViewContext): void {
   const installed = app.isPwaInstalled();
   const headerInstallBtn = document.getElementById('btn-install-header');
   const titleInstallBtn = document.getElementById('btn-title-install');
-  if (headerInstallBtn) headerInstallBtn.hidden = installed;
+  const pauseInstallBtn = document.getElementById('btn-pause-install');
+  if (headerInstallBtn) {
+    headerInstallBtn.hidden = installed || !app.deferredInstallPrompt;
+  }
   if (titleInstallBtn) titleInstallBtn.hidden = installed;
+  if (pauseInstallBtn) pauseInstallBtn.hidden = installed;
 }
 
 export async function handleInstallActionImpl(app: AppViewContext): Promise<void> {
   app.sound.playButtonTap();
-  if (app.deferredInstallPrompt) {
-    try {
-      await app.deferredInstallPrompt.prompt();
-      const choice = await app.deferredInstallPrompt.userChoice;
-      app.deferredInstallPrompt = null;
-      if (choice.outcome === 'accepted') {
-        app.markPwaInstalled();
-        app.closeAllModals();
-      }
-      return;
-    } catch {
-      // Fall through to install guide modal
-    }
-  }
+  if ((await promptNativeInstall(app)) === 'handled') return;
   app.openModal('install');
 }
 
@@ -683,6 +687,8 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     e.preventDefault();
     app.deferredInstallPrompt = e as BeforeInstallPromptEvent;
+    app.pwaInstalledDetected = false;
+    setInstalledStorageFlag(false);
     app.syncInstallUiVisibility();
   });
 

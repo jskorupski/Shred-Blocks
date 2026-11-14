@@ -552,6 +552,10 @@ legend.pause-section-label {
   grid-column: 1 / -1;
 }
 
+.pause-utility-grid > #btn-pause-save-transfer:has(+ #btn-pause-install[hidden]) {
+  grid-column: 1 / -1;
+}
+
 .btn-blessing {
   background: linear-gradient(180deg var(--in-oklab), #237a64 0%, #175445 100%);
   color: #ecfdf5;

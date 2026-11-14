@@ -167,8 +167,20 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await expect(page.locator('#roadmap-list')).toContainText('ENDLESS ARCHIVE');
     await expect(page.locator('#roadmap-list .level-node-card.current-level')).toContainText('STAGE #2501');
 
-    // Verify Map active tab (#tab-btn-home.active) & Home Install button (#btn-install-header) match Title colors!
+    // #btn-install-header stays hidden until beforeinstallprompt proves 1-tap native install (clearing stale storage)
     const homeTabMapStyle = await getButtonPalette('#tab-btn-home.active');
+    await expect(page.locator('#btn-install-header')).toBeHidden();
+    const clearedInstallKey = await page.evaluate(() => {
+      window.localStorage.setItem('shredblocks_pwa_installed_v1', '1');
+      const ev = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+        prompt: async () => {},
+        userChoice: Promise.resolve({ outcome: 'dismissed', platform: 'web' }),
+      });
+      window.dispatchEvent(ev);
+      return window.localStorage.getItem('shredblocks_pwa_installed_v1');
+    });
+    expect(clearedInstallKey).toBeNull();
+    await expect(page.locator('#btn-install-header')).toBeVisible();
     const homeInstallStyle = await getButtonPalette('#btn-install-header');
     const homeJumpGoStyle = await getButtonPalette('#btn-level-jump');
     expect(homeTabMapStyle).toEqual(titleMapStyle);
@@ -203,6 +215,25 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     const pauseInstallStyle = await getButtonPalette('#btn-pause-install');
     expect(pauseMapStyle).toEqual(titleMapStyle);
     expect(pauseInstallStyle).toEqual(titleInstallStyle);
+
+    // Installing via appinstalled hides all Install entry points and expands Backup & Sync Save to full grid width
+    await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+    await page.locator('#btn-pause').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+    const installedUi = await page.evaluate(() => {
+      const saveBtn = document.getElementById('btn-pause-save-transfer')?.getBoundingClientRect();
+      const grid = document.querySelector<HTMLElement>('.pause-utility-grid')?.getBoundingClientRect();
+      return {
+        headerHidden: document.getElementById('btn-install-header')?.hidden,
+        titleHidden: document.getElementById('btn-title-install')?.hidden,
+        pauseHidden: document.getElementById('btn-pause-install')?.hidden,
+        saveWidthDeltaPx: saveBtn && grid ? Math.abs(Math.round(saveBtn.width - grid.width)) : 999,
+      };
+    });
+    expect(installedUi.headerHidden).toBe(true);
+    expect(installedUi.titleHidden).toBe(true);
+    expect(installedUi.pauseHidden).toBe(true);
+    expect(installedUi.saveWidthDeltaPx).toBeLessThanOrEqual(2);
 
     expect(errors).toEqual([]);
   });
