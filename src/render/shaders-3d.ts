@@ -409,36 +409,38 @@ void main() {
     specPower = 9.0;
     specStrength = 0.015;
   } else if (u_materialStyle == 3) {
-    // neon_cyber (NEON-CYBER-01): glossy black-glass/chrome shell reflecting a cool sky gradient, bright
-    // self-lit neon edges in the block color, and glowing circuit traces + pads on top that pulse in time
-    // (static under Reduced Motion). Emissive is added after lighting so it stays vivid.
+    // neon_cyber (NEON-CYBER-01): dark hue-tinted obsidian glass, pure-wavelength neon bevels/rims, and PCB traces
     vec3 lpN = v_localPos;
     float isTop3 = smoothstep(0.86, 0.96, N.z) * step(0.45, lpN.z);
-    float hcMul = u_highContrast == 1 ? 0.55 : 1.0;
-    vec3 neonCol = min(vec3(1.0), base * 1.3 + 0.1);
+    float hc3 = float(u_highContrast);
+    float peakC = max(base.r, max(base.g, base.b));
+    vec3 unitHue = base / max(peakC, 1e-4);
+    float isWarm = step(0.85, unitHue.r) * (1.0 - step(0.22, unitHue.b));
+    float canaryLift = smoothstep(0.70, 0.82, unitHue.g) * isWarm;
+    float orangeDeep = smoothstep(0.35, 0.45, unitHue.g) * (1.0 - smoothstep(0.56, 0.69, unitHue.g)) * isWarm;
+    vec3 sharpHue = clamp(pow(unitHue, vec3(1.26, 1.12, 1.30)) + vec3(-canaryLift * 0.02, canaryLift * 0.20 - orangeDeep * 0.03, canaryLift * 0.02 - orangeDeep * 0.03), 0.0, 1.0);
+    vec3 neonCol = sharpHue * clamp(peakC * 1.10, 0.68, 1.0);
     vec3 R = reflect(-V, N);
     float sky = smoothstep(-0.2, 0.95, R.y * 0.55 + R.z * 0.45);
-    vec3 env = mix(vec3(0.02, 0.015, 0.06), vec3(0.62, 0.7, 1.0), sky) + base * 0.3 * sky;
-    float coreMul = u_highContrast == 1 ? 0.35 : 0.12;
-    base = base * coreMul + vec3(0.012, 0.015, 0.028) + env * 0.42;
-    float bevelEdge = (1.0 - smoothstep(0.8, 0.95, N.z)) * smoothstep(0.12, 0.4, N.z);
+    float coreMul = mix(0.165, 0.215, hc3);
+    base = vec3(0.011, 0.012, 0.020) + neonCol * (coreMul + sky * 0.042);
+    float bevelEdge = (1.0 - smoothstep(0.8, 0.95, N.z)) * smoothstep(0.08, 0.38, N.z);
+    float sideGlow = (1.0 - smoothstep(0.05, 0.30, abs(N.z))) * smoothstep(0.06, 0.52, lpN.z) * 0.28;
+    float outerRim = pow(clamp(v_uv.x, 0.0, 1.0), 2.85) * isTop3 * mix(0.52, 0.40, hc3);
     vec2 gq = lpN.xy * 4.0;
-    vec2 gc = floor(gq);
-    vec2 gf = fract(gq) - 0.5;
-    vec2 gh = hashRelic22(gc + 9.0);
-    float lineD = mix(abs(gf.x), abs(gf.y), step(0.5, gh.x));
-    float traceAA = fwidth(gq.x) * 1.5;
-    float trace = (1.0 - smoothstep(0.045, 0.045 + traceAA, lineD)) * step(0.35, gh.y);
-    float pad = (1.0 - smoothstep(0.11, 0.11 + traceAA, length(gf))) * step(0.82, gh.y);
+    vec2 gf = fract(gq) - 0.5, gh = hashRelic22(floor(gq) + 9.0);
+    float lineD = mix(abs(gf.x), abs(gf.y), step(0.5, gh.x)), padD = length(gf), traceAA = fwidth(gq.x) * 1.5;
+    float trace = (1.0 - smoothstep(0.048, 0.048 + traceAA, lineD)) * step(0.35, gh.y);
+    float pad = (1.0 - smoothstep(0.115, 0.115 + traceAA, padD)) * step(0.82, gh.y);
+    float halo = (exp(-lineD * 13.0) * step(0.35, gh.y) * 0.24 + exp(-padD * 10.0) * step(0.82, gh.y) * 0.22) * isTop3;
     float tN = max(u_boardInfo.z, 0.0) * step(0.0, u_boardInfo.z);
-    float pulse = 0.55 + 0.45 * smoothstep(0.72, 1.0, fract(lpN.x * 0.35 + lpN.y * 0.2 - tN * 0.45));
+    float pulse = 0.64 + 0.36 * smoothstep(0.70, 1.0, fract(lpN.x * 0.35 + lpN.y * 0.2 - tN * 0.45));
     float circuit = clamp(trace + pad, 0.0, 1.0) * isTop3;
-    // Polished glass sheen: a soft diagonal reflection streak sweeping across top faces
-    float sheenBand = 1.0 - smoothstep(0.0, 0.16, abs(fract((v_worldPos.x + v_worldPos.y) * 0.16 + 0.1) - 0.5));
-    base += vec3(0.75, 0.82, 1.0) * sheenBand * isTop3 * 0.22 * hcMul + vec3(0.6, 0.7, 1.0) * rim * 0.25;
-    emissive = neonCol * (bevelEdge * 0.95 + circuit * 0.85 * pulse * hcMul);
-    specPower = 96.0;
-    specStrength = 0.85;
+    float sheenBand = 1.0 - smoothstep(0.0, 0.15, abs(fract((v_worldPos.x + v_worldPos.y) * 0.16 + 0.1) - 0.5));
+    base += mix(neonCol, vec3(0.94, 0.97, 1.0), 0.35) * (sheenBand * isTop3 * mix(0.075, 0.045, hc3) + rim * 0.12);
+    emissive = neonCol * (bevelEdge * 1.08 + outerRim + sideGlow + halo * pulse * mix(1.0, 0.72, hc3)) + mix(neonCol, min(vec3(1.0), neonCol * 1.08 + 0.14), 0.25) * (circuit * 1.02 * pulse * mix(1.0, 0.76, hc3));
+    specPower = 104.0;
+    specStrength = 0.48;
   } else if (u_materialStyle == 5 || u_materialStyle == 7) {
     // Board Tray surfaces (TRAY-IDENTITY-01): 5 = floor tiles, 7 = walls / plinth / pillars
     if (u_trayMaterial == 0) {
@@ -467,7 +469,7 @@ void main() {
     (u_materialStyle != 6 && v_localPos.z > 0.565 && N.z < 0.96 && N.z > 0.05) ? (0.16 * max(dot(N, L1), -0.35)) : 0.0;
   vec3 lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim) + emissive;
 
-  if (u_highContrast == 1) {
+  if (u_highContrast == 1 && u_materialStyle != 3) {
     // Crisp high-contrast 3D bevel edge contour (dark bevel on bright pieces, luminous rim on deep jewel pieces)
     float edgeBevel = smoothstep(0.58, 0.16, abs(N.z));
     float pieceLinLum = dot(lit * lit, vec3(0.2126, 0.7152, 0.0722));
@@ -479,11 +481,8 @@ void main() {
   float blueprintAlpha = 1.0;
 
   if (u_blueprintMix > 0.001) {
-    // Satin Astrolabe Slate / Anodized Gunmetal Title Mode (STONE-TABLET-01 / MYSTIC-RELIC-01):
-    // Encases the 3D board & tactile studs in a 100% solid (alpha = 1.0) monochromatic satin twilight-slate
-    // & anodized gunmetal stasis shell (subtle theme tint via u_stoneTint, zero dirt or pitting) with brushed
-    // anisotropic sheen, burnished champagne-gold & ivory-pearl rim catch-lights matching the logo/astrolabe,
-    // and living Voronoi energy fractures that shatter open into full gameplay color as u_blueprintMix -> 0.
+    // Satin Astrolabe Title Mode (STONE-TABLET-01 / MYSTIC-RELIC-01): 100% opaque (alpha = 1.0) anodized gunmetal
+    // stasis shell (u_stoneTint) with brushed satin sheen, champagne-gold/ivory-pearl rims, and Voronoi fractures.
     float isSunkenRoom = smoothstep(-0.02, -0.10, v_worldPos.z);
     vec3 restoredRgb = clamp(u_color.rgb / mix(1.0, 0.58, isSunkenRoom), 0.0, 1.0);
     float maxC = max(restoredRgb.r, max(restoredRgb.g, restoredRgb.b));

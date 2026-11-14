@@ -445,10 +445,7 @@ export function getToneOnToneGlyphRgb(
 ): [number, number, number] {
   const entry = COLOR_PALETTE[colorId] ?? COLOR_PALETTE[0];
   if (isNeonCyber && colorId >= 1) {
-    if (!highContrast || colorId === 1 || colorId === 2 || colorId === 5 || colorId === 8 || colorId === 9) {
-      return entry.cbNeonGlyphRgb;
-    }
-    return entry.cbHcGlyphRgb;
+    return entry.cbNeonGlyphRgb;
   }
   return highContrast ? entry.cbHcGlyphRgb : entry.cbGlyphRgb;
 }

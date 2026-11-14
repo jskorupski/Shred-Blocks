@@ -688,6 +688,7 @@ export const POLYOMINO_MESH_CATALOG: Record<string, PolyominoMeshEntry> = (() =>
       bevelZ: 0.055,
       recessedInnerCavity: true,
       withStuds: false,
+      encodeEdgeWearUv: true,
     });
 
     const meshInnerCore = buildMorphologicalPolyominoMesh(shape, CORE_INSET, {
@@ -697,6 +698,7 @@ export const POLYOMINO_MESH_CATALOG: Record<string, PolyominoMeshEntry> = (() =>
       bevelZ: 0.032,
       recessedInnerCavity: false,
       withStuds: false,
+      encodeEdgeWearUv: true,
     });
 
     const meshOuterStudded = buildMorphologicalPolyominoMesh(shape, STD_INSET, {
