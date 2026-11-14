@@ -12,7 +12,19 @@ import {
   VIEWPORT_PRESETS,
 } from '../../scripts/lib/agent-harness';
 import { formatProbeHelp, PROBE_SCENES, parseProbeCliArgs } from '../../scripts/ui-probe';
-import { SINGLE_BUNDLE_WARNING_LIMIT_KB } from '../../vite.config';
+import {
+  CF_BEACON_SCRIPT_ID,
+  GA4_SCRIPT_ID,
+  injectAnalyticsScriptsNow,
+  normalizeCfBeaconToken,
+  normalizeGaMeasurementId,
+  scheduleIdleAnalyticsInit,
+} from '../../src/ui/telemetry-analytics';
+import {
+  buildIndexHtmlCsp,
+  resolveAnalyticsBuildOptions,
+  SINGLE_BUNDLE_WARNING_LIMIT_KB,
+} from '../../vite.config';
 
 describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNESS-01)', () => {
   it('AGENT-HARNESS-01: parses quick, matrix, named preset, and custom WxH viewport specs', () => {
@@ -194,5 +206,202 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     expect(viteConfigText).toContain('chunkSizeWarningLimit: SINGLE_BUNDLE_WARNING_LIMIT_KB');
     expect(agentsMdText).toContain('BUNDLE-BUDGET-01');
     expect(playbook).toContain('BUNDLE-BUDGET-01');
+  });
+
+  it('ANALYTICS-01: keeps forks tracker-free by default, stamps strict non-inline CSP when configured, and isolates offline/busy/blocker states', () => {
+    const repoRoot = path.resolve(process.cwd());
+    const baseHtml = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+    const swJs = fs.readFileSync(path.join(repoRoot, 'public', 'sw.js'), 'utf8');
+    expect(swJs).toContain("url.pathname.startsWith('/cdn-cgi/')");
+
+    // 1. Strict ID/token validation rejects empty or hostile injection strings
+    expect(normalizeGaMeasurementId(undefined)).toBe('');
+    expect(normalizeGaMeasurementId('  g-ab12cd34ef  ')).toBe('G-AB12CD34EF');
+    expect(normalizeGaMeasurementId('UA-12345-1')).toBe('');
+    expect(normalizeGaMeasurementId('G-123"><script>alert(1)</script>')).toBe('');
+
+    expect(normalizeCfBeaconToken(undefined)).toBe('');
+    expect(normalizeCfBeaconToken('0123456789ABCDEF0123456789abcdef')).toBe(
+      '0123456789abcdef0123456789abcdef'
+    );
+    expect(normalizeCfBeaconToken('not-a-hex-token')).toBe('');
+
+    // 2. Default fork/dev build options keep CSP 100% unchanged ('self' only)
+    const defaultOpts = resolveAnalyticsBuildOptions({});
+    expect(defaultOpts).toEqual({ gaId: '', cfToken: '', enableCfAnalytics: false });
+    expect(buildIndexHtmlCsp(baseHtml, defaultOpts)).toBe(baseHtml);
+
+    // 3. Setting VITE_GA_MEASUREMENT_ID enables both GA4 + Cloudflare Web Analytics CSP without 'unsafe-inline' in script-src
+    const bothOpts = resolveAnalyticsBuildOptions({ VITE_GA_MEASUREMENT_ID: 'G-TEST998877' });
+    expect(bothOpts).toEqual({ gaId: 'G-TEST998877', cfToken: '', enableCfAnalytics: true });
+    const bothHtml = buildIndexHtmlCsp(baseHtml, bothOpts);
+    expect(bothHtml).toContain(
+      "script-src 'self' https://www.googletagmanager.com https://static.cloudflareinsights.com;"
+    );
+    expect(bothHtml).toContain('https://*.google-analytics.com');
+    expect(bothHtml).toContain('https://cloudflareinsights.com');
+    const scriptSrcMatch = bothHtml.match(/script-src[^;]+/);
+    expect(scriptSrcMatch?.[0]).not.toContain('unsafe-inline');
+    expect(scriptSrcMatch?.[0]).not.toContain('unsafe-eval');
+
+    // Explicit VITE_CF_WEB_ANALYTICS=false keeps only GA4 origins
+    const gaOnlyOpts = resolveAnalyticsBuildOptions({
+      VITE_GA_MEASUREMENT_ID: 'G-TEST998877',
+      VITE_CF_WEB_ANALYTICS: 'false',
+    });
+    expect(gaOnlyOpts.enableCfAnalytics).toBe(false);
+    expect(buildIndexHtmlCsp(baseHtml, gaOnlyOpts)).not.toContain('cloudflareinsights.com');
+
+    // 4. Runtime DOM injection: genuine IArguments dataLayer, privacy flags, duplicate guard, and onerror cleanup
+    interface MockScript {
+      id: string;
+      async: boolean;
+      src: string;
+      fetchPriority: string;
+      attrs: Record<string, string>;
+      removed: boolean;
+      onerror: (() => void) | null;
+      setAttribute(k: string, v: string): void;
+      remove(): void;
+    }
+    const appendedScripts: MockScript[] = [];
+    let existingEdgeCf: object | null = null;
+    const prevWindow = (globalThis as { window?: unknown }).window;
+    const prevDocument = (globalThis as { document?: unknown }).document;
+    const prevNavigator = (globalThis as { navigator?: unknown }).navigator;
+
+    const onlineListeners: Array<() => void> = [];
+    const scheduledTimers: Array<() => void> = [];
+    let mockOnline = false;
+
+    const mockWin: Record<string, unknown> = {
+      addEventListener: (ev: string, cb: () => void) => {
+        if (ev === 'online') onlineListeners.push(cb);
+      },
+      setTimeout: (cb: () => void) => {
+        scheduledTimers.push(cb);
+        return scheduledTimers.length;
+      },
+      requestIdleCallback: (cb: () => void) => {
+        cb();
+        return 1;
+      },
+    };
+
+    const mockDoc = {
+      readyState: 'complete',
+      head: {
+        appendChild: (el: MockScript) => {
+          appendedScripts.push(el);
+          return el;
+        },
+      },
+      getElementById: (id: string) => appendedScripts.find((s) => s.id === id && !s.removed) ?? null,
+      querySelector: (sel: string) => (sel.includes('cloudflareinsights.com/beacon') ? existingEdgeCf : null),
+      createElement: () => {
+        const s: MockScript = {
+          id: '',
+          async: false,
+          src: '',
+          fetchPriority: 'auto',
+          attrs: {},
+          removed: false,
+          onerror: null,
+          setAttribute(k: string, v: string) {
+            this.attrs[k] = v;
+          },
+          remove() {
+            this.removed = true;
+          },
+        };
+        return s;
+      },
+    };
+
+    Object.defineProperty(globalThis, 'window', { value: mockWin, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'document', { value: mockDoc, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'navigator', {
+      get: () => ({ onLine: mockOnline }),
+      configurable: true,
+    });
+
+    try {
+      // Offline + busy gating: zero scripts injected while offline, defers while busy, injects once online & idle
+      let busy = true;
+      scheduleIdleAnalyticsInit(() => busy, {
+        gaId: 'G-TEST998877',
+        cfBeaconToken: '0123456789abcdef0123456789abcdef',
+      });
+      expect(scheduledTimers).toHaveLength(1);
+      scheduledTimers.shift()?.(); // runs while mockOnline === false
+      expect(appendedScripts).toHaveLength(0);
+      expect(onlineListeners).toHaveLength(1);
+
+      // Reconnect online while player is actively dragging (busy === true) -> yields without injecting
+      mockOnline = true;
+      onlineListeners.shift()?.();
+      expect(scheduledTimers).toHaveLength(1);
+      scheduledTimers.shift()?.(); // busy === true -> re-schedules
+      expect(appendedScripts).toHaveLength(0);
+      expect(scheduledTimers).toHaveLength(1);
+
+      // Drag ends (busy === false), Cloudflare already edge-injected beacon -> injects GA4 only (no duplicate CF)
+      busy = false;
+      existingEdgeCf = { edgeInjected: true };
+      scheduledTimers.shift()?.();
+      expect(appendedScripts).toHaveLength(1);
+      expect(appendedScripts[0]?.id).toBe(GA4_SCRIPT_ID);
+      expect(appendedScripts[0]?.async).toBe(true);
+      expect(appendedScripts[0]?.fetchPriority).toBe('low');
+
+      const dl = mockWin.dataLayer as IArguments[];
+      expect(dl).toHaveLength(2);
+      expect(Object.prototype.toString.call(dl[0])).toBe('[object Arguments]');
+      expect(dl[1]?.[0]).toBe('config');
+      expect(dl[1]?.[1]).toBe('G-TEST998877');
+      expect(dl[1]?.[2]).toEqual({
+        send_page_view: true,
+        allow_google_signals: false,
+        allow_ad_personalization_signals: false,
+      });
+
+      // Ad-blocker / offline error handler cleans up the script element silently without throwing
+      appendedScripts[0]?.onerror?.();
+      expect(appendedScripts[0]?.removed).toBe(true);
+
+      // Manual CF beacon token injects when no edge script is present, and survives throwing appendChild
+      existingEdgeCf = null;
+      const cfRes = injectAnalyticsScriptsNow({
+        gaId: '',
+        cfBeaconToken: 'fedcba9876543210fedcba9876543210',
+      });
+      expect(cfRes).toEqual({ gaInjected: false, cfInjected: true });
+      expect(appendedScripts[1]?.id).toBe(CF_BEACON_SCRIPT_ID);
+      expect(appendedScripts[1]?.attrs['data-cf-beacon']).toBe(
+        '{"token":"fedcba9876543210fedcba9876543210"}'
+      );
+
+      mockDoc.head.appendChild = () => {
+        throw new Error('Simulated CSP or DOM error');
+      };
+      expect(() => injectAnalyticsScriptsNow({ gaId: 'G-CRASHPROOF1', cfBeaconToken: '' })).not.toThrow();
+    } finally {
+      if (prevWindow === undefined) delete (globalThis as { window?: unknown }).window;
+      else
+        Object.defineProperty(globalThis, 'window', {
+          value: prevWindow,
+          configurable: true,
+          writable: true,
+        });
+      if (prevDocument === undefined) delete (globalThis as { document?: unknown }).document;
+      else
+        Object.defineProperty(globalThis, 'document', {
+          value: prevDocument,
+          configurable: true,
+          writable: true,
+        });
+      if (prevNavigator === undefined) delete (globalThis as { navigator?: unknown }).navigator;
+      else Object.defineProperty(globalThis, 'navigator', { value: prevNavigator, configurable: true });
+    }
   });
 });

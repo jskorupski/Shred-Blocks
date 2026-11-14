@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { normalizeCfBeaconToken, normalizeGaMeasurementId } from './src/ui/telemetry-analytics';
 
 /**
  * Automatically stamps a deterministic SHA-256 build hash and hashed bundle asset list
@@ -112,30 +113,116 @@ export const FRAME_GUARD_HEADERS = {
  */
 export const SINGLE_BUNDLE_WARNING_LIMIT_KB = 1000;
 
-export default defineConfig({
-  base: '/',
-  define: {
-    __SHREDBLOCKS_LAN_DEVTOOLS__: 'false',
-  },
-  plugins: [pwaAutoVersionPlugin()],
-  build: {
-    target: 'es2022',
-    outDir: 'dist',
-    assetsDir: 'assets',
-    sourcemap: false,
-    minify: 'esbuild',
-    chunkSizeWarningLimit: SINGLE_BUNDLE_WARNING_LIMIT_KB,
-  },
-  server: {
-    host: '127.0.0.1',
-    port: 4173,
-    strictPort: true,
-    headers: FRAME_GUARD_HEADERS,
-  },
-  preview: {
-    host: '127.0.0.1',
-    port: 4173,
-    strictPort: true,
-    headers: FRAME_GUARD_HEADERS,
-  },
+export interface AnalyticsBuildOptions {
+  gaId: string;
+  cfToken: string;
+  enableCfAnalytics: boolean;
+}
+
+/**
+ * Resolves optional build-time analytics env vars (`ANALYTICS-01`).
+ * Defaults to 100% disabled for forks, local dev, and CI unless explicitly configured.
+ */
+export function resolveAnalyticsBuildOptions(env: Record<string, string | undefined>): AnalyticsBuildOptions {
+  const gaId = normalizeGaMeasurementId(env.VITE_GA_MEASUREMENT_ID);
+  const cfToken = normalizeCfBeaconToken(env.VITE_CF_BEACON_TOKEN);
+  const rawCfFlag = (env.VITE_CF_WEB_ANALYTICS ?? '').trim().toLowerCase();
+  const explicitlyDisabled = rawCfFlag === 'false' || rawCfFlag === '0';
+  const explicitlyEnabled = rawCfFlag === 'true' || rawCfFlag === '1';
+  const enableCfAnalytics = !explicitlyDisabled && (explicitlyEnabled || Boolean(cfToken) || Boolean(gaId));
+  return { gaId, cfToken, enableCfAnalytics };
+}
+
+/**
+ * Conditionally widens `<meta http-equiv="Content-Security-Policy">` in `index.html` ONLY when
+ * optional analytics are enabled at build time—never permitting `'unsafe-inline'` or `'unsafe-eval'`
+ * in `script-src` (`SAVE-SEC-01`).
+ */
+export function buildIndexHtmlCsp(
+  html: string,
+  opts: Pick<AnalyticsBuildOptions, 'gaId' | 'enableCfAnalytics'>
+): string {
+  const gaId = normalizeGaMeasurementId(opts.gaId);
+  if (!gaId && !opts.enableCfAnalytics) return html;
+
+  const scriptExtras: string[] = [];
+  const connectExtras: string[] = [];
+  const imgExtras: string[] = [];
+
+  if (gaId) {
+    scriptExtras.push('https://www.googletagmanager.com');
+    connectExtras.push(
+      'https://*.google-analytics.com',
+      'https://*.analytics.google.com',
+      'https://www.googletagmanager.com'
+    );
+    imgExtras.push('https://*.google-analytics.com', 'https://www.googletagmanager.com');
+  }
+  if (opts.enableCfAnalytics) {
+    scriptExtras.push('https://static.cloudflareinsights.com');
+    connectExtras.push('https://cloudflareinsights.com', 'https://*.cloudflareinsights.com');
+  }
+
+  let updated = html;
+  if (scriptExtras.length > 0) {
+    updated = updated.replace("script-src 'self'", `script-src 'self' ${scriptExtras.join(' ')}`);
+  }
+  if (connectExtras.length > 0) {
+    updated = updated.replace("connect-src 'self'", `connect-src 'self' ${connectExtras.join(' ')}`);
+  }
+  if (imgExtras.length > 0) {
+    updated = updated.replace(
+      "img-src 'self' data: blob:",
+      `img-src 'self' data: blob: ${imgExtras.join(' ')}`
+    );
+  }
+  return updated;
+}
+
+function analyticsCspPlugin(opts: Pick<AnalyticsBuildOptions, 'gaId' | 'enableCfAnalytics'>): Plugin {
+  return {
+    name: 'shredblocks-analytics-csp',
+    transformIndexHtml(html) {
+      return buildIndexHtmlCsp(html, opts);
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const fileEnv = loadEnv(mode, process.cwd(), 'VITE_');
+  const analytics = resolveAnalyticsBuildOptions({
+    VITE_GA_MEASUREMENT_ID: process.env.VITE_GA_MEASUREMENT_ID ?? fileEnv.VITE_GA_MEASUREMENT_ID,
+    VITE_CF_BEACON_TOKEN: process.env.VITE_CF_BEACON_TOKEN ?? fileEnv.VITE_CF_BEACON_TOKEN,
+    VITE_CF_WEB_ANALYTICS: process.env.VITE_CF_WEB_ANALYTICS ?? fileEnv.VITE_CF_WEB_ANALYTICS,
+  });
+
+  return {
+    base: '/',
+    define: {
+      __SHREDBLOCKS_LAN_DEVTOOLS__: 'false',
+      __SHREDBLOCKS_GA_ID__: JSON.stringify(analytics.gaId),
+      __SHREDBLOCKS_CF_TOKEN__: JSON.stringify(analytics.cfToken),
+    },
+    plugins: [analyticsCspPlugin(analytics), pwaAutoVersionPlugin()],
+    build: {
+      target: 'es2022',
+      outDir: 'dist',
+      assetsDir: 'assets',
+      sourcemap: false,
+      minify: 'esbuild',
+      chunkSizeWarningLimit: SINGLE_BUNDLE_WARNING_LIMIT_KB,
+    },
+    server: {
+      host: '127.0.0.1',
+      port: 4173,
+      strictPort: true,
+      headers: FRAME_GUARD_HEADERS,
+    },
+    preview: {
+      host: '127.0.0.1',
+      port: 4173,
+      strictPort: true,
+      headers: FRAME_GUARD_HEADERS,
+    },
+  };
 });

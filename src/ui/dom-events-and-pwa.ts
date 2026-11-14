@@ -724,7 +724,10 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
   };
 
   if ('serviceWorker' in navigator) {
+    let swRegistered = false;
     const registerSw = () => {
+      if (swRegistered) return;
+      swRegistered = true;
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
@@ -753,6 +756,8 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
       registerSw();
     } else {
       window.addEventListener('load', registerSw, { once: true });
+      // Fallback so a hanging edge-injected third-party script can never block SW registration
+      window.setTimeout(registerSw, 1_200);
     }
 
     navigator.serviceWorker.addEventListener('controllerchange', () => {

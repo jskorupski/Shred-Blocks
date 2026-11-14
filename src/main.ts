@@ -78,6 +78,7 @@ import {
   useZenBlessingContinueImpl,
 } from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
+import { scheduleIdleAnalyticsInit } from './ui/telemetry-analytics';
 import { canResumeBoardImpl, resumeOrLoadLevelImpl } from './ui/themes-studio-view';
 import { prewarmVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
 
@@ -291,6 +292,9 @@ export class ShredBlocksApp implements AppViewContext {
 
     this.startAnimationLoop();
     this.scheduleIdleUiPrewarm();
+    scheduleIdleAnalyticsInit(
+      () => this.isPointerDownOnCanvas || performance.now() - this.lastDragFrameMs < 500
+    );
   }
 
   /**

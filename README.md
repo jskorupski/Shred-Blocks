@@ -116,12 +116,14 @@ For contributor workflows and deep-dive subsystem specifications, see [`AGENTS.m
 <summary><strong>Cloudflare Pages / Fork Configuration Notes</strong></summary>
 
 [`wrangler.jsonc`](wrangler.jsonc) and [`public/_headers`](public/_headers) configure security and cache headers for the live deployment at `https://shredblocks.skorupski.org`. If deploying a fork to your own domain, update the canonical URL in [`index.html`](index.html), [`public/robots.txt`](public/robots.txt), [`public/sitemap.xml`](public/sitemap.xml), and [`src/storage/save-manager.ts`](src/storage/save-manager.ts) (and remove `wrangler.jsonc` if using another host).
+
+By default, source and fork builds include **zero external analytics** and lock Content Security Policy strictly to `'self'`. To enable optional, offline-safe aggregate visit tracking on your own deployment, set `VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX` (and/or `VITE_CF_WEB_ANALYTICS=true` or `VITE_CF_BEACON_TOKEN=<32-hex-token>`) in your CI/host build environment variables—[`vite.config.ts`](vite.config.ts) automatically stamps the matching HTTPS origins into CSP at build time without permitting `'unsafe-inline'`, and [`src/ui/telemetry-analytics.ts`](src/ui/telemetry-analytics.ts) loads them during low-priority post-boot idle only when online.
 </details>
 
 ---
 
 ## Privacy & License
 
-- **Zero Telemetry**: No analytics, no tracking scripts, no third-party cookies, and no external network requests.
-- **Local Ownership**: Save data stays on your device and can be exported or backed up anytime.
+- **Analytics & Zero Monetization**: ShredBlocks has zero ads, zero in-app purchases, and zero monetization. The hosted deployment at `shredblocks.skorupski.org` uses Cloudflare Web Analytics and Google Analytics (with Google Signals and ad personalization disabled) for basic page-visit and general usage metrics, loaded asynchronously so offline play and content blockers are never affected. Self-hosted and fork builds ship with analytics disabled by default unless opted in at build time.
+- **Local Save Ownership**: Player progress and save data stay 100% local on your device and can be exported or backed up anytime without an account.
 - **License**: [MIT License](LICENSE).

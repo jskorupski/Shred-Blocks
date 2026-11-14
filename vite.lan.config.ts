@@ -51,6 +51,8 @@ export default defineConfig({
   base: '/',
   define: {
     __SHREDBLOCKS_LAN_DEVTOOLS__: 'true',
+    __SHREDBLOCKS_GA_ID__: '""',
+    __SHREDBLOCKS_CF_TOKEN__: '""',
   },
   server: {
     host: '0.0.0.0',
