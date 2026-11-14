@@ -219,6 +219,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
     equippedParticle: save.equippedParticle,
   });
   app.renderer.setQualityPreference(save.settings.qualityTier);
+  app.requestModalBackdropRefresh?.();
 
   document.body.classList.toggle('high-contrast', Boolean(save.settings.highContrast));
   document.body.classList.toggle('colorblind-mode', Boolean(save.settings.colorblindSymbols));

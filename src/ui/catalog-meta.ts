@@ -348,6 +348,7 @@ export interface AppViewContext {
   syncInGameHud(): void;
   syncTimerPillOnly(): void;
   syncTitleOverlayDom(): void;
+  requestModalBackdropRefresh?(): void;
   syncBoosterTargetingBanner(hoverState: HoverState): void;
   syncInstallUiVisibility(): void;
   syncViewportGeometry(): void;

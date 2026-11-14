@@ -4,7 +4,6 @@ import {
   type CommitMoveOutcome,
   cloneBoardState,
   commitBlockMove,
-  computeEarnedStars,
   createBoardState,
   isBoardFailed,
   isBoardWon,
@@ -19,6 +18,7 @@ import {
 } from './input/pointer-controller';
 import { getLevelSpec } from './levels/catalog';
 import { findNextHintMove } from './levels/solver';
+import { hasActiveVisualFxImpl } from './render/particle-fx';
 import { Renderer3D } from './render/renderer-3d';
 import { canSkipZenLevel, SaveManager } from './storage/save-manager';
 import { activateBoosterImpl, executeTargetedBoosterImpl } from './ui/boosters-controller';
@@ -76,12 +76,12 @@ import {
 } from './ui/modals-and-save-transfer';
 import {
   handleLevelFailureImpl,
+  handleLevelVictoryImpl,
   notifyFinalTouchImpl,
-  populateVictoryModalImpl,
   scheduleStuckBoardCheckImpl,
 } from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
-import { prewarmVictoryModalFx, startVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
+import { prewarmVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
 
 export * from './ui/catalog-meta';
 
@@ -116,6 +116,8 @@ export class ShredBlocksApp implements AppViewContext {
   public bombTickAccumulatorSec = 0;
   public frozenTimeSec: number | null = null;
   private lastRafMs = performance.now();
+  private modalSettleFrames = 0;
+  private lastTelemetryUpdateMs = 0;
   public toastTimerId: ReturnType<typeof setTimeout> | null = null;
   public unlockToastTimerId: ReturnType<typeof setTimeout> | null = null;
   public cachedAutoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null = null;
@@ -210,16 +212,22 @@ export class ShredBlocksApp implements AppViewContext {
       onHoverChanged: (hoverState) => {
         this.lastPointerActivityMs = performance.now();
         this.syncBoosterTargetingBanner(hoverState);
-        this.renderNow();
+        if (this.frozenTimeSec !== null) {
+          this.renderNow(0, this.frozenTimeSec);
+        }
       },
       onDragFrame: () => {
         this.lastPointerActivityMs = performance.now();
-        this.renderNow();
+        if (this.frozenTimeSec !== null) {
+          this.renderNow(0, this.frozenTimeSec);
+        }
       },
       onBoardChanged: () => {
         this.lastPointerActivityMs = performance.now();
         this.syncInGameHud();
-        this.renderNow();
+        if (this.frozenTimeSec !== null) {
+          this.renderNow(0, this.frozenTimeSec);
+        }
       },
     });
 
@@ -524,39 +532,7 @@ export class ShredBlocksApp implements AppViewContext {
   }
 
   private handleLevelVictory(): void {
-    const playMode = this.saveManager.getPayload().settings.playMode;
-    const zenClear = playMode === 'ZEN' || this.runTouchedZen;
-    const pureBoosterFreeRun =
-      !zenClear && (this.board.powerUpsUsed ?? 0) === 0 && (this.board.continuesUsed ?? 0) === 0;
-    const earnedStars = computeEarnedStars(this.board, playMode, this.runTouchedZen);
-    this.sound.playWinFanfare(earnedStars);
-    this.renderer.spawnVictoryCelebrationBurst(this.board);
-    const elapsedSec = Math.max(1, Math.round(this.board.timeLimitSec - this.board.timeRemainingSec));
-    const summary = this.saveManager.recordLevelWin(
-      this.board.levelId,
-      this.board.movesCommitted,
-      elapsedSec,
-      Math.max(1, this.board.sessionBlocksShredded),
-      earnedStars,
-      this.board.parMoves,
-      this.board.difficulty,
-      zenClear,
-      pureBoosterFreeRun
-    );
-    if (summary.underPar) {
-      this.sound.playUnderParOracleChime();
-    }
-
-    populateVictoryModalImpl(this, summary);
-    this.openModal('victory');
-    const postSave = this.saveManager.getPayload();
-    startVictoryModalFx({
-      isUnderPar: Boolean(summary.underPar),
-      earnedStars,
-      equippedParticle: postSave.equippedParticle,
-      reducedMotion: postSave.settings.reducedMotion,
-      frozen: this.frozenTimeSec !== null,
-    });
+    handleLevelVictoryImpl(this, this.frozenTimeSec);
   }
 
   private handleLevelFailure(reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES'): void {
@@ -610,13 +586,44 @@ export class ShredBlocksApp implements AppViewContext {
         return;
       }
 
+      const governor = this.renderer.getQualityGovernor();
+      const canvasVisible = this.activeScreen === 'game' || this.titleOverlayOpen;
+      const modalOpen = this.isAnyModalOpen();
+      const hasVisualFx = canvasVisible && hasActiveVisualFxImpl(this.renderer, this.blueprintMix);
+      const isInteractiveMotion =
+        canvasVisible &&
+        !modalOpen &&
+        (nowMs - this.lastPointerActivityMs < 950 ||
+          hasVisualFx ||
+          (!this.titleOverlayOpen &&
+            this.board.timerRunning &&
+            this.saveManager.getPayload().settings.playMode === 'TIMED'));
+
+      governor.recordRafTick(nowMs, {
+        isInteractiveMotion,
+        isModalOpen: modalOpen,
+        isSuspended: !canvasVisible,
+      });
+
       stepSimulationImpl(this, dtSec);
-      if (this.activeScreen === 'game' || this.titleOverlayOpen) {
-        this.renderNow(dtSec, nowMs * 0.001);
+      const victoryOpen =
+        modalOpen && ((document.getElementById('dialog-victory') as HTMLDialogElement | null)?.open ?? false);
+      const drawDt = governor.consumeRenderStep(nowMs, dtSec, {
+        canvasVisible,
+        modalOpen,
+        victoryOpen,
+        hasVisualFx,
+        forceSettle: this.modalSettleFrames > 0,
+      });
+      if (drawDt > 0) {
+        if (this.modalSettleFrames > 0) this.modalSettleFrames--;
+        this.renderNow(drawDt, nowMs * 0.001);
+        governor.markFrameRendered(nowMs, isInteractiveMotion);
       }
 
       const pauseDialog = document.getElementById('dialog-pause') as HTMLDialogElement | null;
-      if (pauseDialog?.open) {
+      if (pauseDialog?.open && nowMs - this.lastTelemetryUpdateMs >= 200) {
+        this.lastTelemetryUpdateMs = nowMs;
         updateTelemetryReadoutImpl(this);
       }
 
@@ -692,11 +699,17 @@ export class ShredBlocksApp implements AppViewContext {
   public isAnyModalOpen(): boolean {
     return isAnyModalOpenImpl();
   }
+  public requestModalBackdropRefresh(): void {
+    this.modalSettleFrames = Math.max(this.modalSettleFrames, 2);
+  }
   public openModal(id: ModalId): void {
+    this.requestModalBackdropRefresh();
     openModalImpl(this, id);
   }
   public closeAllModals(): void {
     stopVictoryModalFx();
+    this.modalSettleFrames = 0;
+    this.renderer.getQualityGovernor().resetPendingRenderDt();
     closeAllModalsImpl();
   }
   private setupDialogLightDismiss(): void {

@@ -1,11 +1,9 @@
 import {
-  type Benchmark120HzResult,
   type BoardState,
   COLOR_PALETTE,
   type ColorId,
   type InputMode,
   type ParticleStyleId,
-  type PerfTelemetry,
   type QualityTier,
   type RocketAxis,
   type SkinId,
@@ -15,9 +13,16 @@ import type { AtlasTextureData, AtlasUVRegion } from './atlas-3d';
 import type { Camera3D } from './camera-3d';
 import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 import { executeBenchmarkFramesImpl, type PathWaypoint, type VisualPathTrace } from './pass2-drag-fx';
+import { QualityGovernor } from './quality-governor';
 import type { VisualGateBurst } from './shred-style-fx';
 
-export { executeBenchmarkFramesImpl, type PathWaypoint, type VisualGateBurst, type VisualPathTrace };
+export {
+  executeBenchmarkFramesImpl,
+  type PathWaypoint,
+  QualityGovernor,
+  type VisualGateBurst,
+  type VisualPathTrace,
+};
 
 export const MAX_PARTICLES = 2048;
 export const PARTICLE_STRIDE = 15; // x, y, z, vx, vy, vz, r, g, b, scale, age, maxAge, rotAngle, rotSpeed, styleTag
@@ -237,167 +242,6 @@ export interface GLMeshHandle {
   uvBuffer: WebGLBuffer;
   indexBuffer: WebGLBuffer;
   indexCount: number;
-}
-
-/**
- * Two-Tier Adaptive `120fps / 60fps` Quality Governor (`VER-03`).
- * Tracks a 120-frame ring buffer of `workDurationMs = performance.now() - frameStart`
- * (never rAF-to-rAF delta, so 60Hz displays are not misclassified by v-sync intervals).
- */
-export class QualityGovernor {
-  private readonly workRing = new Float32Array(120);
-  private readonly sortedScratch = new Float32Array(120);
-  private writeCursor = 0;
-  private sampleCount = 0;
-  private preferredTier: QualityTier = 'AUTO';
-  private activeTier: 'ULTRA_120' | 'BALANCED_60' = 'ULTRA_120';
-  private backend: 'WEBGPU' | 'WEBGL2' | 'CANVAS2D' = 'WEBGL2';
-  private activeParticles = 0;
-  private dpr = 1;
-  private lastRafTimestamp = 0;
-  private measuredFps = 120;
-  private benchmarkRunner: ((frames: number) => Promise<Benchmark120HzResult>) | null = null;
-
-  public setPreference(tier: QualityTier): void {
-    this.preferredTier = tier;
-    if (tier === 'ULTRA_120') {
-      this.activeTier = 'ULTRA_120';
-    } else if (tier === 'BALANCED_60') {
-      this.activeTier = 'BALANCED_60';
-    }
-  }
-
-  public setBackend(backend: 'WEBGPU' | 'WEBGL2' | 'CANVAS2D'): void {
-    this.backend = backend;
-  }
-
-  public setActiveParticles(count: number): void {
-    this.activeParticles = count;
-  }
-
-  public setDpr(dpr: number): void {
-    this.dpr = dpr;
-  }
-
-  public setBenchmarkRunner(runner: (frames: number) => Promise<Benchmark120HzResult>): void {
-    this.benchmarkRunner = runner;
-  }
-
-  public resetWorkSamples(): void {
-    this.sampleCount = 0;
-    this.writeCursor = 0;
-  }
-
-  public recordFrameWork(workDurationMs: number, nowMs = performance.now()): void {
-    const clampedWork = Math.max(0.01, workDurationMs);
-    this.workRing[this.writeCursor] = clampedWork;
-    this.writeCursor = (this.writeCursor + 1) % 120;
-    if (this.sampleCount < 120) this.sampleCount++;
-
-    if (this.lastRafTimestamp > 0) {
-      const delta = nowMs - this.lastRafTimestamp;
-      if (delta > 1 && delta < 250) {
-        const instFps = 1000 / delta;
-        this.measuredFps = this.measuredFps * 0.9 + instFps * 0.1;
-      }
-    }
-    this.lastRafTimestamp = nowMs;
-
-    if (this.preferredTier === 'AUTO' && this.sampleCount >= 24) {
-      const stats = this.computeStats();
-      if (this.activeTier === 'ULTRA_120' && stats.p95WorkMs > 7.8) {
-        this.activeTier = 'BALANCED_60';
-      } else if (this.activeTier === 'BALANCED_60' && stats.p95WorkMs < 4.8) {
-        this.activeTier = 'ULTRA_120';
-      }
-    } else if (this.preferredTier === 'ULTRA_120') {
-      this.activeTier = 'ULTRA_120';
-    } else if (this.preferredTier === 'BALANCED_60') {
-      this.activeTier = 'BALANCED_60';
-    }
-  }
-
-  public getActiveTier(): 'ULTRA_120' | 'BALANCED_60' {
-    return this.activeTier;
-  }
-
-  public getBurstParticleCount(reducedMotion = false): number {
-    if (reducedMotion) return 14;
-    return this.activeTier === 'ULTRA_120' ? 60 : 36;
-  }
-
-  public getMaxActiveParticles(): number {
-    return this.activeTier === 'ULTRA_120' ? 1024 : 384;
-  }
-
-  public getTargetMaxDpr(): number {
-    return this.activeTier === 'ULTRA_120' ? 2.5 : 1.75;
-  }
-
-  private computeStats(): {
-    avgWorkMs: number;
-    p95WorkMs: number;
-    p99WorkMs: number;
-    maxWorkMs: number;
-  } {
-    const count = this.sampleCount;
-    if (count === 0) {
-      return { avgWorkMs: 0.8, p95WorkMs: 1.2, p99WorkMs: 1.5, maxWorkMs: 1.8 };
-    }
-
-    let sum = 0;
-    let maxWorkMs = 0;
-    for (let i = 0; i < count; i++) {
-      const v = this.workRing[i];
-      sum += v;
-      if (v > maxWorkMs) maxWorkMs = v;
-      this.sortedScratch[i] = v;
-    }
-
-    const sub = this.sortedScratch.subarray(0, count);
-    sub.sort();
-
-    const p95Idx = Math.min(count - 1, Math.floor(count * 0.95));
-    const p99Idx = Math.min(count - 1, Math.floor(count * 0.99));
-
-    return {
-      avgWorkMs: Number((sum / count).toFixed(3)),
-      p95WorkMs: Number(sub[p95Idx].toFixed(3)),
-      p99WorkMs: Number(sub[p99Idx].toFixed(3)),
-      maxWorkMs: Number(maxWorkMs.toFixed(3)),
-    };
-  }
-
-  public getTelemetry(): PerfTelemetry {
-    const stats = this.computeStats();
-    return {
-      fps: Math.round(Math.min(240, Math.max(30, this.measuredFps))),
-      avgWorkMs: stats.avgWorkMs,
-      p95WorkMs: stats.p95WorkMs,
-      p99WorkMs: stats.p99WorkMs,
-      maxWorkMs: stats.maxWorkMs,
-      activeTier: this.activeTier,
-      rendererBackend: this.backend,
-      activeParticles: this.activeParticles,
-      dpr: Number(this.dpr.toFixed(2)),
-    };
-  }
-
-  public async run120HzBenchmark(frames = 120): Promise<Benchmark120HzResult> {
-    if (this.benchmarkRunner) {
-      return this.benchmarkRunner(frames);
-    }
-    const stats = this.computeStats();
-    return {
-      framesExecuted: frames,
-      avgWorkMs: stats.avgWorkMs,
-      p95WorkMs: stats.p95WorkMs,
-      p99WorkMs: stats.p99WorkMs,
-      maxWorkMs: stats.maxWorkMs,
-      passes120HzBudget: stats.p95WorkMs <= 8.33,
-      passes60HzBudget: stats.p95WorkMs <= 16.67,
-    };
-  }
 }
 
 export interface VisualShredAnim {

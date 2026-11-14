@@ -680,3 +680,22 @@ export function detectAutomaticShredEventsImpl(
 
   syncSnapshotsImpl(rctx, board);
 }
+
+/**
+ * Returns `true` when transient 3D FX (particles, smoke, shred animations, shockwaves, path traces,
+ * room awakenings, bounce decay, or transition dissolve) are actively animating on the WebGL canvas.
+ */
+export function hasActiveVisualFxImpl(rctx: RenderPassContext, blueprintMix = 0): boolean {
+  return (
+    blueprintMix > 0.001 ||
+    rctx.activeParticleCount > 0 ||
+    rctx.activeSmokeCount > 0 ||
+    rctx.activeVisualShreds.length > 0 ||
+    rctx.activeShockwaves.length > 0 ||
+    rctx.activeGateBursts.length > 0 ||
+    rctx.activePathTraces.length > 0 ||
+    rctx.roomAwakenMap.size > 0 ||
+    rctx.blockBounceMap.size > 0 ||
+    rctx.boardShakeTimer > 0
+  );
+}

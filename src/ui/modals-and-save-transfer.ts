@@ -114,7 +114,8 @@ export function updateTelemetryReadoutImpl(app: AppViewContext): void {
   const el = document.getElementById('telemetry-readout');
   if (!el) return;
   const t = app.renderer.getTelemetry();
-  el.textContent = `FPS: ${t.fps} | Work: ${t.avgWorkMs}ms (p95: ${t.p95WorkMs}ms) | Tier: ${t.activeTier} | Backend: ${t.rendererBackend}`;
+  const text = `FPS: ${t.fps} (${t.displayHz}Hz) | Work: ${t.avgWorkMs}ms (p95: ${t.p95WorkMs}ms) | Tier: ${t.activeTier} | Backend: ${t.rendererBackend}`;
+  if (el.textContent !== text) el.textContent = text;
 }
 
 export function refreshSaveTransferModalImpl(app: AppViewContext): void {

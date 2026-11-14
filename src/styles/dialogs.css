@@ -268,7 +268,6 @@ body.high-contrast #dialog-victory[data-under-par="true"] .victory-dialog-card {
 
 #dialog-victory[data-under-par="true"] .victory-crest-ornament {
   color: #7ef7eb;
-  filter: drop-shadow(0 0 12px rgba(103, 245, 232, 0.48));
   animation-duration: 10s;
   @media (prefers-reduced-motion: reduce) {
     animation: none;

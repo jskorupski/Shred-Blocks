@@ -228,6 +228,7 @@ export class Renderer3D implements RenderPassContext {
 
   public setQualityPreference(tier: QualityTier): void {
     this.qualityGovernor.setPreference(tier);
+    if (this.canvasCssW > 1) this.applyCanvasDpr(this.canvasCssW, this.canvasCssH);
   }
 
   public getEffectiveTrayPalette(trayId: TrayId, highContrast = false): TrayPalette {
@@ -648,8 +649,7 @@ export class Renderer3D implements RenderPassContext {
     }
 
     const nowMs = performance.now();
-    const workDurationMs = nowMs - frameStart;
-    this.qualityGovernor.recordFrameWork(workDurationMs, nowMs);
+    this.qualityGovernor.recordFrameWork(nowMs - frameStart, nowMs, false);
   }
 
   public resetTransientFx(): void {

@@ -1,4 +1,4 @@
-import { isBoardDeadlocked, isBoardWon } from '../core/board';
+import { computeEarnedStars, isBoardDeadlocked, isBoardWon } from '../core/board';
 import { hasFinalTouchGrace } from '../core/board-state';
 import { solveBoard } from '../levels/solver';
 import {
@@ -8,6 +8,7 @@ import {
   type LevelWinRewardSummary,
 } from '../storage/save-manager';
 import { type AppViewContext, BOOSTER_DISPLAY_NAMES, getPlayModeMeta } from './catalog-meta';
+import { startVictoryModalFx } from './victory-modal-fx';
 
 /**
  * Level outcome feedback (`ECON-V2` victory rewards, `OUT_OF_MOVES` / `TIME_OUT` / `BOMB_EXPLODED` failure options,
@@ -176,6 +177,43 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
       chestFanfareEl.hidden = true;
     }
   }
+}
+
+export function handleLevelVictoryImpl(app: AppViewContext, frozenTimeSec: number | null): void {
+  const playMode = app.saveManager.getPayload().settings.playMode;
+  const zenClear = playMode === 'ZEN' || app.runTouchedZen;
+  const pureBoosterFreeRun =
+    !zenClear && (app.board.powerUpsUsed ?? 0) === 0 && (app.board.continuesUsed ?? 0) === 0;
+  const earnedStars = computeEarnedStars(app.board, playMode, app.runTouchedZen);
+  app.sound.playWinFanfare(earnedStars);
+  app.renderer.spawnVictoryCelebrationBurst(app.board);
+  const elapsedSec = Math.max(1, Math.round(app.board.timeLimitSec - app.board.timeRemainingSec));
+  const summary = app.saveManager.recordLevelWin(
+    app.board.levelId,
+    app.board.movesCommitted,
+    elapsedSec,
+    Math.max(1, app.board.sessionBlocksShredded),
+    earnedStars,
+    app.board.parMoves,
+    app.board.difficulty,
+    zenClear,
+    pureBoosterFreeRun
+  );
+  if (summary.underPar) {
+    app.sound.playUnderParOracleChime();
+  }
+
+  populateVictoryModalImpl(app, summary);
+  app.openModal('victory');
+  const postSave = app.saveManager.getPayload();
+  startVictoryModalFx({
+    isUnderPar: Boolean(summary.underPar),
+    earnedStars,
+    equippedParticle: postSave.equippedParticle,
+    reducedMotion: postSave.settings.reducedMotion,
+    frozen: frozenTimeSec !== null,
+    activeTier: app.renderer.getQualityGovernor().getActiveTier(),
+  });
 }
 
 export function handleLevelFailureImpl(

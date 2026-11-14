@@ -116,6 +116,46 @@ export function prewarmVictoryModalFx(): void {
 }
 
 /**
+ * Pre-renders the 8-ray Under-Par Astral Sunburst Crown once onto an offscreen canvas (`280x280` CSS)
+ * so every celebration frame draws it via a single composited `drawImage` blit instead of allocating
+ * 8 `CanvasGradient` objects and string stops per frame.
+ */
+function createSunburstSprite(dpr: number): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const sprite = document.createElement('canvas');
+  const scale = Math.min(2, Math.max(1, dpr));
+  sprite.width = Math.round(280 * scale);
+  sprite.height = Math.round(280 * scale);
+  const sctx = sprite.getContext('2d');
+  if (!sctx) return null;
+
+  sctx.setTransform(scale, 0, 0, scale, 140 * scale, 140 * scale);
+  const evenGrad = sctx.createLinearGradient(0, 0, 0, -135);
+  evenGrad.addColorStop(0, 'rgba(126, 247, 235, 0.22)');
+  evenGrad.addColorStop(1, 'rgba(126, 247, 235, 0)');
+  const oddGrad = sctx.createLinearGradient(0, 0, 0, -135);
+  oddGrad.addColorStop(0, 'rgba(253, 224, 71, 0.18)');
+  oddGrad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+
+  const rayCount = 8;
+  for (let r = 0; r < rayCount; r++) {
+    const ang = (r * Math.PI * 2) / rayCount;
+    const ca = Math.cos(ang) * scale;
+    const sa = Math.sin(ang) * scale;
+    sctx.setTransform(ca, sa, -sa, ca, 140 * scale, 140 * scale);
+    sctx.fillStyle = r % 2 === 0 ? evenGrad : oddGrad;
+    sctx.beginPath();
+    sctx.moveTo(-4, -10);
+    sctx.lineTo(-18, -135);
+    sctx.lineTo(18, -135);
+    sctx.lineTo(4, -10);
+    sctx.closePath();
+    sctx.fill();
+  }
+  return sprite;
+}
+
+/**
  * Renders celebratory 2D sacred-geometry & jewel particle FX directly inside `.victory-dialog-card`
  * (`#victory-fx-canvas`) so players see immediate, zero-delay visual feedback on top of the modal card
  * rather than hidden behind its backdrop (`UNDER-PAR-ORACLE-01`).
@@ -126,6 +166,7 @@ export function startVictoryModalFx(options: {
   equippedParticle: ParticleStyleId;
   reducedMotion: boolean;
   frozen: boolean;
+  activeTier?: 'ULTRA_120' | 'BALANCED_60';
 }): void {
   stopVictoryModalFx();
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -146,10 +187,11 @@ export function startVictoryModalFx(options: {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  const isBalancedTier = options.activeTier === 'BALANCED_60';
   const cardRect = card.getBoundingClientRect();
   const w = Math.max(240, Math.round(cardRect.width || card.clientWidth || 360));
   const h = Math.max(220, Math.round(cardRect.height || card.clientHeight || 420));
-  const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  const dpr = Math.min(isBalancedTier ? 1.75 : 2, Math.max(1, window.devicePixelRatio || 1));
   const targetW = Math.round(w * dpr);
   const targetH = Math.round(h * dpr);
   if (canvas.width !== targetW || canvas.height !== targetH) {
@@ -336,9 +378,10 @@ export function startVictoryModalFx(options: {
     }
   }
 
+  const sunburstSprite = options.isUnderPar && !highContrast ? createSunburstSprite(dpr) : null;
   const totalDuration = options.isUnderPar ? 2.55 : 1.55;
   let elapsed = 0;
-  let lastMs = performance.now();
+  let lastPaintMs = 0;
   canvas.dataset.fxRunning = 'true';
 
   const frame = (nowMs: number) => {
@@ -346,53 +389,41 @@ export function startVictoryModalFx(options: {
       stopVictoryModalFx();
       return;
     }
-    const dt = Math.min(0.05, Math.max(0.001, (nowMs - lastMs) / 1000));
-    lastMs = nowMs;
+    if (lastPaintMs > 0 && isBalancedTier && nowMs - lastPaintMs < 12.5) {
+      activeRafId = requestAnimationFrame(frame);
+      return;
+    }
+    const dt = lastPaintMs > 0 ? Math.min(0.05, Math.max(0.001, (nowMs - lastPaintMs) / 1000)) : 1 / 60;
+    lastPaintMs = nowMs;
     elapsed += dt;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, w, h);
 
-    // 1. Rotating Astral Sunburst Crown on Under-Par clears
-    if (options.isUnderPar && !highContrast && elapsed < 2.15) {
+    // 1. Rotating Astral Sunburst Crown on Under-Par clears (single zero-alloc sprite blit)
+    if (sunburstSprite && elapsed < 2.15) {
       const crownFade = elapsed < 0.22 ? elapsed / 0.22 : Math.max(0, 1 - (elapsed - 0.22) / (2.15 - 0.22));
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(elapsed * 0.55);
+      const rot = elapsed * 0.55;
+      const ca = Math.cos(rot) * dpr;
+      const sa = Math.sin(rot) * dpr;
+      ctx.setTransform(ca, sa, -sa, ca, cx * dpr, cy * dpr);
+      ctx.globalAlpha = crownFade;
       ctx.globalCompositeOperation = 'lighter';
-      const rayCount = 8;
-      for (let r = 0; r < rayCount; r++) {
-        ctx.save();
-        ctx.rotate((r * Math.PI * 2) / rayCount);
-        const grad = ctx.createLinearGradient(0, 0, 0, -135);
-        grad.addColorStop(
-          0,
-          r % 2 === 0
-            ? `rgba(126, 247, 235, ${(0.22 * crownFade).toFixed(3)})`
-            : `rgba(253, 224, 71, ${(0.18 * crownFade).toFixed(3)})`
-        );
-        grad.addColorStop(1, 'rgba(126, 247, 235, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.moveTo(-4, -10);
-        ctx.lineTo(-18, -135);
-        ctx.lineTo(18, -135);
-        ctx.lineTo(4, -10);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-      ctx.restore();
+      ctx.drawImage(sunburstSprite, -140, -140, 280, 280);
+      ctx.globalCompositeOperation = 'source-over';
     }
 
-    // 2. Sacred-Geometry Shockwave Rings
-    for (const ring of rings) {
+    // 2. Sacred-Geometry Shockwave Rings (direct transform matrix — zero save/restore churn)
+    for (let ri = 0; ri < rings.length; ri++) {
+      const ring = rings[ri];
       const t = (elapsed - ring.delay) / ring.dur;
       if (t <= 0 || t >= 1) continue;
       const ease = 1 - (1 - t) ** 3;
       const radius = ring.r0 + (ring.r1 - ring.r0) * ease;
       const alpha = (1 - t) ** 1.5 * 0.82;
-      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = ring.color;
       ctx.lineWidth = ring.lineWidth * (1 - t * 0.45);
@@ -402,47 +433,55 @@ export function startVictoryModalFx(options: {
 
       if (ring.glyphs !== 'none') {
         const nodes = ring.glyphs === 'diamonds' ? 8 : 4;
+        const gScale = 1 - t * 0.3;
         ctx.fillStyle = ring.color;
         for (let n = 0; n < nodes; n++) {
           const ang = (n * Math.PI * 2) / nodes + ease * 0.45;
-          ctx.save();
-          ctx.translate(ring.x + Math.cos(ang) * radius, ring.y + Math.sin(ang) * radius);
-          ctx.rotate(ang + Math.PI * 0.5);
-          if (ring.glyphs === 'diamonds') drawDiamond(ctx, 4.2 * (1 - t * 0.3));
-          else drawStar4(ctx, 5.2 * (1 - t * 0.3));
+          const gx = ring.x + Math.cos(ang) * radius;
+          const gy = ring.y + Math.sin(ang) * radius;
+          const gRot = ang + Math.PI * 0.5;
+          const ca = Math.cos(gRot) * dpr;
+          const sa = Math.sin(gRot) * dpr;
+          ctx.setTransform(ca, sa, -sa, ca, gx * dpr, gy * dpr);
+          if (ring.glyphs === 'diamonds') drawDiamond(ctx, 4.2 * gScale);
+          else drawStar4(ctx, 5.2 * gScale);
           ctx.fill();
-          ctx.restore();
         }
       }
-      ctx.restore();
     }
 
     // 3. Arcane Lightning Bolts (when `lightning_bolts` particle style is equipped)
-    for (const bolt of bolts) {
-      const t = (elapsed - bolt.delay) / bolt.dur;
-      if (t <= 0 || t >= 1) continue;
-      ctx.save();
-      ctx.globalAlpha = (1 - t) ** 1.4 * 0.9;
-      ctx.strokeStyle = bolt.color;
-      ctx.lineWidth = 2.0 * (1 - t * 0.4);
-      ctx.beginPath();
-      bolt.pts.forEach(([px, py], idx) => {
-        if (idx === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
-      ctx.restore();
+    if (bolts.length > 0) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (let bi = 0; bi < bolts.length; bi++) {
+        const bolt = bolts[bi];
+        const t = (elapsed - bolt.delay) / bolt.dur;
+        if (t <= 0 || t >= 1) continue;
+        ctx.globalAlpha = (1 - t) ** 1.4 * 0.9;
+        ctx.strokeStyle = bolt.color;
+        ctx.lineWidth = 2.0 * (1 - t * 0.4);
+        ctx.beginPath();
+        for (let idx = 0; idx < bolt.pts.length; idx++) {
+          const pt = bolt.pts[idx];
+          if (idx === 0) ctx.moveTo(pt[0], pt[1]);
+          else ctx.lineTo(pt[0], pt[1]);
+        }
+        ctx.stroke();
+      }
     }
 
-    // 4. Particles (clipped cleanly above the bottom action button row)
+    // 4. Particles (clipped cleanly above the bottom action button row, zero CanvasGradient or save/restore)
     const bottomSafeY = h - 56;
-    for (const p of particles) {
+    const dampMul = Math.exp(-2.3 * dt);
+    const twinkleBase = elapsed * 18;
+    for (let pi = 0; pi < particles.length; pi++) {
+      const p = particles[pi];
       if (elapsed < p.delay) continue;
       p.age += dt;
       const u = p.age / p.life;
       if (u >= 1) continue;
 
-      const damp = Math.exp(-p.drag * dt);
+      const damp = p.drag === 2.3 ? dampMul : Math.exp(-p.drag * dt);
       p.vx *= damp;
       p.vy = p.vy * damp + p.gravity * dt;
       p.x += p.vx * dt;
@@ -451,30 +490,40 @@ export function startVictoryModalFx(options: {
 
       if (p.x < -16 || p.x > w + 16 || p.y < -16 || p.y > h - 10) continue;
       const bottomMask = p.y > bottomSafeY ? Math.max(0, (h - 14 - p.y) / 42) : 1;
-      const twinkle = 0.78 + 0.22 * Math.sin(elapsed * 18 + p.twinklePhase);
+      const twinkle = 0.78 + 0.22 * Math.sin(twinkleBase + p.twinklePhase);
       const alpha = (1 - u * u) * bottomMask * twinkle;
       if (alpha <= 0.02) continue;
 
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(p.x, p.y);
-
       if (p.kind === 'spark') {
         const speedAngle = Math.atan2(p.vy, p.vx);
-        ctx.rotate(speedAngle);
+        const ca = Math.cos(speedAngle) * dpr;
+        const sa = Math.sin(speedAngle) * dpr;
         const streak = Math.min(18, Math.max(6, Math.hypot(p.vx, p.vy) * 0.075));
-        const grad = ctx.createLinearGradient(-streak, 0, p.size, 0);
-        grad.addColorStop(0, 'rgba(255,255,255,0)');
-        grad.addColorStop(0.7, p.color);
-        grad.addColorStop(1, p.accent);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = p.size * 0.52;
-        ctx.lineCap = 'round';
+        const halfW = p.size * 0.34;
+        const tipX = p.size * 0.55;
+        ctx.setTransform(ca, sa, -sa, ca, p.x * dpr, p.y * dpr);
+        ctx.globalAlpha = alpha * 0.68;
+        ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.moveTo(-streak, 0);
-        ctx.lineTo(p.size * 0.5, 0);
-        ctx.stroke();
+        ctx.lineTo(0, halfW);
+        ctx.lineTo(tipX, 0);
+        ctx.lineTo(0, -halfW);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.accent;
+        ctx.beginPath();
+        ctx.moveTo(-streak * 0.36, 0);
+        ctx.lineTo(0, halfW * 0.56);
+        ctx.lineTo(tipX, 0);
+        ctx.lineTo(0, -halfW * 0.56);
+        ctx.closePath();
+        ctx.fill();
       } else if (p.kind === 'bubble') {
+        ctx.setTransform(dpr, 0, 0, dpr, p.x * dpr, p.y * dpr);
+        ctx.globalAlpha = alpha;
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 1.35;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
@@ -487,15 +536,21 @@ export function startVictoryModalFx(options: {
         ctx.arc(-p.size * 0.24, -p.size * 0.24, p.size * 0.18, 0, Math.PI * 2);
         ctx.fill();
       } else if (p.kind === 'cube') {
-        ctx.rotate(p.rot);
+        const ca = Math.cos(p.rot) * dpr;
+        const sa = Math.sin(p.rot) * dpr;
         const s = p.size * (1 - u * 0.25);
+        ctx.setTransform(ca, sa, -sa, ca, p.x * dpr, p.y * dpr);
+        ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
         ctx.fillRect(-s * 0.5, -s * 0.5, s, s);
         ctx.fillStyle = p.accent;
         ctx.fillRect(-s * 0.5, -s * 0.5, s, s * 0.34);
       } else if (p.kind === 'diamond') {
-        ctx.rotate(p.rot);
+        const ca = Math.cos(p.rot) * dpr;
+        const sa = Math.sin(p.rot) * dpr;
         const r = p.size * (1 - u * 0.2);
+        ctx.setTransform(ca, sa, -sa, ca, p.x * dpr, p.y * dpr);
+        ctx.globalAlpha = alpha;
         drawDiamond(ctx, r);
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 1.6;
@@ -504,8 +559,11 @@ export function startVictoryModalFx(options: {
         drawDiamond(ctx, r * 0.38);
         ctx.fill();
       } else {
-        ctx.rotate(p.rot);
+        const ca = Math.cos(p.rot) * dpr;
+        const sa = Math.sin(p.rot) * dpr;
         const r = p.size * (1 - u * 0.18);
+        ctx.setTransform(ca, sa, -sa, ca, p.x * dpr, p.y * dpr);
+        ctx.globalAlpha = alpha;
         drawStar4(ctx, r);
         ctx.fillStyle = p.color;
         ctx.fill();
@@ -513,8 +571,9 @@ export function startVictoryModalFx(options: {
         ctx.fillStyle = p.accent;
         ctx.fill();
       }
-      ctx.restore();
     }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
 
     if (elapsed < totalDuration) {
       activeRafId = requestAnimationFrame(frame);

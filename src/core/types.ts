@@ -615,6 +615,7 @@ export interface SavePayloadV1 {
 
 export interface PerfTelemetry {
   fps: number;
+  displayHz: number;
   avgWorkMs: number;
   p95WorkMs: number;
   p99WorkMs: number;

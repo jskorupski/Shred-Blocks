@@ -8,10 +8,15 @@ declare const process: { cwd: () => string };
 
 import { playFilteredNoiseBurstVoice, prewarmSharedNoiseBuffer } from '../../src/audio/synth-voices';
 import { Camera3D } from '../../src/render/camera-3d';
+import { QualityGovernor } from '../../src/render/quality-governor';
 import { warmUpWebGLPipelinesImpl } from '../../src/render/relic-awakening-fx';
 import type { RenderPassContext } from '../../src/render/render-types';
 import { prewarmDialogsLayout } from '../../src/ui/dialogs-template';
-import { prewarmVictoryModalFx } from '../../src/ui/victory-modal-fx';
+import {
+  prewarmVictoryModalFx,
+  startVictoryModalFx,
+  stopVictoryModalFx,
+} from '../../src/ui/victory-modal-fx';
 
 function createMockDialog(open: boolean, ops: string[], id: string) {
   const classes = new Set<string>();
@@ -291,5 +296,232 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     expect(failIdx).toBeGreaterThan(winIdx);
     const winBody = mainTs.slice(winIdx, failIdx);
     expect(winBody).not.toContain('this.renderRoadmap(');
+  });
+
+  it('QualityGovernor AUTO adapts cleanly to 60Hz browsers, GPU missed-vsync stalls, and LTPO modal freeze', () => {
+    const gov = new QualityGovernor();
+    gov.setPreference('AUTO');
+
+    // 1. High-refresh 120Hz active play stays ULTRA_120 and preserves 120fps telemetry when Pause modal opens on LTPO
+    let t = 1000;
+    for (let i = 0; i < 40; i++) {
+      t += 8.33;
+      gov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
+      gov.recordFrameWork(1.4, t, false);
+      gov.markFrameRendered(t, true);
+    }
+    expect(gov.getActiveTier()).toBe('ULTRA_120');
+    expect(gov.getTelemetry().fps).toBeGreaterThanOrEqual(115);
+    expect(gov.getTelemetry().displayHz).toBe(120);
+
+    // Simulate LTPO dropping to 60Hz while Pause modal is open — active telemetry must NOT decay to 60fps
+    for (let i = 0; i < 60; i++) {
+      t += 16.67;
+      gov.recordRafTick(t, { isInteractiveMotion: false, isModalOpen: true, isSuspended: false });
+    }
+    expect(gov.getTelemetry().fps).toBeGreaterThanOrEqual(115);
+    expect(gov.getTelemetry().displayHz).toBe(120);
+
+    // 2. 60Hz-locked WebKit/Safari environment selects BALANCED_60 cleanly so DPR caps at 1.75
+    const safariGov = new QualityGovernor();
+    safariGov.setPreference('AUTO');
+    t = 2000;
+    for (let i = 0; i < 40; i++) {
+      t += 16.67;
+      safariGov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
+      safariGov.recordFrameWork(1.8, t, false);
+      safariGov.markFrameRendered(t, true);
+    }
+    expect(safariGov.getActiveTier()).toBe('BALANCED_60');
+    expect(safariGov.getTargetMaxDpr()).toBe(1.75);
+    expect(safariGov.getTelemetry().displayHz).toBe(60);
+    expect(safariGov.getTelemetry().fps).toBe(60);
+
+    // 3. GPU-bound 120Hz device with tiny JS work (1.2ms) but frequent missed vsyncs (>25%) drops to BALANCED_60 cleanly
+    const gpuStalledGov = new QualityGovernor();
+    gpuStalledGov.setPreference('AUTO');
+    t = 3000;
+    for (let i = 0; i < 52; i++) {
+      // Nominal 8.33ms cadence with 30% missed-vsync spikes (16.67ms) even though JS work is only 1.2ms
+      t += i % 3 === 0 ? 16.67 : 8.33;
+      gpuStalledGov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
+      gpuStalledGov.recordFrameWork(1.2, t, false);
+    }
+    expect(gpuStalledGov.getActiveTier()).toBe('BALANCED_60');
+  });
+
+  it('BALANCED_60 paces renders on 120Hz displays, never drops 60Hz displays, and suspends behind settled modals', () => {
+    const gov = new QualityGovernor();
+    gov.setPreference('ULTRA_120');
+    let t = 5000;
+    for (let i = 0; i < 30; i++) {
+      t += 8.33;
+      gov.recordRafTick(t, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
+    }
+    gov.setPreference('BALANCED_60');
+
+    // First 8.33ms tick after render skips and accumulates dt, second (16.67ms) renders full 16.67ms dt
+    gov.markFrameRendered(t, false);
+    const skippedDt = gov.consumeRenderStep(t + 8.33, 0.00833, {
+      canvasVisible: true,
+      modalOpen: false,
+      victoryOpen: false,
+      hasVisualFx: true,
+      forceSettle: false,
+    });
+    expect(skippedDt).toBe(0);
+
+    const paintedDt = gov.consumeRenderStep(t + 16.67, 0.00834, {
+      canvasVisible: true,
+      modalOpen: false,
+      victoryOpen: false,
+      hasVisualFx: true,
+      forceSettle: false,
+    });
+    expect(paintedDt).toBeCloseTo(0.01667, 4);
+
+    // Open Victory dialog suspends settled 3D background rendering cleanly once forceSettle drains
+    const settledVictoryDt = gov.consumeRenderStep(t + 40, 0.016, {
+      canvasVisible: true,
+      modalOpen: true,
+      victoryOpen: true,
+      hasVisualFx: true,
+      forceSettle: false,
+    });
+    expect(settledVictoryDt).toBe(0);
+
+    // On a 60Hz display under BALANCED_60, never drop any 16.67ms frame even with 1ms jitter
+    const gov60 = new QualityGovernor();
+    let t60 = 1000;
+    for (let i = 0; i < 30; i++) {
+      t60 += 16.67;
+      gov60.recordRafTick(t60, { isInteractiveMotion: true, isModalOpen: false, isSuspended: false });
+    }
+    gov60.setPreference('BALANCED_60');
+    gov60.markFrameRendered(t60, false);
+    const jitter60Dt = gov60.consumeRenderStep(t60 + 15.2, 0.0152, {
+      canvasVisible: true,
+      modalOpen: false,
+      victoryOpen: false,
+      hasVisualFx: false,
+      forceSettle: false,
+    });
+    expect(jitter60Dt).toBeCloseTo(0.0152, 4);
+  });
+
+  it('startVictoryModalFx executes zero per-frame CanvasGradient or save/restore allocations', () => {
+    let gradientAllocations = 0;
+    let saveCalls = 0;
+    let restoreCalls = 0;
+    let drawImageCalls = 0;
+    const rafQueue: Array<(ms: number) => void> = [];
+
+    const makeMockCtx = () => ({
+      fillStyle: '#000',
+      strokeStyle: '#000',
+      lineWidth: 1,
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      setTransform: () => {},
+      clearRect: () => {},
+      beginPath: () => {},
+      closePath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      arc: () => {},
+      fill: () => {},
+      stroke: () => {},
+      fillRect: () => {},
+      drawImage: () => {
+        drawImageCalls++;
+      },
+      save: () => {
+        saveCalls++;
+      },
+      restore: () => {
+        restoreCalls++;
+      },
+      createLinearGradient: () => {
+        gradientAllocations++;
+        return { addColorStop: () => {} };
+      },
+    });
+
+    const createCanvasMock = () => ({
+      width: 360,
+      height: 420,
+      dataset: {} as Record<string, string>,
+      getContext: () => makeMockCtx(),
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 360, height: 420 }),
+    });
+
+    const fxCanvas = createCanvasMock();
+    const cardMock = {
+      clientWidth: 360,
+      clientHeight: 420,
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 360, height: 420 }),
+    };
+    const dialogMock = {
+      open: true,
+      querySelector: (sel: string) => (sel === '.victory-dialog-card' ? cardMock : null),
+    };
+
+    const prevWindow = (globalThis as { window?: unknown }).window;
+    const prevDocument = (globalThis as { document?: unknown }).document;
+    const prevRaf = globalThis.requestAnimationFrame;
+    const prevCancelRaf = globalThis.cancelAnimationFrame;
+
+    (globalThis as { window?: unknown }).window = { devicePixelRatio: 2 };
+    (globalThis as { document?: unknown }).document = {
+      body: { classList: { contains: () => false } },
+      createElement: () => createCanvasMock(),
+      getElementById: (id: string) => {
+        if (id === 'dialog-victory') return dialogMock;
+        if (id === 'victory-fx-canvas') return fxCanvas;
+        if (id === 'victory-crest-ornament') {
+          return { getBoundingClientRect: () => ({ left: 154, top: 16, width: 52, height: 52 }) };
+        }
+        return null;
+      },
+    };
+    globalThis.requestAnimationFrame = ((cb: (ms: number) => void) => {
+      rafQueue.push(cb);
+      return rafQueue.length;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+
+    try {
+      startVictoryModalFx({
+        isUnderPar: true,
+        earnedStars: 3,
+        equippedParticle: 'pixel_sparks',
+        reducedMotion: false,
+        frozen: false,
+        activeTier: 'ULTRA_120',
+      });
+      // Two gradients pre-baked once into static sunburst sprite
+      const preBakeGradients = gradientAllocations;
+      expect(preBakeGradients).toBe(2);
+
+      // Step 20 animated frames across spark bursts + rotating under-par sunburst
+      for (let f = 0; f < 20; f++) {
+        const cb = rafQueue.shift();
+        if (cb) cb(1000 + f * 16.67);
+      }
+
+      expect(drawImageCalls).toBeGreaterThanOrEqual(15);
+      expect(gradientAllocations).toBe(preBakeGradients);
+      expect(saveCalls).toBe(0);
+      expect(restoreCalls).toBe(0);
+
+      stopVictoryModalFx();
+    } finally {
+      if (prevWindow === undefined) delete (globalThis as { window?: unknown }).window;
+      else (globalThis as { window?: unknown }).window = prevWindow;
+      if (prevDocument === undefined) delete (globalThis as { document?: unknown }).document;
+      else (globalThis as { document?: unknown }).document = prevDocument;
+      globalThis.requestAnimationFrame = prevRaf;
+      globalThis.cancelAnimationFrame = prevCancelRaf;
+    }
   });
 });
