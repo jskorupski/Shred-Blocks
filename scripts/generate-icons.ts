@@ -1,16 +1,7 @@
-// @ts-expect-error Node built-in module resolved at runtime by tsx
 import { Buffer } from 'node:buffer';
-// @ts-expect-error Node built-in module resolved at runtime by tsx
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-// @ts-expect-error Node built-in module resolved at runtime by tsx
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
-
-declare const process: {
-  cwd: () => string;
-  env: Record<string, string | undefined>;
-  exit: (code: number) => void;
-};
 
 // Preview output dir: override with VISUAL_OUT_DIR; defaults to test-results/visual
 const ARTIFACT_SCRATCH_DIR = process.env.VISUAL_OUT_DIR ?? resolve(process.cwd(), 'test-results', 'visual');

@@ -1,10 +1,6 @@
-// @ts-expect-error Node built-in module resolved at runtime by Vitest
 import fs from 'node:fs';
-// @ts-expect-error Node built-in module resolved at runtime by Vitest
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-
-declare const process: { cwd: () => string };
 
 import { applyBoosterHammer, cloneBoardState, commitBlockMove, createBoardState } from '../../src/core/board';
 import { setFxRandomSeed } from '../../src/core/fx-random';

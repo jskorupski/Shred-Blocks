@@ -1,10 +1,6 @@
-// @ts-expect-error Node built-in module resolved at runtime by Vite
 import { execFileSync } from 'node:child_process';
-// @ts-expect-error Node built-in module resolved at runtime by Vite
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-// @ts-expect-error Node built-in module resolved at runtime by Vite
 import { resolve } from 'node:path';
-// @ts-expect-error Node built-in module resolved at runtime by Vite
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
@@ -17,7 +13,7 @@ const CERT_PATH = resolve(CERT_DIR, 'cert.pem');
  * Ensures a valid self-signed TLS certificate exists in `.certs/` for LAN HTTPS testing (`https://0.0.0.0:8443`).
  * Automatically generates `key.pem` and `cert.pem` via `openssl` if missing on a fresh clone.
  */
-function ensureLanHttpsCerts(): { key: unknown; cert: unknown } {
+function ensureLanHttpsCerts(): { key: string; cert: string } {
   if (!existsSync(KEY_PATH) || !existsSync(CERT_PATH)) {
     mkdirSync(CERT_DIR, { recursive: true });
     execFileSync('openssl', [
@@ -38,8 +34,8 @@ function ensureLanHttpsCerts(): { key: unknown; cert: unknown } {
     ]);
   }
   return {
-    key: readFileSync(KEY_PATH),
-    cert: readFileSync(CERT_PATH),
+    key: readFileSync(KEY_PATH, 'utf8'),
+    cert: readFileSync(CERT_PATH, 'utf8'),
   };
 }
 
@@ -60,14 +56,14 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 8443,
     strictPort: true,
-    https: httpsConfig as Record<string, never>,
+    https: httpsConfig,
     headers: FRAME_GUARD_HEADERS,
   },
   preview: {
     host: '0.0.0.0',
     port: 8443,
     strictPort: true,
-    https: httpsConfig as Record<string, never>,
+    https: httpsConfig,
     headers: FRAME_GUARD_HEADERS,
   },
 });

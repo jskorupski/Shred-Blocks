@@ -1,10 +1,6 @@
-// @ts-expect-error Node built-in module resolved at runtime by Vitest
 import fs from 'node:fs';
-// @ts-expect-error Node built-in module resolved at runtime by Vitest
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-
-declare const process: { cwd: () => string };
 
 import { playFilteredNoiseBurstVoice, prewarmSharedNoiseBuffer } from '../../src/audio/synth-voices';
 import { createBoardState } from '../../src/core/board';

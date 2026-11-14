@@ -1,17 +1,7 @@
-// @ts-expect-error Node built-in module resolved at runtime by tsx
 import { spawn } from 'node:child_process';
-// @ts-expect-error Node built-in module resolved at runtime by tsx
 import { mkdirSync } from 'node:fs';
-// @ts-expect-error Node built-in module resolved at runtime by tsx
 import { join } from 'node:path';
 import { type Browser, chromium } from '@playwright/test';
-
-declare const process: {
-  cwd: () => string;
-  env: Record<string, string | undefined>;
-  exit: (code: number) => void;
-  on: (event: string, listener: () => void) => void;
-};
 
 // Output dir: override with VISUAL_OUT_DIR (e.g. an agent artifact scratch folder); defaults to test-results/visual
 const ARTIFACT_SCRATCH_DIR = process.env.VISUAL_OUT_DIR ?? join(process.cwd(), 'test-results', 'visual');

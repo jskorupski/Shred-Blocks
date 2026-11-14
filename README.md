@@ -74,6 +74,12 @@ npm run lint
 # Run unit, economy & 300-level A* solver tests (Vitest)
 npm run test:unit
 
+# Fast preflight: Biome lint + unit tests + TypeScript & Vite production build
+npm run verify:fast
+
+# Capture & audit specific UI scenes across multi-viewport presets
+npm run probe:ui -- --scene pause-expanded --viewports quick
+
 # Run Desktop & Mobile browser playtests (Playwright)
 npm run test:e2e
 
