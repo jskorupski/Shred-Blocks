@@ -135,7 +135,7 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           </button>
         </div>
 
-        <!-- Primary Navigation & Level Controls First (Zero Scrolling Needed) -->
+        <!-- 3A. In-Game Stage Controls (Hidden outside active gameplay) -->
         <div class="pause-nav-section">
           <div class="dialog-actions-grid pause-primary-grid">
             <button type="button" id="btn-pause-resume" class="btn-tactile btn-primary" autofocus>
@@ -153,57 +153,138 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
           </div>
         </div>
 
-        <!-- Compact 2-Column Architectural Settings Grid -->
-        <div class="settings-list">
-          <label class="setting-row">
-            <span>Sound FX</span>
-            <input type="checkbox" id="toggle-sfx" checked />
-          </label>
-          <label class="setting-row">
-            <span>Music</span>
-            <input type="checkbox" id="toggle-music" checked />
-          </label>
-          <label class="setting-row">
-            <span>Haptics</span>
-            <input type="checkbox" id="toggle-haptics" checked />
-          </label>
-          <label class="setting-row">
-            <span>Colorblind</span>
-            <input type="checkbox" id="toggle-colorblind" />
-          </label>
-          <label class="setting-row">
-            <span>High Contrast</span>
-            <input type="checkbox" id="toggle-high-contrast" />
-          </label>
-          <label class="setting-row">
-            <span>Low Motion</span>
-            <input type="checkbox" id="toggle-reduced-motion" />
-          </label>
-          <label class="setting-row setting-row-wide">
-            <span>Frame Rate</span>
-            <select id="select-quality-tier" class="select-tactile">
-              <option value="AUTO">Auto (120Hz / 60Hz)</option>
-              <option value="ULTRA_120">Ultra 120Hz</option>
-              <option value="BALANCED_60">Balanced 60Hz</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="dialog-actions-grid pause-utility-grid">
-          <button type="button" id="btn-pause-save-transfer" class="btn-tactile btn-secondary btn-compact">
-            Backup &amp; Sync Save
-          </button>
-          <button type="button" id="btn-pause-install" class="btn-tactile btn-install btn-compact">
-            Install App Guide
-          </button>
-        </div>
-
-        <details class="telemetry-details">
-          <summary>Performance Telemetry</summary>
-          <div id="telemetry-readout" class="telemetry-bar" aria-live="off">
-            FPS: 120 | Work: 0.8ms | Tier: ULTRA_120 | Backend: WEBGL2
+        <!-- 3B. Appearance — Featured Expandable Cosmetics Loadout Card (COSMETICS-DRAWER-01) -->
+        <section class="pause-section-block" aria-labelledby="pause-section-appearance">
+          <span id="pause-section-appearance" class="pause-section-label">Appearance</span>
+          <div id="pause-cosmetics-drawer" class="cosmetics-drawer">
+            <button
+              type="button"
+              id="btn-toggle-cosmetics-drawer"
+              class="cosmetics-drawer-toggle"
+              aria-expanded="false"
+              aria-controls="pause-cosmetics-panel"
+            >
+              <span class="cosmetics-header-top">
+                <span class="cosmetics-header-title">✦ Cosmetics &amp; Themes</span>
+                <span class="cosmetics-mini-cluster">
+                  <span class="cosmetics-mini-swatches" aria-hidden="true">
+                    <span id="pause-mini-swatch-skin" class="mini-theme-swatch swatch-classic_studs"></span>
+                    <span id="pause-mini-swatch-tray" class="mini-theme-swatch swatch-industrial_slate"></span>
+                    <span id="pause-mini-swatch-particle" class="mini-theme-swatch swatch-micro_cubes">◆</span>
+                  </span>
+                  <span class="cosmetics-drawer-pill">
+                    <span id="pause-cosmetics-pill">Swap</span>
+                    <svg
+                      class="cosmetics-chevron-svg"
+                      viewBox="0 0 16 16"
+                      width="12"
+                      height="12"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M4 6.25L8 10.25L12 6.25"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </span>
+                </span>
+              </span>
+              <span id="pause-cosmetics-summary" class="cosmetics-header-sub">
+                Classic Studs · Industrial Slate · Classic Cubes
+              </span>
+            </button>
+            <div id="pause-cosmetics-panel" class="cosmetics-drawer-panel" hidden>
+              <p id="pause-cosmetics-status" class="cosmetics-drawer-status"></p>
+              <div id="pause-cosmetics-rows" class="cosmetics-quick-rows"></div>
+              <div class="cosmetics-drawer-footer">
+                <span class="cosmetics-coins-pill" title="Available Coins">
+                  <span class="coin-emblem" aria-hidden="true"></span>
+                  <span id="pause-cosmetics-coins">120 Coins</span>
+                </span>
+                <button
+                  type="button"
+                  id="btn-pause-open-themes"
+                  class="btn-tactile btn-secondary btn-compact"
+                >
+                  ✦ Themes Studio ›
+                </button>
+              </div>
+            </div>
           </div>
-        </details>
+        </section>
+
+        <!-- 3C. Audio & Tactile Feedback Group -->
+        <fieldset class="pause-section-block settings-fieldset">
+          <legend class="pause-section-label">Audio &amp; Haptics</legend>
+          <div class="settings-list settings-grid-3">
+            <label class="setting-row setting-tile">
+              <span>Sound FX</span>
+              <input type="checkbox" id="toggle-sfx" checked />
+            </label>
+            <label class="setting-row setting-tile">
+              <span>Music</span>
+              <input type="checkbox" id="toggle-music" checked />
+            </label>
+            <label class="setting-row setting-tile">
+              <span>Haptics</span>
+              <input type="checkbox" id="toggle-haptics" checked />
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- 3D. Accessibility & Visual Comfort Group -->
+        <fieldset class="pause-section-block settings-fieldset">
+          <legend class="pause-section-label">Accessibility &amp; Display</legend>
+          <div class="settings-list settings-grid-3">
+            <label class="setting-row setting-tile">
+              <span>Colorblind</span>
+              <input type="checkbox" id="toggle-colorblind" />
+            </label>
+            <label class="setting-row setting-tile">
+              <span>High Contrast</span>
+              <input type="checkbox" id="toggle-high-contrast" />
+            </label>
+            <label class="setting-row setting-tile">
+              <span>Low Motion</span>
+              <input type="checkbox" id="toggle-reduced-motion" />
+            </label>
+            <label class="setting-row setting-row-wide">
+              <span>Frame Rate</span>
+              <select id="select-quality-tier" class="select-tactile">
+                <option value="AUTO">Auto (Adaptive)</option>
+                <option value="ULTRA_120">Ultra 120Hz</option>
+                <option value="BALANCED_60">Balanced 60Hz</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- 3E. Save Management & App Installation -->
+        <section class="pause-section-block" aria-labelledby="pause-section-data">
+          <span id="pause-section-data" class="pause-section-label">Save &amp; App</span>
+          <div class="dialog-actions-grid pause-utility-grid">
+            <button type="button" id="btn-pause-save-transfer" class="btn-tactile btn-secondary btn-compact">
+              Backup &amp; Sync Save
+            </button>
+            <button type="button" id="btn-pause-install" class="btn-tactile btn-install btn-compact">
+              Install App Guide
+            </button>
+          </div>
+        </section>
+
+        <!-- 3F. Diagnostics & Telemetry Footer (Strictly Last & Collapsible) -->
+        <div id="pause-diagnostics-footer" class="pause-diagnostics-footer">
+          <details class="telemetry-details">
+            <summary>Performance Telemetry</summary>
+            <div id="telemetry-readout" class="telemetry-bar" aria-live="off">
+              FPS: 120 | Work: 0.8ms | Tier: ULTRA_120 | Backend: WEBGL2
+            </div>
+          </details>
+        </div>
       </div>
     </dialog>
 

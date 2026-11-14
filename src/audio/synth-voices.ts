@@ -1,4 +1,4 @@
-import type { BoosterType, ParticleStyleId } from '../core/types';
+import type { BoosterType } from '../core/types';
 
 // Cozy pentatonic / major-9th chord progressions in C major / F lydian / A minor7 / G13
 const CHILL_CHORDS: ReadonlyArray<ReadonlyArray<number>> = [
@@ -10,7 +10,7 @@ const CHILL_CHORDS: ReadonlyArray<ReadonlyArray<number>> = [
 
 const sharedBurstNoiseCache = new WeakMap<AudioContext, AudioBuffer>();
 
-function getSharedNoiseBuffer(ctx: AudioContext, minDurationSec: number): AudioBuffer {
+export function getSharedNoiseBuffer(ctx: AudioContext, minDurationSec: number): AudioBuffer {
   const cached = sharedBurstNoiseCache.get(ctx);
   const minSamples = Math.max(1, Math.ceil(ctx.sampleRate * Math.max(0.32, minDurationSec)));
   if (cached && cached.sampleRate === ctx.sampleRate && cached.length >= minSamples) {
@@ -578,98 +578,4 @@ export function scheduleAmbientStepVoice(
   const nextStep = musicStep + 1;
   const nextChordIndex = nextStep % 8 === 0 ? (chordIndex + 1) % CHILL_CHORDS.length : chordIndex;
   return { nextStep, nextChordIndex };
-}
-
-export function playShredStyleOvertoneVoice(
-  ctx: AudioContext,
-  sfxGain: GainNode,
-  startTime: number,
-  pitchScale: number,
-  style: ParticleStyleId,
-  previewOnly = false
-): void {
-  const amp = previewOnly ? 0.2 : 0.12;
-  if (style === 'star_confetti') {
-    // Celesta bell fifth sparkle
-    const notes = [1567.98, 2093.0];
-    notes.forEach((f, i) => {
-      const t = startTime + (previewOnly ? i * 0.045 : 0.06 + i * 0.035);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(f * pitchScale, t);
-      gain.gain.setValueAtTime(amp, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
-      osc.connect(gain);
-      gain.connect(sfxGain);
-      osc.start(t);
-      osc.stop(t + 0.14);
-    });
-  } else if (style === 'pixel_sparks') {
-    // Crisp arcade laser-spark pitch zip
-    const t = startTime + (previewOnly ? 0 : 0.03);
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(1320 * pitchScale, t);
-    osc.frequency.exponentialRampToValueAtTime(660 * pitchScale, t + 0.042);
-    gain.gain.setValueAtTime(amp * 0.72, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.048);
-    osc.connect(gain);
-    gain.connect(sfxGain);
-    osc.start(t);
-    osc.stop(t + 0.052);
-  } else if (style === 'soap_bubbles') {
-    // Buoyant liquid-glass upward droplet cluster bloop + effervescent pop
-    for (const [delay, f0, f1, peak] of [
-      [0, 380, 790, 1.05],
-      [0.058, 540, 1080, 0.72],
-    ]) {
-      const t = startTime + (previewOnly ? 0 : 0.035) + delay;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(f0 * pitchScale, t);
-      osc.frequency.exponentialRampToValueAtTime(f1 * pitchScale, t + 0.08);
-      gain.gain.setValueAtTime(amp * peak, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.092);
-      osc.connect(gain);
-      gain.connect(sfxGain);
-      osc.start(t);
-      osc.stop(t + 0.1);
-    }
-  } else if (style === 'lightning_bolts') {
-    // Arcane electric snap fifth + primary & re-strike crackle bursts
-    const t = startTime + (previewOnly ? 0 : 0.015);
-    for (const ratio of [1.0, 1.498, 2.0]) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(640 * ratio * pitchScale, t);
-      osc.frequency.exponentialRampToValueAtTime(280 * ratio * pitchScale, t + 0.068);
-      gain.gain.setValueAtTime(amp * 0.54, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.074);
-      osc.connect(gain);
-      gain.connect(sfxGain);
-      osc.start(t);
-      osc.stop(t + 0.08);
-    }
-    playFilteredNoiseBurstVoice(ctx, sfxGain, t, 0.065, 2750 * pitchScale, amp * 0.75);
-    playFilteredNoiseBurstVoice(ctx, sfxGain, t + 0.075, 0.05, 3400 * pitchScale, amp * 0.48);
-  } else if (previewOnly) {
-    // micro_cubes preview: crisp tactile wooden marimba double tap
-    for (let i = 0; i < 2; i++) {
-      const t = startTime + i * 0.038;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime((440 + i * 146) * pitchScale, t);
-      gain.gain.setValueAtTime(amp, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-      osc.connect(gain);
-      gain.connect(sfxGain);
-      osc.start(t);
-      osc.stop(t + 0.055);
-    }
-  }
 }

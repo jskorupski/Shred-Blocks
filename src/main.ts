@@ -9,13 +9,8 @@ import {
   isBoardWon,
 } from './core/board';
 import { getActiveColor } from './core/polyomino';
-import type { BlockState, BoardState, BoosterType, PlayMode, SavePayloadV1 } from './core/types';
-import {
-  BoardInputController,
-  type BoosterTargetPayload,
-  buildCommittedMoveTrace,
-  type HoverState,
-} from './input/pointer-controller';
+import type { BoardState, BoosterType, PlayMode, SavePayloadV1 } from './core/types';
+import { BoardInputController, buildCommittedMoveTrace, type HoverState } from './input/pointer-controller';
 import { getLevelSpec } from './levels/catalog';
 import { findNextHintMove } from './levels/solver';
 import { hasActiveVisualFxImpl } from './render/particle-fx';
@@ -83,6 +78,7 @@ import {
   useZenBlessingContinueImpl,
 } from './ui/outcome-modals-view';
 import { renderRoadmapImpl, renderThemesStudioImpl } from './ui/roadmap-and-themes-view';
+import { canResumeBoardImpl, resumeOrLoadLevelImpl } from './ui/themes-studio-view';
 import { prewarmVictoryModalFx, stopVictoryModalFx } from './ui/victory-modal-fx';
 
 export * from './ui/catalog-meta';
@@ -105,6 +101,7 @@ export class ShredBlocksApp implements AppViewContext {
   public boardPlayMode: PlayMode = 'CHALLENGE';
   public activeScreen: 'home' | 'game' | 'themes' = 'home';
   public titleOverlayOpen = true;
+  public themesEnteredFromGame = false;
   public blueprintMix = 1.0;
   public activeRoadmapRange = 'all';
   public expandedEndlessRanges: Array<[number, number]> = [];
@@ -193,15 +190,9 @@ export class ShredBlocksApp implements AppViewContext {
           trace.cellMask
         );
       },
-      onImmobileBlockTap: (block) => {
-        this.handleImmobileBlockTap(block);
-      },
-      onLockedVaultTap: (vault) => {
-        handleLockedVaultTapImpl(this, vault);
-      },
-      onExecuteBooster: (type, target) => {
-        return this.executeTargetedBooster(type, target);
-      },
+      onImmobileBlockTap: (block) => handleImmobileBlockTapImpl(this, block),
+      onLockedVaultTap: (vault) => handleLockedVaultTapImpl(this, vault),
+      onExecuteBooster: (type, target) => executeTargetedBoosterImpl(this, type, target),
       isBoardInteractive: () => {
         return (
           this.activeScreen === 'game' &&
@@ -326,8 +317,16 @@ export class ShredBlocksApp implements AppViewContext {
   // CORE GAMEPLAY & LEVEL CONTROLLER
   // ===========================================================================
 
+  public canResumeBoard(levelId = this.board.levelId): boolean {
+    return canResumeBoardImpl(this, levelId);
+  }
+  public resumeOrLoadLevel(levelId: number, switchToGame = true, persistLevel = true): void {
+    resumeOrLoadLevelImpl(this, levelId, switchToGame, persistLevel);
+  }
+
   public loadLevel(levelId: number, switchToGameScreen = true, persistLevel = true): void {
     const cleanId = Math.max(1, Math.floor(levelId));
+    this.themesEnteredFromGame = false;
     cancelPendingOutcomeTransition();
     this.inputController.cancelTargeting();
     const spec = getLevelSpec(cleanId);
@@ -554,7 +553,6 @@ export class ShredBlocksApp implements AppViewContext {
   private handleLevelVictory(): void {
     handleLevelVictoryImpl(this, this.frozenTimeSec);
   }
-
   private handleLevelFailure(reason: 'TIME_OUT' | 'BOMB_EXPLODED' | 'OUT_OF_MOVES'): void {
     handleLevelFailureImpl(this, reason, this.frozenTimeSec);
   }
@@ -562,31 +560,15 @@ export class ShredBlocksApp implements AppViewContext {
   public continueFailedLevel(): void {
     continueFailedLevelImpl(this);
   }
-
   public useZenBlessingContinue(): void {
     useZenBlessingContinueImpl(this);
   }
-
-  private handleImmobileBlockTap(block: BlockState): void {
-    handleImmobileBlockTapImpl(this, block);
-  }
-
   public autoSolveCurrentLevel(): boolean {
     return autoSolveCurrentLevelImpl(this);
   }
-
-  // ===========================================================================
-  // BOOSTERS & TARGETING (UX-04, UX-11) — implemented in src/ui/boosters-controller.ts
-  // ===========================================================================
-
   public activateBooster(type: BoosterType): void {
     activateBoosterImpl(this, type);
   }
-
-  private executeTargetedBooster(type: BoosterType, target: BoosterTargetPayload): boolean {
-    return executeTargetedBoosterImpl(this, type, target);
-  }
-
   public syncBoosterTargetingBanner(hoverState: HoverState): void {
     syncBoosterTargetingBannerImpl(hoverState);
   }

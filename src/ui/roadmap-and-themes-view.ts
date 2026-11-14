@@ -1,3 +1,4 @@
+import { isBoardRunStarted } from '../core/board';
 import {
   getCampaignRoadmapMeta,
   getLevelRoadmapMeta,
@@ -9,11 +10,9 @@ import {
   BOOSTER_DEBUT_NOTES,
   getChapterMetaForLevel,
   getPlayModeMeta,
-  getThemeItemPrice,
-  PARTICLE_CATALOG,
-  SKIN_CATALOG,
-  TRAY_CATALOG,
 } from './catalog-meta';
+
+export { renderThemesStudioImpl } from './themes-studio-view';
 
 export function computeEndlessTierChips(
   unlockedMax: number,
@@ -135,7 +134,7 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
         return;
       }
       app.sound.playButtonTap();
-      app.loadLevel(levelId, true);
+      app.resumeOrLoadLevel(levelId, true);
     });
   }
 
@@ -337,7 +336,8 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
       const playCue = document.createElement('span');
       playCue.className = 'node-play-cue';
       playCue.setAttribute('aria-hidden', 'true');
-      playCue.textContent = `${modeInfo.icon} Play ›`;
+      const isResumable = app.canResumeBoard(spec.id) && isBoardRunStarted(app.board);
+      playCue.textContent = `${modeInfo.icon} ${isResumable ? 'Resume' : 'Play'} ›`;
       currentSubRow.append(nameDiv, playCue);
       contentDiv.appendChild(currentSubRow);
     }
@@ -695,97 +695,4 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
   if (!scrollSelectorIntoView('.level-node-card.current-level', false)) {
     container.scrollTop = 0;
   }
-}
-
-export function renderThemesStudioImpl(app: AppViewContext): void {
-  const save = app.saveManager.getPayload();
-  const particleIcons: Record<string, string> = {
-    micro_cubes: '◆',
-    star_confetti: '✦',
-    pixel_sparks: '✴',
-    soap_bubbles: '◎',
-    lightning_bolts: '↯',
-  };
-
-  const buildCategoryGrid = <T extends string>(
-    containerId: string,
-    items: ReadonlyArray<{ id: T; name: string; desc: string }>,
-    unlockedList: T[],
-    equippedId: T,
-    onAction: (id: T, price: number) => void
-  ) => {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    const frag = document.createDocumentFragment();
-    items.forEach((item, idx) => {
-      const itemPrice = getThemeItemPrice(idx);
-      const isUnlocked = unlockedList.includes(item.id);
-      const isEquipped = equippedId === item.id;
-
-      const card = document.createElement('div');
-      card.className = `theme-card ${isEquipped ? 'equipped' : ''}`;
-
-      const topDiv = document.createElement('div');
-      topDiv.className = 'theme-card-top';
-
-      const swatchDiv = document.createElement('div');
-      swatchDiv.className = `theme-swatch swatch-${item.id}`;
-      if (particleIcons[item.id]) {
-        swatchDiv.textContent = particleIcons[item.id];
-      }
-
-      const metaDiv = document.createElement('div');
-      const h4 = document.createElement('h4');
-      h4.className = 'theme-card-title';
-      h4.textContent = item.name;
-      const p = document.createElement('p');
-      p.className = 'theme-card-desc';
-      p.textContent = item.desc;
-      metaDiv.append(h4, p);
-      topDiv.append(swatchDiv, metaDiv);
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.dataset.themeId = item.id;
-      btn.className = `btn-tactile btn-compact ${
-        isEquipped ? 'btn-primary' : isUnlocked ? 'btn-secondary' : 'btn-warning'
-      }`;
-      btn.textContent = isEquipped ? '✦ Equipped' : isUnlocked ? 'Equip' : `Unlock · ${itemPrice} Coins`;
-
-      btn.addEventListener('click', () => onAction(item.id, itemPrice));
-      card.append(topDiv, btn);
-      frag.appendChild(card);
-    });
-    container.replaceChildren(frag);
-  };
-
-  const applyThemeSelection = (ok: boolean, price: number, onSuccessSound: () => void) => {
-    if (ok) {
-      app.syncAllUiFromSave();
-      onSuccessSound();
-      app.renderThemesStudio();
-      app.renderNow();
-    } else {
-      app.sound.playWallClack();
-      app.showGameToast(`Need ${price} Coins to unlock this cosmetic!`);
-    }
-  };
-
-  buildCategoryGrid('themes-skins-grid', SKIN_CATALOG, save.unlockedSkins, save.equippedSkin, (id, price) =>
-    applyThemeSelection(app.saveManager.unlockOrEquipSkin(id, price), price, () => app.sound.playButtonTap())
-  );
-  buildCategoryGrid('themes-trays-grid', TRAY_CATALOG, save.unlockedTrays, save.equippedTray, (id, price) =>
-    applyThemeSelection(app.saveManager.unlockOrEquipTray(id, price), price, () => app.sound.playButtonTap())
-  );
-  buildCategoryGrid(
-    'themes-particles-grid',
-    PARTICLE_CATALOG,
-    save.unlockedParticles,
-    save.equippedParticle,
-    (id, price) =>
-      applyThemeSelection(app.saveManager.unlockOrEquipParticle(id, price), price, () =>
-        app.sound.playParticlePreview(id)
-      )
-  );
 }

@@ -29,6 +29,7 @@ import {
   isOutcomeTransitionPending,
   useZenBlessingContinueImpl,
 } from './outcome-modals-view';
+import { notifyThemesScreenActiveState, syncPauseCosmeticsDrawerImpl } from './themes-studio-view';
 
 export { continueFailedLevelImpl, useZenBlessingContinueImpl };
 
@@ -60,6 +61,7 @@ export function openModalImpl(app: AppViewContext, id: ModalId): void {
     if (navSec) {
       navSec.hidden = app.activeScreen !== 'game' || app.titleOverlayOpen;
     }
+    syncPauseCosmeticsDrawerImpl(app, true);
     updateTelemetryReadoutImpl(app);
   } else if (id === 'save-transfer') {
     refreshSaveTransferModalImpl(app);
@@ -532,16 +534,7 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
         maxAllowed,
         Math.max(1, Math.floor(st.levelId || ladder.currentLevelId || 1))
       );
-      if (
-        app.board.levelId !== targetId ||
-        app.boardPlayMode !== save.settings.playMode ||
-        isBoardRunStarted(app.board) ||
-        app.levelOutcomeHandled
-      ) {
-        app.loadLevel(targetId, true, true);
-      } else {
-        app.switchScreen('game');
-      }
+      app.resumeOrLoadLevel(targetId, true, true);
       return;
     }
 
@@ -553,6 +546,8 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
 
 export function openTitleScreenImpl(app: AppViewContext): void {
   cancelPendingOutcomeTransition();
+  app.themesEnteredFromGame = false;
+  notifyThemesScreenActiveState(app, false);
   app.titleOverlayOpen = true;
   app.blueprintMix = 1.0;
   if (app.toastTimerId !== null) {
@@ -655,6 +650,11 @@ export function switchScreenImpl(
 
   document.getElementById('tab-btn-home')?.classList.toggle('active', screen === 'home');
   document.getElementById('tab-btn-themes')?.classList.toggle('active', screen === 'themes');
+
+  if (screen !== 'themes') {
+    app.themesEnteredFromGame = false;
+  }
+  notifyThemesScreenActiveState(app, screen === 'themes');
 
   if (screen === 'home') {
     app.activeRoadmapRange = 'all';

@@ -1,12 +1,11 @@
 import type { BoosterType, ParticleStyleId } from '../core/types';
+import { playStyledShredSoundscape } from './shred-style-voices';
 import {
   getOrCreateRelicAwakenNoiseBuffer,
   playBoosterVoice,
   playButtonTapVoice,
-  playFilteredNoiseBurstVoice,
   playLossBuzzerVoice,
   playRelicAwakenVoice,
-  playShredStyleOvertoneVoice,
   playUnderParOracleVoice,
   playWinFanfareVoices,
   prewarmSharedNoiseBuffer,
@@ -441,35 +440,7 @@ export class SoundEngine {
 
     const now = ctx.currentTime;
     const pitchScale = 2 ** (Math.min(12, Math.max(0, cascadeIndex + (isFinalClear ? 2 : 0))) / 12);
-    const grainCount = isFinalClear ? 11 : 8;
-
-    for (let i = 0; i < grainCount; i++) {
-      const startTime = now + i * 0.021;
-      const baseFreq = (320 + i * 85) * pitchScale;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = i % 2 === 0 ? 'sine' : 'triangle';
-      osc.frequency.setValueAtTime(baseFreq, startTime);
-      osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.18, startTime + 0.032);
-
-      gain.gain.setValueAtTime(isFinalClear ? 0.25 : 0.22, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + (isFinalClear ? 0.044 : 0.036));
-
-      osc.connect(gain);
-      gain.connect(this.sfxGain);
-      osc.start(startTime);
-      osc.stop(startTime + (isFinalClear ? 0.046 : 0.038));
-    }
-
-    // Soft filtered noise whirr for the mechanical shredder rollers + equipped shred-style overtone
-    this.playFilteredNoiseBurst(
-      now,
-      isFinalClear ? 0.2 : 0.16,
-      1200 * pitchScale,
-      isFinalClear ? 0.11 : 0.09
-    );
-    playShredStyleOvertoneVoice(ctx, this.sfxGain, now, pitchScale, style, isFinalClear);
+    playStyledShredSoundscape(ctx, this.sfxGain, now, pitchScale, style, isFinalClear, false);
   }
 
   public playParticlePreview(style: ParticleStyleId): void {
@@ -481,7 +452,7 @@ export class SoundEngine {
       void ctx.resume().catch(() => {});
       return;
     }
-    playShredStyleOvertoneVoice(ctx, this.sfxGain, ctx.currentTime, 1.0, style, true);
+    playStyledShredSoundscape(ctx, this.sfxGain, ctx.currentTime, 1.0, style, false, true);
   }
 
   /**
@@ -696,16 +667,6 @@ export class SoundEngine {
     if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
 
     playRelicAwakenVoice(ctx, sfxGain);
-  }
-
-  private playFilteredNoiseBurst(
-    startTime: number,
-    durationSec: number,
-    centerFreq: number,
-    peakGain: number
-  ): void {
-    if (!this.ctx || !this.sfxGain) return;
-    playFilteredNoiseBurstVoice(this.ctx, this.sfxGain, startTime, durationSec, centerFreq, peakGain);
   }
 
   /**

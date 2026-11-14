@@ -293,6 +293,14 @@ export const PARTICLE_CATALOG: ReadonlyArray<{ id: ParticleStyleId; name: string
   },
 ];
 
+export const PARTICLE_GLYPHS: Readonly<Record<ParticleStyleId, string>> = {
+  micro_cubes: '◆',
+  star_confetti: '✦',
+  pixel_sparks: '✴',
+  soap_bubbles: '◎',
+  lightning_bolts: '↯',
+};
+
 export const PWA_INSTALLED_STORAGE_KEY = 'shredblocks_pwa_installed_v1';
 
 export interface AppViewContext {
@@ -304,6 +312,7 @@ export interface AppViewContext {
   boardPlayMode: PlayMode;
   activeScreen: 'home' | 'game' | 'themes';
   titleOverlayOpen: boolean;
+  themesEnteredFromGame: boolean;
   blueprintMix: number;
   activeRoadmapRange: string;
   expandedEndlessRanges: Array<[number, number]>;
@@ -334,6 +343,8 @@ export interface AppViewContext {
   hasUserInteracted: boolean;
   isApplyingPopstate: boolean;
   historyInitialized: boolean;
+  canResumeBoard(levelId?: number): boolean;
+  resumeOrLoadLevel(levelId: number, switchToGameScreen?: boolean, persistLevel?: boolean): void;
   loadLevel(levelId: number, switchToGameScreen?: boolean, persistLevel?: boolean): void;
   switchPlayMode(nextMode: PlayMode, silent?: boolean): void;
   restartCurrentLevel(): void;

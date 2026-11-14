@@ -8,6 +8,7 @@ import {
   PWA_INSTALLED_STORAGE_KEY,
 } from './catalog-meta';
 import { handlePopstateNavigationImpl, refreshSaveTransferModalImpl } from './modals-and-save-transfer';
+import { bindThemesAndCosmeticsEventsImpl } from './themes-studio-view';
 
 export function bindDomEventsImpl(app: AppViewContext): void {
   // Sacred-Geometry Title Crest Overlay Actions
@@ -63,7 +64,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     app.sound.playButtonTap();
     const save = app.saveManager.getPayload();
     const ladder = save.modeState[save.settings.playMode];
-    app.loadLevel(ladder.currentLevelId || ladder.highestUnlocked || 1, true);
+    app.resumeOrLoadLevel(ladder.currentLevelId || ladder.highestUnlocked || 1, true);
   });
   document.getElementById('tab-btn-themes')?.addEventListener('click', () => {
     app.sound.playButtonTap();
@@ -113,7 +114,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     app.sound.playButtonTap();
     const save = app.saveManager.getPayload();
     const ladder = save.modeState[save.settings.playMode];
-    app.loadLevel(ladder.currentLevelId || ladder.highestUnlocked || 1, true);
+    app.resumeOrLoadLevel(ladder.currentLevelId || ladder.highestUnlocked || 1, true);
   });
 
   document.getElementById('btn-install-header')?.addEventListener('click', () => {
@@ -129,21 +130,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     app.renderRoadmap();
   });
 
-  // Themes Studio Category Filter Tabs
-  document.querySelectorAll<HTMLButtonElement>('[data-theme-tab]').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      app.sound.playButtonTap();
-      const cat = tab.dataset.themeTab ?? 'all';
-      document.querySelectorAll('[data-theme-tab]').forEach((t) => {
-        const active = t === tab;
-        t.classList.toggle('active', active);
-        t.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      document.querySelectorAll<HTMLElement>('[data-theme-section]').forEach((sec) => {
-        sec.hidden = cat !== 'all' && sec.dataset.themeSection !== cat;
-      });
-    });
-  });
+  bindThemesAndCosmeticsEventsImpl(app);
 
   // Direct Level Jump (Locked to 1..modeState[playMode].highestUnlocked)
   const jumpInput = document.getElementById('level-jump-input') as HTMLInputElement | null;
@@ -160,7 +147,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
       return;
     }
     app.sound.playButtonTap();
-    app.loadLevel(target, true);
+    app.resumeOrLoadLevel(target, true);
   };
   document.getElementById('btn-level-jump')?.addEventListener('click', triggerLevelJump);
   jumpInput?.addEventListener('keydown', (e) => {
@@ -186,11 +173,6 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   };
   document.getElementById('btn-hud-home')?.addEventListener('click', () => returnHudToMap(false));
   document.getElementById('btn-hud-title-map')?.addEventListener('click', () => returnHudToMap(true));
-
-  document.getElementById('btn-themes-home')?.addEventListener('click', () => {
-    app.sound.playButtonTap();
-    app.switchScreen('home');
-  });
 
   document.getElementById('btn-pause')?.addEventListener('click', () => {
     app.sound.playButtonTap();

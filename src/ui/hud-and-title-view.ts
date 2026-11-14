@@ -1,3 +1,4 @@
+import { isBoardRunStarted } from '../core/board';
 import { getTimedBombTickSec } from '../core/board-state';
 import { findEligibleGateForBlockAt } from '../core/gate-clearance';
 import {
@@ -32,6 +33,7 @@ import {
   getPlayModeMeta,
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
+import { syncPauseCosmeticsDrawerImpl } from './themes-studio-view';
 
 export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockState): void {
   if (isBlockInLockedRoom(app.board, block)) {
@@ -324,21 +326,25 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (heroAwakeningText) {
     heroAwakeningText.textContent = getNextSanctuaryAwakeningText(targetSpec.id);
   }
+  const isResumableTarget = app.canResumeBoard(targetSpec.id) && isBoardRunStarted(app.board);
   if (playBtn) {
-    playBtn.textContent = `${modeInfo.icon} ▶ PLAY LEVEL ${targetSpec.id}`;
+    playBtn.textContent = `${modeInfo.icon} ▶ ${isResumableTarget ? 'RESUME' : 'PLAY'} LEVEL ${targetSpec.id}`;
   }
   if (tabPlayModeIcon) {
     tabPlayModeIcon.textContent = modeInfo.icon;
   }
   if (tabPlayLabel) {
-    tabPlayLabel.textContent = targetSpec.id >= 1000 ? `Play ${targetSpec.id}` : `Play Lvl ${targetSpec.id}`;
+    const verb = isResumableTarget ? 'Resume' : 'Play';
+    tabPlayLabel.textContent =
+      targetSpec.id >= 1000 ? `${verb} ${targetSpec.id}` : `${verb} Lvl ${targetSpec.id}`;
   }
   if (tabPlayBtn) {
-    tabPlayBtn.title = `Continue ${modeInfo.shortLabel} · Level ${targetSpec.id}`;
+    tabPlayBtn.title = `${isResumableTarget ? 'Resume' : 'Continue'} ${modeInfo.shortLabel} · Level ${targetSpec.id}`;
   }
   if (pauseResumeBtn) {
     pauseResumeBtn.textContent = `${modeInfo.icon} ▶ Resume`;
   }
+  syncPauseCosmeticsDrawerImpl(app, false);
 
   // Sacred-Geometry Title Crest Overlay (Adaptive New vs. Returning Player State)
   const isNewPlayer = app.isNewPlayerSave(save);

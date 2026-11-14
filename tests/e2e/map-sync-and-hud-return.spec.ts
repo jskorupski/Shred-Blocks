@@ -347,4 +347,327 @@ test.describe('Sanctuary Map Auto-Scroll, Filter Reset & HUD Title Return', () =
     await expect(card312).toBeVisible();
     await expect(card312.locator('.node-flag-badge.flag-under-par')).toHaveText('✦ Under Par');
   });
+
+  test('COSMETICS-DRAWER-01 & STUDIO-PREVIEW-01: swaps owned cosmetics in Settings drawer without faking locked unlocks, and previews locked combos + live 3D shred in Themes Studio', async ({
+    page,
+  }) => {
+    await bootWithMultiModeSave(page);
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(12));
+    await expect(page.locator('#screen-game')).toBeVisible();
+
+    // 1. Open Settings (#dialog-pause): verify grouped IA (`Appearance`, `Audio & Haptics`, `Accessibility & Display`, `Save & App`, Diagnostics last)
+    await page.locator('#btn-pause').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+    const pauseIaOrder = await page.evaluate(() => {
+      const card = document.querySelector('#dialog-pause .pause-dialog-card');
+      const labels = Array.from(document.querySelectorAll('#dialog-pause .pause-section-label')).map((el) =>
+        el.textContent?.trim()
+      );
+      const lastChildId = card?.lastElementChild?.id ?? '';
+      return { labels, lastChildId };
+    });
+    expect(pauseIaOrder).toEqual({
+      labels: ['Appearance', 'Audio & Haptics', 'Accessibility & Display', 'Save & App'],
+      lastChildId: 'pause-diagnostics-footer',
+    });
+
+    const toggleBtn = page.locator('#btn-toggle-cosmetics-drawer');
+    const panel = page.locator('#pause-cosmetics-panel');
+    await expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#pause-cosmetics-summary')).toContainText('Classic Studs');
+    await expect(panel).toBeHidden();
+
+    await toggleBtn.click();
+    await expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.cosmetics-quick-row')).toHaveCount(3);
+    await expect(panel.locator('.cosmetic-quick-btn')).toHaveCount(15);
+
+    // 2. Locked item (`gummy_jelly` — not in unlockedSkins) has `aria-disabled="true"` + 🔒 badge and NEVER equips for free
+    const lockedSkinBtn = panel.locator(
+      'button[data-quick-cosmetic-kind="skin"][data-quick-cosmetic-id="gummy_jelly"]'
+    );
+    await expect(lockedSkinBtn).toHaveAttribute('aria-disabled', 'true');
+    const lockedBox = await lockedSkinBtn.boundingBox();
+    expect(lockedBox).not.toBeNull();
+    if (lockedBox) {
+      await page.mouse.click(lockedBox.x + lockedBox.width / 2, lockedBox.y + lockedBox.height / 2);
+    }
+    await expect(page.locator('#pause-cosmetics-status')).toContainText('Unlock in Themes Studio');
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave().equippedSkin)).toBe(
+      'classic_studs'
+    );
+
+    // 3. Owned items (`relic_stone`, `warm_birch`, `soap_bubbles`) equip in 1 tap and update live save immediately
+    await panel
+      .locator('button[data-quick-cosmetic-kind="skin"][data-quick-cosmetic-id="relic_stone"]')
+      .click();
+    await panel
+      .locator('button[data-quick-cosmetic-kind="tray"][data-quick-cosmetic-id="warm_birch"]')
+      .click();
+    await panel
+      .locator('button[data-quick-cosmetic-kind="particle"][data-quick-cosmetic-id="soap_bubbles"]')
+      .click();
+
+    const equippedAfterQuickSwap = await page.evaluate(() => {
+      const s = window.__SHREDBLOCKS_DEBUG__.getSave();
+      return { skin: s.equippedSkin, tray: s.equippedTray, particle: s.equippedParticle };
+    });
+    expect(equippedAfterQuickSwap).toEqual({
+      skin: 'relic_stone',
+      tray: 'warm_birch',
+      particle: 'soap_bubbles',
+    });
+
+    // 4. Direct jump to Themes Studio (`#btn-pause-open-themes`) exposes pinned 3D showcase stage + Back/Resume CTA
+    await page.locator('#btn-pause-open-themes').click();
+    await expect(page.locator('#dialog-pause')).toBeHidden();
+    await expect(page.locator('#screen-themes')).toBeVisible();
+    await expect(page.locator('#themes-preview-card')).toBeVisible();
+    await expect(page.locator('#btn-themes-resume-game')).toBeVisible();
+    await expect(page.locator('#themes-preview-badge')).toHaveText('✦ Equipped Loadout');
+
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const baselineShot = (await page.locator('#themes-preview-canvas').screenshot()).toString('base64');
+
+    // 5. Preview a locked Block Skin (`neon_cyber`, 1200c) + locked Board Tray (`frosted_quartz`, 750c) before buying
+    await page.locator('button[data-preview-theme-id="neon_cyber"]').click();
+    await page.locator('button[data-preview-theme-id="frosted_quartz"]').click();
+    await expect(page.locator('#themes-preview-badge')).toContainText('🔒 Preview · 1950 Coins');
+    await expect(page.locator('#btn-themes-reset-preview')).toBeVisible();
+
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const previewShot = (await page.locator('#themes-preview-canvas').screenshot()).toString('base64');
+    expect(previewShot).not.toBe(baselineShot);
+
+    // Scrolling `.themes-scroll` to the bottom keeps `#themes-preview-card` pinned at the top with zero horizontal overflow
+    const stickyMetrics = await page.evaluate(() => {
+      const scrollEl = document.querySelector<HTMLElement>('#screen-themes .themes-scroll');
+      const cardEl = document.getElementById('themes-preview-card');
+      if (!scrollEl || !cardEl) return null;
+      const topBefore = cardEl.getBoundingClientRect().top;
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+      const topAfter = cardEl.getBoundingClientRect().top;
+      return {
+        scrolled: scrollEl.scrollTop > 40,
+        pinnedDeltaPx: Math.abs(topAfter - topBefore),
+        noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+      };
+    });
+    expect(stickyMetrics).toEqual({ scrolled: true, pinnedDeltaPx: 0, noOverflow: true });
+
+    // 6. Trigger `⚡ Test Shred` 4 times to cycle through all 4 showcase blocks (including celebratory 4th-block clear)
+    for (let i = 0; i < 4; i++) {
+      await page.locator('#btn-themes-test-shred').click();
+    }
+    // Reset preview returns cleanly to Equipped Loadout without mutating equipped save items
+    await page.locator('#btn-themes-reset-preview').click();
+    await expect(page.locator('#themes-preview-badge')).toHaveText('✦ Equipped Loadout');
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave().equippedSkin)).toBe(
+      'relic_stone'
+    );
+  });
+
+  test('SESSION-RESUME-01 & STREAK-INTEGRITY-01: preserves mid-level moves, spent Boosters & Flow Streak across Settings -> Themes Studio and Map round-trips while resetting on mode or stage switch', async ({
+    page,
+  }) => {
+    await bootWithMultiModeSave(page);
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(12));
+    await expect(page.locator('#screen-game')).toBeVisible();
+
+    // Spend a HAMMER booster on the first active block so the board is genuinely mid-attempt (`isBoardRunStarted === true`)
+    const initialSnapshot = await page.evaluate(() => {
+      const b = window.__SHREDBLOCKS_DEBUG__.getBoard();
+      const target = b.blocks.find((blk) => blk.status === 'ACTIVE');
+      if (!target) throw new Error('Expected active block on Level 12');
+      return {
+        initialActive: b.blocks.filter((blk) => blk.status === 'ACTIVE').length,
+        targetRow: target.row,
+        targetCol: target.col,
+        hammersBefore: window.__SHREDBLOCKS_DEBUG__.getSave().boosters.HAMMER,
+        streakBefore: window.__SHREDBLOCKS_DEBUG__.getSave().winStreak,
+      };
+    });
+
+    await page.locator('#btn-booster-hammer').click();
+    const targetPt = await page.evaluate(
+      ({ r, c }) => window.__SHREDBLOCKS_DEBUG__.boardToScreen(c + 0.5, r + 0.5),
+      { r: initialSnapshot.targetRow, c: initialSnapshot.targetCol }
+    );
+    await page.mouse.click(targetPt.x, targetPt.y);
+
+    const midRunCounts = await page.evaluate(() => {
+      const b = window.__SHREDBLOCKS_DEBUG__.getBoard();
+      const s = window.__SHREDBLOCKS_DEBUG__.getSave();
+      return {
+        activeBlocks: b.blocks.filter((blk) => blk.status === 'ACTIVE').length,
+        shredded: b.sessionBlocksShredded,
+        hammers: s.boosters.HAMMER,
+        streak: s.winStreak,
+      };
+    });
+    expect(midRunCounts.activeBlocks).toBe(initialSnapshot.initialActive - 1);
+    expect(midRunCounts.shredded).toBe(1);
+    expect(midRunCounts.hammers).toBe(initialSnapshot.hammersBefore - 1);
+    expect(midRunCounts.streak).toBe(2);
+
+    // 1. Mid-game Settings -> Themes Studio -> preview locked skin -> `▶ Resume Lvl 12` preserves exact board & blocks locked leak
+    await page.locator('#btn-pause').click();
+    await page.locator('#btn-toggle-cosmetics-drawer').click();
+    await page.locator('#btn-pause-open-themes').click();
+    await expect(page.locator('#screen-themes')).toBeVisible();
+    await expect(page.locator('#btn-themes-resume-game')).toHaveText('▶ Resume Lvl 12');
+    await page.locator('button[data-preview-theme-id="gummy_jelly"]').click();
+    await page.locator('#btn-themes-resume-game').click();
+
+    await expect(page.locator('#screen-game')).toBeVisible();
+    const afterThemesResume = await page.evaluate(() => {
+      const b = window.__SHREDBLOCKS_DEBUG__.getBoard();
+      const s = window.__SHREDBLOCKS_DEBUG__.getSave();
+      return {
+        levelId: b.levelId,
+        activeBlocks: b.blocks.filter((blk) => blk.status === 'ACTIVE').length,
+        shredded: b.sessionBlocksShredded,
+        equippedSkin: s.equippedSkin,
+        streak: s.winStreak,
+      };
+    });
+    expect(afterThemesResume).toEqual({
+      levelId: 12,
+      activeBlocks: initialSnapshot.initialActive - 1,
+      shredded: 1,
+      equippedSkin: 'classic_studs',
+      streak: 2,
+    });
+
+    // 2. Exit to Sanctuary Map (`‹ Map`) -> Hero & Tab show `Resume`, `winStreak` stays 2, and clicking Hero resumes exact board
+    await page.locator('#btn-hud-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    await expect(page.locator('#btn-play-current')).toContainText('RESUME LEVEL 12');
+    await expect(page.locator('#tab-play-label')).toHaveText('Resume Lvl 12');
+    await expect(page.locator('.level-node-card.current-level[data-level-id="12"]')).toContainText(
+      'Resume ›'
+    );
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave().winStreak)).toBe(2);
+
+    await page.locator('#btn-play-current').click();
+    await expect(page.locator('#screen-game')).toBeVisible();
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().sessionBlocksShredded)).toBe(1);
+
+    // 3. Picking a DIFFERENT stage on Map (Level 11) cleanly loads Move 0 instead of stale Level 12 state
+    await page.locator('#btn-hud-home').click();
+    await page.locator('.level-node-card[data-level-id="11"]').click();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 11');
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().sessionBlocksShredded)).toBe(0);
+  });
+
+  test('VIEWPORT-MATRIX-01 & SETTINGS-IA-01: keeps grouped Settings & expanded Cosmetics card unclipped and scrollable across 8 target viewports (320x568 to 1440x900 + short landscape)', async ({
+    page,
+  }) => {
+    await bootWithMultiModeSave(page);
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(12));
+    await expect(page.locator('#screen-game')).toBeVisible();
+
+    const viewports = [
+      { label: 'ultra-compact-320x568', width: 320, height: 568 },
+      { label: 'compact-mobile-360x640', width: 360, height: 640 },
+      { label: 'flagship-mobile-390x844', width: 390, height: 844 },
+      { label: 'split-midwidth-480x800', width: 480, height: 800 },
+      { label: 'short-landscape-667x375', width: 667, height: 375 },
+      { label: 'flagship-landscape-844x390', width: 844, height: 390 },
+      { label: 'tablet-portrait-768x1024', width: 768, height: 1024 },
+      { label: 'desktop-widescreen-1440x900', width: 1440, height: 900 },
+    ];
+
+    await page.locator('#btn-pause').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+      for (const expanded of [false, true]) {
+        const curExpanded = await page.locator('#btn-toggle-cosmetics-drawer').getAttribute('aria-expanded');
+        if ((curExpanded === 'true') !== expanded) {
+          await page.locator('#btn-toggle-cosmetics-drawer').click();
+        }
+
+        const metrics = await page.evaluate(() => {
+          const card = document.querySelector<HTMLElement>('#dialog-pause .pause-dialog-card');
+          const closeBtn = document.getElementById('btn-pause-close');
+          const footer = document.getElementById('pause-diagnostics-footer');
+          if (!card || !closeBtn || !footer) return null;
+
+          card.scrollTop = 0;
+          const cardRect = card.getBoundingClientRect();
+          const closeRect = closeBtn.getBoundingClientRect();
+          const topVisible = closeRect.top >= cardRect.top - 1 && closeRect.bottom <= cardRect.bottom + 1;
+
+          // Check every visible button, swatch, select, and setting label inside the card
+          const selectors = [
+            '#btn-pause-resume',
+            '#btn-pause-home',
+            '#btn-pause-restart',
+            '#btn-toggle-cosmetics-drawer',
+            '#select-quality-tier',
+            '#btn-pause-save-transfer',
+            '#btn-pause-install',
+            '.setting-row',
+            '.cosmetic-quick-btn',
+          ];
+          let outOfBoundsSelector: string | null = null;
+          for (const sel of selectors) {
+            const nodes = card.querySelectorAll<HTMLElement>(sel);
+            for (const node of nodes) {
+              if (node.closest('[hidden]')) continue;
+              const r = node.getBoundingClientRect();
+              if (r.width < 16 || r.left < cardRect.left - 1.5 || r.right > cardRect.right + 1.5) {
+                outOfBoundsSelector = `${sel} (${Math.round(r.left)}..${Math.round(r.right)} vs ${Math.round(cardRect.left)}..${Math.round(cardRect.right)})`;
+                break;
+              }
+            }
+            if (outOfBoundsSelector) break;
+          }
+
+          let truncatedLabel: string | null = null;
+          for (const span of card.querySelectorAll<HTMLElement>('.setting-row > span')) {
+            if (span.scrollWidth > span.clientWidth + 1) {
+              truncatedLabel = `${span.textContent} (${span.scrollWidth} > ${span.clientWidth})`;
+              break;
+            }
+          }
+
+          card.scrollTop = card.scrollHeight;
+          const footerRect = footer.getBoundingClientRect();
+          const bottomReachable =
+            footerRect.top >= cardRect.top - 1 && footerRect.bottom <= cardRect.bottom + 2;
+          card.scrollTop = 0;
+
+          return {
+            docNoOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+            cardNoOverflow: card.scrollWidth <= card.clientWidth + 1,
+            cardFitsViewport:
+              cardRect.top >= -0.5 &&
+              cardRect.bottom <= window.innerHeight + 1 &&
+              cardRect.left >= -0.5 &&
+              cardRect.right <= window.innerWidth + 1,
+            topVisible,
+            bottomReachable,
+            outOfBoundsSelector,
+            truncatedLabel,
+          };
+        });
+
+        expect(metrics, `${vp.label} (expanded=${expanded})`).toEqual({
+          docNoOverflow: true,
+          cardNoOverflow: true,
+          cardFitsViewport: true,
+          topVisible: true,
+          bottomReachable: true,
+          outOfBoundsSelector: null,
+          truncatedLabel: null,
+        });
+      }
+    }
+  });
 });

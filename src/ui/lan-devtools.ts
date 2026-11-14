@@ -174,15 +174,32 @@ export function mountLanDevTools(app: AppViewContext): void {
     themesEcon.prepend(createUnlockButton('btn-lan-unlock-themes', '🛠 Unlock All', app));
   }
 
-  const pauseUtility = document.querySelector('#dialog-pause .pause-utility-grid');
-  if (pauseUtility && !document.getElementById('btn-lan-unlock-pause')) {
-    pauseUtility.appendChild(createUnlockButton('btn-lan-unlock-pause', '🛠 LAN Unlock All', app));
+  const diagnosticsFooter =
+    document.getElementById('pause-diagnostics-footer') ??
+    document.querySelector('#dialog-pause .pause-dialog-card');
+  if (diagnosticsFooter && !document.getElementById('btn-lan-unlock-pause')) {
+    const devDetails = document.createElement('details');
+    devDetails.id = 'pause-lan-devtools';
+    devDetails.className = 'telemetry-details lan-devtools-details';
+
+    const summary = document.createElement('summary');
+    summary.textContent = 'Developer Tools (LAN Only)';
+
+    const grid = document.createElement('div');
+    grid.className = 'dialog-actions-grid pause-dev-grid';
+
+    const unlockBtn = createUnlockButton('btn-lan-unlock-pause', '🛠 LAN Unlock All', app);
+    unlockBtn.className = 'btn-tactile btn-secondary btn-compact';
+
     const restoreBtn = document.createElement('button');
     restoreBtn.type = 'button';
     restoreBtn.id = 'btn-lan-restore-save';
     restoreBtn.className = 'btn-tactile btn-secondary btn-compact';
     restoreBtn.addEventListener('click', () => restoreOrResetLanSave(app));
-    pauseUtility.appendChild(restoreBtn);
+
+    grid.append(unlockBtn, restoreBtn);
+    devDetails.append(summary, grid);
+    diagnosticsFooter.appendChild(devDetails);
     syncRestoreButtonLabels();
   }
 }

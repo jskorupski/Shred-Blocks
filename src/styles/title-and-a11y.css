@@ -614,7 +614,7 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
     padding: 0.52rem 1rem;
   }
 
-  .dialog-actions-grid:not(.pause-primary-grid):not(.pause-utility-grid) {
+  .dialog-actions-grid:not(.pause-primary-grid):not(.pause-utility-grid):not(.pause-dev-grid) {
     grid-template-columns: 1fr;
   }
 
@@ -747,6 +747,7 @@ body.high-contrast .pwa-update-toast {
   .theme-card,
   .booster-btn,
   .setting-row,
+  .cosmetics-drawer,
   .setting-row input[type="checkbox"],
   .dialog-card,
   .economy-pills,
