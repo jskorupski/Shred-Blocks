@@ -3,7 +3,6 @@ import {
   AMBIENT_PRESETS,
   AMBIENT_ROTATION_BARS,
   AmbientMusicController,
-  prewarmAmbientMusicBuffer,
   SCENE_ROTATION_POOLS,
 } from '../../src/audio/ambient-music';
 import { playStyledShredSoundscape } from '../../src/audio/shred-style-voices';
@@ -547,15 +546,15 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
     }
   });
 
-  describe('AMBIENT-MUSIC-01: Mode-Attuned Lo-Fi Chill Grooves & Pure-Pentatonic Rotation', () => {
+  describe('AMBIENT-MUSIC-01: Mode-Attuned Drumless Warm Analog Synthwave & Pure-Pentatonic Rotation', () => {
     const createAmbientMockCtx = () => {
       const filters: Array<{ type: BiquadFilterType; freq: number; q: number }> = [];
       const oscStarts: Array<{ type: OscillatorType; freq: number; startAt: number; stopAt: number }> = [];
       const bufStarts: Array<{ len: number; when: number }> = [];
-      let shaperCount = 0;
       let delayCount = 0;
       let compCount = 0;
       let disconnectCount = 0;
+      let immediateStopCount = 0;
 
       const makeParam = (onSet?: (v: number) => void) => ({
         value: 0,
@@ -596,10 +595,6 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
             }),
           };
         },
-        createWaveShaper: () => {
-          shaperCount += 1;
-          return { ...baseNode, curve: null, oversample: 'none' };
-        },
         createDelay: () => {
           delayCount += 1;
           return { ...baseNode, delayTime: makeParam() };
@@ -608,6 +603,7 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
           compCount += 1;
           return { ...baseNode, threshold: makeParam(), ratio: makeParam() };
         },
+        createStereoPanner: () => ({ ...baseNode, pan: makeParam() }),
         createBuffer: (_ch: number, len: number, sampleRate: number) => {
           const buf = new Float32Array(len);
           return { length: len, sampleRate, getChannelData: () => buf };
@@ -641,8 +637,12 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
               rec.startAt = t;
               oscStarts.push(rec);
             },
-            stop: (t = 0) => {
-              rec.stopAt = t;
+            stop: (t?: number) => {
+              if (t === undefined) {
+                immediateStopCount += 1;
+              } else {
+                rec.stopAt = t;
+              }
             },
           };
         },
@@ -654,28 +654,32 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
         filters,
         oscStarts,
         bufStarts,
-        getStats: () => ({ shaperCount, delayCount, compCount, disconnectCount }),
+        getStats: () => ({ delayCount, compCount, disconnectCount, immediateStopCount }),
       };
     };
 
-    it('keeps every preset pure-pentatonic (0 semitones, 0 tritones, >= 2.9 semitone spacing) with aligned drum patterns', () => {
+    it('keeps every synthwave preset pure-pentatonic (0 semitones, 0 tritones, >= 1.9 semitone pad spacing)', () => {
       const hzToMidi = (f: number) => 69 + 12 * Math.log2(f / 440);
-      const validTokens = new Set(['K', 'k', 'S', 'R', 'r', 'H', 'h', 'O', '.']);
 
       expect(AMBIENT_PRESETS).toHaveLength(5);
       for (const preset of AMBIENT_PRESETS) {
-        expect(preset.drumPattern.length).toBe(preset.pattern.length);
-        for (const tok of preset.drumPattern) {
-          expect(validTokens.has(tok)).toBe(true);
-        }
+        expect(preset.arpPattern).toHaveLength(16);
+        expect(preset.arp).toHaveLength(5);
+        expect(preset.chords).toHaveLength(4);
 
         const pcs = new Set<number>();
+        for (const freq of preset.arp) {
+          pcs.add(((Math.round(hzToMidi(freq)) % 12) + 12) % 12);
+        }
         for (const chord of preset.chords) {
-          const stack = [chord.root, ...chord.pad].map(hzToMidi);
+          const stack = [chord.bass, ...chord.pad].map(hzToMidi);
           for (let i = 1; i < stack.length; i++) {
-            expect(stack[i] - stack[i - 1]).toBeGreaterThanOrEqual(2.9);
+            expect(stack[i] - stack[i - 1]).toBeGreaterThanOrEqual(1.9);
           }
-          for (const midi of [...stack, ...chord.motif.map(hzToMidi)]) {
+          const melodic = [...stack];
+          if (chord.leadA !== null) melodic.push(hzToMidi(chord.leadA));
+          if (chord.leadB !== null) melodic.push(hzToMidi(chord.leadB));
+          for (const midi of melodic) {
             pcs.add(((Math.round(midi) % 12) + 12) % 12);
           }
         }
@@ -698,66 +702,66 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
 
       expect(ctrl.getScene()).toBe('MENU');
       expect(ctrl.getActivePresetId()).toBe(SCENE_ROTATION_POOLS.MENU[0]);
+      expect(ctrl.getActivePresetId()).toBe('horizon_awake');
 
       ctrl.setScene('CHALLENGE', ctx, musicGain, false);
-      expect(ctrl.getActivePresetId()).toBe('carved_stone');
+      expect(ctrl.getActivePresetId()).toBe('starlight_kids');
       ctrl.advanceStep(ctx, musicGain, 2.02);
       // Re-asserting the same scene (e.g. Next Level / Restart in Challenge) must not reset bars or step
       ctrl.setScene('CHALLENGE', ctx, musicGain, true);
       ctrl.setScene('CHALLENGE', ctx, musicGain, true);
-      expect(ctrl.getActivePresetId()).toBe('carved_stone');
+      expect(ctrl.getActivePresetId()).toBe('starlight_kids');
 
       let t = 2.2;
-      const barLen = AMBIENT_PRESETS.find((p) => p.id === 'carved_stone')?.pattern.length ?? 0;
+      const barLen = AMBIENT_PRESETS.find((p) => p.id === 'starlight_kids')?.arpPattern.length ?? 0;
       expect(barLen).toBe(16);
       for (let s = 1; s < AMBIENT_ROTATION_BARS * barLen; s++) {
         t += ctrl.advanceStep(ctx, musicGain, t);
       }
       expect(ctrl.getBarsInCurrentTrack()).toBe(AMBIENT_ROTATION_BARS);
-      expect(ctrl.getActivePresetId()).toBe('carved_stone');
+      expect(ctrl.getActivePresetId()).toBe('starlight_kids');
 
       // Downbeat of bar 33 rotates smoothly to the next palette in the CHALLENGE pool
       ctrl.advanceStep(ctx, musicGain, t);
       expect(ctrl.getActivePresetId()).toBe(SCENE_ROTATION_POOLS.CHALLENGE[1]);
+      expect(ctrl.getActivePresetId()).toBe('horizon_awake');
 
       ctrl.setScene('ZEN', ctx, musicGain, false);
-      expect(ctrl.getActivePresetId()).toBe('rainstone');
+      expect(ctrl.getActivePresetId()).toBe('coastal_dive');
       ctrl.setScene('TIMED', ctx, musicGain, false);
-      expect(ctrl.getActivePresetId()).toBe('starlight');
+      expect(ctrl.getActivePresetId()).toBe('hawkins_stargazer');
       ctrl.destroy();
     });
 
-    it('synthesizes the warm-tape drum bus, 720 Hz chamber wash, deterministic pink noise, and tears down cleanly', () => {
+    it('synthesizes drumless Juno chorus, 860 Hz tape echo wash, wow LFO, zero noise drums, and tears down cleanly', () => {
       const { ctx, musicGain, filters, oscStarts, bufStarts, getStats } = createAmbientMockCtx();
-      const bufA = prewarmAmbientMusicBuffer(ctx);
-      const bufB = prewarmAmbientMusicBuffer(ctx);
-      expect(bufA).toBe(bufB);
 
       const ctrl = new AmbientMusicController();
       ctrl.setScene('CHALLENGE', ctx, musicGain, false);
 
-      // Step through 1 full bar (16 steps) to trigger pad, pillow bass, kicks, snares, hats, and rimshot
+      // Step through 1 full bar (16 steps) of starlight_kids
       let t = 2.05;
       for (let i = 0; i < 16; i++) {
         t += ctrl.advanceStep(ctx, musicGain, t);
       }
 
       const stats = getStats();
-      expect(stats.shaperCount).toBe(1);
-      expect(stats.delayCount).toBe(2);
+      expect(bufStarts).toHaveLength(0);
+      expect(stats.delayCount).toBe(4);
       expect(stats.compCount).toBe(1);
-      expect(filters.some((f) => f.type === 'lowpass' && f.freq === 2900)).toBe(true);
-      expect(filters.filter((f) => f.type === 'lowpass' && f.freq === 720).length).toBeGreaterThanOrEqual(2);
-      expect(oscStarts.length).toBeGreaterThanOrEqual(8);
-      expect(bufStarts.length).toBeGreaterThanOrEqual(6);
+      expect(filters.some((f) => f.type === 'lowpass' && f.freq === 1750)).toBe(true);
+      expect(filters.filter((f) => f.type === 'lowpass' && f.freq === 860)).toHaveLength(2);
+      expect(oscStarts.length).toBeGreaterThanOrEqual(25);
 
       ctrl.destroy();
-      expect(getStats().disconnectCount).toBeGreaterThan(0);
+      const postDestroyStats = getStats();
+      expect(postDestroyStats.disconnectCount).toBeGreaterThan(0);
+      expect(postDestroyStats.immediateStopCount).toBe(3);
 
       const sound = new SoundEngine({ sfxEnabled: false, musicEnabled: false, hapticsEnabled: false });
       sound.setMusicScene('TIMED');
       expect(sound.getMusicScene()).toBe('TIMED');
-      expect(sound.getActiveMusicPreset()).toBe('starlight');
+      expect(sound.getActiveMusicPreset()).toBe('hawkins_stargazer');
       sound.destroy();
     });
   });

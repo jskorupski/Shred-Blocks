@@ -4,10 +4,10 @@ import {
   type AmbientChord,
   type AmbientPreset,
   type AmbientPresetId,
-  type DrumToken,
-  getTapeCurve,
+  type AnalogArpConfig,
+  type JunoPadOpts,
+  type MoogBassOpts,
   type MusicScene,
-  prewarmAmbientMusicBuffer,
   SCENE_ROTATION_POOLS,
 } from './ambient-presets';
 
@@ -17,9 +17,7 @@ export {
   type AmbientChord,
   type AmbientPreset,
   type AmbientPresetId,
-  type DrumToken,
   type MusicScene,
-  prewarmAmbientMusicBuffer,
   SCENE_ROTATION_POOLS,
 };
 
@@ -32,10 +30,19 @@ function setParam(param: AudioParam | undefined, value: number, time: number): v
   }
 }
 
-function targetParam(param: AudioParam | undefined, value: number, time: number, tc: number): void {
+function linearRamp(param: AudioParam | undefined, value: number, time: number): void {
   if (!param) return;
-  if (typeof param.setTargetAtTime === 'function') {
-    param.setTargetAtTime(value, time, tc);
+  if (typeof param.linearRampToValueAtTime === 'function') {
+    param.linearRampToValueAtTime(value, time);
+  } else {
+    setParam(param, value, time);
+  }
+}
+
+function expRamp(param: AudioParam | undefined, value: number, time: number): void {
+  if (!param) return;
+  if (typeof param.exponentialRampToValueAtTime === 'function') {
+    param.exponentialRampToValueAtTime(value, time);
   } else {
     setParam(param, value, time);
   }
@@ -49,55 +56,44 @@ function disconnectAll(nodes: ReadonlyArray<AudioNode>): void {
   }
 }
 
-interface MasterMusicGraph {
+function stopOscs(oscs: ReadonlyArray<OscillatorNode>): void {
+  for (const osc of oscs) {
+    try {
+      osc.stop();
+    } catch {}
+  }
+}
+
+interface MasterSynthwaveGraph {
   readonly ctx: AudioContext;
   readonly musicGain: GainNode;
-  readonly warmthFilter: BiquadFilterNode;
-  readonly drumTapeFilter: BiquadFilterNode;
-  readonly wetInput: GainNode;
-  readonly wetOutput: GainNode;
+  readonly dryBus: GainNode;
+  readonly chorusIn: GainNode;
+  readonly washIn: GainNode;
+  readonly wowDepthGain: GainNode;
   readonly ownedNodes: ReadonlyArray<AudioNode>;
+  readonly ownedOscs: ReadonlyArray<OscillatorNode>;
 }
 
-interface PresetBus {
-  readonly padMelBus: GainNode;
-  readonly drumBus: GainNode;
-  readonly wetBus: GainNode;
-  readonly leadGain: GainNode;
-  readonly beatDryGain: GainNode;
-  readonly beatWetGain: GainNode;
-}
-
-interface NoiseLayerSpec {
-  readonly buffer: AudioBuffer;
-  readonly offset: number;
-  readonly when: number;
-  readonly readDur: number;
-  readonly stopAt: number;
-  readonly peak: number;
-  readonly attack: number;
-  readonly decay: number;
-  readonly wetGain: number;
-  readonly filters: ReadonlyArray<{
-    readonly type: BiquadFilterType;
-    readonly freq: number;
-    readonly q: number;
-  }>;
+interface PresetStem {
+  readonly dry: GainNode;
+  readonly wet: GainNode;
+  readonly chorus: GainNode;
 }
 
 /**
- * Mode-attuned procedural Web Audio chill soundtrack controller with warm tape drums,
- * pure-pentatonic pads, felt-mallet motifs, and bar-aligned 32-bar palette rotation.
+ * Mode-attuned drumless Warm Analog Synthwave controller featuring Juno-60 stereo chorus,
+ * 860 Hz vintage tape echo, analog wow modulation, pure-pentatonic stacks, and 32-bar rotation.
  */
 export class AmbientMusicController {
   private timerId: ReturnType<typeof setInterval> | null = null;
-  private graph: MasterMusicGraph | null = null;
-  private activeBus: PresetBus | null = null;
+  private graph: MasterSynthwaveGraph | null = null;
+  private activeStem: PresetStem | null = null;
   private readonly fadeTimers = new Set<ReturnType<typeof setTimeout>>();
 
   private currentScene: MusicScene = 'MENU';
   private rotationIndex = 0;
-  private activePresetId: AmbientPresetId = 'astrolabe';
+  private activePresetId: AmbientPresetId = SCENE_ROTATION_POOLS.MENU[0];
   private barsInCurrentTrack = 0;
   private stepIndex = 0;
   private chordIndex = 0;
@@ -142,8 +138,7 @@ export class AmbientMusicController {
     this.chordIndex = 0;
     if (playing && ctx && musicGain) {
       const graph = this.ensureGraph(ctx, musicGain);
-      const preset = this.getPresetById(opener);
-      this.createPresetBus(ctx, graph, preset, ctx.currentTime);
+      this.createPresetStem(ctx, graph, ctx.currentTime);
       this.nextNoteTime = ctx.currentTime + 0.06;
     }
   }
@@ -151,8 +146,8 @@ export class AmbientMusicController {
   public start(ctx: AudioContext, musicGain: GainNode): void {
     if (this.timerId !== null) return;
     const graph = this.ensureGraph(ctx, musicGain);
-    if (!this.activeBus) {
-      this.createPresetBus(ctx, graph, this.getPresetById(this.activePresetId), ctx.currentTime);
+    if (!this.activeStem) {
+      this.createPresetStem(ctx, graph, ctx.currentTime);
     }
     this.nextNoteTime = ctx.currentTime + 0.05;
     this.timerId = setInterval(() => this.tickLookahead(ctx, musicGain), 45);
@@ -166,12 +161,11 @@ export class AmbientMusicController {
       clearInterval(this.timerId);
       this.timerId = null;
     }
-    if (this.activeBus && this.graph) {
+    if (this.activeStem && this.graph) {
       const ctx = this.graph.ctx;
-      const t = ctx.currentTime;
-      const old = this.activeBus;
-      this.activeBus = null;
-      this.fadeOutBus(ctx, old, t, 360);
+      const old = this.activeStem;
+      this.activeStem = null;
+      this.fadeOutStem(ctx, old, ctx.currentTime);
     }
   }
 
@@ -184,174 +178,204 @@ export class AmbientMusicController {
       clearTimeout(tid);
     }
     this.fadeTimers.clear();
-    if (this.activeBus) {
-      disconnectAll([this.activeBus.padMelBus, this.activeBus.drumBus, this.activeBus.wetBus]);
-      this.activeBus = null;
+    if (this.activeStem) {
+      disconnectAll([this.activeStem.dry, this.activeStem.wet, this.activeStem.chorus]);
+      this.activeStem = null;
     }
     if (this.graph) {
+      stopOscs(this.graph.ownedOscs);
       disconnectAll(this.graph.ownedNodes);
       this.graph = null;
     }
   }
 
-  private ensureGraph(ctx: AudioContext, musicGain: GainNode): MasterMusicGraph {
+  private ensureGraph(ctx: AudioContext, musicGain: GainNode): MasterSynthwaveGraph {
     if (this.graph && this.graph.ctx === ctx && this.graph.musicGain === musicGain) {
       return this.graph;
     }
     if (this.graph) {
+      stopOscs(this.graph.ownedOscs);
       disconnectAll(this.graph.ownedNodes);
       this.graph = null;
-      this.activeBus = null;
+      this.activeStem = null;
     }
 
-    const owned: AudioNode[] = [];
-    const preset = this.getPresetById(this.activePresetId);
-    const busOut = ctx.createGain();
-    setParam(busOut.gain, 1.0, ctx.currentTime);
-    owned.push(busOut);
+    const now = ctx.currentTime;
+    const ownedNodes: AudioNode[] = [];
+    const ownedOscs: OscillatorNode[] = [];
 
-    const warmthFilter = ctx.createBiquadFilter();
-    warmthFilter.type = 'lowpass';
-    setParam(warmthFilter.frequency, preset.warmthHz, ctx.currentTime);
-    setParam(warmthFilter.Q, 0.55, ctx.currentTime);
-    warmthFilter.connect(busOut);
-    owned.push(warmthFilter);
-
-    const drumTapeFilter = ctx.createBiquadFilter();
-    drumTapeFilter.type = 'lowpass';
-    setParam(drumTapeFilter.frequency, 2900, ctx.currentTime);
-    setParam(drumTapeFilter.Q, 0.65, ctx.currentTime);
-    owned.push(drumTapeFilter);
-
-    if (typeof ctx.createWaveShaper === 'function') {
-      const shaper = ctx.createWaveShaper();
-      shaper.curve = getTapeCurve();
-      shaper.oversample = '2x';
-      drumTapeFilter.connect(shaper);
-      shaper.connect(busOut);
-      owned.push(shaper);
-    } else {
-      drumTapeFilter.connect(busOut);
-    }
-
-    const wetInput = ctx.createGain();
-    setParam(wetInput.gain, 1.0, ctx.currentTime);
-    const wetOutput = ctx.createGain();
-    setParam(wetOutput.gain, preset.wetMix, ctx.currentTime);
-    wetOutput.connect(busOut);
-    owned.push(wetInput, wetOutput);
-
-    if (typeof ctx.createDelay === 'function') {
-      const makeWashLeg = (delaySec: number) => {
-        const d = ctx.createDelay(1.5);
-        setParam(d.delayTime, delaySec, ctx.currentTime);
-        const damp = ctx.createBiquadFilter();
-        damp.type = 'lowpass';
-        setParam(damp.frequency, 720, ctx.currentTime);
-        setParam(damp.Q, 0.5, ctx.currentTime);
-        const fb = ctx.createGain();
-        setParam(fb.gain, 0.26, ctx.currentTime);
-        const tap = ctx.createGain();
-        setParam(tap.gain, 0.58, ctx.currentTime);
-        d.connect(damp);
-        damp.connect(fb);
-        damp.connect(tap);
-        tap.connect(wetOutput);
-        owned.push(d, damp, fb, tap);
-        return { d, fb };
-      };
-      const legA = makeWashLeg(0.34);
-      const legB = makeWashLeg(0.53);
-      wetInput.connect(legA.d);
-      legA.fb.connect(legB.d);
-      legB.fb.connect(legA.d);
-    } else {
-      wetInput.connect(wetOutput);
-    }
+    const dryBus = ctx.createGain();
+    setParam(dryBus.gain, 1.0, now);
+    ownedNodes.push(dryBus);
 
     if (typeof ctx.createDynamicsCompressor === 'function') {
-      const guard = ctx.createDynamicsCompressor();
-      setParam(guard.threshold, -9, ctx.currentTime);
-      setParam(guard.ratio, 3, ctx.currentTime);
-      busOut.connect(guard);
-      guard.connect(musicGain);
-      owned.push(guard);
+      const comp = ctx.createDynamicsCompressor();
+      setParam(comp.threshold, -4, now);
+      setParam(comp.ratio, 3, now);
+      dryBus.connect(comp);
+      comp.connect(musicGain);
+      ownedNodes.push(comp);
     } else {
-      busOut.connect(musicGain);
+      dryBus.connect(musicGain);
     }
 
-    this.graph = { ctx, musicGain, warmthFilter, drumTapeFilter, wetInput, wetOutput, ownedNodes: owned };
+    // Analog Tape Wow LFO (0.31 Hz, +-2.5 cents on sustained pads)
+    const wowLfo = ctx.createOscillator();
+    const wowDepthGain = ctx.createGain();
+    wowLfo.type = 'sine';
+    setParam(wowLfo.frequency, 0.31, now);
+    setParam(wowDepthGain.gain, 2.5, now);
+    wowLfo.connect(wowDepthGain);
+    wowLfo.start();
+    ownedOscs.push(wowLfo);
+    ownedNodes.push(wowLfo, wowDepthGain);
+
+    // Juno-60 Stereo Chorus (I+II)
+    const chorusIn = ctx.createGain();
+    const chorusOut = ctx.createGain();
+    setParam(chorusIn.gain, 1.0, now);
+    setParam(chorusOut.gain, 0.84, now);
+    chorusIn.connect(chorusOut);
+    chorusOut.connect(dryBus);
+    ownedNodes.push(chorusIn, chorusOut);
+
+    const chorusLp = ctx.createBiquadFilter();
+    chorusLp.type = 'lowpass';
+    setParam(chorusLp.frequency, 1750, now);
+    chorusIn.connect(chorusLp);
+    ownedNodes.push(chorusLp);
+
+    if (typeof ctx.createDelay === 'function') {
+      const voices = [
+        { delay: 0.013, rate: 0.38, pan: -0.6 },
+        { delay: 0.019, rate: 0.49, pan: 0.6 },
+      ];
+      for (const voice of voices) {
+        const d = ctx.createDelay(0.1);
+        setParam(d.delayTime, voice.delay, now);
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.type = 'sine';
+        setParam(lfo.frequency, voice.rate, now);
+        setParam(lfoGain.gain, 0.0024, now);
+        lfo.connect(lfoGain);
+        lfoGain.connect(d.delayTime);
+        lfo.start();
+        ownedOscs.push(lfo);
+
+        const g = ctx.createGain();
+        setParam(g.gain, 0.42, now);
+        chorusLp.connect(d);
+        d.connect(g);
+        ownedNodes.push(d, lfo, lfoGain, g);
+
+        if (typeof ctx.createStereoPanner === 'function') {
+          const pan = ctx.createStereoPanner();
+          setParam(pan.pan, voice.pan, now);
+          g.connect(pan);
+          pan.connect(chorusOut);
+          ownedNodes.push(pan);
+        } else {
+          g.connect(chorusOut);
+        }
+      }
+    }
+
+    // Vintage Tape Echo / Horizon Wash
+    const washIn = ctx.createGain();
+    const washOut = ctx.createGain();
+    setParam(washIn.gain, 1.0, now);
+    setParam(washOut.gain, 0.48, now);
+    washOut.connect(dryBus);
+    ownedNodes.push(washIn, washOut);
+
+    if (typeof ctx.createDelay === 'function') {
+      const delayA = ctx.createDelay(1.5);
+      const delayB = ctx.createDelay(1.5);
+      setParam(delayA.delayTime, 0.31, now);
+      setParam(delayB.delayTime, 0.46, now);
+
+      const dampA = ctx.createBiquadFilter();
+      const dampB = ctx.createBiquadFilter();
+      dampA.type = 'lowpass';
+      dampB.type = 'lowpass';
+      setParam(dampA.frequency, 860, now);
+      setParam(dampB.frequency, 860, now);
+
+      const fbA = ctx.createGain();
+      const fbB = ctx.createGain();
+      setParam(fbA.gain, 0.34, now);
+      setParam(fbB.gain, 0.34, now);
+
+      washIn.connect(delayA);
+      delayA.connect(dampA);
+      dampA.connect(fbA);
+      fbA.connect(delayB);
+      delayB.connect(dampB);
+      dampB.connect(fbB);
+      fbB.connect(delayA);
+      ownedNodes.push(delayA, delayB, dampA, dampB, fbA, fbB);
+
+      if (typeof ctx.createStereoPanner === 'function') {
+        const pA = ctx.createStereoPanner();
+        const pB = ctx.createStereoPanner();
+        setParam(pA.pan, -0.45, now);
+        setParam(pB.pan, 0.45, now);
+        dampA.connect(pA);
+        dampB.connect(pB);
+        pA.connect(washOut);
+        pB.connect(washOut);
+        ownedNodes.push(pA, pB);
+      } else {
+        dampA.connect(washOut);
+        dampB.connect(washOut);
+      }
+    } else {
+      washIn.connect(washOut);
+    }
+
+    this.graph = { ctx, musicGain, dryBus, chorusIn, washIn, wowDepthGain, ownedNodes, ownedOscs };
     return this.graph;
   }
 
-  private fadeOutBus(ctx: AudioContext, bus: PresetBus, startAt: number, cleanupMs: number): void {
+  private fadeOutStem(ctx: AudioContext, stem: PresetStem, startAt: number): void {
     const start = Math.max(ctx.currentTime, startAt);
-    const stems = [bus.padMelBus, bus.drumBus, bus.wetBus];
-    for (const node of stems) {
+    const nodes = [stem.dry, stem.wet, stem.chorus];
+    for (const node of nodes) {
       node.gain.cancelScheduledValues?.(start);
       setParam(node.gain, Math.max(0.0001, node.gain.value || 1.0), start);
-      node.gain.exponentialRampToValueAtTime(0.0001, start + 0.38);
+      expRamp(node.gain, 0.0001, start + 0.36);
     }
-    const delayMs = Math.max(cleanupMs, Math.ceil((start - ctx.currentTime + 0.44) * 1000));
+    const delayMs = Math.max(420, Math.ceil((start - ctx.currentTime + 0.42) * 1000));
     const tid = setTimeout(() => {
       this.fadeTimers.delete(tid);
-      disconnectAll(stems);
+      disconnectAll(nodes);
     }, delayMs);
     this.fadeTimers.add(tid);
   }
 
-  private createPresetBus(
-    ctx: AudioContext,
-    graph: MasterMusicGraph,
-    preset: AmbientPreset,
-    downbeatTime: number
-  ): PresetBus {
+  private createPresetStem(ctx: AudioContext, graph: MasterSynthwaveGraph, downbeatTime: number): PresetStem {
     const now = ctx.currentTime;
-    const rampStart = Math.max(now, downbeatTime - 0.08);
-    const rampTo = downbeatTime <= now + 0.01 ? now + 0.18 : downbeatTime;
-    const drumTo = downbeatTime <= now + 0.01 ? now + 0.12 : downbeatTime;
-    const rampOrigin = downbeatTime <= now + 0.01 ? now : rampStart;
-
-    const makeStem = (target: AudioNode, endAt: number) => {
-      const stem = ctx.createGain();
-      stem.gain.setValueAtTime(0.0001, rampOrigin);
-      stem.gain.linearRampToValueAtTime(1.0, endAt);
-      stem.connect(target);
-      return stem;
+    const rampStart = downbeatTime <= now + 0.01 ? now : Math.max(now, downbeatTime - 0.04);
+    const makeGain = (target: AudioNode) => {
+      const g = ctx.createGain();
+      setParam(g.gain, 0.0001, rampStart);
+      linearRamp(g.gain, 1.0, rampStart + 0.22);
+      g.connect(target);
+      return g;
     };
-    const padMelBus = makeStem(graph.warmthFilter, rampTo);
-    const drumBus = makeStem(graph.drumTapeFilter, drumTo);
-    const wetBus = makeStem(graph.wetInput, rampTo);
 
-    const leadGain = ctx.createGain();
-    setParam(leadGain.gain, 0.78, rampStart);
-    const drySend = ctx.createGain();
-    setParam(drySend.gain, 0.44, rampStart);
-    const wetSend = ctx.createGain();
-    setParam(wetSend.gain, 0.66, rampStart);
-    leadGain.connect(drySend);
-    leadGain.connect(wetSend);
-    drySend.connect(padMelBus);
-    wetSend.connect(wetBus);
-
-    const beatDryGain = ctx.createGain();
-    setParam(beatDryGain.gain, 1.0, rampStart);
-    beatDryGain.connect(drumBus);
-
-    const beatWetGain = ctx.createGain();
-    setParam(beatWetGain.gain, 1.0, rampStart);
-    beatWetGain.connect(wetBus);
-
-    const prev = this.activeBus;
+    const nextStem: PresetStem = {
+      dry: makeGain(graph.dryBus),
+      wet: makeGain(graph.washIn),
+      chorus: makeGain(graph.chorusIn),
+    };
+    const prev = this.activeStem;
     if (prev) {
-      this.fadeOutBus(ctx, prev, Math.max(now, downbeatTime - 0.04), 440);
+      this.fadeOutStem(ctx, prev, Math.max(now, downbeatTime - 0.04));
     }
-
-    const nextBus: PresetBus = { padMelBus, drumBus, wetBus, leadGain, beatDryGain, beatWetGain };
-    this.activeBus = nextBus;
-    targetParam(graph.warmthFilter.frequency, preset.warmthHz, rampStart, 0.1);
-    targetParam(graph.wetOutput.gain, preset.wetMix, rampStart, 0.1);
-    return nextBus;
+    this.activeStem = nextStem;
+    return nextStem;
   }
 
   private tickLookahead(ctx: AudioContext, musicGain: GainNode): void {
@@ -359,16 +383,16 @@ export class AmbientMusicController {
     if (this.nextNoteTime < ctx.currentTime) {
       this.nextNoteTime = ctx.currentTime + 0.03;
     }
-    while (this.nextNoteTime < ctx.currentTime + 0.26) {
+    while (this.nextNoteTime < ctx.currentTime + 0.24) {
       this.nextNoteTime += this.advanceStep(ctx, musicGain, this.nextNoteTime);
     }
   }
 
-  /** Advances the scheduler by one 16th/12th step and returns its step duration in seconds. */
+  /** Advances the step scheduler by one 16th note and returns its step duration in seconds. */
   public advanceStep(ctx: AudioContext, musicGain: GainNode, time: number): number {
     const graph = this.ensureGraph(ctx, musicGain);
     let preset = this.getPresetById(this.activePresetId);
-    const initialBarLen = preset.pattern.length;
+    const initialBarLen = preset.arpPattern.length;
     const initialStepInBar = this.stepIndex % initialBarLen;
 
     if (initialStepInBar === 0 && this.stepIndex > 0 && this.barsInCurrentTrack >= AMBIENT_ROTATION_BARS) {
@@ -379,31 +403,18 @@ export class AmbientMusicController {
       this.stepIndex = 0;
       this.chordIndex = 0;
       preset = this.getPresetById(this.activePresetId);
-      this.createPresetBus(ctx, graph, preset, time);
+      this.createPresetStem(ctx, graph, time);
     }
 
-    const bus = this.activeBus ?? this.createPresetBus(ctx, graph, preset, time);
-    const barLen = preset.pattern.length;
+    const stem = this.activeStem ?? this.createPresetStem(ctx, graph, time);
+    const barLen = preset.arpPattern.length;
     const stepInBar = this.stepIndex % barLen;
     const chord = preset.chords[this.chordIndex % preset.chords.length];
-    const swingShift = preset.swingSec > 0 && barLen === 16 && stepInBar % 2 === 1 ? preset.swingSec : 0;
-    const eventTime = Math.max(ctx.currentTime + 0.01, time + swingShift);
+    const nt = Math.max(ctx.currentTime + 0.01, time);
+    const barDur = preset.stepSec * barLen;
+    const slot = preset.arpPattern[stepInBar];
 
-    if (stepInBar === 0) {
-      this.schedulePadBar(ctx, bus, preset, chord, barLen, eventTime);
-    }
-    if (stepInBar === 0 || stepInBar === Math.floor(barLen / 2)) {
-      this.schedulePillowBass(ctx, bus, preset, chord, stepInBar === 0, eventTime);
-    }
-
-    this.scheduleDrumHit(ctx, bus, preset.drumPattern[stepInBar], eventTime, this.stepIndex);
-
-    const patSlot = preset.pattern[stepInBar];
-    const playChance =
-      patSlot >= 0 && ((this.stepIndex * 37 + this.chordIndex * 13) % 100) / 100 < preset.rubatoChance;
-    if (playChance) {
-      this.scheduleFeltMalletNote(ctx, bus, preset, chord, patSlot, eventTime);
-    }
+    this.schedulePresetStep(ctx, graph, stem, preset, chord, stepInBar, barDur, slot, nt);
 
     this.stepIndex += 1;
     if (this.stepIndex % barLen === 0) {
@@ -413,283 +424,299 @@ export class AmbientMusicController {
     return preset.stepSec;
   }
 
-  private schedulePadBar(
+  private schedulePresetStep(
     ctx: AudioContext,
-    bus: PresetBus,
+    graph: MasterSynthwaveGraph,
+    stem: PresetStem,
     preset: AmbientPreset,
     chord: AmbientChord,
-    barLen: number,
-    eventTime: number
+    stepInBar: number,
+    barDur: number,
+    slot: number,
+    nt: number
   ): void {
-    const barDur = preset.stepSec * barLen * 1.45;
-    const freqs = [chord.root, ...chord.pad];
-    for (let i = 0; i < freqs.length; i++) {
-      const detuneVals = i === 1 ? [0, 2] : [0];
-      const baseAmp = preset.padAmp / (detuneVals.length * Math.sqrt(freqs.length) * 1.15);
-      const voiceAmp = i === 0 ? baseAmp * 0.55 : baseAmp;
-      for (const dt of detuneVals) {
-        const osc = ctx.createOscillator();
-        const lp = ctx.createBiquadFilter();
-        const g = ctx.createGain();
-        osc.type = i === 0 ? 'sine' : preset.padWave;
-        setParam(osc.frequency, freqs[i], eventTime);
-        if (dt !== 0) setParam(osc.detune, dt, eventTime);
+    if (stepInBar === 0) {
+      this.playJunoPad(ctx, graph, stem, chord.pad, nt, barDur, preset.pad);
+    } else if (stepInBar === 8 && preset.innerPadStep8) {
+      this.playJunoPad(ctx, graph, stem, [chord.pad[0], chord.pad[2]], nt, barDur, preset.innerPadStep8);
+    }
 
-        lp.type = 'lowpass';
-        setParam(lp.frequency, preset.padCutoff, eventTime);
-        setParam(lp.Q, 0.55, eventTime);
+    if (stepInBar % preset.bass.stepMod === 0) {
+      const bassDur = preset.bass.fixedDur ?? barDur * (preset.bass.durScale ?? 1.0);
+      const amp = stepInBar % 4 === 0 ? preset.bass.amp : preset.bass.ampOff;
+      this.playMoogBass(ctx, stem, chord.bass, nt, bassDur, preset.bass, amp);
+    }
 
-        g.gain.setValueAtTime(0.0003, eventTime);
-        g.gain.linearRampToValueAtTime(voiceAmp, eventTime + barDur * 0.28);
-        g.gain.linearRampToValueAtTime(voiceAmp * 0.86, eventTime + barDur * 0.74);
-        g.gain.exponentialRampToValueAtTime(0.0003, eventTime + barDur);
+    if (preset.lead) {
+      if (stepInBar === preset.lead.stepA && chord.leadA !== null) {
+        this.playAnalogLeadSigh(ctx, stem, chord.leadA, nt, barDur * preset.lead.durA, preset.lead.ampA);
+      } else if (preset.lead.stepB !== undefined && stepInBar === preset.lead.stepB && chord.leadB !== null) {
+        const durB = preset.lead.durB ?? preset.lead.durA;
+        const ampB = preset.lead.ampB ?? preset.lead.ampA;
+        this.playAnalogLeadSigh(ctx, stem, chord.leadB, nt, barDur * durB, ampB);
+      }
+    }
 
-        osc.connect(lp);
-        lp.connect(g);
-        g.connect(bus.padMelBus);
-        if (preset.wetMix > 0) {
-          const send = ctx.createGain();
-          setParam(send.gain, 0.2, eventTime);
-          g.connect(send);
-          send.connect(bus.wetBus);
-        }
-        osc.start(eventTime);
-        osc.stop(eventTime + barDur + 0.06);
+    if (slot >= 0) {
+      const noteFreq = preset.arp[slot % preset.arp.length];
+      if (preset.arpVoice === 'pluck') {
+        this.playHorizonPluck(ctx, stem, noteFreq, nt);
+      } else {
+        this.playAnalogArp(ctx, stem, noteFreq, nt, preset.arpVoice);
       }
     }
   }
 
-  private schedulePillowBass(
+  private playJunoPad(
     ctx: AudioContext,
-    bus: PresetBus,
-    preset: AmbientPreset,
-    chord: AmbientChord,
-    isBeatOne: boolean,
-    eventTime: number
+    graph: MasterSynthwaveGraph,
+    stem: PresetStem,
+    freqs: ReadonlyArray<number>,
+    when: number,
+    barDur: number,
+    opts: JunoPadOpts
   ): void {
-    const osc = ctx.createOscillator();
-    const lp = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-    osc.type = 'triangle';
-    setParam(osc.frequency, isBeatOne ? chord.root : chord.pad[0], eventTime);
-    lp.type = 'lowpass';
-    setParam(lp.frequency, 240, eventTime);
-    setParam(lp.Q, 0.6, eventTime);
+    const dur = barDur * opts.durScale;
+    const cutPeak = opts.cutPeak ?? opts.cutStart;
+    const cutEnd = opts.cutEnd ?? opts.cutStart;
 
-    const bassDur = Math.max(0.32, preset.stepSec * 4.5);
-    g.gain.setValueAtTime(0.0002, eventTime);
-    g.gain.linearRampToValueAtTime(0.0756, eventTime + 0.07);
-    g.gain.exponentialRampToValueAtTime(0.0002, eventTime + bassDur);
-
-    osc.connect(lp);
-    lp.connect(g);
-    g.connect(bus.padMelBus);
-    osc.start(eventTime);
-    osc.stop(eventTime + bassDur + 0.05);
-  }
-
-  private scheduleFeltMalletNote(
-    ctx: AudioContext,
-    bus: PresetBus,
-    preset: AmbientPreset,
-    chord: AmbientChord,
-    patSlot: number,
-    nt: number
-  ): void {
-    const noteFreq = chord.motif[patSlot % chord.motif.length];
-    const rel = preset.stepSec * preset.arpReleaseMul;
-    const endT = nt + Math.max(preset.arpAttack + 0.14, rel);
-
-    const noteLp = ctx.createBiquadFilter();
-    noteLp.type = 'lowpass';
-    setParam(noteLp.frequency, preset.noteLpHz, nt);
-    noteLp.frequency.exponentialRampToValueAtTime(Math.max(380, preset.noteLpHz * 0.68), nt + 0.24);
-    setParam(noteLp.Q, 0.55, nt);
-
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0002, nt);
-    g.gain.linearRampToValueAtTime(preset.arpAmp * 0.35, nt + preset.arpAttack * 0.45);
-    g.gain.linearRampToValueAtTime(preset.arpAmp, nt + preset.arpAttack);
-    g.gain.exponentialRampToValueAtTime(0.0002, endT);
-
-    const osc = ctx.createOscillator();
-    osc.type = preset.arpWave;
-    setParam(osc.frequency, noteFreq, nt);
-    osc.connect(noteLp);
-
-    const warmTwin = ctx.createOscillator();
-    const warmGain = ctx.createGain();
-    warmTwin.type = 'sine';
-    setParam(warmTwin.frequency, noteFreq * 1.001155, nt);
-    setParam(warmGain.gain, 0.25, nt);
-    warmTwin.connect(warmGain);
-    warmGain.connect(noteLp);
-
-    noteLp.connect(g);
-    g.connect(bus.leadGain);
-    osc.start(nt);
-    warmTwin.start(nt);
-    osc.stop(endT + 0.06);
-    warmTwin.stop(endT + 0.06);
-  }
-
-  private playFilteredNoiseLayer(ctx: AudioContext, bus: PresetBus, spec: NoiseLayerSpec): void {
-    const src = ctx.createBufferSource();
-    src.buffer = spec.buffer;
-    let tail: AudioNode = src;
-    for (const f of spec.filters) {
-      const node = ctx.createBiquadFilter();
-      node.type = f.type;
-      setParam(node.frequency, f.freq, spec.when);
-      setParam(node.Q, f.q, spec.when);
-      tail.connect(node);
-      tail = node;
-    }
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0002, spec.when);
-    g.gain.linearRampToValueAtTime(spec.peak, spec.when + spec.attack);
-    g.gain.exponentialRampToValueAtTime(0.0002, spec.when + spec.decay);
-    tail.connect(g);
-    g.connect(bus.beatDryGain);
-    if (spec.wetGain > 0) {
-      const wetSend = ctx.createGain();
-      setParam(wetSend.gain, spec.wetGain, spec.when);
-      g.connect(wetSend);
-      wetSend.connect(bus.beatWetGain);
-    }
-    src.start(spec.when, spec.offset, spec.readDur);
-    src.stop(spec.stopAt);
-  }
-
-  private scheduleDrumHit(
-    ctx: AudioContext,
-    bus: PresetBus,
-    token: DrumToken,
-    nt: number,
-    stepNum: number
-  ): void {
-    if (token === '.') return;
-    const buffer = prewarmAmbientMusicBuffer(ctx);
-    const offset = (stepNum * 0.17) % 0.55;
-
-    if (token === 'K' || token === 'k') {
-      const scale = token === 'K' ? 1.0 : 0.58;
-      const osc = ctx.createOscillator();
+    for (const freq of freqs) {
       const lp = ctx.createBiquadFilter();
-      const g = ctx.createGain();
-      osc.type = 'triangle';
-      setParam(osc.frequency, 150, nt);
-      osc.frequency.exponentialRampToValueAtTime(72, nt + 0.032);
-      osc.frequency.exponentialRampToValueAtTime(49, nt + 0.16);
       lp.type = 'lowpass';
-      setParam(lp.frequency, 260, nt);
-      setParam(lp.Q, 0.7, nt);
-      g.gain.setValueAtTime(0.0002, nt);
-      g.gain.linearRampToValueAtTime(0.4 * scale, nt + 0.004);
-      g.gain.exponentialRampToValueAtTime(0.0002, nt + 0.21);
-      osc.connect(lp);
+      setParam(lp.frequency, opts.cutStart, when);
+      if (cutPeak !== opts.cutStart) {
+        linearRamp(lp.frequency, cutPeak, when + opts.attack);
+        expRamp(lp.frequency, Math.max(200, cutEnd), when + dur * 0.85);
+      }
+      setParam(lp.Q, 0.6, when);
+
+      const g = ctx.createGain();
+      setParam(g.gain, 0.0002, when);
+      linearRamp(g.gain, opts.amp, when + opts.attack);
+      linearRamp(g.gain, opts.amp * 0.85, when + dur * 0.76);
+      expRamp(g.gain, 0.0002, when + dur);
+
+      const stack: ReadonlyArray<{
+        readonly type: OscillatorType;
+        readonly dt: number;
+        readonly gain: number;
+      }> = [
+        { type: 'sawtooth', dt: -7, gain: 0.34 },
+        { type: 'sawtooth', dt: 7, gain: 0.34 },
+        { type: 'triangle', dt: 0, gain: 0.44 },
+      ];
+      for (const voice of stack) {
+        const osc = ctx.createOscillator();
+        const vg = ctx.createGain();
+        osc.type = voice.type;
+        setParam(osc.frequency, freq, when);
+        setParam(osc.detune, voice.dt, when);
+        graph.wowDepthGain.connect(osc.detune);
+        setParam(vg.gain, voice.gain, when);
+        osc.connect(vg);
+        vg.connect(lp);
+        osc.start(when);
+        osc.stop(when + dur + 0.06);
+      }
+
       lp.connect(g);
-      g.connect(bus.beatDryGain);
-      osc.start(nt);
-      osc.stop(nt + 0.23);
+      g.connect(stem.chorus);
+      const ws = ctx.createGain();
+      setParam(ws.gain, opts.wetAmt, when);
+      g.connect(ws);
+      ws.connect(stem.wet);
+    }
+  }
 
-      this.playFilteredNoiseLayer(ctx, bus, {
-        buffer,
-        offset,
-        when: nt,
-        readDur: 0.04,
-        stopAt: nt + 0.035,
-        peak: 0.13 * scale,
-        attack: 0.002,
-        decay: 0.024,
-        wetGain: 0,
-        filters: [{ type: 'bandpass', freq: 380, q: 1.2 }],
-      });
-      return;
+  private playMoogBass(
+    ctx: AudioContext,
+    stem: PresetStem,
+    freq: number,
+    when: number,
+    dur: number,
+    opts: MoogBassOpts,
+    amp: number
+  ): void {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    setParam(lp.frequency, opts.cutoff, when);
+    setParam(lp.Q, 0.75, when);
+
+    const g = ctx.createGain();
+    setParam(g.gain, 0.0002, when);
+    linearRamp(g.gain, amp, when + opts.attack);
+    linearRamp(g.gain, amp * 0.82, when + dur * 0.7);
+    expRamp(g.gain, 0.0002, when + dur);
+
+    const sub = ctx.createOscillator();
+    const subG = ctx.createGain();
+    sub.type = 'sine';
+    setParam(sub.frequency, freq, when);
+    setParam(subG.gain, 0.85, when);
+    sub.connect(subG);
+    subG.connect(lp);
+
+    if (opts.sawAmt > 0) {
+      const saw = ctx.createOscillator();
+      const sawG = ctx.createGain();
+      saw.type = 'sawtooth';
+      setParam(saw.frequency, freq, when);
+      setParam(sawG.gain, opts.sawAmt, when);
+      saw.connect(sawG);
+      sawG.connect(lp);
+      saw.start(when);
+      saw.stop(when + dur + 0.04);
     }
 
-    if (token === 'S') {
-      const sOsc = ctx.createOscillator();
-      const sGain = ctx.createGain();
-      sOsc.type = 'sine';
-      setParam(sOsc.frequency, 225, nt);
-      sOsc.frequency.exponentialRampToValueAtTime(122, nt + 0.042);
-      sGain.gain.setValueAtTime(0.0002, nt);
-      sGain.gain.linearRampToValueAtTime(0.23, nt + 0.003);
-      sGain.gain.exponentialRampToValueAtTime(0.0002, nt + 0.085);
-      sOsc.connect(sGain);
-      sGain.connect(bus.beatDryGain);
-      sOsc.start(nt);
-      sOsc.stop(nt + 0.1);
+    lp.connect(g);
+    g.connect(stem.dry);
+    sub.start(when);
+    sub.stop(when + dur + 0.04);
+  }
 
-      this.playFilteredNoiseLayer(ctx, bus, {
-        buffer,
-        offset,
-        when: nt,
-        readDur: 0.15,
-        stopAt: nt + 0.13,
-        peak: 0.21,
-        attack: 0.003,
-        decay: 0.115,
-        wetGain: 0.16,
-        filters: [
-          { type: 'bandpass', freq: 1450, q: 0.75 },
-          { type: 'lowpass', freq: 2600, q: 0.6 },
-        ],
-      });
-      return;
+  private playAnalogArp(
+    ctx: AudioContext,
+    stem: PresetStem,
+    freq: number,
+    when: number,
+    opts: AnalogArpConfig
+  ): void {
+    const lfoPhase = this.stepIndex * opts.cutLfoRate;
+    const lfoVal = opts.cutLfoFn === 'cos' ? Math.cos(lfoPhase) : Math.sin(lfoPhase);
+    const cutHi = opts.cutBase + opts.cutLfoAmp * lfoVal;
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    setParam(lp.frequency, cutHi, when);
+    expRamp(lp.frequency, opts.cutLo, when + Math.min(opts.decay * 0.72, 0.44));
+    setParam(lp.Q, opts.q, when);
+
+    const g = ctx.createGain();
+    setParam(g.gain, 0.0002, when);
+    linearRamp(g.gain, opts.amp, when + opts.attack);
+    expRamp(g.gain, 0.0002, when + opts.decay);
+
+    const tri = ctx.createOscillator();
+    const saw = ctx.createOscillator();
+    const sawG = ctx.createGain();
+    tri.type = 'triangle';
+    saw.type = 'sawtooth';
+    setParam(tri.frequency, freq, when);
+    setParam(saw.frequency, freq, when);
+    setParam(saw.detune, 3.5, when);
+    setParam(sawG.gain, opts.sawMix, when);
+
+    tri.connect(lp);
+    saw.connect(sawG);
+    sawG.connect(lp);
+    lp.connect(g);
+    g.connect(stem.chorus);
+
+    const ws = ctx.createGain();
+    setParam(ws.gain, opts.wetAmt, when);
+    g.connect(ws);
+    ws.connect(stem.wet);
+
+    tri.start(when);
+    saw.start(when);
+    tri.stop(when + opts.decay + 0.05);
+    saw.stop(when + opts.decay + 0.05);
+  }
+
+  private playHorizonPluck(ctx: AudioContext, stem: PresetStem, freq: number, when: number): void {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    setParam(lp.frequency, 660, when);
+    expRamp(lp.frequency, 310, when + 0.55);
+    setParam(lp.Q, 0.6, when);
+
+    const g = ctx.createGain();
+    setParam(g.gain, 0.0002, when);
+    linearRamp(g.gain, 0.072, when + 0.042);
+    expRamp(g.gain, 0.0002, when + 1.05);
+
+    const tri = ctx.createOscillator();
+    const oct = ctx.createOscillator();
+    const octG = ctx.createGain();
+    tri.type = 'triangle';
+    oct.type = 'sine';
+    setParam(tri.frequency, freq, when);
+    setParam(oct.frequency, freq * 2, when);
+    setParam(octG.gain, 0.14, when);
+
+    tri.connect(lp);
+    oct.connect(octG);
+    octG.connect(lp);
+    lp.connect(g);
+    g.connect(stem.chorus);
+
+    const ws = ctx.createGain();
+    setParam(ws.gain, 0.85, when);
+    g.connect(ws);
+    ws.connect(stem.wet);
+
+    tri.start(when);
+    oct.start(when);
+    tri.stop(when + 1.1);
+    oct.stop(when + 1.1);
+  }
+
+  private playAnalogLeadSigh(
+    ctx: AudioContext,
+    stem: PresetStem,
+    freq: number,
+    when: number,
+    dur: number,
+    amp: number
+  ): void {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    setParam(lp.frequency, 820, when);
+    setParam(lp.Q, 0.7, when);
+
+    const g = ctx.createGain();
+    setParam(g.gain, 0.0002, when);
+    linearRamp(g.gain, amp, when + 0.42);
+    linearRamp(g.gain, amp * 0.72, when + dur * 0.65);
+    expRamp(g.gain, 0.0002, when + dur);
+
+    const vib = ctx.createOscillator();
+    const vibG = ctx.createGain();
+    vib.type = 'sine';
+    setParam(vib.frequency, 4.6, when);
+    setParam(vibG.gain, freq * 0.004, when);
+    vib.connect(vibG);
+
+    const stack: ReadonlyArray<{
+      readonly type: OscillatorType;
+      readonly dt: number;
+      readonly gain: number;
+    }> = [
+      { type: 'triangle', dt: -3.5, gain: 0.65 },
+      { type: 'sawtooth', dt: 3.5, gain: 0.32 },
+    ];
+    for (const voice of stack) {
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+      osc.type = voice.type;
+      setParam(osc.frequency, freq, when);
+      setParam(osc.detune, voice.dt, when);
+      vibG.connect(osc.frequency);
+      setParam(og.gain, voice.gain, when);
+      osc.connect(og);
+      og.connect(lp);
+      osc.start(when);
+      osc.stop(when + dur + 0.06);
     }
 
-    if (token === 'R' || token === 'r') {
-      const scale = token === 'R' ? 1.0 : 0.5;
-      const kOsc = ctx.createOscillator();
-      const kLp = ctx.createBiquadFilter();
-      const kGain = ctx.createGain();
-      kOsc.type = 'triangle';
-      setParam(kOsc.frequency, 360, nt);
-      kOsc.frequency.exponentialRampToValueAtTime(170, nt + 0.022);
-      kLp.type = 'lowpass';
-      setParam(kLp.frequency, 950, nt);
-      setParam(kLp.Q, 0.7, nt);
-      kGain.gain.setValueAtTime(0.0002, nt);
-      kGain.gain.linearRampToValueAtTime(0.19 * scale, nt + 0.0025);
-      kGain.gain.exponentialRampToValueAtTime(0.0002, nt + 0.05);
-      kOsc.connect(kLp);
-      kLp.connect(kGain);
-      kGain.connect(bus.beatDryGain);
-      kOsc.start(nt);
-      kOsc.stop(nt + 0.065);
+    lp.connect(g);
+    g.connect(stem.chorus);
+    const ws = ctx.createGain();
+    setParam(ws.gain, 0.75, when);
+    g.connect(ws);
+    ws.connect(stem.wet);
 
-      this.playFilteredNoiseLayer(ctx, bus, {
-        buffer,
-        offset,
-        when: nt,
-        readDur: 0.07,
-        stopAt: nt + 0.06,
-        peak: 0.12 * scale,
-        attack: 0.002,
-        decay: 0.045,
-        wetGain: 0.14,
-        filters: [{ type: 'bandpass', freq: 1650, q: 1.1 }],
-      });
-      return;
-    }
-
-    const dec = token === 'O' ? 0.095 : 0.038;
-    this.playFilteredNoiseLayer(ctx, bus, {
-      buffer,
-      offset,
-      when: nt,
-      readDur: dec + 0.03,
-      stopAt: nt + dec + 0.02,
-      peak: token === 'H' ? 0.08 : token === 'O' ? 0.07 : 0.045,
-      attack: 0.0025,
-      decay: dec,
-      wetGain: token === 'O' ? 0.1 : 0,
-      filters: [
-        { type: 'highpass', freq: 1800, q: 0.6 },
-        { type: 'lowpass', freq: 3200, q: 0.6 },
-      ],
-    });
+    vib.start(when);
+    vib.stop(when + dur + 0.06);
   }
 }

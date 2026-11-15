@@ -1,10 +1,5 @@
 import type { BoosterType, ParticleStyleId } from '../core/types';
-import {
-  AmbientMusicController,
-  type AmbientPresetId,
-  type MusicScene,
-  prewarmAmbientMusicBuffer,
-} from './ambient-music';
+import { AmbientMusicController, type AmbientPresetId, type MusicScene } from './ambient-music';
 import { playStyledShredSoundscape } from './shred-style-voices';
 import {
   getOrCreateRelicAwakenNoiseBuffer,
@@ -38,7 +33,7 @@ export class SoundEngine {
   private lastSlideTickMs = 0;
   private lastWallClackMs = 0;
 
-  // Mode-attuned lo-fi chill ambient music controller
+  // Mode-attuned drumless warm analog synthwave ambient music controller
   private readonly ambientMusic = new AmbientMusicController();
   private prewarmTimerId: ReturnType<typeof setTimeout> | null = null;
   private prewarmIdleId: number | null = null;
@@ -80,7 +75,6 @@ export class SoundEngine {
         try {
           getOrCreateRelicAwakenNoiseBuffer(ctx);
           prewarmSharedNoiseBuffer(ctx);
-          prewarmAmbientMusicBuffer(ctx);
         } catch {
           // Ignore on restricted environments
         }
@@ -133,7 +127,7 @@ export class SoundEngine {
     this.musicEnabled = enabled;
     this.syncAudioSessionType();
     if (this.musicGain && this.ctx) {
-      this.musicGain.gain.setTargetAtTime(enabled ? 0.25 : 0, this.ctx.currentTime, 0.08);
+      this.musicGain.gain.setTargetAtTime(enabled ? 0.28 : 0, this.ctx.currentTime, 0.08);
     }
     if (enabled && this.unlocked && !this.isDocumentHidden) {
       this.startMusicLoop();
@@ -206,7 +200,7 @@ export class SoundEngine {
       this.sfxGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.value = this.musicEnabled ? 0.25 : 0;
+      this.musicGain.gain.value = this.musicEnabled ? 0.28 : 0;
       this.musicGain.connect(this.ctx.destination);
     } catch {
       return null;
@@ -236,7 +230,6 @@ export class SoundEngine {
         source.start(0);
         getOrCreateRelicAwakenNoiseBuffer(ctx);
         prewarmSharedNoiseBuffer(ctx);
-        prewarmAmbientMusicBuffer(ctx);
       } catch {
         // Ignore
       }
@@ -692,7 +685,7 @@ export class SoundEngine {
   }
 
   /**
-   * Starts the Mode-Attuned Lo-Fi Chill Ambient Music lookahead scheduler (`AMBIENT-MUSIC-01`).
+   * Starts the Mode-Attuned Drumless Warm Analog Synthwave lookahead scheduler (`AMBIENT-MUSIC-01`).
    */
   private startMusicLoop(): void {
     const ctx = this.ensureContext();
