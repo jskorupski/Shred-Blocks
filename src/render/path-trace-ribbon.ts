@@ -1,4 +1,4 @@
-import type { ColorId } from '../core/types';
+import type { ColorId, TrayId } from '../core/types';
 
 export interface PathWaypoint {
   x: number;
@@ -206,4 +206,263 @@ export function fillTraceUniformWindow(
     maxX: maxX + pad,
     maxY: maxY + pad,
   };
+}
+
+export interface TrayFloorSample {
+  readonly floorTileA: readonly [number, number, number];
+  readonly floorTileB: readonly [number, number, number];
+}
+
+export interface OriginGhostStyle {
+  isLightTray: boolean;
+  padRgb: [number, number, number];
+  padAlpha: number;
+  haloRgb: [number, number, number];
+  haloAlpha: number;
+  bracketRgb: [number, number, number];
+  bracketAlpha: number;
+  bracketInset: number;
+  badgeRgb: [number, number, number];
+  badgeAlpha: number;
+}
+
+export interface ReturnHomeStyle {
+  isLightTray: boolean;
+  padRgb: [number, number, number];
+  padAlpha: number;
+  haloRgb: [number, number, number];
+  haloAlpha: number;
+  bracketRgb: [number, number, number];
+  bracketAlpha: number;
+  bracketInset: number;
+}
+
+/**
+ * Computes tray-luminance-adaptive styling for the mid-drag Origin Ghost Footprint (`ORIGIN-GHOST-01`)
+ * so the starting cell anchor stays subtle on default `industrial_slate` yet crisp across light trays
+ * (`warm_birch`, `frosted_quartz`, `mint_studio`), `midnight_arcade`, `FLOOR_PATHS`, and `highContrast`.
+ */
+export function resolveOriginGhostStyle(
+  trayId: TrayId,
+  palette: TrayFloorSample,
+  blockRgb: readonly [number, number, number],
+  highContrast: boolean,
+  effPulse: number
+): OriginGhostStyle {
+  const floorLum =
+    0.2126 * palette.floorTileA[0] + 0.7152 * palette.floorTileA[1] + 0.0722 * palette.floorTileA[2];
+  const [cr, cg, cb] = blockRgb;
+
+  if (!highContrast && floorLum >= 0.42) {
+    const padRgb: [number, number, number] = [cr * 0.16 + 0.05, cg * 0.16 + 0.06, cb * 0.16 + 0.1];
+    const lightBoost = Math.min(1, (floorLum - 0.42) / 0.42);
+    return {
+      isLightTray: true,
+      padRgb,
+      padAlpha: 0.19 + 0.07 * lightBoost,
+      haloRgb: [0.99, 0.98, 0.95],
+      haloAlpha: 0.56,
+      bracketRgb: [padRgb[0], padRgb[1], padRgb[2]],
+      bracketAlpha: 0.8 + 0.12 * effPulse,
+      bracketInset: 0.072,
+      badgeRgb: [0.98, 0.97, 0.93],
+      badgeAlpha: 0.88 + 0.1 * effPulse,
+    };
+  }
+
+  if (!highContrast && (trayId === 'midnight_arcade' || floorLum < 0.12)) {
+    const padRgb: [number, number, number] = [
+      Math.min(1, cr * 0.25 + 0.76),
+      Math.min(1, cg * 0.25 + 0.76),
+      Math.min(1, cb * 0.25 + 0.74),
+    ];
+    const bracketRgb: [number, number, number] = [
+      Math.min(1, cr * 0.24 + 0.8),
+      Math.min(1, cg * 0.24 + 0.78),
+      Math.min(1, cb * 0.24 + 0.7),
+    ];
+    return {
+      isLightTray: false,
+      padRgb,
+      padAlpha: 0.17,
+      haloRgb: [0.02, 0.03, 0.08],
+      haloAlpha: 0.68,
+      bracketRgb,
+      bracketAlpha: 0.74 + 0.14 * effPulse,
+      bracketInset: 0.082,
+      badgeRgb: [bracketRgb[0], bracketRgb[1], bracketRgb[2]],
+      badgeAlpha: 0.84 + 0.12 * effPulse,
+    };
+  }
+
+  const padRgb: [number, number, number] = highContrast
+    ? [Math.min(1, cr * 0.22 + 0.78), Math.min(1, cg * 0.22 + 0.76), Math.min(1, cb * 0.22 + 0.7)]
+    : [Math.min(1, cr * 0.28 + 0.7), Math.min(1, cg * 0.28 + 0.66), Math.min(1, cb * 0.28 + 0.58)];
+  return {
+    isLightTray: false,
+    padRgb,
+    padAlpha: highContrast ? 0.18 : 0.1,
+    haloRgb: [0.03, 0.05, 0.1],
+    haloAlpha: highContrast ? 0.58 : 0.34,
+    bracketRgb: [padRgb[0], padRgb[1], padRgb[2]],
+    bracketAlpha: (highContrast ? 0.82 : 0.58) + 0.16 * effPulse,
+    bracketInset: 0.07,
+    badgeRgb: [padRgb[0], padRgb[1], padRgb[2]],
+    badgeAlpha: (highContrast ? 0.9 : 0.7) + 0.14 * effPulse,
+  };
+}
+
+/**
+ * Tray-luminance-adaptive cancel-confirmation styling when a dragged block returns onto its origin footprint.
+ */
+export function resolveReturnHomeStyle(
+  trayId: TrayId,
+  palette: TrayFloorSample,
+  highContrast: boolean,
+  effPulse: number
+): ReturnHomeStyle {
+  const floorLum =
+    0.2126 * palette.floorTileA[0] + 0.7152 * palette.floorTileA[1] + 0.0722 * palette.floorTileA[2];
+
+  if (!highContrast && floorLum >= 0.42) {
+    return {
+      isLightTray: true,
+      padRgb: [0.18, 0.15, 0.12],
+      padAlpha: 0.22 + 0.08 * effPulse,
+      haloRgb: [0.99, 0.98, 0.94],
+      haloAlpha: 0.56,
+      bracketRgb: [0.16, 0.14, 0.12],
+      bracketAlpha: 0.8 + 0.12 * effPulse,
+      bracketInset: 0.072,
+    };
+  }
+
+  if (!highContrast && (trayId === 'midnight_arcade' || floorLum < 0.12)) {
+    return {
+      isLightTray: false,
+      padRgb: [0.98, 0.95, 0.86],
+      padAlpha: 0.26 + 0.1 * effPulse,
+      haloRgb: [0.02, 0.03, 0.08],
+      haloAlpha: 0.66,
+      bracketRgb: [0.98, 0.95, 0.86],
+      bracketAlpha: 0.8 + 0.14 * effPulse,
+      bracketInset: 0.082,
+    };
+  }
+
+  return {
+    isLightTray: false,
+    padRgb: [0.98, 0.95, 0.86],
+    padAlpha: 0.22 + 0.1 * effPulse,
+    haloRgb: [0.03, 0.05, 0.1],
+    haloAlpha: highContrast ? 0.58 : 0.36,
+    bracketRgb: [0.98, 0.95, 0.86],
+    bracketAlpha: (highContrast ? 0.86 : 0.76) + 0.16 * effPulse,
+    bracketInset: 0.07,
+  };
+}
+
+export interface PathTraceHost {
+  readonly lastOptions: { readonly reducedMotion?: boolean };
+  readonly qualityGovernor: { getActiveTier(): string };
+  readonly activePathTraces: VisualPathTrace[];
+}
+
+function buildDefaultRectCellMask(cols: number, rows: number): number {
+  const w = Math.min(4, Math.max(1, Math.round(cols)));
+  const h = Math.min(4, Math.max(1, Math.round(rows)));
+  let mask = 0;
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      mask |= 1 << (r * 4 + c);
+    }
+  }
+  return mask;
+}
+
+export function spawnPathTraceImpl(
+  rctx: PathTraceHost,
+  waypoints: ReadonlyArray<PathWaypoint>,
+  colorId: ColorId,
+  z = 0.0,
+  spanCols = 1,
+  spanRows = 1,
+  intoGate = false,
+  cellMask?: number
+): void {
+  if (rctx.lastOptions.reducedMotion || waypoints.length < 2) return;
+  const cols = Math.max(1, spanCols);
+  const rows = Math.max(1, spanRows);
+  const adjusted = waypoints.slice();
+  const endPt = waypoints[waypoints.length - 1];
+  const dx0 = waypoints[1].x - waypoints[0].x;
+  const dy0 = waypoints[1].y - waypoints[0].y;
+  const len0 = Math.hypot(dx0, dy0);
+  if (len0 > 0.12) {
+    const ux = dx0 / len0;
+    const uy = dy0 / len0;
+    const tMaxX = Math.abs(ux) > 1e-4 ? (cols * 0.5) / Math.abs(ux) : 99;
+    const tMaxY = Math.abs(uy) > 1e-4 ? (rows * 0.5) / Math.abs(uy) : 99;
+    const perpSpan0 = Math.abs(uy) * cols + Math.abs(ux) * rows;
+    const estTailHw = Math.max(0.41, perpSpan0 * 0.44) * 0.28;
+    const rearMargin = intoGate ? 0.36 : Math.max(0.22, estTailHw * 0.85);
+    const maxFirstLegPull = waypoints.length > 2 ? len0 * 0.85 : 99;
+    const pullBack = Math.min(maxFirstLegPull, Math.max(0, Math.min(tMaxX, tMaxY) - rearMargin));
+    adjusted[0] = {
+      x: adjusted[0].x - ux * pullBack,
+      y: adjusted[0].y - uy * pullBack,
+    };
+  }
+  const { segments, totalLength } = buildTraceSegments(adjusted);
+  if (segments.length === 0 || totalLength < 0.24) return;
+
+  let weightedPerp = 0;
+  for (const seg of segments) {
+    const perpSpan = Math.abs(Math.sin(seg.rotZ)) * cols + Math.abs(Math.cos(seg.rotZ)) * rows;
+    seg.width = Math.max(0.82, perpSpan * 0.88);
+    seg.alphaScale = 1 / Math.max(1, perpSpan) ** 0.1;
+    weightedPerp += perpSpan * seg.len;
+  }
+  const avgPerpSpan = weightedPerp / Math.max(1e-4, totalLength);
+  const alphaScale = 1 / Math.max(1, avgPerpSpan) ** 0.1;
+  const resolvedMask = intoGate
+    ? 0
+    : cellMask && cellMask > 0
+      ? cellMask
+      : buildDefaultRectCellMask(cols, rows);
+
+  const maxTraces = rctx.qualityGovernor.getActiveTier() === 'ULTRA_120' ? 5 : 3;
+  while (rctx.activePathTraces.length >= maxTraces) {
+    rctx.activePathTraces.shift();
+  }
+  rctx.activePathTraces.push({
+    segments,
+    totalLength,
+    colorId,
+    z,
+    age: 0.001,
+    maxAge: DEFAULT_TRACE_MAX_AGE_SEC,
+    alphaScale,
+    headOriginX: endPt.x - cols * 0.5,
+    headOriginY: endPt.y - rows * 0.5,
+    spanCols: cols,
+    spanRows: rows,
+    headCellMask: resolvedMask,
+  });
+}
+
+export function stepPathTracesImpl(rctx: PathTraceHost, dtSec: number): void {
+  if (rctx.lastOptions.reducedMotion) {
+    if (rctx.activePathTraces.length > 0) {
+      rctx.activePathTraces.length = 0;
+    }
+    return;
+  }
+  for (let i = rctx.activePathTraces.length - 1; i >= 0; i--) {
+    const tr = rctx.activePathTraces[i];
+    tr.age += dtSec;
+    if (tr.age >= tr.maxAge) {
+      rctx.activePathTraces.splice(i, 1);
+    }
+  }
 }

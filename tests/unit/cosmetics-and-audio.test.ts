@@ -2,10 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { playStyledShredSoundscape } from '../../src/audio/shred-style-voices';
 import { SoundEngine } from '../../src/audio/synth';
 import { applyBoosterHammer, commitBlockMove, createBoardState } from '../../src/core/board';
-import { COLOR_PALETTE, type ColorId, type ParticleStyleId } from '../../src/core/types';
+import { COLOR_PALETTE, type ColorId, type ParticleStyleId, type TrayId } from '../../src/core/types';
 import { getLevelSpec } from '../../src/levels/catalog';
 import { POLYOMINO_MESH_CATALOG } from '../../src/render/mesh-generator';
-import { getToneOnToneGlyphRgb } from '../../src/render/render-types';
+import { resolveOriginGhostStyle, resolveReturnHomeStyle } from '../../src/render/pass2-drag-fx';
+import {
+  getToneOnToneGlyphRgb,
+  HIGH_CONTRAST_TRAY_PALETTES,
+  TRAY_PALETTES,
+} from '../../src/render/render-types';
 import { MAIN_FRAGMENT_SHADER } from '../../src/render/shaders-3d';
 import { type AppViewContext, PARTICLE_CATALOG } from '../../src/ui/catalog-meta';
 import { canResumeBoardImpl, resumeOrLoadLevelImpl } from '../../src/ui/pause-cosmetics-drawer';
@@ -454,6 +459,83 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
         const l2 = relLum(glyph);
         const cr = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
         expect(cr).toBeGreaterThanOrEqual(3.0);
+      }
+    }
+  });
+
+  it('ORIGIN-GHOST-01: adapts mid-drag origin ghost & return-home contrast across all 5 board trays and 4 A11y modes', () => {
+    const srgbToLin = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const relLum = (rgb: readonly [number, number, number]): number =>
+      0.2126 * srgbToLin(rgb[0]) + 0.7152 * srgbToLin(rgb[1]) + 0.0722 * srgbToLin(rgb[2]);
+    const mixRgb = (
+      fg: readonly [number, number, number],
+      bg: readonly [number, number, number],
+      alpha: number
+    ): [number, number, number] => [
+      fg[0] * alpha + bg[0] * (1 - alpha),
+      fg[1] * alpha + bg[1] * (1 - alpha),
+      fg[2] * alpha + bg[2] * (1 - alpha),
+    ];
+    const contrast = (a: readonly [number, number, number], b: readonly [number, number, number]): number => {
+      const la = relLum(a);
+      const lb = relLum(b);
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    };
+
+    const trays: TrayId[] = [
+      'industrial_slate',
+      'warm_birch',
+      'midnight_arcade',
+      'frosted_quartz',
+      'mint_studio',
+    ];
+    const lightTrays = new Set<TrayId>(['warm_birch', 'frosted_quartz', 'mint_studio']);
+    const colorIds: ColorId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+    for (const trayId of trays) {
+      for (const highContrast of [false, true]) {
+        const palette = highContrast ? HIGH_CONTRAST_TRAY_PALETTES[trayId] : TRAY_PALETTES[trayId];
+        for (const colorblind of [false, true]) {
+          for (const colorId of colorIds) {
+            const entry = COLOR_PALETTE[colorId];
+            const blockRgb = colorblind
+              ? highContrast
+                ? entry.cbHcRgb
+                : entry.cbRgb
+              : highContrast
+                ? entry.hcRgb
+                : entry.rgb;
+            const style = resolveOriginGhostStyle(trayId, palette, blockRgb, highContrast, 0);
+
+            if (!highContrast && lightTrays.has(trayId)) {
+              expect(style.isLightTray).toBe(true);
+              expect(style.padAlpha).toBeGreaterThanOrEqual(0.2);
+              expect(style.padAlpha).toBeLessThanOrEqual(0.28);
+            } else {
+              expect(style.isLightTray).toBe(false);
+              if (trayId === 'industrial_slate' && !highContrast) {
+                expect(style.padAlpha).toBeLessThanOrEqual(0.12);
+              }
+              if (trayId === 'midnight_arcade' && !highContrast) {
+                expect(style.padAlpha).toBeGreaterThanOrEqual(0.15);
+                expect(style.haloAlpha).toBeGreaterThanOrEqual(0.6);
+              }
+            }
+
+            for (const tile of [palette.floorTileA, palette.floorTileB]) {
+              const overHalo = mixRgb(style.haloRgb, tile, style.haloAlpha);
+              const compBracket = mixRgb(style.bracketRgb, overHalo, style.bracketAlpha);
+              expect(contrast(compBracket, tile)).toBeGreaterThanOrEqual(2.6);
+            }
+          }
+        }
+
+        const home = resolveReturnHomeStyle(trayId, palette, highContrast, 0);
+        for (const tile of [palette.floorTileA, palette.floorTileB]) {
+          const overHalo = mixRgb(home.haloRgb, tile, home.haloAlpha);
+          const compBracket = mixRgb(home.bracketRgb, overHalo, home.bracketAlpha);
+          expect(contrast(compBracket, tile)).toBeGreaterThanOrEqual(2.6);
+        }
       }
     }
   });

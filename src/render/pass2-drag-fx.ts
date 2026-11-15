@@ -5,16 +5,34 @@ import type { Benchmark120HzResult, BoardState, ColorId } from '../core/types';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
 import {
   buildTraceSegments,
-  DEFAULT_TRACE_MAX_AGE_SEC,
   fillTraceUniformWindow,
   MAX_TRACE_UNIFORM_PTS,
+  type OriginGhostStyle,
+  type PathTraceHost,
   type PathTraceSegment,
   type PathWaypoint,
+  type ReturnHomeStyle,
+  resolveOriginGhostStyle,
+  resolveReturnHomeStyle,
+  spawnPathTraceImpl,
+  stepPathTracesImpl,
   type VisualPathTrace,
 } from './path-trace-ribbon';
 import type { RenderPassContext, RenderSceneOptions } from './render-types';
 
-export { buildTraceSegments, type PathTraceSegment, type PathWaypoint, type VisualPathTrace };
+export {
+  buildTraceSegments,
+  type OriginGhostStyle,
+  type PathTraceHost,
+  type PathTraceSegment,
+  type PathWaypoint,
+  type ReturnHomeStyle,
+  resolveOriginGhostStyle,
+  resolveReturnHomeStyle,
+  spawnPathTraceImpl,
+  stepPathTracesImpl,
+  type VisualPathTrace,
+};
 
 const TRACE_UNIFORM_BUF = new Float32Array(MAX_TRACE_UNIFORM_PTS * 4);
 
@@ -40,105 +58,6 @@ export function getShapeAnchorCellOffset(shape: PolyominoShape): { x: number; y:
   return { x: bestDc + 0.5, y: bestDr + 0.5 };
 }
 
-function buildDefaultRectCellMask(cols: number, rows: number): number {
-  const w = Math.min(4, Math.max(1, Math.round(cols)));
-  const h = Math.min(4, Math.max(1, Math.round(rows)));
-  let mask = 0;
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      mask |= 1 << (r * 4 + c);
-    }
-  }
-  return mask;
-}
-
-export function spawnPathTraceImpl(
-  rctx: RenderPassContext,
-  waypoints: ReadonlyArray<PathWaypoint>,
-  colorId: ColorId,
-  z = 0.0,
-  spanCols = 1,
-  spanRows = 1,
-  intoGate = false,
-  cellMask?: number
-): void {
-  if (rctx.lastOptions.reducedMotion || waypoints.length < 2) return;
-  const cols = Math.max(1, spanCols);
-  const rows = Math.max(1, spanRows);
-  const adjusted = waypoints.slice();
-  const endPt = waypoints[waypoints.length - 1];
-  const dx0 = waypoints[1].x - waypoints[0].x;
-  const dy0 = waypoints[1].y - waypoints[0].y;
-  const len0 = Math.hypot(dx0, dy0);
-  if (len0 > 0.12) {
-    const ux = dx0 / len0;
-    const uy = dy0 / len0;
-    const tMaxX = Math.abs(ux) > 1e-4 ? (cols * 0.5) / Math.abs(ux) : 99;
-    const tMaxY = Math.abs(uy) > 1e-4 ? (rows * 0.5) / Math.abs(uy) : 99;
-    const perpSpan0 = Math.abs(uy) * cols + Math.abs(ux) * rows;
-    const estTailHw = Math.max(0.41, perpSpan0 * 0.44) * 0.28;
-    const rearMargin = intoGate ? 0.36 : Math.max(0.22, estTailHw * 0.85);
-    const maxFirstLegPull = waypoints.length > 2 ? len0 * 0.85 : 99;
-    const pullBack = Math.min(maxFirstLegPull, Math.max(0, Math.min(tMaxX, tMaxY) - rearMargin));
-    adjusted[0] = {
-      x: adjusted[0].x - ux * pullBack,
-      y: adjusted[0].y - uy * pullBack,
-    };
-  }
-  const { segments, totalLength } = buildTraceSegments(adjusted);
-  if (segments.length === 0 || totalLength < 0.24) return;
-
-  let weightedPerp = 0;
-  for (const seg of segments) {
-    const perpSpan = Math.abs(Math.sin(seg.rotZ)) * cols + Math.abs(Math.cos(seg.rotZ)) * rows;
-    seg.width = Math.max(0.82, perpSpan * 0.88);
-    seg.alphaScale = 1 / Math.max(1, perpSpan) ** 0.1;
-    weightedPerp += perpSpan * seg.len;
-  }
-  const avgPerpSpan = weightedPerp / Math.max(1e-4, totalLength);
-  const alphaScale = 1 / Math.max(1, avgPerpSpan) ** 0.1;
-  const resolvedMask = intoGate
-    ? 0
-    : cellMask && cellMask > 0
-      ? cellMask
-      : buildDefaultRectCellMask(cols, rows);
-
-  const maxTraces = rctx.qualityGovernor.getActiveTier() === 'ULTRA_120' ? 5 : 3;
-  while (rctx.activePathTraces.length >= maxTraces) {
-    rctx.activePathTraces.shift();
-  }
-  rctx.activePathTraces.push({
-    segments,
-    totalLength,
-    colorId,
-    z,
-    age: 0.001,
-    maxAge: DEFAULT_TRACE_MAX_AGE_SEC,
-    alphaScale,
-    headOriginX: endPt.x - cols * 0.5,
-    headOriginY: endPt.y - rows * 0.5,
-    spanCols: cols,
-    spanRows: rows,
-    headCellMask: resolvedMask,
-  });
-}
-
-export function stepPathTracesImpl(rctx: RenderPassContext, dtSec: number): void {
-  if (rctx.lastOptions.reducedMotion) {
-    if (rctx.activePathTraces.length > 0) {
-      rctx.activePathTraces.length = 0;
-    }
-    return;
-  }
-  for (let i = rctx.activePathTraces.length - 1; i >= 0; i--) {
-    const tr = rctx.activePathTraces[i];
-    tr.age += dtSec;
-    if (tr.age >= tr.maxAge) {
-      rctx.activePathTraces.splice(i, 1);
-    }
-  }
-}
-
 function drawCellOuterCornerBrackets3D(
   rctx: RenderPassContext,
   gl: WebGL2RenderingContext,
@@ -149,7 +68,9 @@ function drawCellOuterCornerBrackets3D(
   r: number,
   g: number,
   b: number,
-  alpha: number
+  alpha: number,
+  inset = 0.07,
+  expand = 0
 ): void {
   const occ = new Set<number>();
   for (const [dr, dc] of shape.cells) {
@@ -157,9 +78,9 @@ function drawCellOuterCornerBrackets3D(
   }
   const has = (dr: number, dc: number) => occ.has((dr + 1) * 16 + (dc + 1));
 
-  const inset = 0.07;
   const arm = 0.25;
   const thick = 0.058;
+  const vLen = Math.max(0, arm - thick);
   const quad = (qx: number, qy: number, qw: number, qh: number) =>
     rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, qx, qy, z, qw, qh, 1, r, g, b, alpha, 0, 0, 4);
 
@@ -172,20 +93,25 @@ function drawCellOuterCornerBrackets3D(
     const freeR = !has(dr, dc + 1);
 
     if (freeT && freeL) {
-      quad(cx + inset, cy + inset, arm, thick);
-      quad(cx + inset, cy + inset + thick, thick, arm - thick);
+      quad(cx + inset - expand, cy + inset - expand, arm + expand * 2, thick + expand * 2);
+      quad(cx + inset - expand, cy + inset + thick + expand, thick + expand * 2, vLen);
     }
     if (freeT && freeR) {
-      quad(cx + 1 - inset - arm, cy + inset, arm, thick);
-      quad(cx + 1 - inset - thick, cy + inset + thick, thick, arm - thick);
+      quad(cx + 1 - inset - arm - expand, cy + inset - expand, arm + expand * 2, thick + expand * 2);
+      quad(cx + 1 - inset - thick - expand, cy + inset + thick + expand, thick + expand * 2, vLen);
     }
     if (freeB && freeL) {
-      quad(cx + inset, cy + 1 - inset - thick, arm, thick);
-      quad(cx + inset, cy + 1 - inset - arm, thick, arm - thick);
+      quad(cx + inset - expand, cy + 1 - inset - thick - expand, arm + expand * 2, thick + expand * 2);
+      quad(cx + inset - expand, cy + 1 - inset - arm - expand, thick + expand * 2, vLen);
     }
     if (freeB && freeR) {
-      quad(cx + 1 - inset - arm, cy + 1 - inset - thick, arm, thick);
-      quad(cx + 1 - inset - thick, cy + 1 - inset - arm, thick, arm - thick);
+      quad(
+        cx + 1 - inset - arm - expand,
+        cy + 1 - inset - thick - expand,
+        arm + expand * 2,
+        thick + expand * 2
+      );
+      quad(cx + 1 - inset - thick - expand, cy + 1 - inset - arm - expand, thick + expand * 2, vLen);
     }
   }
 }
@@ -249,20 +175,27 @@ export function renderActiveDragReticleAndOriginFootprint(
     pa: number
   ) => rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, px, py, pz, pw, ph, 1.0, pr, pg, pb, pa, 0, 0, 4);
 
+  const colorblind = Boolean(options.colorblindSymbols);
+  const trayId = options.equippedTray ?? 'industrial_slate';
+  const trayPalette = rctx.getEffectiveTrayPalette(trayId, highContrast);
+  const floorLum =
+    0.2126 * trayPalette.floorTileA[0] +
+    0.7152 * trayPalette.floorTileA[1] +
+    0.0722 * trayPalette.floorTileA[2];
+  const isLightTray = !highContrast && floorLum >= 0.42;
+
   for (const b of group) {
     const shape = getShape(b.shapeId);
     const activeColor: ColorId = getActiveColor(b.colorStack, b.colorCursor);
-    const [cr, cg, cb] = rctx.getColorRgb(activeColor, highContrast);
+    const [cr, cg, cb] = rctx.getColorRgb(activeColor, highContrast, colorblind);
     const roomVis = rctx.getRoomVisualState(board, board.roomMap[b.row * board.cols + b.col] ?? 0);
     const snapRow = b.row + dRow;
     const snapCol = b.col + dCol;
 
     // Origin Ghost Footprint when dragged >= 1 cell away from starting spot
     if (isDisplacedFromOrigin) {
-      const brkR = highContrast ? Math.min(1, cr * 0.25 + 0.75) : Math.min(1, cr * 0.28 + 0.7);
-      const brkG = highContrast ? Math.min(1, cg * 0.25 + 0.73) : Math.min(1, cg * 0.28 + 0.66);
-      const brkB = highContrast ? Math.min(1, cb * 0.25 + 0.66) : Math.min(1, cb * 0.28 + 0.58);
-      const origZ = roomVis.zOffset + 0.011;
+      const ghostStyle = resolveOriginGhostStyle(trayId, trayPalette, [cr, cg, cb], highContrast, effPulse);
+      const origZ = roomVis.zOffset + 0.015;
 
       for (const [dr, dc] of shape.cells) {
         drawFlatPad(
@@ -271,10 +204,10 @@ export function renderActiveDragReticleAndOriginFootprint(
           origZ,
           0.84,
           0.84,
-          brkR,
-          brkG,
-          brkB,
-          highContrast ? 0.15 : 0.09
+          ghostStyle.padRgb[0],
+          ghostStyle.padRgb[1],
+          ghostStyle.padRgb[2],
+          ghostStyle.padAlpha
         );
       }
       drawCellOuterCornerBrackets3D(
@@ -283,11 +216,26 @@ export function renderActiveDragReticleAndOriginFootprint(
         shape,
         b.col,
         b.row,
-        origZ + 0.003,
-        brkR,
-        brkG,
-        brkB,
-        (highContrast ? 0.78 : 0.56) + 0.16 * effPulse
+        origZ + 0.002,
+        ghostStyle.haloRgb[0],
+        ghostStyle.haloRgb[1],
+        ghostStyle.haloRgb[2],
+        ghostStyle.haloAlpha,
+        ghostStyle.bracketInset,
+        0.016
+      );
+      drawCellOuterCornerBrackets3D(
+        rctx,
+        gl,
+        shape,
+        b.col,
+        b.row,
+        origZ + 0.0035,
+        ghostStyle.bracketRgb[0],
+        ghostStyle.bracketRgb[1],
+        ghostStyle.bracketRgb[2],
+        ghostStyle.bracketAlpha,
+        ghostStyle.bracketInset
       );
 
       if (b.id === lead.id) {
@@ -298,21 +246,19 @@ export function renderActiveDragReticleAndOriginFootprint(
           b.col + anchor.x,
           b.row + anchor.y,
           origZ + 0.006,
-          0.44,
-          brkR,
-          brkG,
-          brkB,
-          (highContrast ? 0.88 : 0.68) + 0.14 * effPulse
+          0.45,
+          ghostStyle.badgeRgb[0],
+          ghostStyle.badgeRgb[1],
+          ghostStyle.badgeRgb[2],
+          ghostStyle.badgeAlpha
         );
       }
     }
 
-    // Live Snapped Landing Reticle (shifts to calm pearl/ivory cancel frame when returned home!)
+    // Live Snapped Landing Reticle (shifts to calm cancel frame when returned home!)
     if (isReturnedHomeConfirm) {
-      const homeR = 0.98;
-      const homeG = 0.95;
-      const homeB = 0.86;
-      const homeZ = roomVis.zOffset + 0.012;
+      const homeStyle = resolveReturnHomeStyle(trayId, trayPalette, highContrast, effPulse);
+      const homeZ = roomVis.zOffset + 0.015;
       for (const [dr, dc] of shape.cells) {
         drawFlatPad(
           snapCol + dc + 0.06,
@@ -320,10 +266,10 @@ export function renderActiveDragReticleAndOriginFootprint(
           homeZ,
           0.88,
           0.88,
-          homeR,
-          homeG,
-          homeB,
-          0.22 + 0.1 * effPulse
+          homeStyle.padRgb[0],
+          homeStyle.padRgb[1],
+          homeStyle.padRgb[2],
+          homeStyle.padAlpha
         );
       }
       drawCellOuterCornerBrackets3D(
@@ -332,24 +278,43 @@ export function renderActiveDragReticleAndOriginFootprint(
         shape,
         snapCol,
         snapRow,
+        homeZ + 0.002,
+        homeStyle.haloRgb[0],
+        homeStyle.haloRgb[1],
+        homeStyle.haloRgb[2],
+        homeStyle.haloAlpha,
+        homeStyle.bracketInset,
+        0.016
+      );
+      drawCellOuterCornerBrackets3D(
+        rctx,
+        gl,
+        shape,
+        snapCol,
+        snapRow,
         homeZ + 0.004,
-        homeR,
-        homeG,
-        homeB,
-        0.76 + 0.16 * effPulse
+        homeStyle.bracketRgb[0],
+        homeStyle.bracketRgb[1],
+        homeStyle.bracketRgb[2],
+        homeStyle.bracketAlpha,
+        homeStyle.bracketInset
       );
     } else {
+      const snapRoomVis = rctx.getRoomVisualState(board, board.roomMap[snapRow * board.cols + snapCol] ?? 0);
+      const blockLum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
+      const shade = isLightTray ? (blockLum > 0.55 ? 0.78 : 0.88) : 1.0;
+      const padAlpha = (isLightTray ? 0.32 : 0.28) + 0.16 * effPulse;
       for (const [dr, dc] of shape.cells) {
         drawFlatPad(
           snapCol + dc + 0.05,
           snapRow + dr + 0.05,
-          0.012,
+          snapRoomVis.zOffset + 0.015,
           0.9,
           0.9,
-          cr,
-          cg,
-          cb,
-          0.28 + 0.16 * effPulse
+          cr * shade,
+          cg * shade,
+          cb * shade,
+          padAlpha
         );
       }
     }
@@ -541,12 +506,29 @@ export function renderCanvas2DDragAndTrailFx(
     }
   }
 
-  // 2. Origin Ghost Footprint during live displaced drag
-  const draggedId = options.draggedBlockId ?? null;
+  // 2. Origin Ghost Footprint + Snapped Landing Reticle during drag (tray-luminance adaptive)
+  let draggedId = options.draggedBlockId ?? null;
+  let liftedDetected = false;
+  if (draggedId === null) {
+    const lifted = board.blocks.find((b) => b.status === 'ACTIVE' && b.liftAlpha > 0.1);
+    if (lifted) {
+      draggedId = lifted.id;
+      liftedDetected = true;
+    }
+  }
   if (draggedId !== null) {
+    const trayId = options.equippedTray ?? 'industrial_slate';
+    const trayPalette = rctx.getEffectiveTrayPalette(trayId, highContrast);
+    const floorLum =
+      0.2126 * trayPalette.floorTileA[0] +
+      0.7152 * trayPalette.floorTileA[1] +
+      0.0722 * trayPalette.floorTileA[2];
+    const isLightTray = !highContrast && floorLum >= 0.42;
+
     const group = getMovedGroupBlocks(board, draggedId);
     const lead = group.find((b) => b.id === draggedId) ?? group[0];
-    if (lead && (Boolean(options.isLiveDrag) || lead.liftAlpha > 0.1)) {
+    if (lead) {
+      const isLiveDrag = Boolean(options.isLiveDrag) || liftedDetected || lead.liftAlpha > 0.1;
       let dRow =
         options.dragTargetRow !== undefined && options.dragTargetRow !== null
           ? options.dragTargetRow - lead.row
@@ -559,35 +541,70 @@ export function renderCanvas2DDragAndTrailFx(
         dRow = 0;
         dCol = 0;
       }
-      if (dRow !== 0 || dCol !== 0) {
-        ctx.save();
-        ctx.setLineDash([5, 4]);
-        for (const b of group) {
-          const shape = getShape(b.shapeId);
+      const isDisplacedFromOrigin = isLiveDrag && (dRow !== 0 || dCol !== 0);
+      const isReturnedHomeConfirm = isLiveDrag && Boolean(options.dragLeftOrigin) && dRow === 0 && dCol === 0;
+      const toCssRgba = (rgb: readonly [number, number, number], a: number): string =>
+        `rgba(${Math.round(rgb[0] * 255)}, ${Math.round(rgb[1] * 255)}, ${Math.round(rgb[2] * 255)}, ${a.toFixed(3)})`;
+
+      for (const b of group) {
+        const shape = getShape(b.shapeId);
+        const activeColor: ColorId = getActiveColor(b.colorStack, b.colorCursor);
+        const rgb = rctx.getColorRgb(activeColor, highContrast, colorblind);
+        const snapRow = b.row + dRow;
+        const snapCol = b.col + dCol;
+
+        if (isDisplacedFromOrigin) {
+          const ghostStyle = resolveOriginGhostStyle(trayId, trayPalette, rgb, highContrast, 0.5);
+          ctx.save();
+          ctx.setLineDash([5, 4]);
           for (const [dr, dc] of shape.cells) {
             fillCellPad(
               b.col + dc,
               b.row + dr,
               0.08,
-              0.012,
-              'rgba(254, 243, 199, 0.14)',
-              'rgba(254, 243, 199, 0.78)',
+              0.016,
+              toCssRgba(ghostStyle.padRgb, ghostStyle.padAlpha),
+              toCssRgba(ghostStyle.bracketRgb, ghostStyle.bracketAlpha),
               2
             );
           }
+          ctx.restore();
           if (b.id === lead.id) {
             const anchor = getShapeAnchorCellOffset(shape);
             drawCenteredText(
               '↩',
               b.col + anchor.x,
               b.row + anchor.y,
-              0.02,
-              '#FEF3C7',
-              'bold 14px sans-serif'
+              0.022,
+              isLightTray ? '#FFFDF9' : '#FEF3C7',
+              'bold 14px sans-serif',
+              false
             );
           }
         }
-        ctx.restore();
+
+        const homeStyle = isReturnedHomeConfirm
+          ? resolveReturnHomeStyle(trayId, trayPalette, highContrast, 0.5)
+          : null;
+        for (const [dr, dc] of shape.cells) {
+          fillCellPad(
+            snapCol + dc,
+            snapRow + dr,
+            0.06,
+            0.016,
+            homeStyle
+              ? toCssRgba(homeStyle.padRgb, homeStyle.padAlpha)
+              : isLightTray
+                ? toCssRgba(rgb, 0.34)
+                : 'rgba(255, 255, 255, 0.25)',
+            homeStyle
+              ? toCssRgba(homeStyle.bracketRgb, homeStyle.bracketAlpha)
+              : isLightTray
+                ? 'rgba(15, 23, 42, 0.65)'
+                : '#FFFFFF',
+            homeStyle ? 2.5 : undefined
+          );
+        }
       }
     }
   }

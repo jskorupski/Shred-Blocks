@@ -1,10 +1,5 @@
 import { getGateActiveColor, getGateOutwardNormal } from '../core/gate-clearance';
-import {
-  canGroupOccupyOffset,
-  getBlockRoomId,
-  getMovedGroupBlocks,
-  isBlockInSealedVault,
-} from '../core/physics';
+import { getBlockRoomId, isBlockInSealedVault } from '../core/physics';
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import { type BoardState, COLOR_PALETTE, type ColorId } from '../core/types';
 import { BLOCK_LIFT_DELTA_Z, BLOCK_TOP_Z } from './camera-3d';
@@ -266,46 +261,6 @@ export function renderCanvas2DFallbackImpl(
 
   // 5. Draw Target Reticles, Origin Ghost Footprint, Mystic Path Traces & Hint Ghost Outline
   renderCanvas2DDragAndTrailFx(rctx, ctx, board, options, project, fillCellPad, drawCenteredText);
-  let draggedId = options.draggedBlockId ?? null;
-  if (draggedId === null) {
-    const lifted = board.blocks.find((b) => b.status === 'ACTIVE' && b.liftAlpha > 0.1);
-    if (lifted) draggedId = lifted.id;
-  }
-  if (draggedId !== null) {
-    const group = getMovedGroupBlocks(board, draggedId);
-    const lead = group.find((b) => b.id === draggedId) ?? group[0];
-    if (lead) {
-      let dRow =
-        options.dragTargetRow !== undefined && options.dragTargetRow !== null
-          ? options.dragTargetRow - lead.row
-          : Math.round(lead.y - lead.row);
-      let dCol =
-        options.dragTargetCol !== undefined && options.dragTargetCol !== null
-          ? options.dragTargetCol - lead.col
-          : Math.round(lead.x - lead.col);
-      if (!canGroupOccupyOffset(board, group, dRow, dCol)) {
-        dRow = 0;
-        dCol = 0;
-      }
-      const isReturnedHomeConfirm = Boolean(options.dragLeftOrigin) && dRow === 0 && dCol === 0;
-      for (const b of group) {
-        const shape = getShape(b.shapeId);
-        const snapRow = b.row + dRow;
-        const snapCol = b.col + dCol;
-        for (const [dr, dc] of shape.cells) {
-          fillCellPad(
-            snapCol + dc,
-            snapRow + dr,
-            0.06,
-            0.015,
-            isReturnedHomeConfirm ? 'rgba(254, 243, 199, 0.28)' : 'rgba(255, 255, 255, 0.25)',
-            isReturnedHomeConfirm ? '#FEF3C7' : '#FFFFFF',
-            isReturnedHomeConfirm ? 2.5 : undefined
-          );
-        }
-      }
-    }
-  }
   const fallbackGuideMove = board.hintMove ?? options.autoGuideMove ?? null;
   if (fallbackGuideMove) {
     const hintBlock = board.blocks.find((b) => b.id === fallbackGuideMove.blockId && b.status === 'ACTIVE');
