@@ -136,7 +136,8 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
 
     const initialZ = bubbleCtx.particlePool[2];
     const maxAge = bubbleCtx.particlePool[11];
-    expect(maxAge).toBeGreaterThanOrEqual(1.48);
+    expect(maxAge).toBeGreaterThanOrEqual(1.25);
+    expect(maxAge).toBeLessThanOrEqual(1.9);
     // Zero initial horizontal velocity so any horizontal travel proves swirling air-current eddies
     bubbleCtx.particlePool[3] = 0;
     const startX = bubbleCtx.particlePool[0];
@@ -728,6 +729,7 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
       commitBlockMove(board, 1, 0, 1, 'CHALLENGE');
       detectAutomaticShredEventsImpl(rctx, board, rctx.lastOptions);
       const midCount = rctx.particlePoolCount;
+      const midSlot0MaxAge = rctx.particlePool[11];
       const midShockwaves = rctx.activeShockwaves.length;
       const noGold = rctx.activeShockwaves.every((sw) => !sw.goldShimmer && (sw.peakAlpha ?? 0) >= 0.4);
       expect(Math.max(...rctx.activeShockwaves.map((sw) => sw.peakAlpha ?? 0)), style).toBeGreaterThan(0.65);
@@ -745,6 +747,8 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
       commitBlockMove(board, 2, 0, 3, 'CHALLENGE');
       detectAutomaticShredEventsImpl(rctx, board, rctx.lastOptions);
       expect(rctx.particlePoolCount, style).toBeGreaterThan(Math.floor(midCount * 1.65));
+      expect(rctx.particlePool[11], style).toBeGreaterThan(midSlot0MaxAge);
+      if (style === 'soap_bubbles') expect(rctx.particlePool[11]).toBeGreaterThanOrEqual(1.85);
       expect(rctx.activeShockwaves.length, style).toBe(3);
       for (const sw of rctx.activeShockwaves) {
         expect(sw.feathered && sw.z <= 0.05 && (sw.goldShimmer ?? 0) >= 1 && sw.cy < 0.25, style).toBe(true);

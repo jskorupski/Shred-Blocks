@@ -575,7 +575,11 @@ export function spawnStyledParticlesImpl(
             ? 0.114 + ((i * 5) % 4) * 0.01
             : 0.168 + ((i * 7) % 3) * 0.016;
       scale = baseBubbleScale * (celebratory ? 0.95 : 1.0);
-      maxAge = 1.85 + ((i * 9) % 10) * 0.105;
+      // Brisker 1.28..1.86s lifetime during normal play so rapid shreds don't linger over the board;
+      // full 1.85..2.96s lingering flourish reserved for the stage-winning final shred (`celebratory`).
+      maxAge = celebratory
+        ? (1.85 + ((i * 9) % 10) * 0.105) * (isShimmerTier ? 1.06 : 1.0)
+        : 1.28 + ((i * 9) % 10) * 0.064;
       rotSpeed = (i % 2 === 0 ? 1 : -1) * (1.25 + (i % 7) * 0.28);
     } else if (particleStyle === 'lightning_bolts') {
       const tierMul = celebratory ? (isShimmerTier ? 0.68 : 1.26) : 1.0;
