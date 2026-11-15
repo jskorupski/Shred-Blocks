@@ -77,11 +77,11 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         <div id="victory-chest-fanfare" class="chest-fanfare-box" hidden></div>
 
         <div class="dialog-actions">
-          <button type="button" id="btn-victory-home" class="btn-tactile btn-sanctuary">
-            ‹ Map
+          <button type="button" id="btn-victory-home" class="btn-tactile btn-sanctuary btn-structured">
+            <span class="btn-action-glyph" data-glyph="back" aria-hidden="true">‹</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-label-text">Map</span>
           </button>
-          <button type="button" id="btn-victory-replay" class="btn-tactile btn-secondary">
-            ↻ Replay
+          <button type="button" id="btn-victory-replay" class="btn-tactile btn-secondary btn-structured">
+            <span class="btn-action-glyph" data-glyph="restart" aria-hidden="true">↻</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-label-text">Replay</span>
           </button>
           <button type="button" id="btn-next-level" class="btn-tactile btn-primary" autofocus>
             ▶ Next Level
@@ -105,16 +105,16 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
             ↻ Try Again (Free)
           </button>
           <button type="button" id="btn-use-zen-blessing" class="btn-tactile btn-blessing" hidden>
-            🌿 Zen Blessing: +5 Moves (Free · 1/3)
+            Zen Blessing: +5 Moves (Free · 1/3)
           </button>
           <button type="button" id="btn-continue-level" class="btn-tactile btn-warning">
-            ➕ +5 Moves (150 Coins)
+            +5 Moves (150 Coins)
           </button>
           <button type="button" id="btn-failure-zen" class="btn-tactile btn-secondary">
-            🌿 Switch to Zen Mode · Lvl 1
+            Switch to Zen Mode · Lvl 1
           </button>
-          <button type="button" id="btn-failure-home" class="btn-tactile btn-sanctuary">
-            ‹ Return to Sanctuary Map
+          <button type="button" id="btn-failure-home" class="btn-tactile btn-sanctuary btn-structured">
+            <span class="btn-action-glyph" data-glyph="back" aria-hidden="true">‹</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-label-text">Return to Sanctuary Map</span>
           </button>
         </div>
       </div>
@@ -141,14 +141,14 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
             <button type="button" id="btn-pause-resume" class="btn-tactile btn-primary" autofocus>
               ▶ Resume
             </button>
-            <button type="button" id="btn-pause-home" class="btn-tactile btn-sanctuary">
-              ‹ Sanctuary Map
+            <button type="button" id="btn-pause-home" class="btn-tactile btn-sanctuary btn-structured">
+              <span class="btn-action-glyph" data-glyph="back" aria-hidden="true">‹</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-label-text">Sanctuary Map</span>
             </button>
-            <button type="button" id="btn-pause-restart" class="btn-tactile btn-secondary btn-compact">
-              ↻ Restart Level
+            <button type="button" id="btn-pause-restart" class="btn-tactile btn-secondary btn-compact btn-structured">
+              <span class="btn-action-glyph" data-glyph="restart" aria-hidden="true">↻</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-label-text">Restart Level</span>
             </button>
-            <button type="button" id="btn-pause-skip" class="btn-tactile btn-secondary btn-compact">
-              Skip Level (Free) ▸▸
+            <button type="button" id="btn-pause-skip" class="btn-tactile btn-secondary btn-compact btn-structured">
+              <span class="btn-label-text">Skip Level (Free)</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-action-glyph" data-glyph="forward" aria-hidden="true">▸▸</span>
             </button>
           </div>
         </div>
@@ -208,9 +208,9 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
                 <button
                   type="button"
                   id="btn-pause-open-themes"
-                  class="btn-tactile btn-secondary btn-compact"
+                  class="btn-tactile btn-secondary btn-compact btn-structured"
                 >
-                  ✦ Themes Studio ›
+                  <span class="btn-action-glyph" data-glyph="spark" aria-hidden="true">✦</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-label-text">Themes Studio</span><span class="btn-space" aria-hidden="true"> </span><span class="btn-action-glyph" data-glyph="forward" aria-hidden="true">›</span>
                 </button>
               </div>
             </div>
@@ -221,14 +221,40 @@ export const DIALOGS_AND_TOAST_TEMPLATE = `
         <fieldset class="pause-section-block settings-fieldset">
           <legend class="pause-section-label">Audio &amp; Haptics</legend>
           <div class="settings-list settings-grid-3">
-            <label class="setting-row setting-tile">
+            <button
+              type="button"
+              id="btn-volume-sfx"
+              class="setting-row setting-tile setting-volume-btn"
+              data-volume-step="2"
+              aria-label="Sound FX volume: Level 2 of 3"
+            >
               <span>Sound FX</span>
-              <input type="checkbox" id="toggle-sfx" checked />
-            </label>
-            <label class="setting-row setting-tile">
+              <b class="vol-step-pill" aria-hidden="true">
+                <i class="vol-step-text" id="vol-label-sfx">2</i>
+                <i class="vol-bars">
+                  <i class="vol-bar"></i>
+                  <i class="vol-bar"></i>
+                  <i class="vol-bar"></i>
+                </i>
+              </b>
+            </button>
+            <button
+              type="button"
+              id="btn-volume-music"
+              class="setting-row setting-tile setting-volume-btn"
+              data-volume-step="2"
+              aria-label="Music volume: Level 2 of 3"
+            >
               <span>Music</span>
-              <input type="checkbox" id="toggle-music" checked />
-            </label>
+              <b class="vol-step-pill" aria-hidden="true">
+                <i class="vol-step-text" id="vol-label-music">2</i>
+                <i class="vol-bars">
+                  <i class="vol-bar"></i>
+                  <i class="vol-bar"></i>
+                  <i class="vol-bar"></i>
+                </i>
+              </b>
+            </button>
             <label class="setting-row setting-tile">
               <span>Haptics</span>
               <input type="checkbox" id="toggle-haptics" checked />

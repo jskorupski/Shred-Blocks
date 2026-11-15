@@ -1,4 +1,11 @@
-import type { LevelRecord, ModeLadderState, ModeStateMap, PlayMode, SavePayloadV1 } from '../core/types';
+import type {
+  AudioVolumeStep,
+  LevelRecord,
+  ModeLadderState,
+  ModeStateMap,
+  PlayMode,
+  SavePayloadV1,
+} from '../core/types';
 
 export const PLAY_MODES: ReadonlyArray<PlayMode> = ['CHALLENGE', 'ZEN', 'TIMED'];
 const MAX_MODE_LEVEL = 999_999;
@@ -108,9 +115,17 @@ export function migrateSavePayload(
   payload: SavePayloadV1,
   migrateEconomyStep: (p: SavePayloadV1) => SavePayloadV1
 ): SavePayloadV1 {
+  const rawSfxVol = payload.settings.sfxEnabled === false ? 0 : (payload.settings.sfxVolume ?? 2);
+  payload.settings.sfxVolume = Math.min(3, Math.max(0, Math.round(rawSfxVol))) as AudioVolumeStep;
+  payload.settings.sfxEnabled = payload.settings.sfxVolume > 0;
+  const rawMusicVol = payload.settings.musicEnabled === false ? 0 : (payload.settings.musicVolume ?? 2);
+  payload.settings.musicVolume = Math.min(3, Math.max(0, Math.round(rawMusicVol))) as AudioVolumeStep;
+  payload.settings.musicEnabled = payload.settings.musicVolume > 0;
+
   const originalPlayMode = payload.settings.playMode;
   const wasLegacyV1 = (payload.economyVersion ?? 1) < 2;
   const migrated = migrateEconomyStep(payload);
+  migrated.economyVersion = Math.max(2, migrated.economyVersion || 2);
 
   if ((migrated.modeLadderVersion ?? 0) >= 1) {
     reconcileModeStateWithEnvelope(migrated);
@@ -240,10 +255,8 @@ export function packModeSplitTrailer(
   telemetryCutoffIdx: number,
   writeVarint: (out: number[], value: number) => void
 ): void {
-  if ((payload.modeLadderVersion ?? 0) < 1) return;
-
   out.push(MODE_SPLIT_TRAILER_MAGIC_0, MODE_SPLIT_TRAILER_MAGIC_1);
-  writeVarint(out, payload.modeLadderVersion);
+  writeVarint(out, Math.max(1, payload.modeLadderVersion || 1));
 
   let activeLaddersMask = 0;
   for (let m = 0; m < PLAY_MODES.length; m++) {

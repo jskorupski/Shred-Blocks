@@ -1,7 +1,7 @@
 import { computeEarnedStars } from '../core/board';
 import { getTimedBombTickSec, hasFinalTouchGrace } from '../core/board-state';
 import type { BoardState, PlayMode, SavePayloadV1 } from '../core/types';
-import type { AppViewContext } from './catalog-meta';
+import { type AppViewContext, setRichModeText } from './catalog-meta';
 
 export type HudUrgency = 'calm' | 'normal' | 'bonus' | 'warn' | 'critical';
 
@@ -330,8 +330,8 @@ export function syncKeystoneDomImpl(app: AppViewContext): void {
     }
   }
 
-  setTextIfChanged(document.getElementById('hud-keystone-stars'), state.metaPrimary);
-  setTextIfChanged(document.getElementById('hud-keystone-rule'), state.metaSecondary);
+  setRichModeText(document.getElementById('hud-keystone-stars'), state.metaPrimary);
+  setRichModeText(document.getElementById('hud-keystone-rule'), state.metaSecondary);
 
   const fill = document.getElementById('hud-keystone-fill');
   if (fill) {
@@ -384,7 +384,7 @@ export function showKeystoneRuleToastImpl(app: AppViewContext): void {
     const bombNote = activeBombs
       ? ` · 💣 -1/${Math.max(1, Math.round(getTimedBombTickSec(app.board)))}s`
       : '';
-    app.showGameToast(`⏱ Speed Rush: 3★ ≥ ${s3} · 2★ ≥ ${s2}${bombNote}`);
+    app.showGameToast(`⏱️ Speed Rush: 3★ ≥ ${s3} · 2★ ≥ ${s2}${bombNote}`);
     return;
   }
 

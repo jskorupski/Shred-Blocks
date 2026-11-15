@@ -9,7 +9,15 @@ import {
   countUniqueClearedLevels,
   type LevelWinRewardSummary,
 } from '../storage/save-manager';
-import { type AppViewContext, BOOSTER_DISPLAY_NAMES, getPlayModeMeta } from './catalog-meta';
+import {
+  type AppViewContext,
+  BOOSTER_DISPLAY_NAMES,
+  BOOSTER_TOKENS,
+  formatCompactLevelRef,
+  getPlayModeMeta,
+  setButtonIconLabel,
+  setRichModeText,
+} from './catalog-meta';
 import { startVictoryModalFx } from './victory-modal-fx';
 
 /**
@@ -73,7 +81,8 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   const milestoneFillEl = document.getElementById('victory-milestone-chest-fill');
 
   const save = app.saveManager.getPayload();
-  const modeInfo = getPlayModeMeta(save.settings.playMode);
+  const playMode = save.settings.playMode;
+  const modeInfo = getPlayModeMeta(playMode);
   const isUnderPar = Boolean(summary.underPar);
   const movesSaved = summary.underParMovesSaved ?? Math.max(0, app.board.parMoves - app.board.movesCommitted);
 
@@ -81,7 +90,13 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
 
   const nextLevelBtn = document.getElementById('btn-next-level');
   if (nextLevelBtn) {
-    nextLevelBtn.textContent = `${modeInfo.icon} ▶ Next Level`;
+    setButtonIconLabel(nextLevelBtn, {
+      mode: playMode,
+      modeIcon: modeInfo.icon,
+      actionGlyph: '▶',
+      actionKind: 'play',
+      label: 'Next Level',
+    });
   }
 
   if (titleEl) {
@@ -90,17 +105,20 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
       : `Level ${app.board.levelId} Cleared!`;
   }
   if (subtitleEl) {
-    subtitleEl.textContent = summary.zenClear
-      ? summary.zenStarAwarded
-        ? '★ +1 Gold Star Earned in Zen Sanctuary! Every 3 unique Zen clears awards a Gold Star.'
-        : `🌿 Tranquil Zen Clear — ★ ${save.zenStarProgress}/3 toward next Gold Star · Blessings ${save.zenBlessings}/3`
-      : isUnderPar
-        ? `Astrolabe Outsmarted — ${movesSaved} ${movesSaved === 1 ? 'move' : 'moves'} faster than the Sanctuary solver!`
-        : summary.starsEarned === 3
-          ? 'Flawless 3-Star Shredder Mastery!'
-          : summary.starsEarned === 2
-            ? 'Great Job! Clear in fewer moves for 3 Stars!'
-            : 'Stage Complete! Clear closer to Par for 3 Stars!';
+    setRichModeText(
+      subtitleEl,
+      summary.zenClear
+        ? summary.zenStarAwarded
+          ? '★ +1 Gold Star Earned in Zen Sanctuary! Every 3 unique Zen clears awards a Gold Star.'
+          : `🌿 Tranquil Zen Clear — ★ ${save.zenStarProgress}/3 toward next Gold Star · Blessings ${save.zenBlessings}/3`
+        : isUnderPar
+          ? `Astrolabe Outsmarted — ${movesSaved} ${movesSaved === 1 ? 'move' : 'moves'} faster than the Sanctuary solver!`
+          : summary.starsEarned === 3
+            ? 'Flawless 3-Star Shredder Mastery!'
+            : summary.starsEarned === 2
+              ? 'Great Job! Clear in fewer moves for 3 Stars!'
+              : 'Stage Complete! Clear closer to Par for 3 Stars!'
+    );
   }
   if (underParBannerEl) {
     if (isUnderPar) {
@@ -112,7 +130,10 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
       if (summary.firstUnderPar && summary.underParBooster) {
         const bName = BOOSTER_DISPLAY_NAMES[summary.underParBooster];
         const bRarity = BOOSTER_RARITY[summary.underParBooster];
-        detail.textContent = `Solved in ${app.board.movesCommitted} vs. Par ${app.board.parMoves}! Bounty: +${summary.underParCoins ?? 0} Coins & +1 ${bName} [${bRarity}]`;
+        setRichModeText(
+          detail,
+          `Solved in ${app.board.movesCommitted} vs. Par ${app.board.parMoves}! Bounty: +${summary.underParCoins ?? 0} Coins & ${BOOSTER_TOKENS[summary.underParBooster]} +1 ${bName} [${bRarity}]`
+        );
       } else {
         detail.textContent = `Solved in ${app.board.movesCommitted} vs. Par ${app.board.parMoves}! Oracle Encore — Stage Bounty Claimed`;
       }
@@ -127,9 +148,12 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
     if (summary.zenClear) {
       const pill = document.createElement('span');
       pill.className = 'zen-victory-pill';
-      pill.textContent = summary.zenStarAwarded
-        ? '🌿 Zen Cleared · ★ +1 Gold Star Earned!'
-        : `🌿 Zen Cleared · ★ ${save.zenStarProgress}/3`;
+      setRichModeText(
+        pill,
+        summary.zenStarAwarded
+          ? '🌿 Zen Cleared · ★ +1 Gold Star Earned!'
+          : `🌿 Zen Cleared · ★ ${save.zenStarProgress}/3`
+      );
       starsEl.replaceChildren(pill);
     } else {
       const slots: HTMLSpanElement[] = [];
@@ -185,7 +209,7 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
   if (chestFanfareEl) {
     const chestNotes: string[] = [];
     const boosterLabels = summary.rewardedBoosters.map(
-      (b) => `+1 ${BOOSTER_DISPLAY_NAMES[b]} [${BOOSTER_RARITY[b]}]`
+      (b) => `${BOOSTER_TOKENS[b]} +1 ${BOOSTER_DISPLAY_NAMES[b]} [${BOOSTER_RARITY[b]}]`
     );
     let bCursor = 0;
     if (summary.shredderChestsOpened > 0) {
@@ -212,9 +236,11 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
       chestNotes.push(`🌿 Zen Blessing Earned! (${save.zenBlessings}/3 Free Continues Banked)`);
     }
     if (chestNotes.length > 0) {
-      chestFanfareEl.textContent = chestNotes.join(' | ');
+      setRichModeText(chestFanfareEl, chestNotes.join(' | '));
       chestFanfareEl.hidden = false;
     } else {
+      delete chestFanfareEl.dataset.richModeSig;
+      chestFanfareEl.replaceChildren();
       chestFanfareEl.hidden = true;
     }
   }
@@ -305,7 +331,6 @@ export function handleLevelFailureImpl(
 
   const save = app.saveManager.getPayload();
   const playMode = save.settings.playMode;
-  const modeInfo = getPlayModeMeta(playMode);
   const titleEl = document.getElementById('failure-title');
   const reasonEl = document.getElementById('failure-reason');
   const retryBtn = document.getElementById('btn-retry-level');
@@ -314,23 +339,34 @@ export function handleLevelFailureImpl(
   const zenBtn = document.getElementById('btn-failure-zen');
 
   if (retryBtn) {
-    retryBtn.textContent = `${modeInfo.icon} ↻ Try Again (Free)`;
+    setButtonIconLabel(retryBtn, {
+      mode: playMode,
+      actionGlyph: '↻',
+      actionKind: 'restart',
+      label: 'Try Again (Free)',
+    });
   }
 
   if (blessingBtn) {
     const blessings = save.zenBlessings || 0;
     blessingBtn.hidden = playMode === 'ZEN' || blessings <= 0;
-    blessingBtn.textContent =
-      reason === 'OUT_OF_MOVES'
-        ? `🌿 Zen Blessing: +5 Moves (Free · ${blessings}/3)`
-        : reason === 'BOMB_EXPLODED'
-          ? `🌿 Zen Blessing: Defuse & Continue (Free · ${blessings}/3)`
-          : `🌿 Zen Blessing: +20 Seconds (Free · ${blessings}/3)`;
+    setButtonIconLabel(blessingBtn, {
+      mode: 'ZEN',
+      label:
+        reason === 'OUT_OF_MOVES'
+          ? `Zen Blessing: +5 Moves (Free · ${blessings}/3)`
+          : reason === 'BOMB_EXPLODED'
+            ? `Zen Blessing: Defuse & Continue (Free · ${blessings}/3)`
+            : `Zen Blessing: +20 Seconds (Free · ${blessings}/3)`,
+    });
   }
 
   if (zenBtn) {
     zenBtn.hidden = playMode === 'ZEN';
-    zenBtn.textContent = `🌿 Switch to Zen Mode · Lvl ${save.modeState.ZEN.currentLevelId}`;
+    setButtonIconLabel(zenBtn, {
+      mode: 'ZEN',
+      label: `Switch to Zen Mode · ${formatCompactLevelRef(save.modeState.ZEN.currentLevelId)}`,
+    });
   }
 
   if (titleEl) {
@@ -350,12 +386,16 @@ export function handleLevelFailureImpl(
           : 'You ran out of time in Speed Rush! Retry for free, add +20 seconds with a Zen Blessing or Coins, or switch to Zen Mode.';
   }
   if (continueBtn) {
-    continueBtn.textContent =
-      reason === 'OUT_OF_MOVES'
-        ? `➕ +5 Moves (${CONTINUE_COIN_COST} Coins)`
-        : reason === 'BOMB_EXPLODED'
-          ? `➕ Defuse & Continue (${CONTINUE_COIN_COST} Coins)`
-          : `➕ +20 Seconds (${CONTINUE_COIN_COST} Coins)`;
+    setButtonIconLabel(continueBtn, {
+      actionGlyph: '+',
+      actionKind: 'plus',
+      label:
+        reason === 'OUT_OF_MOVES'
+          ? `+5 Moves (${CONTINUE_COIN_COST} Coins)`
+          : reason === 'BOMB_EXPLODED'
+            ? `Defuse & Continue (${CONTINUE_COIN_COST} Coins)`
+            : `+20 Seconds (${CONTINUE_COIN_COST} Coins)`,
+    });
   }
 
   const boardAtLoss = app.board;

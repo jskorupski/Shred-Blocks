@@ -1,4 +1,11 @@
-import type { ParticleStyleId, QualityTier, SavePayloadV1, SkinId, TrayId } from '../core/types';
+import type {
+  AudioVolumeStep,
+  ParticleStyleId,
+  QualityTier,
+  SavePayloadV1,
+  SkinId,
+  TrayId,
+} from '../core/types';
 import {
   base64UrlToBytes,
   bytesToBase64Url,
@@ -46,6 +53,16 @@ const PARTICLE_IDS: ReadonlyArray<ParticleStyleId> = [
   'lightning_bolts',
 ];
 const QUALITY_TIERS: ReadonlyArray<QualityTier> = ['AUTO', 'ULTRA_120', 'BALANCED_60'];
+const AUDIO_VOLUME_TRAILER_MAGIC_0 = 0xa8;
+const AUDIO_VOLUME_TRAILER_MAGIC_1 = 0x56;
+
+function pickAudioVolumeStep(v: unknown, enabledFallback: boolean): AudioVolumeStep {
+  if (!enabledFallback) return 0;
+  if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 3) {
+    return v as AudioVolumeStep;
+  }
+  return 2;
+}
 
 /**
  * Validates that an unknown parsed JSON object conforms to `SavePayloadV1`.
@@ -192,16 +209,26 @@ function sanitizeSavePayload(obj: Partial<SavePayloadV1>): SavePayloadV1 {
     equippedSkin: pickEnum(obj.equippedSkin, unlockedSkins, unlockedSkins[0]),
     equippedTray: pickEnum(obj.equippedTray, unlockedTrays, unlockedTrays[0]),
     equippedParticle: pickEnum(obj.equippedParticle, unlockedParticles, unlockedParticles[0]),
-    settings: {
-      playMode: pickEnum(s.playMode, ['CHALLENGE', 'ZEN', 'TIMED'] as const, 'CHALLENGE'),
-      sfxEnabled: pickBool(s.sfxEnabled, true),
-      musicEnabled: pickBool(s.musicEnabled, true),
-      hapticsEnabled: pickBool(s.hapticsEnabled, true),
-      colorblindSymbols: pickBool(s.colorblindSymbols, false),
-      highContrast: pickBool(s.highContrast, false),
-      reducedMotion: pickBool(s.reducedMotion, false),
-      qualityTier: pickEnum(s.qualityTier, QUALITY_TIERS, 'AUTO'),
-    },
+    settings: (() => {
+      const rawSfxEnabled = pickBool(s.sfxEnabled, true);
+      const rawMusicEnabled = pickBool(s.musicEnabled, true);
+      const hasSfxVol = typeof s.sfxVolume === 'number' && Number.isInteger(s.sfxVolume);
+      const hasMusicVol = typeof s.musicVolume === 'number' && Number.isInteger(s.musicVolume);
+      const sfxVolume = pickAudioVolumeStep(s.sfxVolume, rawSfxEnabled);
+      const musicVolume = pickAudioVolumeStep(s.musicVolume, rawMusicEnabled);
+      return {
+        playMode: pickEnum(s.playMode, ['CHALLENGE', 'ZEN', 'TIMED'] as const, 'CHALLENGE'),
+        sfxEnabled: hasSfxVol ? sfxVolume > 0 : rawSfxEnabled,
+        musicEnabled: hasMusicVol ? musicVolume > 0 : rawMusicEnabled,
+        sfxVolume,
+        musicVolume,
+        hapticsEnabled: pickBool(s.hapticsEnabled, true),
+        colorblindSymbols: pickBool(s.colorblindSymbols, false),
+        highContrast: pickBool(s.highContrast, false),
+        reducedMotion: pickBool(s.reducedMotion, false),
+        qualityTier: pickEnum(s.qualityTier, QUALITY_TIERS, 'AUTO'),
+      };
+    })(),
     levelRecords,
   };
 }
@@ -315,7 +342,7 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
   // Economy v2 trailer (`0xa5`): encodes economyVersion, starReliquaryLevel, and zenCleared level IDs
   const zenIds = ids.filter((id) => payload.levelRecords[id]?.zenCleared === true);
   out.push(0xa5);
-  writeVarint(out, payload.economyVersion ?? 2);
+  writeVarint(out, Math.max(2, payload.economyVersion || 2));
   writeVarint(out, payload.starReliquaryLevel ?? 0);
   writeVarint(out, zenIds.length);
   let prevZenId = 0;
@@ -325,6 +352,13 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
   }
 
   packModeSplitTrailer(out, payload, ids, telemetryCutoffIdx, writeVarint);
+
+  // Unconditional `[0xa8, 0x56]` ('V') audio-volume step trailer (`0..3` per channel):
+  // All outgoing saves/exports always write the latest trailer (`SAVE-COMPAT-01`), while
+  // decoding keeps `[0xa8, 0x56]` optional so pre-`0xa8` legacy saves load seamlessly.
+  const sfxVol = st.sfxEnabled ? (st.sfxVolume ?? 2) : 0;
+  const musicVol = st.musicEnabled ? (st.musicVolume ?? 2) : 0;
+  out.push(AUDIO_VOLUME_TRAILER_MAGIC_0, AUDIO_VOLUME_TRAILER_MAGIC_1, (sfxVol & 3) | ((musicVol & 3) << 2));
 
   return Uint8Array.from(out);
 }
@@ -485,6 +519,22 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
     }
   );
 
+  let sfxVolume: AudioVolumeStep = (sFlags & 2) !== 0 ? 2 : 0;
+  let musicVolume: AudioVolumeStep = (sFlags & 4) !== 0 ? 2 : 0;
+  if (pos < rawBytes.length && rawBytes[pos] === AUDIO_VOLUME_TRAILER_MAGIC_0) {
+    pos++;
+    const magic1 = readByte();
+    if (magic1 !== AUDIO_VOLUME_TRAILER_MAGIC_1) {
+      throw new SaveCodeError('DECOMPRESSION_FAILED', 'Invalid audio volume trailer header.');
+    }
+    const packedVol = readByte();
+    if ((packedVol & ~0x0f) !== 0) {
+      throw new SaveCodeError('DECOMPRESSION_FAILED', 'Invalid audio volume trailer byte.');
+    }
+    sfxVolume = (packedVol & 3) as AudioVolumeStep;
+    musicVolume = ((packedVol >>> 2) & 3) as AudioVolumeStep;
+  }
+
   return validateSavePayloadV1({
     schemaVersion: 1,
     appId: 'shredblocks-color-jam',
@@ -512,8 +562,10 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
     equippedParticle,
     settings: {
       playMode: (sFlags & 128) !== 0 ? 'CHALLENGE' : (sFlags & 1) !== 0 ? 'ZEN' : 'TIMED',
-      sfxEnabled: (sFlags & 2) !== 0,
-      musicEnabled: (sFlags & 4) !== 0,
+      sfxEnabled: sfxVolume > 0,
+      musicEnabled: musicVolume > 0,
+      sfxVolume,
+      musicVolume,
       hapticsEnabled: (sFlags & 8) !== 0,
       colorblindSymbols: (sFlags & 16) !== 0,
       highContrast: (sFlags & 32) !== 0,
@@ -529,8 +581,13 @@ function unpackCompactSaveBytes(rawBytes: Uint8Array): SavePayloadV1 {
  * Prepends 1-byte Codec Header `0x01` (STOR-01) so decoding is 100% synchronous and deterministic.
  */
 export function encodeSaveCode(payload: SavePayloadV1, options?: { qrCompact?: boolean }): string {
-  validateSavePayloadV1(payload);
-  const rawBytes = packCompactSaveBytes(payload, Boolean(options?.qrCompact));
+  const normalized = validateSavePayloadV1(payload);
+  const latest: SavePayloadV1 = {
+    ...normalized,
+    economyVersion: Math.max(2, normalized.economyVersion || 2),
+    modeLadderVersion: Math.max(1, normalized.modeLadderVersion || 1),
+  };
+  const rawBytes = packCompactSaveBytes(latest, Boolean(options?.qrCompact));
   const framedBytes = compressLz77(rawBytes);
   const b64Payload = bytesToBase64Url(framedBytes);
   const crcHex = computeCrc32Hex(b64Payload);

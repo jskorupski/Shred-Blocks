@@ -92,10 +92,10 @@ export const BOOSTER_DISPLAY_NAMES: Record<BoosterType, string> = {
 };
 
 export const BOOSTER_DEBUT_NOTES: Partial<Record<number, string>> = {
-  2: 'UNCOMMON Power-Up Unlocked: Hint! Highlights the optimal move (+2 Free Moves in Challenge Mode, or +10s Freeze in Speed Rush).',
-  8: 'RARE Power-Up Unlocked: Hammer! Tap any block, crate, or locked gate to shatter it.',
-  18: 'EPIC Power-Up Unlocked: Rocket! Blasts an entire row or column of blocks.',
-  30: 'LEGENDARY Power-Up Unlocked: Color Vacuum! Sweeps all unlocked blocks of a chosen color off the board.',
+  2: '💡 UNCOMMON Power-Up Unlocked: Hint! Highlights the optimal move (+2 Free Moves in Challenge Mode, or +10s Freeze in Speed Rush).',
+  8: '🔨 RARE Power-Up Unlocked: Hammer! Tap any block, crate, or locked gate to shatter it.',
+  18: '🚀 EPIC Power-Up Unlocked: Rocket! Blasts an entire row or column of blocks.',
+  30: '🧲 LEGENDARY Power-Up Unlocked: Color Vacuum! Sweeps all unlocked blocks of a chosen color off the board.',
 };
 
 export const SANCTUARY_AWAKENING_MILESTONES: ReadonlyArray<{ levelId: number; label: string }> = [
@@ -410,39 +410,27 @@ export function getPlayModeMeta(mode: PlayMode): {
     return { icon: '🌿', shortLabel: 'Zen', badgeLabel: '🌿 ZEN' };
   }
   if (mode === 'TIMED') {
-    return { icon: '⏱', shortLabel: 'Speed Rush', badgeLabel: '⏱ SPEED RUSH' };
+    return { icon: '⏱️', shortLabel: 'Speed Rush', badgeLabel: '⏱️ SPEED RUSH' };
   }
   return { icon: '⚔️', shortLabel: 'Challenge', badgeLabel: '⚔️ CHALLENGE' };
 }
 
-/**
- * Formats onboarding unlock notes and contextual helper toasts with a highlighted semantic lead
- * (`<strong class="banner-kicker">`) using pure DOM nodes (`SAVE-SEC-01`, zero `innerHTML`) while
- * preserving `el.textContent === text` verbatim.
- */
-export function renderStructuredBannerText(el: HTMLElement, text: string): void {
-  let splitEnd = -1;
-  const exclIdx = text.indexOf('! ');
-  const colonIdx = text.indexOf(': ');
-  const dashIdx = text.indexOf(' — ');
-
-  if (exclIdx > 0 && exclIdx <= 48 && (colonIdx === -1 || exclIdx - colonIdx <= 28)) {
-    splitEnd = exclIdx + 1;
-  } else if (colonIdx > 0 && colonIdx <= 48) {
-    splitEnd = colonIdx + 1;
-  } else if (dashIdx > 0 && dashIdx <= 46) {
-    splitEnd = dashIdx + 2;
-  }
-
-  if (splitEnd > 0 && splitEnd < text.length - 2) {
-    const lead = document.createElement('strong');
-    lead.className = 'banner-kicker';
-    lead.textContent = text.slice(0, splitEnd);
-    el.replaceChildren(lead, document.createTextNode(text.slice(splitEnd)));
-  } else {
-    el.textContent = text;
-  }
-}
+export {
+  BOOSTER_TOKENS,
+  type ButtonActionGlyphKind,
+  buildNodesWithModeIcons,
+  createBoosterIconSvg,
+  createInlineBoosterIconSpan,
+  createInlineModeIconSpan,
+  createModeIconSvg,
+  formatCompactLevelRef,
+  renderNavPlayLabel,
+  renderStructuredBannerText,
+  type StructuredButtonParts,
+  setButtonIconLabel,
+  setModeIconElement,
+  setRichModeText,
+} from './mode-and-booster-icons';
 
 let zoomLockInstalled = false;
 

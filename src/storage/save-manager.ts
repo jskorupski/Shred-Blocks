@@ -1,4 +1,12 @@
-import type { BoosterType, LevelRecord, ParticleStyleId, SavePayloadV1, SkinId, TrayId } from '../core/types';
+import type {
+  AudioVolumeStep,
+  BoosterType,
+  LevelRecord,
+  ParticleStyleId,
+  SavePayloadV1,
+  SkinId,
+  TrayId,
+} from '../core/types';
 import { decodeSaveCode, encodeSaveCode, validateSavePayloadV1 } from './save-code';
 import {
   BOOSTER_COIN_COSTS,
@@ -118,6 +126,8 @@ export function createDefaultSavePayload(): SavePayloadV1 {
       playMode: 'CHALLENGE',
       sfxEnabled: true,
       musicEnabled: true,
+      sfxVolume: 2,
+      musicVolume: 2,
       hapticsEnabled: true,
       colorblindSymbols: false,
       highContrast: false,
@@ -188,25 +198,15 @@ export class SaveManager {
     const idb = rawIdb ? migrateLegacyEconomy(rawIdb) : null;
 
     if (local && idb) {
-      if (idb.writeSeq > local.writeSeq) {
-        this.payload = idb;
-        this.writeLocalStorage(SAVE_STORAGE_KEY, idb);
-      } else if (local.writeSeq > idb.writeSeq) {
-        this.payload = local;
-        await this.writeIndexedDB(local);
-      } else {
-        this.payload = local;
-      }
-    } else if (idb && !local) {
+      this.payload = idb.writeSeq > local.writeSeq ? idb : local;
+    } else if (idb) {
       this.payload = idb;
-      this.writeLocalStorage(SAVE_STORAGE_KEY, idb);
-    } else if (local && !idb) {
+    } else if (local) {
       this.payload = local;
-      await this.writeIndexedDB(local);
-    } else {
-      this.writeLocalStorage(SAVE_STORAGE_KEY, this.payload);
-      await this.writeIndexedDB(this.payload);
     }
+    // Always write the latest migrated schema back to both persistent stores (`SAVE-COMPAT-01`)
+    this.writeLocalStorage(SAVE_STORAGE_KEY, this.payload);
+    await this.writeIndexedDB(this.payload);
 
     this.notifyListeners();
     return this.getPayload();
@@ -238,10 +238,44 @@ export class SaveManager {
   }
 
   public updateSettings(partial: Partial<SavePayloadV1['settings']>): SavePayloadV1 {
-    const prevMode = this.payload.settings.playMode;
+    const prev = this.payload.settings;
+    const prevMode = prev.playMode;
+    const resolveChannel = (
+      prevVol: AudioVolumeStep,
+      nextVol: AudioVolumeStep | undefined,
+      nextEnabled: boolean | undefined
+    ): { volume: AudioVolumeStep; enabled: boolean } => {
+      if (nextVol !== undefined) {
+        const clamped = (
+          nextEnabled === false ? 0 : Math.min(3, Math.max(0, Math.round(nextVol)))
+        ) as AudioVolumeStep;
+        return { volume: clamped, enabled: clamped > 0 };
+      }
+      if (nextEnabled !== undefined) {
+        const restored = (nextEnabled ? (prevVol > 0 ? prevVol : 2) : 0) as AudioVolumeStep;
+        return { volume: restored, enabled: restored > 0 };
+      }
+      return { volume: prevVol, enabled: prevVol > 0 };
+    };
+
+    const sfx = resolveChannel(
+      prev.sfxVolume ?? (prev.sfxEnabled ? 2 : 0),
+      partial.sfxVolume,
+      partial.sfxEnabled
+    );
+    const music = resolveChannel(
+      prev.musicVolume ?? (prev.musicEnabled ? 2 : 0),
+      partial.musicVolume,
+      partial.musicEnabled
+    );
+
     this.payload.settings = {
-      ...this.payload.settings,
+      ...prev,
       ...partial,
+      sfxVolume: sfx.volume,
+      sfxEnabled: sfx.enabled,
+      musicVolume: music.volume,
+      musicEnabled: music.enabled,
     };
     const nextMode = this.payload.settings.playMode;
     if (nextMode !== prevMode) {

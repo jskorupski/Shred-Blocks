@@ -509,3 +509,114 @@ export function playRelicAwakenVoice(ctx: AudioContext, sfxGain: GainNode): void
     auraOsc.stop(now + 1.5);
   }
 }
+
+export function playPickupVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  playOscSweepVoice(ctx, sfxGain, 'sine', 180, 420, 0.042, 0.32, 0.048, 0.05);
+}
+
+export function playWallClackVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  playOscSweepVoice(ctx, sfxGain, 'triangle', 118, 58, 0.035, 0.3, 0.038, 0.04);
+}
+
+export function playSnapVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  playOscSweepVoice(ctx, sfxGain, 'sine', 520, 260, 0.022, 0.24, 0.024, 0.026);
+}
+
+function playOscSweepVoice(
+  ctx: AudioContext,
+  sfxGain: GainNode,
+  type: OscillatorType,
+  freqStart: number,
+  freqEnd: number,
+  freqDurSec: number,
+  peakGain: number,
+  gainDurSec: number,
+  stopSec: number
+): void {
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freqStart, now);
+  osc.frequency.exponentialRampToValueAtTime(freqEnd, now + freqDurSec);
+  gain.gain.setValueAtTime(peakGain, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + gainDurSec);
+  osc.connect(gain);
+  gain.connect(sfxGain);
+  osc.start(now);
+  osc.stop(now + stopSec);
+}
+
+export function playSlideTickVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(640, now);
+  osc.frequency.exponentialRampToValueAtTime(480, now + 0.018);
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(640, now);
+  filter.Q.setValueAtTime(3.5, now);
+  gain.gain.setValueAtTime(0.16, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.018);
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(sfxGain);
+  osc.start(now);
+  osc.stop(now + 0.02);
+}
+
+export function playLayerPeelVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  const now = ctx.currentTime;
+  const notes = [440, 660, 880];
+  notes.forEach((freq, idx) => {
+    const t = now + idx * 0.028;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.12, t + 0.035);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.038);
+    osc.connect(gain);
+    gain.connect(sfxGain);
+    osc.start(t);
+    osc.stop(t + 0.04);
+  });
+}
+
+export function playIceCrackVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  const now = ctx.currentTime;
+  for (const freq of [1800, 2450, 3120]) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.92, now + 0.065);
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.068);
+    osc.connect(gain);
+    gain.connect(sfxGain);
+    osc.start(now);
+    osc.stop(now + 0.07);
+  }
+}
+
+export function playLockOpenVoice(ctx: AudioContext, sfxGain: GainNode): void {
+  const now = ctx.currentTime;
+  const notes = [587.33, 880.0];
+  notes.forEach((freq, idx) => {
+    const t = now + idx * 0.048;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.26, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
+    osc.connect(gain);
+    gain.connect(sfxGain);
+    osc.start(t);
+    osc.stop(t + 0.08);
+  });
+}

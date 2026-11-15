@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBoardState } from '../../src/core/board';
 import { getLevelSpec } from '../../src/levels/catalog';
 import { deriveKeystoneHudState, formatClockCompact } from '../../src/ui/hud-keystone';
+import { buildNodesWithModeIcons, formatCompactLevelRef } from '../../src/ui/mode-and-booster-icons';
 
 const DEFAULT_SAVE = {
   zenBlessings: 1,
@@ -150,5 +151,75 @@ describe('HUD Keystone view-model derivation (HUD-KEYSTONE-01)', () => {
     expect(inertBombs.urgency).toBe('calm');
     expect(inertBombs.metaPrimary).toBe('🌿 Bombs Inert');
     expect(inertBombs.metaSecondary).toBe('★ 0/3 · 🌿 3/3');
+  });
+
+  it('formats multi-digit compact level refs and upgrades mode + booster tokens into jewel crests', () => {
+    expect(formatCompactLevelRef(1)).toBe('Lvl 1');
+    expect(formatCompactLevelRef(99)).toBe('Lvl 99');
+    expect(formatCompactLevelRef(100)).toBe('#100');
+    expect(formatCompactLevelRef(177)).toBe('#177');
+    expect(formatCompactLevelRef(2501)).toBe('#2501');
+    expect(formatCompactLevelRef(99999)).toBe('#99999');
+
+    interface MockNode {
+      kind: 'text' | 'el';
+      tag?: string;
+      text?: string;
+      attrs: Record<string, string>;
+      children: MockNode[];
+      className: string;
+      setAttribute: (k: string, v: string) => void;
+      appendChild: (child: MockNode) => MockNode;
+    }
+    const makeEl = (tag: string): MockNode => {
+      const node: MockNode = {
+        kind: 'el',
+        tag,
+        attrs: {},
+        children: [],
+        className: '',
+        setAttribute(k: string, v: string) {
+          this.attrs[k] = v;
+        },
+        appendChild(child: MockNode) {
+          this.children.push(child);
+          return child;
+        },
+      };
+      return node;
+    };
+    const prevDoc = globalThis.document;
+    (globalThis as unknown as { document: unknown }).document = {
+      createElement: (tag: string) => makeEl(tag),
+      createElementNS: (_ns: string, tag: string) => makeEl(tag),
+      createTextNode: (text: string) => ({
+        kind: 'text',
+        text,
+        attrs: {},
+        children: [],
+        className: '',
+        setAttribute: () => {},
+        appendChild: (c: MockNode) => c,
+      }),
+    };
+    try {
+      const nodes = buildNodesWithModeIcons(
+        '💡 Hint · 🔨 Crush · 🚀 Blast · 🧲 Pull · ↩️ Undo · 🌿 Zen'
+      ) as unknown as MockNode[];
+      const spans = nodes.filter((n) => n.kind === 'el' && n.tag === 'span');
+      expect(spans.map((s) => s.attrs['data-booster-glyph'] ?? s.attrs['data-mode-glyph'])).toEqual([
+        'HINT',
+        'HAMMER',
+        'ROCKET',
+        'VACUUM',
+        'UNDO',
+        'ZEN',
+      ]);
+      for (const s of spans) {
+        expect(s.children[0]?.tag).toBe('svg');
+      }
+    } finally {
+      (globalThis as unknown as { document: unknown }).document = prevDoc;
+    }
   });
 });

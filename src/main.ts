@@ -149,6 +149,8 @@ export class ShredBlocksApp implements AppViewContext {
     this.sound = new SoundEngine({
       sfxEnabled: initialSave.settings.sfxEnabled,
       musicEnabled: initialSave.settings.musicEnabled,
+      sfxVolume: initialSave.settings.sfxVolume,
+      musicVolume: initialSave.settings.musicVolume,
       hapticsEnabled: initialSave.settings.hapticsEnabled,
     });
 
@@ -399,7 +401,7 @@ export class ShredBlocksApp implements AppViewContext {
       this.preRestartSnapshot = cloneBoardState(this.board);
       this.preRestartUndoStack = this.undoStack.slice();
       this.preRestartFreeUndos = this.freeUndosRemaining;
-      this.showGameToast('🔄 Level restarted — tap Undo to restore!');
+      this.showGameToast('↩️ Level restarted — tap Undo to restore!');
     }
     const spec = getLevelSpec(this.board.levelId);
     const activeMode = this.saveManager.getPayload().settings.playMode;
@@ -435,7 +437,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.saveManager.recordLevelSkip(currentId);
     this.closeAllModals();
     this.loadLevel(currentId + 1, true);
-    this.showGameToast(`⏭️ Skipped Level ${currentId} — Level ${currentId + 1} Ready!`);
+    this.showGameToast(`🌿 Skipped Level ${currentId} — Level ${currentId + 1} Ready!`);
   }
 
   public pushUndoSnapshot(boardState: BoardState): void {

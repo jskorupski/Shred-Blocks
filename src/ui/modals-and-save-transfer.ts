@@ -361,7 +361,7 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
           ? `🌿 Zen Mode · Level ${targetId} — clear stages to earn ★ & Zen Blessings!`
           : nextMode === 'CHALLENGE'
             ? `⚔️ Challenge Mode · Level ${targetId}`
-            : `⏱ Speed Rush · Level ${targetId}`
+            : `⏱️ Speed Rush · Level ${targetId}`
       );
     } else if (wasRunStarted) {
       app.showGameToast(
@@ -369,7 +369,7 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
           ? `🌿 Zen Mode — Level ${targetId} restarted with inert bombs!`
           : nextMode === 'CHALLENGE'
             ? `⚔️ Challenge Mode — Level ${targetId} restarted for Gold Stars!`
-            : `⏱ Speed Rush — Level ${targetId} restarted for Gold Stars!`
+            : `⏱️ Speed Rush — Level ${targetId} restarted for Gold Stars!`
       );
     } else {
       app.showGameToast(
@@ -377,7 +377,7 @@ export function switchPlayModeImpl(app: AppViewContext, nextMode: PlayMode, sile
           ? '🌿 Switched to Zen Mode (Untimed · Inert Bombs)'
           : nextMode === 'CHALLENGE'
             ? '⚔️ Switched to Challenge Mode (Move Budget)'
-            : '⏱ Switched to Speed Rush (Timed)'
+            : '⏱️ Switched to Speed Rush (Timed)'
       );
     }
   }

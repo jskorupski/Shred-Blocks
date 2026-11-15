@@ -16,7 +16,12 @@ import {
   getEffectiveBoosterUnlockLevel,
   isBoosterUnlocked,
 } from '../storage/save-manager';
-import { type AppViewContext, BOOSTER_DISPLAY_NAMES, UI_BOOSTER_PRICES } from './catalog-meta';
+import {
+  type AppViewContext,
+  BOOSTER_DISPLAY_NAMES,
+  BOOSTER_TOKENS,
+  UI_BOOSTER_PRICES,
+} from './catalog-meta';
 
 /**
  * Booster & Undo controller (`UX-04`, `UX-11`, `F-08`, `MECH-10`, `UNDO-RES-01`), extracted from `main.ts`
@@ -37,7 +42,7 @@ function canAffordBooster(app: BoosterAppContext, type: BoosterType): boolean {
   if (app.saveManager.getBoosterCount(type) > 0) return true;
   const price = UI_BOOSTER_PRICES[type];
   if (app.saveManager.getPayload().coins >= price) return true;
-  app.showGameToast(`Need ${price} Coins for ${BOOSTER_DISPLAY_NAMES[type]}!`);
+  app.showGameToast(`${BOOSTER_TOKENS[type]} Need ${price} Coins for ${BOOSTER_DISPLAY_NAMES[type]}!`);
   return false;
 }
 
@@ -46,10 +51,10 @@ function ensureBoosterAvailable(app: BoosterAppContext, type: BoosterType): bool
   const price = UI_BOOSTER_PRICES[type];
   const displayName = BOOSTER_DISPLAY_NAMES[type];
   if (app.saveManager.buyBoosterWithCoins(type, price)) {
-    app.showGameToast(`Purchased ${displayName} for ${price} Coins!`);
+    app.showGameToast(`${BOOSTER_TOKENS[type]} Purchased ${displayName} for ${price} Coins!`);
     return true;
   }
-  app.showGameToast(`Need ${price} Coins for ${displayName}!`);
+  app.showGameToast(`${BOOSTER_TOKENS[type]} Need ${price} Coins for ${displayName}!`);
   return false;
 }
 
@@ -61,7 +66,7 @@ export function activateBoosterImpl(app: BoosterAppContext, type: BoosterType): 
     app.sound.playWallClack();
     const displayName = BOOSTER_DISPLAY_NAMES[type];
     app.showGameToast(
-      `🔒 ${displayName} (${BOOSTER_RARITY[type]}) unlocks at Level ${BOOSTER_UNLOCK_LEVEL[type]}!`
+      `🔒 ${BOOSTER_TOKENS[type]} ${displayName} (${BOOSTER_RARITY[type]}) unlocks at Level ${BOOSTER_UNLOCK_LEVEL[type]}!`
     );
     return;
   }
@@ -168,7 +173,7 @@ function executeHintBoosterImpl(app: BoosterAppContext): void {
       : playMode === 'TIMED'
         ? hint
           ? '💡 Hint + 10s Clock Freeze!'
-          : '❄️ Timer & Bombs Frozen for +10s!'
+          : '💡 Hint: Timer & Bombs Frozen for +10s!'
         : '💡 Optimal next move highlighted on the board!'
   );
   app.syncInGameHud();
@@ -208,7 +213,7 @@ export function executeTargetedBoosterImpl(
 
   if (!applied) {
     app.sound.playWallClack();
-    app.showGameToast('Tap a valid colored block or crate target!');
+    app.showGameToast(`${BOOSTER_TOKENS[type]} Tap a valid colored block or crate target!`);
     return false;
   }
 

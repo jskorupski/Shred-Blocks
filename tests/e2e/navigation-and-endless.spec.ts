@@ -19,28 +19,19 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
       expect(loc).toEqual({ pathname: '/', search: '', hash: '' });
     };
     await assertZeroUrlMutation();
-
-    // 1. Launch Level 1 from Title Screen -> seeds Map ('home') beneath Gameplay ('game')
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#title-overlay')).toBeHidden();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
     await assertZeroUrlMutation();
-
-    // 2. Browser Back from Gameplay -> lands on Sanctuary Map (#screen-home)
     await page.goBack();
     await expect(page.locator('#screen-home')).toBeVisible();
     await expect(page.locator('#screen-game')).toBeHidden();
     await assertZeroUrlMutation();
-
-    // 3. Browser Forward from Map -> returns to Gameplay (Level 1)
     await page.goForward();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
     await assertZeroUrlMutation();
-
-    // 4. Advance through multiple levels in-game (Level 1 -> 2 -> 3) via Zen-only Skip:
-    //    verify Skip is hidden in Challenge, switch to Zen, and verify replaceState prevents stack bloat!
     await expect(page.locator('#btn-skip-hud')).toBeHidden();
     await page.locator('#btn-mode-next').click();
     await expect(page.locator('#btn-skip-hud')).toBeVisible();
@@ -49,22 +40,15 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await page.locator('#btn-skip-hud').click();
     await expect(page.locator('#hud-level-title')).toContainText('Level 3');
     await assertZeroUrlMutation();
-
-    // Open Pause modal while on Level 3, then press Browser Back:
-    // closes open modal and lands directly on Map in a single Back step!
     await page.locator('#btn-pause').click();
     await expect(page.locator('#dialog-pause')).toBeVisible();
     await page.goBack();
     await expect(page.locator('#dialog-pause')).toBeHidden();
     await expect(page.locator('#screen-home')).toBeVisible();
     await assertZeroUrlMutation();
-
-    // Forward returns directly to Level 3
     await page.goForward();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 3');
-
-    // Back to Map, then open Themes Studio, then Back -> Map, then Back -> Title Screen!
     await page.goBack();
     await expect(page.locator('#screen-home')).toBeVisible();
     await page.locator('#tab-btn-themes').click();
@@ -560,7 +544,12 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
       const list = document.getElementById('roadmap-list');
       if (list) list.scrollTop = 0;
     });
-    await expect(firstThreeGroups.nth(0)).toContainText('🌿 3/5 Cleared · 2 Skipped');
+    await expect(firstThreeGroups.nth(0)).toContainText('3/5 Cleared · 2 Skipped');
+    const zenJewel = '.inline-mode-icon[data-mode-glyph="ZEN"] svg.mode-svg-icon';
+    await expect(firstThreeGroups.nth(0).locator(`.stage-group-summary > ${zenJewel}`)).toBeVisible();
+    await expect(
+      firstThreeGroups.nth(0).locator(`.level-node-card[data-level-id="1"] ${zenJewel}`)
+    ).toBeVisible();
     const zenComparison = await page.evaluate(() => {
       const n1 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="1"]');
       const n2 = document.querySelector<HTMLElement>('.level-node-card[data-level-id="2"]');
@@ -730,12 +719,15 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await dragCell(3, 2, 3, 1);
     await dragCell(3, 1, 4, 1);
     await expect(page.locator('#dialog-victory')).toBeVisible();
-    await expect(page.locator('#victory-stars')).toContainText('🌿 Zen Cleared');
+    await expect(page.locator('#victory-stars')).toContainText('Zen Cleared');
+    const zenJewel = '.inline-mode-icon[data-mode-glyph="ZEN"] svg.mode-svg-icon';
+    await expect(page.locator('#victory-stars').locator(zenJewel)).toBeVisible();
     await page.locator('#btn-victory-home').click();
     await expect(page.locator('#screen-home')).toBeVisible();
     await expect(page.locator('#map-tab-zen')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.level-node-card[data-level-id="1"]')).toHaveClass(/zen-cleared-level/);
-    await expect(page.locator('.level-node-card[data-level-id="1"]')).toContainText('🌿 Zen');
+    await expect(page.locator('.level-node-card[data-level-id="1"]')).toContainText('Zen');
+    await expect(page.locator('.level-node-card[data-level-id="1"]').locator(zenJewel)).toBeVisible();
 
     // 4. Anti-Cheese & Independent Ladders: on Level 1 in Zen Mode, make a move (`Moves: 1 / Par 2`),
     //    then switch Zen -> Timed/Challenge -> resets to Move 0

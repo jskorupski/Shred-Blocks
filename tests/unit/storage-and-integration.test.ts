@@ -118,7 +118,7 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
       }
 
       const sb1Code = encodeSaveCode(fullSave);
-      expect(sb1Code.length).toBeLessThanOrEqual(210);
+      expect(sb1Code.length).toBeLessThanOrEqual(220);
       const decodedDirect = decodeSaveCode(sb1Code);
       expect(decodedDirect).toEqual(fullSave);
       expect(Object.keys(decodedDirect.levelRecords).length).toBe(200);
@@ -718,6 +718,8 @@ describe('Storage, Save Codes, QR SVG, Input & Audio Integration', () => {
           playMode: tier === 'ULTRA_120' ? 'TIMED' : 'ZEN',
           sfxEnabled: false,
           musicEnabled: false,
+          sfxVolume: 0,
+          musicVolume: 0,
           hapticsEnabled: false,
           colorblindSymbols: true,
           highContrast: true,

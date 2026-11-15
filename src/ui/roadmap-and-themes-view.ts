@@ -8,8 +8,11 @@ import {
 import {
   type AppViewContext,
   BOOSTER_DEBUT_NOTES,
+  createModeIconSvg,
   getChapterMetaForLevel,
   getPlayModeMeta,
+  setButtonIconLabel,
+  setRichModeText,
 } from './catalog-meta';
 
 export { renderThemesStudioImpl } from './themes-studio-view';
@@ -202,7 +205,7 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
 
     const rightDiv = document.createElement('div');
     rightDiv.className = 'chapter-banner-stars';
-    rightDiv.textContent = starsText;
+    setRichModeText(rightDiv, starsText);
 
     banner.append(leftDiv, rightDiv);
     return banner;
@@ -257,17 +260,16 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
     const markerSpan = document.createElement('span');
     markerSpan.className = 'node-step-marker';
     markerSpan.setAttribute('aria-hidden', 'true');
-    markerSpan.textContent = isCurrent
-      ? '▶'
-      : isCompleted
-        ? '✓'
-        : isZenNode
-          ? '🌿'
-          : isSkipped
-            ? '»'
-            : isUnlocked
-              ? '•'
-              : '🔒';
+    if (isCurrent) {
+      markerSpan.textContent = '▶';
+    } else if (isCompleted) {
+      markerSpan.textContent = '✓';
+    } else if (isZenNode) {
+      markerSpan.classList.add('marker-zen-jewel');
+      markerSpan.replaceChildren(createModeIconSvg('ZEN'));
+    } else {
+      markerSpan.textContent = isSkipped ? '»' : isUnlocked ? '•' : '🔒';
+    }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'node-content';
@@ -309,7 +311,7 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
     } else if (isZenNode) {
       const zenFlag = document.createElement('span');
       zenFlag.className = 'node-flag-badge flag-zen';
-      zenFlag.textContent = '🌿 Zen';
+      setRichModeText(zenFlag, '🌿 Zen');
       rightCluster.append(zenFlag);
     }
 
@@ -324,7 +326,7 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
 
     const starsSpan = document.createElement('span');
     starsSpan.className = `node-stars${isSkipped && !isCurrent ? ' stars-skipped' : ''}`;
-    starsSpan.textContent = starDisplay;
+    setRichModeText(starsSpan, starDisplay);
     rightCluster.append(starsSpan);
 
     topRow.append(leftCluster, rightCluster);
@@ -337,7 +339,13 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
       playCue.className = 'node-play-cue';
       playCue.setAttribute('aria-hidden', 'true');
       const isResumable = app.canResumeBoard(spec.id) && isBoardRunStarted(app.board);
-      playCue.textContent = `${modeInfo.icon} ${isResumable ? 'Resume' : 'Play'} ›`;
+      setButtonIconLabel(playCue, {
+        mode: playMode,
+        modeIcon: modeInfo.icon,
+        label: isResumable ? 'Resume' : 'Play',
+        trailingGlyph: '›',
+        trailingKind: 'forward',
+      });
       currentSubRow.append(nameDiv, playCue);
       contentDiv.appendChild(currentSubRow);
     }
@@ -345,7 +353,7 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
     if (milestoneNote) {
       const noteDiv = document.createElement('div');
       noteDiv.className = 'node-unlock-note';
-      noteDiv.textContent = `✦ ${milestoneNote}`;
+      setRichModeText(noteDiv, /^(💡|🔨|🚀|🧲)/.test(milestoneNote) ? milestoneNote : `✦ ${milestoneNote}`);
       contentDiv.appendChild(noteDiv);
     }
 
@@ -446,7 +454,7 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
         if (skippedCount > 0) {
           parts.push(`${skippedCount} Skipped`);
         }
-        summarySpan.textContent = parts.join(' · ');
+        setRichModeText(summarySpan, parts.join(' · '));
       } else {
         summarySpan.className = 'stage-group-summary summary-progress';
         const parts = [`${clearedCount}/${builtNodes.length} Cleared`];
@@ -634,7 +642,7 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
         kicker.textContent = `ENDLESS ARCHIVE · STAGES #${gapStart}–#${gapEnd}`;
         const title = document.createElement('span');
         title.className = 'chapter-banner-title';
-        title.textContent = `${archivedCount} Earlier Stages (${gapProgress})`;
+        setRichModeText(title, `${archivedCount} Earlier Stages (${gapProgress})`);
         const sub = document.createElement('span');
         sub.className = 'chapter-banner-sub';
         sub.textContent =

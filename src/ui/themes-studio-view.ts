@@ -4,10 +4,12 @@ import { hasActiveVisualFxImpl } from '../render/particle-fx';
 import { Renderer3D } from '../render/renderer-3d';
 import {
   type AppViewContext,
+  formatCompactLevelRef,
   getThemeItemPrice,
   PARTICLE_CATALOG,
   PARTICLE_GLYPHS,
   SKIN_CATALOG,
+  setButtonIconLabel,
   TRAY_CATALOG,
 } from './catalog-meta';
 
@@ -414,14 +416,22 @@ function ensureThemesStudioEnhancementsMounted(app: AppViewContext): void {
     testShredBtn.type = 'button';
     testShredBtn.id = 'btn-themes-test-shred';
     testShredBtn.className = 'btn-tactile btn-primary btn-compact';
-    testShredBtn.textContent = '⚡ Test Shred';
+    setButtonIconLabel(testShredBtn, {
+      actionGlyph: '⚡',
+      actionKind: 'bolt',
+      label: 'Test Shred',
+    });
     testShredBtn.addEventListener('click', () => triggerThemePreviewShred(app));
 
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
     resetBtn.id = 'btn-themes-reset-preview';
     resetBtn.className = 'btn-tactile btn-secondary btn-compact';
-    resetBtn.textContent = '↺ Reset';
+    setButtonIconLabel(resetBtn, {
+      actionGlyph: '↺',
+      actionKind: 'restart',
+      label: 'Reset',
+    });
     resetBtn.title = 'Reset preview to currently equipped loadout';
     resetBtn.hidden = true;
     resetBtn.addEventListener('click', () => {
@@ -452,7 +462,12 @@ function syncThemesPreviewHeaderAndReadout(app: AppViewContext): void {
     resumeBtn.hidden = !showResume;
     if (showResume) {
       const lvl = app.board.levelId;
-      resumeBtn.textContent = runStarted ? `▶ Resume Lvl ${lvl}` : `▶ Back to Lvl ${lvl}`;
+      const ref = formatCompactLevelRef(lvl);
+      setButtonIconLabel(resumeBtn, {
+        actionGlyph: '▶',
+        actionKind: 'play',
+        label: runStarted ? `Resume ${ref}` : `Return ${ref}`,
+      });
       resumeBtn.title = `Return directly to Level ${lvl}`;
     }
   }
@@ -615,14 +630,11 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
       previewBtn.className = `btn-tactile btn-compact btn-theme-preview ${
         isPreviewed ? 'is-active-preview' : 'btn-secondary'
       }`;
-      previewBtn.textContent =
-        kind === 'particle'
-          ? isPreviewed
-            ? '⚡ Test'
-            : '⚡ Preview'
-          : isPreviewed
-            ? '👁 Shown'
-            : '👁 Preview';
+      setButtonIconLabel(previewBtn, {
+        actionGlyph: kind === 'particle' ? '⚡' : '👁',
+        actionKind: kind === 'particle' ? 'bolt' : 'eye',
+        label: kind === 'particle' ? (isPreviewed ? 'Test' : 'Preview') : isPreviewed ? 'Shown' : 'Preview',
+      });
       previewBtn.setAttribute('aria-pressed', isPreviewed ? 'true' : 'false');
       previewBtn.addEventListener('click', () =>
         selectItemForStudioPreview(
@@ -639,7 +651,15 @@ export function renderThemesStudioImpl(app: AppViewContext): void {
       btn.className = `btn-tactile btn-compact btn-theme-cta ${
         isEquipped ? 'btn-primary' : isUnlocked ? 'btn-secondary' : 'btn-warning'
       }`;
-      btn.textContent = isEquipped ? '✦ Equipped' : isUnlocked ? 'Equip' : `Unlock · ${itemPrice} Coins`;
+      if (isEquipped) {
+        setButtonIconLabel(btn, {
+          actionGlyph: '✦',
+          actionKind: 'spark',
+          label: 'Equipped',
+        });
+      } else {
+        btn.textContent = isUnlocked ? 'Equip' : `Unlock · ${itemPrice} Coins`;
+      }
       btn.addEventListener('click', () => onAction(item.id, itemPrice));
 
       actionsRow.append(previewBtn, btn);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SavePayloadV1 } from '../../src/core/types';
 import {
   compressLz77,
@@ -216,6 +216,8 @@ describe('SAVE-COMPAT-01: Live Player Save Backward-Compatibility & Forward Migr
       playMode: 'CHALLENGE',
       sfxEnabled: true,
       musicEnabled: false,
+      sfxVolume: 2,
+      musicVolume: 0,
       hapticsEnabled: true,
       colorblindSymbols: true,
       highContrast: true,
@@ -352,5 +354,193 @@ describe('SAVE-COMPAT-01: Live Player Save Backward-Compatibility & Forward Migr
     // Truncated mid-`[0xa6, 0x4d]` trailer is rejected cleanly
     const truncatedModeTrailer = modeRaw.slice(0, modeRaw.length - 2);
     expect(() => decodeSaveCode(forgeCode(compressLz77(truncatedModeTrailer)))).toThrow(SaveCodeError);
+
+    // 6. Unconditional `[0xa8, 0x56, packedVol]` trailer on all outgoing saves/exports (`SAVE-COMPAT-01`)
+    const defaultCode = encodeSaveCode(createDefaultSavePayload());
+    const defaultRaw = decompressFramedBytes(fromB64Url(defaultCode.slice(4, -9)));
+    expect(defaultRaw.slice(-3)).toEqual(Uint8Array.from([0xa8, 0x56, 0x0a]));
+
+    const mutedDefault = createDefaultSavePayload();
+    mutedDefault.settings.sfxVolume = 0;
+    mutedDefault.settings.sfxEnabled = false;
+    mutedDefault.settings.musicVolume = 0;
+    mutedDefault.settings.musicEnabled = false;
+    const mutedCode = encodeSaveCode(mutedDefault);
+    const mutedRaw = decompressFramedBytes(fromB64Url(mutedCode.slice(4, -9)));
+    expect(mutedRaw.slice(-3)).toEqual(Uint8Array.from([0xa8, 0x56, 0x00]));
+    expect(decodeSaveCode(defaultCode).settings.sfxVolume).toBe(2);
+    expect(decodeSaveCode(defaultCode).settings.musicVolume).toBe(2);
+    expect(decodeSaveCode(mutedCode).settings.sfxVolume).toBe(0);
+    expect(decodeSaveCode(mutedCode).settings.musicVolume).toBe(0);
+
+    // Truncated, malformed, or out-of-range `[0xa8, 0x56]` trailers throw SaveCodeError, while future `0xa9` trailers decode cleanly
+    expect(() => decodeSaveCode(forgeCode(compressLz77(defaultRaw.slice(0, -1))))).toThrow(SaveCodeError);
+    expect(() => decodeSaveCode(forgeCode(compressLz77(defaultRaw.slice(0, -2))))).toThrow(SaveCodeError);
+    const badMagic = Uint8Array.from(defaultRaw);
+    badMagic[badMagic.length - 2] = 0x00;
+    expect(() => decodeSaveCode(forgeCode(compressLz77(badMagic)))).toThrow(SaveCodeError);
+    const badVolBits = Uint8Array.from(defaultRaw);
+    badVolBits[badVolBits.length - 1] = 0xf0;
+    expect(() => decodeSaveCode(forgeCode(compressLz77(badVolBits)))).toThrow(SaveCodeError);
+    const withPostVolTrailer = new Uint8Array(defaultRaw.length + 3);
+    withPostVolTrailer.set(defaultRaw, 0);
+    withPostVolTrailer.set([0xa9, 0x01, 0x02], defaultRaw.length);
+    expect(decodeSaveCode(forgeCode(compressLz77(withPostVolTrailer))).settings.sfxVolume).toBe(2);
+
+    const volMgr = new SaveManager();
+    volMgr.updateSettings({ sfxVolume: 1, musicVolume: 3 });
+    expect(volMgr.getPayload().settings).toMatchObject({
+      sfxEnabled: true,
+      musicEnabled: true,
+      sfxVolume: 1,
+      musicVolume: 3,
+    });
+    for (const exported of [volMgr.exportSaveCode(), volMgr.exportSaveCode({ qrCompact: true })]) {
+      const volRaw = decompressFramedBytes(fromB64Url(exported.slice(4, -9)));
+      expect(volRaw.slice(-3)).toEqual(Uint8Array.from([0xa8, 0x56, 0x0d]));
+      expect(decodeSaveCode(exported).settings).toMatchObject({
+        sfxEnabled: true,
+        musicEnabled: true,
+        sfxVolume: 1,
+        musicVolume: 3,
+      });
+    }
+    volMgr.updateSettings({ sfxEnabled: false });
+    expect(volMgr.getPayload().settings.sfxVolume).toBe(0);
+    volMgr.updateSettings({ sfxEnabled: true });
+    expect(volMgr.getPayload().settings.sfxVolume).toBe(2);
+  });
+
+  it('always writes latest save/export schemas while migrating legacy localStorage, pinned SB1 codes, and JSON imports losslessly', async () => {
+    const legacyEncoderInput: SavePayloadV1 = {
+      ...createDefaultSavePayload(),
+      economyVersion: 1,
+      modeLadderVersion: 0,
+    };
+    const forcedLatest = decodeSaveCode(encodeSaveCode(legacyEncoderInput));
+    expect(forcedLatest.economyVersion).toBe(2);
+    expect(forcedLatest.modeLadderVersion).toBe(1);
+    expect(forcedLatest.settings).toMatchObject({ sfxVolume: 2, musicVolume: 2 });
+
+    const memStore = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      get length() {
+        return memStore.size;
+      },
+      clear: () => memStore.clear(),
+      getItem: (k: string) => memStore.get(k) ?? null,
+      key: (i: number) => Array.from(memStore.keys())[i] ?? null,
+      removeItem: (k: string) => {
+        memStore.delete(k);
+      },
+      setItem: (k: string, v: string) => {
+        memStore.set(k, String(v));
+      },
+    } as Storage);
+
+    try {
+      // Boot from a pre-volume Economy v1 localStorage save -> migrates and rewrites latest version on init()
+      memStore.set(
+        SAVE_STORAGE_KEY,
+        JSON.stringify({
+          schemaVersion: 1,
+          appId: 'shredblocks-color-jam',
+          writeSeq: 9,
+          updatedAt: 1750000000000,
+          highestLevelUnlocked: 14,
+          currentLevelId: 12,
+          coins: 420,
+          totalStars: 31,
+          economyVersion: 1,
+          boosters: { UNDO: 4, FREEZE: 2, HAMMER: 1 },
+          settings: { playMode: 'ZEN', sfxEnabled: true, musicEnabled: false },
+          levelRecords: { '1': { stars: 3, bestMoves: 3, bestTimeSec: 6 } },
+        })
+      );
+
+      const bootMgr = new SaveManager();
+      const booted = await bootMgr.init();
+      expect(booted.economyVersion).toBe(2);
+      expect(booted.modeLadderVersion).toBe(1);
+      expect(booted.boosters.HINT).toBe(2);
+      expect(booted.settings).toMatchObject({
+        playMode: 'CHALLENGE',
+        sfxEnabled: true,
+        sfxVolume: 2,
+        musicEnabled: false,
+        musicVolume: 0,
+      });
+
+      const persistedRaw = memStore.get(SAVE_STORAGE_KEY);
+      expect(persistedRaw).toBeTruthy();
+      const persisted = JSON.parse(persistedRaw ?? '{}') as SavePayloadV1;
+      expect(persisted.economyVersion).toBe(2);
+      expect(persisted.modeLadderVersion).toBe(1);
+      expect(persisted.settings.sfxVolume).toBe(2);
+      expect(persisted.settings.musicVolume).toBe(0);
+
+      const bootCode = bootMgr.exportSaveCode();
+      const bootRaw = decompressFramedBytes(fromB64Url(bootCode.slice(4, -9)));
+      expect(bootRaw.slice(-3)).toEqual(Uint8Array.from([0xa8, 0x56, 0x02]));
+
+      // Importing every legacy SB1 format preserves data and upgrades exports to latest version
+      for (const [legacyCode, expectedMusicVol] of [
+        [PINNED_PRE_A5_LEGACY_CODE, 2],
+        [PINNED_V1_FULL_SAVE_CODE, 0],
+        [PINNED_RAW_JSON_SAVE_CODE, 2],
+      ] as const) {
+        const imported = bootMgr.importSaveCode(legacyCode);
+        expect(imported.economyVersion).toBe(2);
+        expect(imported.modeLadderVersion).toBe(1);
+        expect(imported.settings.sfxVolume).toBe(2);
+        expect(imported.settings.musicVolume).toBe(expectedMusicVol);
+
+        const reExportedJson = JSON.parse(bootMgr.exportSaveJson()) as SavePayloadV1;
+        expect(reExportedJson.economyVersion).toBe(2);
+        expect(reExportedJson.modeLadderVersion).toBe(1);
+        expect(reExportedJson.settings.sfxVolume).toBe(2);
+        expect(reExportedJson.settings.musicVolume).toBe(expectedMusicVol);
+
+        const reExportedCode = bootMgr.exportSaveCode({ qrCompact: true });
+        const reRaw = decompressFramedBytes(fromB64Url(reExportedCode.slice(4, -9)));
+        expect(reRaw.slice(-3)).toEqual(Uint8Array.from([0xa8, 0x56, 2 | (expectedMusicVol << 2)]));
+      }
+
+      // Custom volumes + legacy JSON import + 1-tap restorePreImportBackup()
+      bootMgr.updateSettings({ sfxVolume: 3, musicVolume: 1 });
+      const legacyJsonImport = bootMgr.importSaveJson(
+        JSON.stringify({
+          schemaVersion: 1,
+          appId: 'shredblocks-color-jam',
+          writeSeq: 22,
+          highestLevelUnlocked: 27,
+          coins: 515,
+          totalStars: 64,
+          boosters: { UNDO: 3, FREEZE: 1 },
+          settings: { sfxEnabled: true, musicEnabled: false, hapticsEnabled: false },
+          levelRecords: { '1': { stars: 3, bestMoves: 2, bestTimeSec: 4 } },
+        })
+      );
+      expect(legacyJsonImport.economyVersion).toBe(2);
+      expect(legacyJsonImport.modeLadderVersion).toBe(1);
+      expect(legacyJsonImport.highestLevelUnlocked).toBe(27);
+      expect(legacyJsonImport.settings).toMatchObject({
+        sfxEnabled: true,
+        sfxVolume: 2,
+        musicEnabled: false,
+        musicVolume: 0,
+        hapticsEnabled: false,
+      });
+
+      const restored = bootMgr.restorePreImportBackup();
+      expect(restored?.settings).toMatchObject({
+        sfxEnabled: true,
+        sfxVolume: 3,
+        musicEnabled: true,
+        musicVolume: 1,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -83,90 +83,96 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
 
     const readModeVisualState = async () =>
       page.evaluate(() => {
-        const shell = document.getElementById('app-shell');
-        const backdrop = document.querySelector('.mode-ambience-backdrop');
-        const ornament = document.querySelector('#screen-game .sacred-geometry-ornament');
-        const hudBar = document.querySelector('#screen-game .hud-top-bar');
-        const dockBar = document.querySelector('#screen-game .booster-dock');
-        const titlePlayBtn = document.getElementById('btn-title-play');
-        const mapPlayBtn = document.getElementById('btn-play-current');
-        const navPlayBtn = document.getElementById('tab-btn-play');
-        const navPlayIcon = document.getElementById('tab-play-mode-icon');
-        const pauseResumeBtn = document.getElementById('btn-pause-resume');
-        const canvas = document.getElementById('game-canvas');
-        const ch = document.querySelector('.ambience-challenge');
-        const zn = document.querySelector('.ambience-zen');
-        const tm = document.querySelector('.ambience-timed');
+        const q = (s: string) => document.querySelector(s);
+        const bg = (s: string) => {
+          const e = q(s);
+          return e ? getComputedStyle(e).backgroundImage : '';
+        };
+        const op = (s: string) => {
+          const e = q(s);
+          return e ? getComputedStyle(e).opacity : '';
+        };
+        const attrGlyph = (s: string) => q(s)?.getAttribute('data-mode-glyph') ?? null;
+        const shell = q('#app-shell');
         return {
           playMode: shell?.getAttribute('data-play-mode'),
           bodyPlayMode: document.body.getAttribute('data-play-mode'),
           titleOpen: shell?.getAttribute('data-title-open'),
           activeScreen: shell?.getAttribute('data-active-screen'),
-          backdropOpacity: backdrop ? window.getComputedStyle(backdrop).opacity : '',
-          ornamentColor: ornament ? window.getComputedStyle(ornament).color : '',
-          hudBg: hudBar ? window.getComputedStyle(hudBar).backgroundImage : '',
-          dockBg: dockBar ? window.getComputedStyle(dockBar).backgroundImage : '',
-          titlePlayBg: titlePlayBtn ? window.getComputedStyle(titlePlayBtn).backgroundImage : '',
-          titlePlayText: titlePlayBtn?.textContent ?? '',
-          mapPlayBg: mapPlayBtn ? window.getComputedStyle(mapPlayBtn).backgroundImage : '',
-          mapPlayText: mapPlayBtn?.textContent ?? '',
-          navPlayBg: navPlayBtn ? window.getComputedStyle(navPlayBtn).backgroundImage : '',
-          navPlayIcon: navPlayIcon?.textContent ?? '',
-          pauseResumeBg: pauseResumeBtn ? window.getComputedStyle(pauseResumeBtn).backgroundImage : '',
-          pauseResumeText: pauseResumeBtn?.textContent ?? '',
-          canvasFilter: canvas ? window.getComputedStyle(canvas).filter : '',
+          backdropOpacity: op('.mode-ambience-backdrop'),
+          ornamentColor: (() => {
+            const e = q('#screen-game .sacred-geometry-ornament');
+            return e ? getComputedStyle(e).color : '';
+          })(),
+          hudBg: bg('#screen-game .hud-top-bar'),
+          dockBg: bg('#screen-game .booster-dock'),
+          titlePlayBg: bg('#btn-title-play'),
+          titlePlayText: q('#btn-title-play')?.textContent ?? '',
+          titlePlayMode: attrGlyph('#btn-title-play .btn-mode-emblem'),
+          mapPlayBg: bg('#btn-play-current'),
+          mapPlayText: q('#btn-play-current')?.textContent ?? '',
+          mapPlayMode: attrGlyph('#btn-play-current .btn-mode-emblem'),
+          navPlayBg: bg('#tab-btn-play'),
+          navPlayMode: attrGlyph('#tab-play-mode-icon'),
+          navPlaySvg: Boolean(q('#tab-play-mode-icon svg.mode-svg-icon')),
+          pauseResumeBg: bg('#btn-pause-resume'),
+          pauseResumeText: q('#btn-pause-resume')?.textContent ?? '',
+          pauseResumeMode: attrGlyph('#btn-pause-resume .btn-mode-emblem'),
+          canvasFilter: (() => {
+            const e = q('#game-canvas');
+            return e ? getComputedStyle(e).filter : '';
+          })(),
           layerOpacity: {
-            challenge: ch ? window.getComputedStyle(ch).opacity : '',
-            zen: zn ? window.getComputedStyle(zn).opacity : '',
-            timed: tm ? window.getComputedStyle(tm).opacity : '',
+            challenge: op('.ambience-challenge'),
+            zen: op('.ambience-zen'),
+            timed: op('.ambience-timed'),
           },
         };
       });
 
+    const assertModeCtas = (
+      state: Awaited<ReturnType<typeof readModeVisualState>>,
+      mode: 'CHALLENGE' | 'ZEN' | 'TIMED'
+    ) => {
+      expect(state.playMode).toBe(mode);
+      expect(state.bodyPlayMode).toBe(mode);
+      expect(state.canvasFilter).toBe('none');
+      expect(state.titlePlayText).toContain('▶ CONTINUE');
+      expect(state.titlePlayMode).toBe(mode);
+      expect(state.mapPlayText).toContain('▶ PLAY');
+      expect(state.mapPlayMode).toBe(mode);
+      expect(state.navPlayMode).toBe(mode);
+      expect(state.navPlaySvg).toBe(true);
+      expect(state.pauseResumeText).toBe('▶ Resume');
+      expect(state.pauseResumeMode).toBe(mode);
+    };
+
     const challengeState = await readModeVisualState();
-    expect(challengeState.playMode).toBe('CHALLENGE');
-    expect(challengeState.bodyPlayMode).toBe('CHALLENGE');
+    assertModeCtas(challengeState, 'CHALLENGE');
     expect(challengeState.titleOpen).toBe('false');
     expect(challengeState.activeScreen).toBe('game');
     expect(challengeState.backdropOpacity).toBe('1');
-    expect(challengeState.canvasFilter).toBe('none');
     expect(challengeState.layerOpacity).toEqual({ challenge: '1', zen: '0', timed: '0' });
-    expect(challengeState.titlePlayText).toContain('⚔️ ▶ CONTINUE');
-    expect(challengeState.mapPlayText).toContain('⚔️ ▶ PLAY');
-    expect(challengeState.navPlayIcon).toBe('⚔️');
-    expect(challengeState.pauseResumeText).toBe('⚔️ ▶ Resume');
     expect(challengeState.mapPlayBg).toBe(challengeState.navPlayBg);
     expect(challengeState.pauseResumeBg).toBe(challengeState.navPlayBg);
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPlayMode('ZEN'));
     const zenState = await readModeVisualState();
-    expect(zenState.playMode).toBe('ZEN');
-    expect(zenState.bodyPlayMode).toBe('ZEN');
-    expect(zenState.canvasFilter).toBe('none');
+    assertModeCtas(zenState, 'ZEN');
     expect(zenState.layerOpacity).toEqual({ challenge: '0', zen: '1', timed: '0' });
     expect(zenState.ornamentColor).not.toBe(challengeState.ornamentColor);
     expect(zenState.hudBg).not.toBe(challengeState.hudBg);
     expect(zenState.dockBg).not.toBe(challengeState.dockBg);
-    expect(zenState.titlePlayText).toContain('🌿 ▶ CONTINUE');
-    expect(zenState.mapPlayText).toContain('🌿 ▶ PLAY');
-    expect(zenState.navPlayIcon).toBe('🌿');
-    expect(zenState.pauseResumeText).toBe('🌿 ▶ Resume');
     expect(zenState.navPlayBg).not.toBe(challengeState.navPlayBg);
 
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.setPlayMode('TIMED'));
     const timedState = await readModeVisualState();
-    expect(timedState.playMode).toBe('TIMED');
-    expect(timedState.bodyPlayMode).toBe('TIMED');
-    expect(timedState.canvasFilter).toBe('none');
+    assertModeCtas(timedState, 'TIMED');
     expect(timedState.layerOpacity).toEqual({ challenge: '0', zen: '0', timed: '1' });
     expect(timedState.ornamentColor).not.toBe(zenState.ornamentColor);
     expect(timedState.ornamentColor).not.toBe(challengeState.ornamentColor);
     expect(timedState.hudBg).not.toBe(zenState.hudBg);
     expect(timedState.hudBg).not.toBe(challengeState.hudBg);
-    expect(timedState.titlePlayText).toContain('⏱ ▶ CONTINUE');
-    expect(timedState.mapPlayText).toContain('⏱ ▶ PLAY');
-    expect(timedState.navPlayIcon).toBe('⏱');
-    expect(timedState.pauseResumeText).toBe('⏱ ▶ Resume');
     expect(timedState.navPlayBg).not.toBe(zenState.navPlayBg);
     expect(timedState.navPlayBg).not.toBe(challengeState.navPlayBg);
 
@@ -243,33 +249,21 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
       dbg.loadLevel(1);
       dbg.freezeTime(4.0);
       dbg.advanceFrozenFrames(90); // 1.5s idle
-      const idleParticles = dbg.getTelemetry().activeParticles;
+      const idleP = dbg.getTelemetry().activeParticles;
       const nonShredBlock = dbg.getBoard().blocks.find((b) => b.col === 3 && b.row === 2);
-      if (nonShredBlock) {
-        dbg.commitMove(nonShredBlock.id, 1, 3);
-      }
+      if (nonShredBlock) dbg.commitMove(nonShredBlock.id, 1, 3);
       dbg.advanceFrozenFrames(6);
-      const afterSlideParticles = dbg.getTelemetry().activeParticles;
+      const slideP = dbg.getTelemetry().activeParticles;
       const shredBlk = dbg.getBoard().blocks[0];
       dbg.commitMove(shredBlk.id, 0, shredBlk.col);
       dbg.advanceFrozenFrames(2);
-      const midShredParticles = dbg.getTelemetry().activeParticles;
+      const shredP = dbg.getTelemetry().activeParticles;
       (document.getElementById('btn-restart') as HTMLButtonElement | null)?.click();
       dbg.advanceFrozenFrames(1);
-      const afterRestartParticles = dbg.getTelemetry().activeParticles;
-
+      const restartP = dbg.getTelemetry().activeParticles;
       dbg.freezeTime(null);
       dbg.setFxRandomSeed(null);
-      return {
-        zStart,
-        zAfter,
-        boltTelemetry,
-        rmTelemetry,
-        idleParticles,
-        afterSlideParticles,
-        midShredParticles,
-        afterRestartParticles,
-      };
+      return { zStart, zAfter, boltTelemetry, rmTelemetry, idleP, slideP, shredP, restartP };
     });
 
     expect(bubbleVsBolt.zAfter).toBeGreaterThan(bubbleVsBolt.zStart + 0.35);
@@ -277,10 +271,10 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
     expect(bubbleVsBolt.boltTelemetry.gateBurstModes).toContain('PLASMA_ARCS:lightning_bolts');
     expect(bubbleVsBolt.rmTelemetry.activeParticles).toBe(0);
     expect(bubbleVsBolt.rmTelemetry.gateBurstModes).toContain('REDUCED_MOTION_SEAL:star_confetti');
-    expect(bubbleVsBolt.idleParticles).toBe(0);
-    expect(bubbleVsBolt.afterSlideParticles).toBe(0);
-    expect(bubbleVsBolt.midShredParticles).toBeGreaterThan(12);
-    expect(bubbleVsBolt.afterRestartParticles).toBe(0);
+    expect(bubbleVsBolt.idleP).toBe(0);
+    expect(bubbleVsBolt.slideP).toBe(0);
+    expect(bubbleVsBolt.shredP).toBeGreaterThan(12);
+    expect(bubbleVsBolt.restartP).toBe(0);
   });
 
   test('MAP-MODE-SPLIT-01 & ZEN-STARS-01: Connected Folder-Tab WAI-ARIA navigation, independent ladders, global booster unlocks, Zen-only skips, Zen Stars, and free Zen Blessing continues', async ({
@@ -324,8 +318,6 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
     expect(tabGeometry?.zenTabIndex).toBe(-1);
     expect(tabGeometry?.seamDeltaPx).toBeLessThanOrEqual(3);
     expect(tabGeometry?.noOverflow).toBe(true);
-
-    // Keyboard roving-tabindex navigation (ArrowRight -> ZEN -> TIMED -> wrap CHALLENGE, End -> TIMED, Home -> CHALLENGE)
     await page.locator('#map-tab-challenge').focus();
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('#map-tab-zen')).toHaveAttribute('aria-selected', 'true');
@@ -335,45 +327,31 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
     await expect(page.locator('#map-tab-timed')).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Home');
     await expect(page.locator('#map-tab-challenge')).toHaveAttribute('aria-selected', 'true');
-
-    // 2. Advance Zen ladder across 4 unique non-skipped clears (awards +1 Zen Star at 3 clears & +1 Zen Blessing at 4 clears)
-    //    plus 3 Zen skips to reach Level 8 — verifying the 3-skip consecutive cap & genuine-clear Hammer gating (`ZEN-SKIP-GUARD-01`)
     await page.locator('#map-tab-zen').click();
     await page.locator('#btn-play-current').click();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#btn-skip-hud')).toBeVisible();
-
     for (let lvl = 1; lvl <= 4; lvl++) {
       await page.evaluate((id) => {
         window.__SHREDBLOCKS_DEBUG__.loadLevel(id);
         window.__SHREDBLOCKS_DEBUG__.autoSolveCurrentLevel();
       }, lvl);
       await expect(page.locator('#dialog-victory')).toBeVisible();
-      if (lvl === 3) {
-        await expect(page.locator('#victory-stars')).toContainText('+1 Gold Star Earned');
-      }
+      if (lvl === 3) await expect(page.locator('#victory-stars')).toContainText('+1 Gold Star Earned');
       await page.locator('#btn-next-level').click();
     }
-    // Now on Level 5 in Zen Mode; skip 5 -> 6 -> 7 -> 8 via Zen-only HUD Skip (3 consecutive skips)
-    for (let s = 0; s < 3; s++) {
-      await page.locator('#btn-skip-hud').click();
-    }
+    for (let s = 0; s < 3; s++) await page.locator('#btn-skip-hud').click();
     await expect(page.locator('#hud-level-title')).toContainText('Level 8');
     await expect(page.locator('#btn-skip-hud')).toHaveAttribute('aria-disabled', 'true');
-    // 4th consecutive un-cleared skip is blocked with clear toast feedback!
     await page.locator('#btn-skip-hud').click({ force: true });
     await expect(page.locator('#hud-level-title')).toContainText('Level 8');
     await expect(page.locator('#game-toast')).toContainText('max 3 skipped in a row');
-
-    // Return to Sanctuary Map: verify Zen = Lvl 8, Challenge = Lvl 1, Rush = Lvl 1, +1 Zen Star, 1/3 Blessing
     await page.locator('#btn-hud-home').click();
     await expect(page.locator('#map-tab-lvl-zen')).toHaveText('Lvl 8');
     await expect(page.locator('#map-tab-lvl-challenge')).toHaveText('Lvl 1');
     await expect(page.locator('#map-tab-lvl-timed')).toHaveText('Lvl 1');
     await expect(page.locator('#stat-stars')).toHaveText('1');
     await expect(page.locator('#zen-progress-text')).toContainText('1/3');
-
-    // 3. Switch to Challenge folder tab (Lvl 1): with only 4 genuine clears, Hammer (Lvl 8) stays locked against skip farming!
     await page.locator('#map-tab-challenge').click();
     await expect(page.locator('#btn-play-current')).toContainText('PLAY LEVEL 1');
     await page.locator('#btn-play-current').click();
@@ -724,5 +702,85 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
 
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 409 —');
+  });
+
+  test('ICON-OPTICAL-PARITY-01: Mode icon optical sizing and structured CTA spacing', async ({ page }) => {
+    for (const [width, height] of [
+      [320, 568],
+      [1280, 800],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.goto('/');
+      await page.waitForFunction(() => Boolean(window.__SHREDBLOCKS_DEBUG__));
+      await page.evaluate(() => {
+        window.__SHREDBLOCKS_DEBUG__.patchSave({ highestLevelUnlocked: 25, currentLevelId: 25 });
+        window.__SHREDBLOCKS_DEBUG__.setPlayMode('TIMED');
+      });
+      const title = await page.evaluate(() => {
+        const btn = document.getElementById('btn-title-play');
+        const em = btn?.querySelector('.btn-mode-emblem');
+        const j = document.querySelector('#title-chapter-badge .inline-mode-icon');
+        const cs = j ? window.getComputedStyle(j) : null;
+        return {
+          mode: em?.getAttribute('data-mode-glyph'),
+          w: em?.querySelector('svg.mode-svg-icon')?.getBoundingClientRect().width ?? 0,
+          emBoxShadow: em ? window.getComputedStyle(em).boxShadow : '',
+          badgeGlow: Boolean(cs && cs.backgroundImage !== 'none' && cs.boxShadow !== 'none'),
+          overflow: !btn || btn.scrollWidth > btn.clientWidth + 1,
+        };
+      });
+      expect(title).toMatchObject({ mode: 'TIMED', emBoxShadow: 'none', badgeGlow: true, overflow: false });
+      expect(title.w).toBeGreaterThanOrEqual(8);
+      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('home'));
+      const home = await page.evaluate(() => {
+        const h = (s: string) => document.querySelector(s)?.getBoundingClientRect().height ?? 0;
+        const tEl = document.querySelector('#map-tab-timed .mode-tab-icon');
+        const tH = tEl?.getBoundingClientRect().height ?? 0;
+        const j = document.querySelector('#zen-sanctuary-card .inline-mode-icon');
+        const zs = j ? window.getComputedStyle(j) : null;
+        const bad = ['#btn-play-current', '#tab-btn-play', '.node-play-cue'].filter((s) => {
+          const el = document.querySelector<HTMLElement>(s);
+          return !el || el.scrollWidth > el.clientWidth + 1;
+        });
+        return {
+          timedAttr: tEl?.getAttribute('data-mode-glyph'),
+          navAttr: document.getElementById('tab-play-mode-icon')?.getAttribute('data-mode-glyph'),
+          ratioC: tH / (h('#map-tab-challenge .mode-tab-icon') || 1),
+          ratioZ: tH / (h('#map-tab-zen .mode-tab-icon') || 1),
+          zenJewel: Boolean(zs && zs.backgroundImage !== 'none' && zs.boxShadow !== 'none'),
+          bad,
+        };
+      });
+      expect(home).toMatchObject({ timedAttr: 'TIMED', navAttr: 'TIMED', zenJewel: false, bad: [] });
+      expect(home.ratioC).toBeGreaterThanOrEqual(0.95);
+      expect(home.ratioC).toBeLessThanOrEqual(1.05);
+      expect(home.ratioZ).toBeGreaterThanOrEqual(0.95);
+      expect(home.ratioZ).toBeLessThanOrEqual(1.05);
+      await page.locator('#btn-play-current').click();
+      await page.locator('#hud-keystone-info').click();
+      await expect(
+        page.locator('#game-toast .inline-mode-icon[data-mode-glyph="TIMED"] svg.mode-svg-icon')
+      ).toBeVisible();
+      await page.locator('#btn-pause').click();
+      await expect(page.locator('#dialog-pause')).toBeVisible();
+      const hudPause = await page.evaluate(() => {
+        const j = document.querySelector('#game-toast .inline-mode-icon');
+        const cs = j ? window.getComputedStyle(j) : null;
+        const attr = (id: string) => document.getElementById(id)?.getAttribute('data-mode-glyph');
+        const ctas = ['#btn-pause-resume', '#btn-pause-restart', '#btn-pause-home', '#btn-pause-open-themes'];
+        const bad = ctas.filter((s) => {
+          const e = document.querySelector<HTMLElement>(s);
+          return !e || e.scrollWidth > e.clientWidth + 1;
+        });
+        return {
+          toastGlow: Boolean(cs && cs.backgroundImage !== 'none' && cs.boxShadow !== 'none'),
+          hud: attr('hud-mode-icon'),
+          prev: attr('hud-mode-prev-icon'),
+          next: attr('hud-mode-next-icon'),
+          bad,
+        };
+      });
+      expect(hudPause).toEqual({ toastGlow: true, hud: 'TIMED', prev: 'ZEN', next: 'CHALLENGE', bad: [] });
+    }
   });
 });

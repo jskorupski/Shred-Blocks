@@ -423,10 +423,12 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
 .btn-title-hero {
   width: 100%;
   min-height: 48px;
+  padding-inline: 0.75rem;
   font-family: var(--font-ui);
   font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.09em;
+  font-variant-numeric: tabular-nums;
   border-radius: var(--radius-md);
 }
 

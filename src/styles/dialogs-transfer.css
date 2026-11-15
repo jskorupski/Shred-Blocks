@@ -184,3 +184,121 @@
   line-height: 1.45;
   color: var(--text-secondary);
 }
+
+/* Stepped Sanctuary Volume Cycle Controls (#dialog-pause Audio & Haptics) */
+.setting-volume-btn {
+  width: 100%;
+  text-align: left;
+}
+
+.setting-volume-btn:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 rgba(214, 255, 248, 0.14),
+    0 1px 0 rgba(8, 5, 18, 0.58);
+}
+
+.vol-step-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.24rem;
+  height: 20px;
+  padding: 0 0.34rem;
+  border-radius: var(--radius-xs);
+  background: rgba(12, 9, 24, 0.48);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.48),
+    inset 0 0 0 1px rgba(255, 248, 238, 0.11);
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.vol-step-text {
+  font-style: normal;
+  font-size: 0.61rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  min-width: 1.38rem;
+  text-align: center;
+  color: rgba(216, 204, 230, 0.62);
+}
+
+.setting-volume-btn:not([data-volume-step="0"]) .vol-step-text {
+  color: #cffcf4;
+}
+
+.setting-volume-btn[data-volume-step="3"] .vol-step-text {
+  color: #fde68a;
+}
+
+.vol-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 12px;
+}
+
+.vol-bar {
+  display: block;
+  width: 3.5px;
+  border-radius: 1.5px;
+  background: rgba(255, 248, 238, 0.18);
+  transition:
+    background 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.vol-bar:nth-child(1) {
+  height: 5px;
+}
+
+.vol-bar:nth-child(2) {
+  height: 8.5px;
+}
+
+.vol-bar:nth-child(3) {
+  height: 12px;
+}
+
+.setting-volume-btn[data-volume-step="1"] .vol-bar:nth-child(1),
+.setting-volume-btn[data-volume-step="2"] .vol-bar:nth-child(-n + 2),
+.setting-volume-btn[data-volume-step="3"] .vol-bar:nth-child(-n + 2) {
+  background: linear-gradient(180deg, #7ef8e9 0%, #2dd4bf 100%);
+  box-shadow: 0 0 4px rgba(45, 212, 191, 0.35);
+}
+
+.setting-volume-btn[data-volume-step="3"] .vol-bar:nth-child(3) {
+  background: linear-gradient(180deg, #fde68a 0%, #48e0ce 100%);
+  box-shadow: 0 0 5px rgba(253, 230, 138, 0.45);
+}
+
+body.high-contrast .vol-step-pill {
+  background: rgba(6, 5, 16, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 250, 235, 0.72);
+}
+
+body.high-contrast .setting-volume-btn .vol-step-text {
+  color: rgba(255, 250, 235, 0.75);
+}
+
+body.high-contrast .setting-volume-btn:not([data-volume-step="0"]) .vol-step-text {
+  color: #ffffff;
+}
+
+@media (forced-colors: active) {
+  .vol-step-pill {
+    border: 1px solid ButtonText;
+  }
+
+  .vol-bar {
+    background: GrayText;
+  }
+
+  .setting-volume-btn[data-volume-step="1"] .vol-bar:nth-child(1),
+  .setting-volume-btn[data-volume-step="2"] .vol-bar:nth-child(-n + 2),
+  .setting-volume-btn[data-volume-step="3"] .vol-bar {
+    background: Highlight;
+  }
+}

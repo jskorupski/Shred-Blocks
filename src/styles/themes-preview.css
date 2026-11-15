@@ -409,11 +409,26 @@
    THEMES STUDIO PINNED 3D LIVE PREVIEW STAGE & CARD AFFORDANCES
    ========================================================================== */
 
+#screen-themes .brand-cluster {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+#screen-themes .header-actions {
+  flex-shrink: 0;
+}
+
 .themes-resume-btn {
   white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  max-width: 100%;
 }
 
 @media (max-width: 520px) {
+  #screen-themes .brand-title {
+    font-size: clamp(0.84rem, 1.4dvw + 0.36rem, 1.18rem);
+  }
   #btn-themes-home,
   #btn-themes-resume-game {
     padding: 0.22rem 0.44rem;

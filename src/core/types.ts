@@ -264,6 +264,9 @@ export type InputMode = 'DRAG' | 'TARGET_HAMMER' | 'TARGET_ROCKET' | 'TARGET_VAC
 export type RocketAxis = 'ROW' | 'COL';
 export type QualityTier = 'AUTO' | 'ULTRA_120' | 'BALANCED_60';
 
+/** Discrete Sanctuary volume steps (`0` = Off, `1` = Level 1, `2` = Level 2 [default], `3` = Level 3). */
+export type AudioVolumeStep = 0 | 1 | 2 | 3;
+
 export type SkinId = 'classic_studs' | 'relic_stone' | 'gummy_jelly' | 'carved_wood' | 'neon_cyber';
 export type TrayId = 'industrial_slate' | 'warm_birch' | 'midnight_arcade' | 'frosted_quartz' | 'mint_studio';
 export type ParticleStyleId =
@@ -604,6 +607,8 @@ export interface SavePayloadV1 {
     playMode: PlayMode;
     sfxEnabled: boolean;
     musicEnabled: boolean;
+    sfxVolume: AudioVolumeStep;
+    musicVolume: AudioVolumeStep;
     hapticsEnabled: boolean;
     colorblindSymbols: boolean;
     highContrast: boolean;

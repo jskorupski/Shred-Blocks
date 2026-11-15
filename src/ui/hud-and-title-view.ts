@@ -2,7 +2,7 @@ import { isBoardRunStarted } from '../core/board';
 import { getTimedBombTickSec } from '../core/board-state';
 import { findEligibleGateForBlockAt } from '../core/gate-clearance';
 import { canGroupOccupyOffset, getMovedGroupBlocks, isBlockInLockedRoom } from '../core/physics';
-import type { BoosterType, SavePayloadV1 } from '../core/types';
+import type { AudioVolumeStep, BoosterType, SavePayloadV1 } from '../core/types';
 import type { HoverState } from '../input/pointer-controller';
 import { getLevelSpec } from '../levels/catalog';
 import type { RenderSceneOptions } from '../render/renderer-3d';
@@ -16,9 +16,14 @@ import {
 } from '../storage/save-manager';
 import {
   type AppViewContext,
+  formatCompactLevelRef,
   getChapterMetaForLevel,
   getNextSanctuaryAwakeningText,
   getPlayModeMeta,
+  renderNavPlayLabel,
+  setButtonIconLabel,
+  setModeIconElement,
+  setRichModeText,
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
 import { syncKeystoneDomImpl } from './hud-keystone';
@@ -84,17 +89,17 @@ export function syncBoosterTargetingBannerImpl(hoverState: HoverState): void {
     unlockToast.hidden = true;
   }
   if (isHammer) {
-    setTextIfChanged(textEl, '🔨 Tap any block, crate, or locked gate to smash');
+    setRichModeText(textEl, '🔨 Tap any block, crate, or locked gate to smash');
     if (!axisBtn.hidden) axisBtn.hidden = true;
   } else if (isRocket) {
-    setTextIfChanged(
+    setRichModeText(
       textEl,
       `🚀 Aim & release to blast entire ${hoverState.rocketAxis === 'ROW' ? 'ROW' : 'COLUMN'}`
     );
     if (axisBtn.hidden) axisBtn.hidden = false;
     setTextIfChanged(axisBtn, hoverState.rocketAxis === 'ROW' ? 'Axis: ↔ ROW' : 'Axis: ↕ COL');
   } else if (isVacuum) {
-    setTextIfChanged(textEl, '🧲 Tap any unlocked colored block to vacuum all matching blocks');
+    setRichModeText(textEl, '🧲 Tap any unlocked colored block to vacuum all matching blocks');
     if (!axisBtn.hidden) axisBtn.hidden = true;
   }
 }
@@ -186,6 +191,8 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
     sfxEnabled: save.settings.sfxEnabled,
     musicScene,
     musicEnabled: save.settings.musicEnabled,
+    sfxVolume: save.settings.sfxVolume,
+    musicVolume: save.settings.musicVolume,
     hapticsEnabled: save.settings.hapticsEnabled,
     equippedParticle: save.equippedParticle,
   });
@@ -247,7 +254,7 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
       tabEl.tabIndex = isSelected ? 0 : -1;
     }
     if (lvlEl) {
-      lvlEl.textContent = `Lvl ${save.modeState[def.mode].currentLevelId}`;
+      lvlEl.textContent = formatCompactLevelRef(save.modeState[def.mode].currentLevelId);
     }
   }
   const modePanelEl = document.getElementById('map-mode-panel');
@@ -284,34 +291,46 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
     heroHeading.textContent = `Level ${targetSpec.id} — ${targetSpec.name}`;
   }
   if (heroNote) {
-    heroNote.textContent =
+    setRichModeText(
+      heroNote,
       targetSpec.unlockNote ??
-      (activeMode === 'ZEN'
-        ? 'Untimed sanctuary flow — 3 clears earn +1 ★ & 4 clears bank a Free Continue Blessing'
-        : activeMode === 'TIMED'
-          ? `Beat the ${targetSpec.timeLimitSec ?? 90}s Speed Rush clock for up to 3 Gold Stars`
-          : `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`);
+        (activeMode === 'ZEN'
+          ? 'Untimed sanctuary flow — 3 clears earn +1 ★ & 4 clears bank a Free Continue Blessing'
+          : activeMode === 'TIMED'
+            ? `Beat the ${targetSpec.timeLimitSec ?? 90}s Speed Rush clock for up to 3 Gold Stars`
+            : `Clear all blocks in ${targetSpec.parMoves ?? 6} moves for 3 Stars`)
+    );
   }
   if (heroAwakeningText) {
     heroAwakeningText.textContent = getNextSanctuaryAwakeningText(targetSpec.id);
   }
   const isResumableTarget = app.canResumeBoard(targetSpec.id) && isBoardRunStarted(app.board);
   if (playBtn) {
-    playBtn.textContent = `${modeInfo.icon} ▶ ${isResumableTarget ? 'RESUME' : 'PLAY'} LEVEL ${targetSpec.id}`;
+    setButtonIconLabel(playBtn, {
+      mode: activeMode,
+      modeIcon: modeInfo.icon,
+      actionGlyph: '▶',
+      actionKind: 'play',
+      label: `${isResumableTarget ? 'RESUME' : 'PLAY'} LEVEL ${targetSpec.id}`,
+    });
   }
   if (tabPlayModeIcon) {
-    tabPlayModeIcon.textContent = modeInfo.icon;
+    setModeIconElement(tabPlayModeIcon, activeMode);
   }
   if (tabPlayLabel) {
-    const verb = isResumableTarget ? 'Resume' : 'Play';
-    tabPlayLabel.textContent =
-      targetSpec.id >= 1000 ? `${verb} ${targetSpec.id}` : `${verb} Lvl ${targetSpec.id}`;
+    renderNavPlayLabel(tabPlayLabel, tabPlayBtn, targetSpec.id, isResumableTarget);
   }
   if (tabPlayBtn) {
     tabPlayBtn.title = `${isResumableTarget ? 'Resume' : 'Continue'} ${modeInfo.shortLabel} · Level ${targetSpec.id}`;
   }
   if (pauseResumeBtn) {
-    pauseResumeBtn.textContent = `${modeInfo.icon} ▶ Resume`;
+    setButtonIconLabel(pauseResumeBtn, {
+      mode: activeMode,
+      modeIcon: modeInfo.icon,
+      actionGlyph: '▶',
+      actionKind: 'play',
+      label: 'Resume',
+    });
   }
   syncPauseCosmeticsDrawerImpl(app, false);
 
@@ -332,7 +351,10 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (titleReturningSummary) titleReturningSummary.hidden = isNewPlayer;
   if (titleReturningNav) titleReturningNav.hidden = isNewPlayer;
   if (titleChapterBadge) {
-    titleChapterBadge.textContent = `${modeInfo.badgeLabel} · ${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`;
+    setRichModeText(
+      titleChapterBadge,
+      `${modeInfo.badgeLabel} · ${chapterMeta.chapterNum} · ${chapterMeta.title.toUpperCase()}`
+    );
   }
   if (titleLevelSubtitle) {
     titleLevelSubtitle.textContent = `Level ${targetSpec.id} — ${targetSpec.name}`;
@@ -342,22 +364,46 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   if (titleStatStreak) titleStatStreak.textContent = String(save.winStreak);
   if (titlePlayBtn) {
     titlePlayBtn.setAttribute('data-new-player', isNewPlayer ? 'true' : 'false');
-    titlePlayBtn.textContent = isNewPlayer
-      ? '▶ BEGIN JOURNEY'
-      : `${modeInfo.icon} ▶ CONTINUE · LEVEL ${targetSpec.id}`;
+    if (isNewPlayer) {
+      setButtonIconLabel(titlePlayBtn, {
+        actionGlyph: '▶',
+        actionKind: 'play',
+        label: 'BEGIN JOURNEY',
+      });
+    } else {
+      setButtonIconLabel(titlePlayBtn, {
+        mode: activeMode,
+        modeIcon: modeInfo.icon,
+        actionGlyph: '▶',
+        actionKind: 'play',
+        label: `CONTINUE · LEVEL ${targetSpec.id}`,
+      });
+    }
   }
   if (titleSyncLabel) {
     titleSyncLabel.textContent = isNewPlayer ? 'Restore Save' : 'Sync';
   }
   app.syncInstallUiVisibility();
 
-  // Settings Checkboxes & Selects
+  // Settings Stepped Volume Buttons, Checkboxes & Selects
+  const syncVolumeBtn = (btnId: string, labelId: string, name: string, step: AudioVolumeStep) => {
+    const btn = document.getElementById(btnId);
+    const labelEl = document.getElementById(labelId);
+    const text = step === 0 ? 'OFF' : String(step);
+    const spoken = step === 0 ? 'Off' : `Level ${step} of 3`;
+    if (btn) {
+      setAttrIfChanged(btn, 'data-volume-step', String(step));
+      setAttrIfChanged(btn, 'aria-label', `${name}: ${spoken} (tap to cycle)`);
+    }
+    setTextIfChanged(labelEl, text);
+  };
+  syncVolumeBtn('btn-volume-sfx', 'vol-label-sfx', 'Sound FX', save.settings.sfxVolume);
+  syncVolumeBtn('btn-volume-music', 'vol-label-music', 'Music', save.settings.musicVolume);
+
   const setChecked = (id: string, val: boolean) => {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (el) el.checked = val;
   };
-  setChecked('toggle-sfx', save.settings.sfxEnabled);
-  setChecked('toggle-music', save.settings.musicEnabled);
   setChecked('toggle-haptics', save.settings.hapticsEnabled);
   setChecked('toggle-colorblind', save.settings.colorblindSymbols);
   setChecked('toggle-high-contrast', save.settings.highContrast);
@@ -375,13 +421,20 @@ export function syncAllUiFromSaveImpl(app: AppViewContext): void {
     jumpInput.title = `Jump to unlocked ${activeMode.toLowerCase()} stage (1–${maxUnlocked})`;
   }
 
-  const hudSfxBtn = document.getElementById('btn-hud-sfx');
-  const hudMusicBtn = document.getElementById('btn-hud-music');
-  if (hudSfxBtn) hudSfxBtn.textContent = save.settings.sfxEnabled ? '🔊' : '🔇';
-  if (hudMusicBtn) hudMusicBtn.textContent = save.settings.musicEnabled ? '🎵' : '🔕';
-
   app.syncInGameHud();
   refreshThemesPreviewIfActive(app);
+}
+
+/**
+ * Cycles Sound FX or Music volume through `Level 2 -> Level 3 -> Off -> Level 1 -> Level 2`.
+ */
+export function cycleAudioVolumeSettingImpl(app: AppViewContext, channel: 'sfx' | 'music'): void {
+  const s = app.saveManager.getPayload().settings;
+  const current = channel === 'sfx' ? s.sfxVolume : s.musicVolume;
+  const next = ((current + 1) % 4) as AudioVolumeStep;
+  app.saveManager.updateSettings(channel === 'sfx' ? { sfxVolume: next } : { musicVolume: next });
+  app.sound.playButtonTap();
+  app.renderNow();
 }
 
 export function syncInGameHudImpl(app: AppViewContext): void {
@@ -428,22 +481,22 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   }
   setTextIfChanged(coinsInline, `${save.coins}`);
   const modeMeta = {
-    CHALLENGE: { icon: '⚔️', hero: 'Challenge', wing: 'Challenge', full: 'Challenge Mode' },
-    ZEN: { icon: '🌿', hero: 'Zen', wing: 'Zen', full: 'Zen Mode' },
-    TIMED: { icon: '⏱', hero: 'Speed Rush', wing: 'Rush', full: 'Speed Rush Mode' },
+    CHALLENGE: { hero: 'Challenge', wing: 'Challenge', full: 'Challenge Mode' },
+    ZEN: { hero: 'Zen', wing: 'Zen', full: 'Zen Mode' },
+    TIMED: { hero: 'Speed Rush', wing: 'Rush', full: 'Speed Rush Mode' },
   } as const;
   setAttrIfChanged(modeBtn, 'data-mode', playMode);
-  setTextIfChanged(modeIcon, modeMeta[playMode].icon);
+  setModeIconElement(modeIcon, playMode);
   setTextIfChanged(modeText, modeMeta[playMode].hero);
   const modeOrder = ['CHALLENGE', 'ZEN', 'TIMED'] as const;
   const modeIdx = modeOrder.indexOf(playMode);
   const prevMode = modeOrder[(modeIdx + 2) % 3];
   const nextMode = modeOrder[(modeIdx + 1) % 3];
-  setTextIfChanged(prevIcon, modeMeta[prevMode].icon);
+  setModeIconElement(prevIcon, prevMode);
   setTextIfChanged(prevLabel, modeMeta[prevMode].wing);
   const prevTitle = `Switch to ${modeMeta[prevMode].full}`;
   if (prevBtn && prevBtn.title !== prevTitle) prevBtn.title = prevTitle;
-  setTextIfChanged(nextIcon, modeMeta[nextMode].icon);
+  setModeIconElement(nextIcon, nextMode);
   setTextIfChanged(nextLabel, modeMeta[nextMode].wing);
   const nextTitle = `Switch to ${modeMeta[nextMode].full}`;
   if (nextBtn && nextBtn.title !== nextTitle) nextBtn.title = nextTitle;

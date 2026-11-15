@@ -8,6 +8,7 @@ import {
   MAX_ENDLESS_LEVEL,
   PWA_INSTALLED_STORAGE_KEY,
 } from './catalog-meta';
+import { cycleAudioVolumeSettingImpl } from './hud-and-title-view';
 import { showKeystoneRuleToastImpl } from './hud-keystone';
 import { handlePopstateNavigationImpl, refreshSaveTransferModalImpl } from './modals-and-save-transfer';
 import { bindThemesAndCosmeticsEventsImpl, refreshThemesPreviewIfActive } from './themes-studio-view';
@@ -207,18 +208,6 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     showKeystoneRuleToastImpl(app);
   });
 
-  document.getElementById('btn-hud-sfx')?.addEventListener('click', () => {
-    const cur = app.saveManager.getPayload().settings.sfxEnabled;
-    app.saveManager.updateSettings({ sfxEnabled: !cur });
-    app.sound.playButtonTap();
-  });
-
-  document.getElementById('btn-hud-music')?.addEventListener('click', () => {
-    const cur = app.saveManager.getPayload().settings.musicEnabled;
-    app.saveManager.updateSettings({ musicEnabled: !cur });
-    app.sound.playButtonTap();
-  });
-
   document.getElementById('btn-restart')?.addEventListener('click', () => {
     app.restartCurrentLevel();
   });
@@ -338,8 +327,12 @@ export function bindDomEventsImpl(app: AppViewContext): void {
       app.renderNow();
     });
   };
-  bindToggle('toggle-sfx', 'sfxEnabled');
-  bindToggle('toggle-music', 'musicEnabled');
+  document.getElementById('btn-volume-sfx')?.addEventListener('click', () => {
+    cycleAudioVolumeSettingImpl(app, 'sfx');
+  });
+  document.getElementById('btn-volume-music')?.addEventListener('click', () => {
+    cycleAudioVolumeSettingImpl(app, 'music');
+  });
   bindToggle('toggle-haptics', 'hapticsEnabled');
   bindToggle('toggle-colorblind', 'colorblindSymbols');
   bindToggle('toggle-high-contrast', 'highContrast');
@@ -700,7 +693,7 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext): void {
     app.deferredInstallPrompt = null;
     app.markPwaInstalled();
     app.closeAllModals();
-    app.showGameToast('📲 ShredBlocks installed to your device!');
+    app.showGameToast('✦ ShredBlocks installed to your device!');
   });
 
   try {

@@ -604,7 +604,8 @@ legend.pause-section-label {
   transition: background 0.14s ease;
 }
 
-.setting-row:has(input[type="checkbox"]:checked) {
+.setting-row:has(input[type="checkbox"]:checked),
+.setting-volume-btn:not([data-volume-step="0"]) {
   color: var(--text-primary);
   background: linear-gradient(
     180deg var(--in-oklab),

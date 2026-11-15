@@ -22,7 +22,6 @@ async function dragBoardCellToCell(
   await page.mouse.up();
 }
 
-/** Click board cell `(col, row)` using a real mouse click on `#game-canvas`. */
 async function clickBoardCell(page: Page, col: number, row: number): Promise<void> {
   const pt = await page.evaluate(({ c, r }) => window.__SHREDBLOCKS_DEBUG__.boardToScreen(c + 0.5, r + 0.5), {
     c: col,
@@ -40,9 +39,7 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     page.on('console', (msg) => {
       if (msg.type() === 'error') errors.push(`CONSOLE_ERROR: ${msg.text()}`);
     });
-
     await page.goto('/');
-    // Verify Sacred-Geometry Title Screen launches in New Player mode over the live 3D board
     await expect(page.locator('#title-overlay')).toBeVisible();
     await expect(page.locator('#title-crest-heading')).toHaveText('ShredBlocks');
     const fontsReady = await page.evaluate(async () => {
@@ -78,25 +75,20 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#screen-home')).toBeVisible();
     await expect(page.locator('.brand-title').first()).toHaveText('ShredBlocks');
     await expect(page.locator('#stat-coins')).toHaveText('120');
-
     // Verify 300+ roadmap nodes render in All view
     const allNodesCount = await page.locator('#roadmap-list .level-node-card').count();
     expect(allNodesCount).toBeGreaterThanOrEqual(300);
-
     // Verify Sculpted Courtyard (🏛️ on L14) and Multi-Room Sanctum (⛩️ on L25) badges appear on Sanctuary Map
     await expect(page.locator('#roadmap-list .level-node-card').nth(13)).toContainText('🏛️');
     await expect(page.locator('#roadmap-list .level-node-card').nth(24)).toContainText('⛩️');
-
     // Click a locked level (#5) on Home Roadmap and verify global #game-toast feedback appears on #screen-home
     await page.locator('#roadmap-list .level-node-card').nth(4).click();
     await expect(page.locator('#game-toast')).toBeVisible();
     await expect(page.locator('#game-toast')).toContainText('Clear up to Level');
-
     // Filter by 51-100
     await page.locator('.chip-filter[data-range="51-100"]').click();
     const filteredCount = await page.locator('#roadmap-list .level-node-card').count();
     expect(filteredCount).toBe(50);
-
     // Filter by Endless (301+)
     await page.locator('.chip-filter[data-range="endless"]').click();
     const endlessFirstText = await page
@@ -104,14 +96,11 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
       .first()
       .textContent();
     expect(endlessFirstText).toContain('301');
-
     // Direct Level Jump blocks locked stages (> highestLevelUnlocked), then jumps once unlocked
     await page.locator('#level-jump-input').fill('11');
     await page.locator('#btn-level-jump').click();
     await expect(page.locator('#game-toast')).toContainText('Stage #11 is locked');
-    await page.evaluate(() => {
-      window.__SHREDBLOCKS_DEBUG__.patchSave({ highestLevelUnlocked: 11 });
-    });
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.patchSave({ highestLevelUnlocked: 11 }));
     await page.locator('#btn-level-jump').click();
     await expect(page.locator('#screen-game')).toBeVisible();
     await expect(page.locator('#hud-level-title')).toContainText('Level 11');
@@ -249,20 +238,18 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await expect(page.locator('#dialog-victory')).toBeVisible();
     const saveAfterL2 = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getSave());
     expect(saveAfterL2.highestLevelUnlocked).toBe(3);
-
-    // Return to Sanctuary Map via Victory Modal '‹ Map' button, then tap Brand Crest (#btn-home-title)
-    // to verify Returning Player Title Screen flow ('▶ CONTINUE · LEVEL 3' + Map & Themes buttons)
     await page.locator('#btn-victory-home').click();
     await expect(page.locator('#screen-home')).toBeVisible();
     await page.locator('#btn-home-title').click();
     await expect(page.locator('#title-overlay')).toBeVisible();
     await expect(page.locator('#title-returning-summary')).toBeVisible();
     await expect(page.locator('#title-returning-nav')).toBeVisible();
-    await expect(page.locator('#btn-title-play')).toHaveText('⚔️ ▶ CONTINUE · LEVEL 3');
+    await expect(page.locator('#btn-title-play')).toHaveText('▶ CONTINUE · LEVEL 3');
+    const chEmblem = '#btn-title-play .btn-mode-emblem[data-mode-glyph="CHALLENGE"] svg.mode-svg-icon';
+    await expect(page.locator(chEmblem)).toBeVisible();
     await page.locator('#btn-title-play').click();
     await expect(page.locator('#title-overlay')).toBeHidden();
     await expect(page.locator('#hud-level-title')).toContainText('Level 3');
-
     expect(errors).toEqual([]);
   });
 
@@ -271,7 +258,6 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
   }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
-
     await page.goto('/');
     await page.evaluate(() => {
       window.__SHREDBLOCKS_DEBUG__.patchSave({
@@ -430,37 +416,50 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
     await page.locator('#toggle-high-contrast').check();
     await page.locator('#toggle-colorblind').check();
     await page.locator('#toggle-reduced-motion').check();
-    await page.locator('#toggle-sfx').uncheck();
-    await page.locator('#toggle-music').uncheck();
+    // Stepped Sound FX & Music start at Level 2: 2 taps cycle 2 -> 3 -> Off (`0`)
+    await page.locator('#btn-volume-sfx').click();
+    await expect(page.locator('#btn-volume-sfx')).toHaveAttribute('data-volume-step', '3');
+    await page.locator('#btn-volume-sfx').click();
+    await page.locator('#btn-volume-music').click();
+    await page.locator('#btn-volume-music').click();
     await page.locator('#toggle-haptics').uncheck();
     await page.locator('#select-quality-tier').selectOption('BALANCED_60');
 
     const bodyClassesAndSettings = await page.evaluate(() => {
-      const s = window.__SHREDBLOCKS_DEBUG__.getSave().settings;
-      const wheel = document.querySelector('.ornament-outer-wheel');
-      const wheelAnim = wheel ? window.getComputedStyle(wheel).animationName : '';
+      const w = document.querySelector('.ornament-outer-wheel');
       return {
         hcClass: document.body.classList.contains('high-contrast'),
         cbClass: document.body.classList.contains('colorblind-mode'),
         rmClass: document.body.classList.contains('reduced-motion'),
-        wheelAnim,
-        settings: s,
+        wheelAnim: w ? window.getComputedStyle(w).animationName : '',
+        sfxStep: document.getElementById('btn-volume-sfx')?.getAttribute('data-volume-step'),
+        musicStep: document.getElementById('btn-volume-music')?.getAttribute('data-volume-step'),
+        settings: window.__SHREDBLOCKS_DEBUG__.getSave().settings,
       };
     });
-    expect(bodyClassesAndSettings.hcClass).toBe(true);
-    expect(bodyClassesAndSettings.cbClass).toBe(true);
-    expect(bodyClassesAndSettings.rmClass).toBe(true);
-    expect(bodyClassesAndSettings.wheelAnim).toBe('none');
-    expect(bodyClassesAndSettings.settings.highContrast).toBe(true);
-    expect(bodyClassesAndSettings.settings.colorblindSymbols).toBe(true);
-    expect(bodyClassesAndSettings.settings.reducedMotion).toBe(true);
-    expect(bodyClassesAndSettings.settings.sfxEnabled).toBe(false);
-    expect(bodyClassesAndSettings.settings.musicEnabled).toBe(false);
-    expect(bodyClassesAndSettings.settings.hapticsEnabled).toBe(false);
-    expect(bodyClassesAndSettings.settings.qualityTier).toBe('BALANCED_60');
+    expect(bodyClassesAndSettings).toMatchObject({
+      hcClass: true,
+      cbClass: true,
+      rmClass: true,
+      wheelAnim: 'none',
+      sfxStep: '0',
+      musicStep: '0',
+      settings: {
+        highContrast: true,
+        colorblindSymbols: true,
+        reducedMotion: true,
+        sfxVolume: 0,
+        musicVolume: 0,
+        sfxEnabled: false,
+        musicEnabled: false,
+        hapticsEnabled: false,
+        qualityTier: 'BALANCED_60',
+      },
+    });
 
     // Cycle through all 5 Block Skins x 5 Board Trays while High Contrast + Colorblind Symbols are active
     await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
       const skins = ['classic_studs', 'relic_stone', 'gummy_jelly', 'carved_wood', 'neon_cyber'] as const;
       const trays = [
         'industrial_slate',
@@ -469,13 +468,11 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
         'frosted_quartz',
         'mint_studio',
       ] as const;
-      for (let i = 0; i < 5; i++) {
-        window.__SHREDBLOCKS_DEBUG__.setTheme(skins[i], trays[i], 'micro_cubes');
-      }
-      window.__SHREDBLOCKS_DEBUG__.setHighContrast(false);
-      window.__SHREDBLOCKS_DEBUG__.setColorblindMode(false);
-      window.__SHREDBLOCKS_DEBUG__.setReducedMotion(false);
-      window.__SHREDBLOCKS_DEBUG__.setQualityTier('AUTO');
+      for (let i = 0; i < 5; i++) dbg.setTheme(skins[i], trays[i], 'micro_cubes');
+      dbg.setHighContrast(false);
+      dbg.setColorblindMode(false);
+      dbg.setReducedMotion(false);
+      dbg.setQualityTier('AUTO');
     });
     await page.locator('#btn-pause-close').click();
 

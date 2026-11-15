@@ -144,7 +144,12 @@ export class AmbientMusicController {
   }
 
   public start(ctx: AudioContext, musicGain: GainNode): void {
-    if (this.timerId !== null) return;
+    if (this.timerId !== null) {
+      if (ctx.state === 'running') {
+        this.tickLookahead(ctx, musicGain);
+      }
+      return;
+    }
     const graph = this.ensureGraph(ctx, musicGain);
     if (!this.activeStem) {
       this.createPresetStem(ctx, graph, ctx.currentTime);
@@ -169,7 +174,8 @@ export class AmbientMusicController {
     }
   }
 
-  public destroy(): void {
+  /** Immediately halts the lookahead scheduler, cancels fades, zeroes stem gains, and disconnects the active stem. */
+  public stopImmediate(): void {
     if (this.timerId !== null) {
       clearInterval(this.timerId);
       this.timerId = null;
@@ -179,9 +185,21 @@ export class AmbientMusicController {
     }
     this.fadeTimers.clear();
     if (this.activeStem) {
-      disconnectAll([this.activeStem.dry, this.activeStem.wet, this.activeStem.chorus]);
+      const nodes = [this.activeStem.dry, this.activeStem.wet, this.activeStem.chorus];
+      if (this.graph) {
+        const now = this.graph.ctx.currentTime;
+        for (const node of nodes) {
+          node.gain.cancelScheduledValues?.(now);
+          setParam(node.gain, 0, now);
+        }
+      }
+      disconnectAll(nodes);
       this.activeStem = null;
     }
+  }
+
+  public destroy(): void {
+    this.stopImmediate();
     if (this.graph) {
       stopOscs(this.graph.ownedOscs);
       disconnectAll(this.graph.ownedNodes);

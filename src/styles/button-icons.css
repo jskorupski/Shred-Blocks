@@ -1,0 +1,734 @@
+/* ICON-OPTICAL-PARITY-01: Unified optical scaling & zero-layout-inflation spacing for mode emblems and structured CTA glyphs. */
+
+/* --- 1. Mode Emblems (shared across tabs, HUD wings, dock play pill, & structured CTAs) --- */
+.mode-tab-icon,
+.mode-glyph,
+.tab-play-mode-glyph,
+.btn-mode-emblem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.08em;
+  height: 1.08em;
+  line-height: 1;
+  letter-spacing: 0;
+  color: currentColor;
+  background: none;
+  border: none;
+  box-shadow: none;
+  filter: none;
+  flex: none;
+  pointer-events: none;
+  font-style: normal;
+}
+
+.mode-svg-icon,
+.booster-svg-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  color: inherit;
+  fill: none;
+  flex: none;
+}
+
+/* --- 2. Structured Button Internals (:where avoids overriding surface-specific CTA layout rules) --- */
+:where(.btn-structured) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38em;
+}
+
+.btn-space {
+  /* Out-of-flow so Flexbox inserts a single gap between icon and label while preserving DOM textContent */
+  position: absolute;
+  width: 0;
+  height: 0;
+  font-size: 0;
+  line-height: 0;
+  letter-spacing: 0;
+  overflow: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.btn-icon-cluster {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.24em;
+  line-height: 1;
+  letter-spacing: 0;
+  flex: none;
+  pointer-events: none;
+}
+
+.btn-mode-emblem {
+  font-size: 1.08em;
+}
+
+.btn-action-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  letter-spacing: 0;
+  flex: none;
+  pointer-events: none;
+  font-style: normal;
+  vertical-align: middle;
+}
+
+.btn-action-glyph[data-glyph="play"] {
+  font-size: 0.84em;
+  transform: translateY(0.01em);
+}
+
+.btn-action-glyph[data-glyph="restart"] {
+  font-size: 1.1em;
+  transform: translateY(-0.02em);
+}
+
+.btn-action-glyph[data-glyph="back"],
+.btn-action-glyph[data-glyph="forward"] {
+  font-size: 1.22em;
+  line-height: 0.85;
+  transform: translateY(-0.04em);
+}
+
+.btn-action-glyph[data-glyph="plus"],
+.btn-action-glyph[data-glyph="bolt"],
+.btn-action-glyph[data-glyph="spark"],
+.btn-action-glyph[data-glyph="eye"] {
+  font-size: 1.02em;
+}
+
+.btn-label-text {
+  display: inline-block;
+  min-width: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+  text-box: trim-both cap alphabetic;
+  padding-block-end: 0.24em;
+  margin-block-end: -0.24em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 3. Surface-Specific Proportional Sizing & Spacing --- */
+
+/* 3a. Home Map Mode Folder Tabs */
+#map-mode-tabs .map-mode-tab {
+  gap: 0.34rem;
+}
+
+#map-mode-tabs .mode-tab-icon {
+  font-size: 1.06em;
+}
+
+@media (max-width: 520px) {
+  #map-mode-tabs .map-mode-tab {
+    gap: 0.24rem;
+  }
+
+  #map-mode-tabs .mode-tab-icon {
+    font-size: 1em;
+  }
+}
+
+@media (max-width: 420px) {
+  #map-mode-tabs .map-mode-tab {
+    padding: 0.22rem 0.28rem;
+  }
+
+  #map-mode-tabs .mode-tab-lvl {
+    padding: 0.07rem 0.26rem;
+    font-size: 0.58rem;
+  }
+}
+
+@media (max-width: 390px) {
+  #map-mode-tabs.map-mode-tablist {
+    grid-template-columns: minmax(0, 1.27fr) minmax(0, 0.83fr) minmax(0, 0.9fr);
+  }
+}
+
+@media (max-width: 355px) {
+  #map-mode-tabs .map-mode-tab {
+    gap: 0.16rem;
+    padding: 0.2rem 0.22rem;
+    font-size: 0.66rem;
+  }
+
+  #map-mode-tabs .mode-tab-icon {
+    font-size: 0.92em;
+  }
+
+  #map-mode-tabs .mode-tab-lvl {
+    padding: 0.06rem 0.22rem;
+    font-size: 0.56rem;
+  }
+}
+
+@media (max-height: 500px) {
+  #map-mode-tabs .map-mode-tab {
+    gap: 0.22rem;
+  }
+
+  #map-mode-tabs .mode-tab-icon {
+    font-size: 0.94em;
+  }
+}
+
+/* 3b. In-Game Mode Carousel Wings & Keystone Mode Pill */
+.hud-mode-carousel .btn-mode-wing {
+  gap: 0.22rem;
+}
+
+.hud-mode-carousel .btn-mode-wing .mode-glyph {
+  font-size: 1.05em;
+}
+
+.hud-mode-carousel .btn-mode-wing .wing-chevron {
+  flex: none;
+  font-size: 1.12em;
+  line-height: 0.9;
+  transform: translateY(-0.04em);
+}
+
+#btn-mode-toggle {
+  gap: 0.34rem;
+}
+
+#btn-mode-toggle .mode-glyph {
+  font-size: 1.08em;
+}
+
+#btn-mode-toggle .mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  line-height: 1.1;
+}
+
+#btn-mode-toggle .mode-swap-svg {
+  flex: none;
+}
+
+@media (max-width: 679px) {
+  .hud-mode-carousel {
+    gap: 0.18rem;
+  }
+
+  .hud-mode-carousel .btn-mode-wing {
+    gap: 0.16rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .hud-mode-carousel .btn-mode-wing .mode-glyph {
+    font-size: 0.98em;
+  }
+
+  #btn-mode-toggle {
+    gap: 0.26rem;
+  }
+
+  #btn-mode-toggle .mode-badge {
+    gap: 0.22rem;
+  }
+}
+
+@media (max-width: 460px) {
+  #btn-mode-toggle {
+    gap: 0.22rem;
+  }
+
+  #btn-mode-toggle .mode-glyph {
+    font-size: 0.96em;
+  }
+}
+
+@media (max-width: 360px) {
+  .hud-mode-carousel .btn-mode-wing {
+    gap: 0.12rem;
+  }
+
+  .hud-mode-carousel .btn-mode-wing .mode-glyph {
+    font-size: 0.9em;
+  }
+
+  #btn-mode-toggle {
+    gap: 0.16rem;
+  }
+
+  #btn-mode-toggle .mode-badge {
+    gap: 0.16rem;
+  }
+
+  #btn-mode-toggle .mode-glyph {
+    font-size: 0.92em;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .hud-mode-carousel .btn-mode-wing .mode-glyph,
+  #btn-mode-toggle .mode-glyph {
+    font-size: 0.96em;
+  }
+
+  #btn-mode-toggle {
+    gap: 0.22rem;
+  }
+}
+
+/* 3c. Persistent Bottom Navigation Play Tab */
+#tab-btn-play .tab-play-icon-pair {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2em;
+  line-height: 1;
+  letter-spacing: 0;
+  flex: none;
+}
+
+#tab-btn-play .tab-play-mode-glyph {
+  font-size: 1.08em;
+}
+
+#tab-btn-play .tab-play-icon-pair svg {
+  flex: none;
+}
+
+/* 3d. Map Current Node Play Cue */
+.node-play-cue {
+  gap: 0.26em;
+}
+
+.node-play-cue .btn-action-glyph[data-glyph="forward"] {
+  font-size: 1.14em;
+}
+
+/* 3e. Title & Home Hero Play CTAs */
+#btn-title-play {
+  gap: 0.44em;
+}
+
+#btn-title-play .btn-icon-cluster {
+  gap: 0.26em;
+}
+
+#btn-title-play .btn-mode-emblem {
+  font-size: 1.12em;
+}
+
+#btn-title-play .btn-action-glyph[data-glyph="play"] {
+  font-size: 0.86em;
+}
+
+@container title-card (max-width: 340px) {
+  #btn-title-play {
+    font-size: clamp(0.76rem, 3.8cqi, 0.9rem);
+    letter-spacing: 0.045em;
+  }
+}
+
+@container title-card (max-width: 330px) {
+  #btn-title-play {
+    gap: 0.32em;
+  }
+
+  #btn-title-play .btn-icon-cluster {
+    gap: 0.18em;
+  }
+
+  #btn-title-play .btn-mode-emblem {
+    font-size: 1.04em;
+  }
+}
+
+#btn-play-current {
+  gap: 0.42em;
+}
+
+#btn-play-current .btn-icon-cluster {
+  gap: 0.25em;
+}
+
+#btn-play-current .btn-mode-emblem {
+  font-size: 1.1em;
+}
+
+@media (max-width: 360px) {
+  #btn-play-current {
+    gap: 0.3em;
+  }
+
+  #btn-play-current .btn-icon-cluster {
+    gap: 0.18em;
+  }
+}
+
+/* 3f. Pause, Victory & Failure Modal Action Buttons */
+#dialog-pause .btn-structured {
+  gap: 0.34em;
+}
+
+#dialog-pause #btn-pause-resume .btn-icon-cluster {
+  gap: 0.22em;
+}
+
+@container (max-width: 340px) {
+  #dialog-pause .btn-structured {
+    gap: 0.24em;
+  }
+
+  #dialog-pause #btn-pause-resume .btn-icon-cluster {
+    gap: 0.16em;
+  }
+
+  #dialog-pause .btn-mode-emblem {
+    font-size: 1em;
+  }
+}
+
+#dialog-victory .dialog-actions:not(.dialog-actions-vertical) {
+  gap: 0.5rem;
+}
+
+#btn-next-level {
+  gap: 0.36em;
+}
+
+#btn-next-level .btn-action-glyph[data-glyph="forward"] {
+  font-size: 1.18em;
+}
+
+@media (max-width: 380px) {
+  #dialog-victory .dialog-actions:not(.dialog-actions-vertical) .btn-structured {
+    gap: 0.26em;
+    padding-inline: 0.65rem;
+  }
+}
+
+#dialog-failure .btn-structured {
+  gap: 0.36em;
+}
+
+@media (max-width: 380px) {
+  #dialog-failure .btn-structured {
+    gap: 0.26em;
+  }
+}
+
+/* 3g. Themes Studio Controls */
+@media (max-width: 360px) {
+  #btn-themes-test-shred,
+  #btn-themes-reset-preview {
+    gap: 0.26em;
+  }
+}
+
+/* --- 4. Informational, Hint, Toast & Reward Faceted Jewel Crests (Non-Interactive Only) --- */
+.inline-mode-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.34em;
+  height: 1.34em;
+  padding: 0.15em;
+  margin-inline: 0.02em 0.06em;
+  border-radius: 5px;
+  vertical-align: -0.22em;
+  line-height: 1;
+  flex: none;
+  pointer-events: none;
+}
+
+.zen-victory-pill > .inline-mode-icon {
+  margin-inline: 0;
+}
+
+.inline-mode-icon[data-mode-glyph="CHALLENGE"] {
+  background: linear-gradient(145deg, #f7be45 0%, #c97312 58%, #7d3c05 100%);
+  border: 1px solid #ffe699;
+  color: #fff9e6;
+  box-shadow:
+    0 0 0 1px rgba(8, 5, 16, 0.9),
+    inset 0 1px 0 rgba(255, 250, 220, 0.55),
+    0 0 9px rgba(255, 190, 64, 0.62),
+    0 0 16px rgba(245, 158, 11, 0.32);
+}
+
+.inline-mode-icon[data-mode-glyph="ZEN"],
+.node-step-marker.marker-zen-jewel {
+  background: linear-gradient(145deg, #2ee5c5 0%, #109c84 58%, #075449 100%);
+  border: 1px solid #9effec;
+  color: #f0fffc;
+  box-shadow:
+    0 0 0 1px rgba(5, 12, 16, 0.92),
+    inset 0 1px 0 rgba(225, 255, 248, 0.55),
+    0 0 9px rgba(62, 242, 208, 0.64),
+    0 0 16px rgba(26, 188, 156, 0.34);
+}
+
+.inline-mode-icon[data-mode-glyph="TIMED"] {
+  background: linear-gradient(145deg, #54b6ff 0%, #1e6fe0 58%, #0d3982 100%);
+  border: 1px solid #a8dcff;
+  color: #f2f9ff;
+  box-shadow:
+    0 0 0 1px rgba(5, 8, 20, 0.92),
+    inset 0 1px 0 rgba(230, 246, 255, 0.55),
+    0 0 9px rgba(88, 184, 255, 0.68),
+    0 0 16px rgba(37, 130, 246, 0.36);
+}
+
+.inline-mode-icon[data-booster-glyph="UNDO"] {
+  background: linear-gradient(145deg, #b89cff 0%, #6d48c7 58%, #341b75 100%);
+  border: 1px solid #dfd2ff;
+  color: #f7f3ff;
+  box-shadow:
+    0 0 0 1px rgba(8, 5, 20, 0.92),
+    inset 0 1px 0 rgba(244, 238, 255, 0.55),
+    0 0 9px rgba(178, 145, 255, 0.62),
+    0 0 16px rgba(120, 78, 224, 0.34);
+}
+
+.inline-mode-icon[data-booster-glyph="HINT"] {
+  background: linear-gradient(145deg, #ffe264 0%, #e09612 58%, #7d4502 100%);
+  border: 1px solid #fff2ab;
+  color: #fffdf0;
+  box-shadow:
+    0 0 0 1px rgba(10, 6, 4, 0.92),
+    inset 0 1px 0 rgba(255, 252, 224, 0.65),
+    0 0 10px rgba(255, 214, 72, 0.72),
+    0 0 18px rgba(245, 166, 24, 0.38);
+}
+
+.inline-mode-icon[data-booster-glyph="HAMMER"] {
+  background: linear-gradient(145deg, #ff9654 0%, #d44d15 58%, #731d04 100%);
+  border: 1px solid #ffd0a6;
+  color: #fff6ef;
+  box-shadow:
+    0 0 0 1px rgba(14, 5, 4, 0.92),
+    inset 0 1px 0 rgba(255, 236, 220, 0.58),
+    0 0 9px rgba(255, 134, 64, 0.66),
+    0 0 16px rgba(224, 74, 24, 0.35);
+}
+
+.inline-mode-icon[data-booster-glyph="ROCKET"] {
+  background: linear-gradient(145deg, #ff70a8 0%, #cf226e 58%, #6d0937 100%);
+  border: 1px solid #ffc2dc;
+  color: #fff2f8;
+  box-shadow:
+    0 0 0 1px rgba(14, 4, 12, 0.92),
+    inset 0 1px 0 rgba(255, 228, 242, 0.58),
+    0 0 9px rgba(255, 98, 162, 0.68),
+    0 0 16px rgba(220, 38, 122, 0.36);
+}
+
+.inline-mode-icon[data-booster-glyph="VACUUM"] {
+  background: linear-gradient(145deg, #62c5ff 0%, #3b5be0 58%, #1a247a 100%);
+  border: 1px solid #bde6ff;
+  color: #f2faff;
+  box-shadow:
+    0 0 0 1px rgba(5, 7, 20, 0.92),
+    inset 0 1px 0 rgba(230, 248, 255, 0.58),
+    0 0 9px rgba(98, 186, 255, 0.68),
+    0 0 16px rgba(64, 102, 242, 0.38);
+}
+
+/* Compact passive status headers & telemetry counters use clean unboxed normal icons */
+:is(
+    .chest-card,
+    .keystone-meta,
+    .chapter-banner-stars,
+    .stage-group-summary,
+    .node-flag-badge,
+    .node-stars,
+    .roadmap-archive-btn
+  )
+  .inline-mode-icon {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: currentColor;
+  width: 1.08em;
+  height: 1.08em;
+  padding: 0;
+  margin-inline: 0.01em 0.04em;
+  vertical-align: -0.15em;
+}
+
+.chest-card .inline-mode-icon {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  vertical-align: 0;
+  color: #5eead4;
+}
+
+:is(.keystone-rule, .chapter-banner-stars, .stage-group-summary, .node-stars) .inline-mode-icon {
+  color: #6ee7d8;
+}
+
+.inline-mode-icon[data-mode-glyph="CHALLENGE"] .mode-svg-icon {
+  filter: drop-shadow(0 1px 1px rgba(48, 18, 2, 0.85));
+}
+
+.inline-mode-icon[data-mode-glyph="ZEN"] .mode-svg-icon,
+.node-step-marker.marker-zen-jewel .mode-svg-icon {
+  filter: drop-shadow(0 1px 1px rgba(3, 38, 32, 0.88));
+}
+
+.node-step-marker.marker-zen-jewel .mode-svg-icon {
+  width: 68%;
+  height: 68%;
+}
+
+.inline-mode-icon[data-mode-glyph="TIMED"] .mode-svg-icon,
+.inline-mode-icon[data-booster-glyph="VACUUM"] .mode-svg-icon {
+  filter: drop-shadow(0 1px 1px rgba(4, 22, 58, 0.88));
+}
+
+.inline-mode-icon[data-booster-glyph="UNDO"] .mode-svg-icon {
+  filter: drop-shadow(0 1px 1px rgba(24, 10, 56, 0.88));
+}
+
+.inline-mode-icon[data-booster-glyph="HINT"] .mode-svg-icon {
+  filter: drop-shadow(0 1px 1px rgba(54, 26, 2, 0.88));
+}
+
+.inline-mode-icon[data-booster-glyph="HAMMER"] .mode-svg-icon {
+  filter: drop-shadow(0 1px 1px rgba(52, 12, 2, 0.88));
+}
+
+.inline-mode-icon[data-booster-glyph="ROCKET"] .mode-svg-icon {
+  filter: drop-shadow(0 1px 1px rgba(54, 4, 28, 0.88));
+}
+
+:is(
+    .chest-card,
+    .keystone-meta,
+    .chapter-banner-stars,
+    .stage-group-summary,
+    .node-flag-badge,
+    .node-stars,
+    .roadmap-archive-btn
+  )
+  .inline-mode-icon
+  .mode-svg-icon {
+  filter: none;
+}
+
+/* High Contrast A11y: crisp obsidian crest with bright mode rim & zero blur halo */
+body.high-contrast .inline-mode-icon,
+body.high-contrast .node-step-marker.marker-zen-jewel {
+  background: #09090d;
+  color: #ffffff;
+  border-width: 1.5px;
+  box-shadow: none;
+}
+
+body.high-contrast .inline-mode-icon[data-mode-glyph="CHALLENGE"] {
+  border-color: #ffd84d;
+}
+
+body.high-contrast .inline-mode-icon[data-mode-glyph="ZEN"],
+body.high-contrast .node-step-marker.marker-zen-jewel {
+  border-color: #52ffe0;
+}
+
+body.high-contrast .inline-mode-icon[data-mode-glyph="TIMED"] {
+  border-color: #78c8ff;
+}
+
+body.high-contrast .inline-mode-icon[data-booster-glyph="UNDO"] {
+  border-color: #d8c7ff;
+}
+
+body.high-contrast .inline-mode-icon[data-booster-glyph="HINT"] {
+  border-color: #ffe26a;
+}
+
+body.high-contrast .inline-mode-icon[data-booster-glyph="HAMMER"] {
+  border-color: #ff9c5a;
+}
+
+body.high-contrast .inline-mode-icon[data-booster-glyph="ROCKET"] {
+  border-color: #ff7ec2;
+}
+
+body.high-contrast .inline-mode-icon[data-booster-glyph="VACUUM"] {
+  border-color: #7cc4ff;
+}
+
+body.high-contrast
+  :is(
+    .chest-card,
+    .keystone-meta,
+    .chapter-banner-stars,
+    .stage-group-summary,
+    .node-flag-badge,
+    .node-stars,
+    .roadmap-archive-btn
+  )
+  .inline-mode-icon {
+  background: none;
+  border: none;
+  color: currentColor;
+}
+
+body.high-contrast .inline-mode-icon .mode-svg-icon,
+body.high-contrast .node-step-marker.marker-zen-jewel .mode-svg-icon {
+  filter: none;
+}
+
+/* Celebration & Toast Pop */
+@keyframes mode-jewel-pop {
+  0% {
+    transform: scale(0.76);
+    filter: brightness(1.35);
+  }
+  58% {
+    transform: scale(1.1);
+    filter: brightness(1.18);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+#game-toast .inline-mode-icon,
+#unlock-toast .inline-mode-icon,
+#booster-target-banner .inline-mode-icon,
+#victory-under-par-banner .inline-mode-icon,
+#victory-stars .inline-mode-icon,
+#victory-chest-fanfare .inline-mode-icon {
+  width: 1.48em;
+  height: 1.48em;
+  border-radius: 6px;
+  margin-inline: 0.02em 0.08em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body:not(.reduced-motion):not(.high-contrast)
+    :is(
+      #game-toast,
+      #unlock-toast,
+      #booster-target-banner,
+      #victory-under-par-banner,
+      #victory-stars,
+      #victory-chest-fanfare
+    )
+    .inline-mode-icon {
+    animation: mode-jewel-pop 0.46s cubic-bezier(0.22, 1, 0.36, 1) 1;
+  }
+}
