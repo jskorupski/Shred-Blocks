@@ -1,13 +1,5 @@
 import type { BoosterType } from '../core/types';
 
-// Cozy pentatonic / major-9th chord progressions in C major / F lydian / A minor7 / G13
-const CHILL_CHORDS: ReadonlyArray<ReadonlyArray<number>> = [
-  [261.63, 329.63, 392.0, 493.88, 587.33], // Cmaj9 (C4, E4, G4, B4, D5)
-  [220.0, 261.63, 329.63, 392.0, 493.88], // Am9   (A3, C4, E4, G4, B4)
-  [174.61, 220.0, 261.63, 329.63, 392.0], // Fmaj9 (F3, A3, C4, E4, G4)
-  [196.0, 246.94, 293.66, 349.23, 440.0], // G13   (G3, B3, D4, F4, A4)
-];
-
 const sharedBurstNoiseCache = new WeakMap<AudioContext, AudioBuffer>();
 
 export function getSharedNoiseBuffer(ctx: AudioContext, minDurationSec: number): AudioBuffer {
@@ -516,66 +508,4 @@ export function playRelicAwakenVoice(ctx: AudioContext, sfxGain: GainNode): void
     auraOsc.start(now + 0.025);
     auraOsc.stop(now + 1.5);
   }
-}
-
-export function scheduleAmbientStepVoice(
-  ctx: AudioContext,
-  musicGain: GainNode,
-  time: number,
-  stepDuration: number,
-  musicStep: number,
-  chordIndex: number
-): { nextStep: number; nextChordIndex: number } {
-  const chord = CHILL_CHORDS[chordIndex % CHILL_CHORDS.length];
-  // On step 0 of every 8-step bar, swell a warm low-pass synth pad root + fifth
-  if (musicStep % 8 === 0) {
-    const rootFreq = chord[0] * 0.5;
-    const fifthFreq = chord[2] * 0.5;
-    for (const padFreq of [rootFreq, fifthFreq]) {
-      const padOsc = ctx.createOscillator();
-      const padFilter = ctx.createBiquadFilter();
-      const padGain = ctx.createGain();
-
-      padOsc.type = 'triangle';
-      padOsc.frequency.setValueAtTime(padFreq, time);
-
-      padFilter.type = 'lowpass';
-      padFilter.frequency.setValueAtTime(420, time);
-
-      const barDur = stepDuration * 8;
-      padGain.gain.setValueAtTime(0.001, time);
-      padGain.gain.linearRampToValueAtTime(0.14, time + barDur * 0.35);
-      padGain.gain.exponentialRampToValueAtTime(0.001, time + barDur * 0.98);
-
-      padOsc.connect(padFilter);
-      padFilter.connect(padGain);
-      padGain.connect(musicGain);
-      padOsc.start(time);
-      padOsc.stop(time + barDur);
-    }
-  }
-
-  // Play a soft Rhodes / marimba arpeggio note on selected steps (sparse, non-fatiguing)
-  const patternIndex = [0, 2, 1, 3, 4, 2, -1, 3][musicStep % 8];
-  if (patternIndex >= 0) {
-    const noteFreq = chord[patternIndex % chord.length];
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(noteFreq, time);
-
-    gain.gain.setValueAtTime(0.001, time);
-    gain.gain.linearRampToValueAtTime(0.18, time + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + stepDuration * 1.45);
-
-    osc.connect(gain);
-    gain.connect(musicGain);
-    osc.start(time);
-    osc.stop(time + stepDuration * 1.5);
-  }
-
-  const nextStep = musicStep + 1;
-  const nextChordIndex = nextStep % 8 === 0 ? (chordIndex + 1) % CHILL_CHORDS.length : chordIndex;
-  return { nextStep, nextChordIndex };
 }

@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  AMBIENT_PRESETS,
+  AMBIENT_ROTATION_BARS,
+  AmbientMusicController,
+  prewarmAmbientMusicBuffer,
+  SCENE_ROTATION_POOLS,
+} from '../../src/audio/ambient-music';
 import { playStyledShredSoundscape } from '../../src/audio/shred-style-voices';
 import { SoundEngine } from '../../src/audio/synth';
 import { applyBoosterHammer, commitBlockMove, createBoardState } from '../../src/core/board';
@@ -538,5 +545,220 @@ describe('SHRED-AUDIO-01 & SESSION-RESUME-01: 5 Signature Shred Soundscapes & Mi
         }
       }
     }
+  });
+
+  describe('AMBIENT-MUSIC-01: Mode-Attuned Lo-Fi Chill Grooves & Pure-Pentatonic Rotation', () => {
+    const createAmbientMockCtx = () => {
+      const filters: Array<{ type: BiquadFilterType; freq: number; q: number }> = [];
+      const oscStarts: Array<{ type: OscillatorType; freq: number; startAt: number; stopAt: number }> = [];
+      const bufStarts: Array<{ len: number; when: number }> = [];
+      let shaperCount = 0;
+      let delayCount = 0;
+      let compCount = 0;
+      let disconnectCount = 0;
+
+      const makeParam = (onSet?: (v: number) => void) => ({
+        value: 0,
+        setValueAtTime: (v: number) => onSet?.(v),
+        linearRampToValueAtTime: () => {},
+        exponentialRampToValueAtTime: () => {},
+        setTargetAtTime: (v: number) => onSet?.(v),
+        cancelScheduledValues: () => {},
+      });
+      const disconnect = () => {
+        disconnectCount += 1;
+      };
+      const baseNode = { connect: () => {}, disconnect };
+      const musicGain = { ...baseNode, gain: makeParam() } as unknown as GainNode;
+
+      const ctx = {
+        currentTime: 2.0,
+        sampleRate: 44100,
+        state: 'running' as AudioContextState,
+        destination: {},
+        createGain: () => ({ ...baseNode, gain: makeParam() }),
+        createBiquadFilter: () => {
+          const rec = { type: 'lowpass' as BiquadFilterType, freq: 0, q: 0 };
+          filters.push(rec);
+          return {
+            ...baseNode,
+            get type() {
+              return rec.type;
+            },
+            set type(t: BiquadFilterType) {
+              rec.type = t;
+            },
+            frequency: makeParam((v) => {
+              rec.freq = v;
+            }),
+            Q: makeParam((v) => {
+              rec.q = v;
+            }),
+          };
+        },
+        createWaveShaper: () => {
+          shaperCount += 1;
+          return { ...baseNode, curve: null, oversample: 'none' };
+        },
+        createDelay: () => {
+          delayCount += 1;
+          return { ...baseNode, delayTime: makeParam() };
+        },
+        createDynamicsCompressor: () => {
+          compCount += 1;
+          return { ...baseNode, threshold: makeParam(), ratio: makeParam() };
+        },
+        createBuffer: (_ch: number, len: number, sampleRate: number) => {
+          const buf = new Float32Array(len);
+          return { length: len, sampleRate, getChannelData: () => buf };
+        },
+        createBufferSource: () => {
+          let bufLen = 0;
+          return {
+            set buffer(b: { length: number } | null) {
+              bufLen = b?.length ?? 0;
+            },
+            connect: () => {},
+            start: (when = 0) => bufStarts.push({ len: bufLen, when }),
+            stop: () => {},
+          };
+        },
+        createOscillator: () => {
+          const rec = { type: 'sine' as OscillatorType, freq: 0, startAt: 0, stopAt: 0 };
+          return {
+            get type() {
+              return rec.type;
+            },
+            set type(t: OscillatorType) {
+              rec.type = t;
+            },
+            frequency: makeParam((v) => {
+              rec.freq = v;
+            }),
+            detune: makeParam(),
+            connect: () => {},
+            start: (t = 0) => {
+              rec.startAt = t;
+              oscStarts.push(rec);
+            },
+            stop: (t = 0) => {
+              rec.stopAt = t;
+            },
+          };
+        },
+      } as unknown as AudioContext;
+
+      return {
+        ctx,
+        musicGain,
+        filters,
+        oscStarts,
+        bufStarts,
+        getStats: () => ({ shaperCount, delayCount, compCount, disconnectCount }),
+      };
+    };
+
+    it('keeps every preset pure-pentatonic (0 semitones, 0 tritones, >= 2.9 semitone spacing) with aligned drum patterns', () => {
+      const hzToMidi = (f: number) => 69 + 12 * Math.log2(f / 440);
+      const validTokens = new Set(['K', 'k', 'S', 'R', 'r', 'H', 'h', 'O', '.']);
+
+      expect(AMBIENT_PRESETS).toHaveLength(5);
+      for (const preset of AMBIENT_PRESETS) {
+        expect(preset.drumPattern.length).toBe(preset.pattern.length);
+        for (const tok of preset.drumPattern) {
+          expect(validTokens.has(tok)).toBe(true);
+        }
+
+        const pcs = new Set<number>();
+        for (const chord of preset.chords) {
+          const stack = [chord.root, ...chord.pad].map(hzToMidi);
+          for (let i = 1; i < stack.length; i++) {
+            expect(stack[i] - stack[i - 1]).toBeGreaterThanOrEqual(2.9);
+          }
+          for (const midi of [...stack, ...chord.motif.map(hzToMidi)]) {
+            pcs.add(((Math.round(midi) % 12) + 12) % 12);
+          }
+        }
+        const sorted = [...pcs].sort((a, b) => a - b);
+        expect(sorted).toHaveLength(5);
+        for (let i = 0; i < sorted.length; i++) {
+          for (let j = i + 1; j < sorted.length; j++) {
+            const diff = (sorted[j] - sorted[i]) % 12;
+            expect(diff).not.toBe(1);
+            expect(diff).not.toBe(11);
+            expect(diff).not.toBe(6);
+          }
+        }
+      }
+    });
+
+    it('routes mode openers without restarting on identical scenes and rotates smoothly after 32 bars', () => {
+      const { ctx, musicGain } = createAmbientMockCtx();
+      const ctrl = new AmbientMusicController();
+
+      expect(ctrl.getScene()).toBe('MENU');
+      expect(ctrl.getActivePresetId()).toBe(SCENE_ROTATION_POOLS.MENU[0]);
+
+      ctrl.setScene('CHALLENGE', ctx, musicGain, false);
+      expect(ctrl.getActivePresetId()).toBe('carved_stone');
+      ctrl.advanceStep(ctx, musicGain, 2.02);
+      // Re-asserting the same scene (e.g. Next Level / Restart in Challenge) must not reset bars or step
+      ctrl.setScene('CHALLENGE', ctx, musicGain, true);
+      ctrl.setScene('CHALLENGE', ctx, musicGain, true);
+      expect(ctrl.getActivePresetId()).toBe('carved_stone');
+
+      let t = 2.2;
+      const barLen = AMBIENT_PRESETS.find((p) => p.id === 'carved_stone')?.pattern.length ?? 0;
+      expect(barLen).toBe(16);
+      for (let s = 1; s < AMBIENT_ROTATION_BARS * barLen; s++) {
+        t += ctrl.advanceStep(ctx, musicGain, t);
+      }
+      expect(ctrl.getBarsInCurrentTrack()).toBe(AMBIENT_ROTATION_BARS);
+      expect(ctrl.getActivePresetId()).toBe('carved_stone');
+
+      // Downbeat of bar 33 rotates smoothly to the next palette in the CHALLENGE pool
+      ctrl.advanceStep(ctx, musicGain, t);
+      expect(ctrl.getActivePresetId()).toBe(SCENE_ROTATION_POOLS.CHALLENGE[1]);
+
+      ctrl.setScene('ZEN', ctx, musicGain, false);
+      expect(ctrl.getActivePresetId()).toBe('rainstone');
+      ctrl.setScene('TIMED', ctx, musicGain, false);
+      expect(ctrl.getActivePresetId()).toBe('starlight');
+      ctrl.destroy();
+    });
+
+    it('synthesizes the warm-tape drum bus, 720 Hz chamber wash, deterministic pink noise, and tears down cleanly', () => {
+      const { ctx, musicGain, filters, oscStarts, bufStarts, getStats } = createAmbientMockCtx();
+      const bufA = prewarmAmbientMusicBuffer(ctx);
+      const bufB = prewarmAmbientMusicBuffer(ctx);
+      expect(bufA).toBe(bufB);
+
+      const ctrl = new AmbientMusicController();
+      ctrl.setScene('CHALLENGE', ctx, musicGain, false);
+
+      // Step through 1 full bar (16 steps) to trigger pad, pillow bass, kicks, snares, hats, and rimshot
+      let t = 2.05;
+      for (let i = 0; i < 16; i++) {
+        t += ctrl.advanceStep(ctx, musicGain, t);
+      }
+
+      const stats = getStats();
+      expect(stats.shaperCount).toBe(1);
+      expect(stats.delayCount).toBe(2);
+      expect(stats.compCount).toBe(1);
+      expect(filters.some((f) => f.type === 'lowpass' && f.freq === 2900)).toBe(true);
+      expect(filters.filter((f) => f.type === 'lowpass' && f.freq === 720).length).toBeGreaterThanOrEqual(2);
+      expect(oscStarts.length).toBeGreaterThanOrEqual(8);
+      expect(bufStarts.length).toBeGreaterThanOrEqual(6);
+
+      ctrl.destroy();
+      expect(getStats().disconnectCount).toBeGreaterThan(0);
+
+      const sound = new SoundEngine({ sfxEnabled: false, musicEnabled: false, hapticsEnabled: false });
+      sound.setMusicScene('TIMED');
+      expect(sound.getMusicScene()).toBe('TIMED');
+      expect(sound.getActiveMusicPreset()).toBe('starlight');
+      sound.destroy();
+    });
   });
 });

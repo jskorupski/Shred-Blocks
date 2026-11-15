@@ -1,4 +1,10 @@
 import type { BoosterType, ParticleStyleId } from '../core/types';
+import {
+  AmbientMusicController,
+  type AmbientPresetId,
+  type MusicScene,
+  prewarmAmbientMusicBuffer,
+} from './ambient-music';
 import { playStyledShredSoundscape } from './shred-style-voices';
 import {
   getOrCreateRelicAwakenNoiseBuffer,
@@ -9,8 +15,9 @@ import {
   playUnderParOracleVoice,
   playWinFanfareVoices,
   prewarmSharedNoiseBuffer,
-  scheduleAmbientStepVoice,
 } from './synth-voices';
+
+export type { AmbientPresetId, MusicScene };
 
 interface NavigatorWithAudioSession extends Navigator {
   audioSession?: {
@@ -31,13 +38,10 @@ export class SoundEngine {
   private lastSlideTickMs = 0;
   private lastWallClackMs = 0;
 
-  // Ambient music scheduler state
-  private musicTimerId: ReturnType<typeof setInterval> | null = null;
+  // Mode-attuned lo-fi chill ambient music controller
+  private readonly ambientMusic = new AmbientMusicController();
   private prewarmTimerId: ReturnType<typeof setTimeout> | null = null;
   private prewarmIdleId: number | null = null;
-  private nextNoteTime = 0;
-  private musicStep = 0;
-  private chordIndex = 0;
   private isDocumentHidden = false;
 
   private readonly boundUnlock: () => void;
@@ -76,6 +80,7 @@ export class SoundEngine {
         try {
           getOrCreateRelicAwakenNoiseBuffer(ctx);
           prewarmSharedNoiseBuffer(ctx);
+          prewarmAmbientMusicBuffer(ctx);
         } catch {
           // Ignore on restricted environments
         }
@@ -95,7 +100,7 @@ export class SoundEngine {
   }
 
   public destroy(): void {
-    this.stopMusicLoop();
+    this.ambientMusic.destroy();
     if (this.prewarmTimerId !== null) {
       clearTimeout(this.prewarmTimerId);
       this.prewarmTimerId = null;
@@ -128,13 +133,27 @@ export class SoundEngine {
     this.musicEnabled = enabled;
     this.syncAudioSessionType();
     if (this.musicGain && this.ctx) {
-      this.musicGain.gain.setTargetAtTime(enabled ? 0.22 : 0, this.ctx.currentTime, 0.08);
+      this.musicGain.gain.setTargetAtTime(enabled ? 0.25 : 0, this.ctx.currentTime, 0.08);
     }
     if (enabled && this.unlocked && !this.isDocumentHidden) {
       this.startMusicLoop();
     } else if (!enabled) {
       this.stopMusicLoop();
     }
+  }
+
+  public setMusicScene(scene: MusicScene): void {
+    const playing =
+      this.musicEnabled && this.unlocked && !this.isDocumentHidden && this.ambientMusic.isRunning();
+    this.ambientMusic.setScene(scene, this.ctx, this.musicGain, playing);
+  }
+
+  public getMusicScene(): MusicScene {
+    return this.ambientMusic.getScene();
+  }
+
+  public getActiveMusicPreset(): AmbientPresetId {
+    return this.ambientMusic.getActivePresetId();
   }
 
   public setHapticsEnabled(enabled: boolean): void {
@@ -146,8 +165,10 @@ export class SoundEngine {
     musicEnabled?: boolean;
     hapticsEnabled?: boolean;
     equippedParticle?: ParticleStyleId;
+    musicScene?: MusicScene;
   }): void {
     if (settings.sfxEnabled !== undefined) this.setSfxEnabled(settings.sfxEnabled);
+    if (settings.musicScene !== undefined) this.setMusicScene(settings.musicScene);
     if (settings.musicEnabled !== undefined) this.setMusicEnabled(settings.musicEnabled);
     if (settings.hapticsEnabled !== undefined) this.setHapticsEnabled(settings.hapticsEnabled);
     if (settings.equippedParticle !== undefined) this.equippedParticle = settings.equippedParticle;
@@ -185,7 +206,7 @@ export class SoundEngine {
       this.sfxGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.value = this.musicEnabled ? 0.22 : 0;
+      this.musicGain.gain.value = this.musicEnabled ? 0.25 : 0;
       this.musicGain.connect(this.ctx.destination);
     } catch {
       return null;
@@ -215,6 +236,7 @@ export class SoundEngine {
         source.start(0);
         getOrCreateRelicAwakenNoiseBuffer(ctx);
         prewarmSharedNoiseBuffer(ctx);
+        prewarmAmbientMusicBuffer(ctx);
       } catch {
         // Ignore
       }
@@ -670,52 +692,15 @@ export class SoundEngine {
   }
 
   /**
-   * Starts the Chill Ambient Background Music Synthesizer lookahead scheduler.
-   * Uses a soft Rhodes/marimba arpeggiator + warm low-pass pad loop.
+   * Starts the Mode-Attuned Lo-Fi Chill Ambient Music lookahead scheduler (`AMBIENT-MUSIC-01`).
    */
   private startMusicLoop(): void {
-    if (this.musicTimerId !== null) return;
     const ctx = this.ensureContext();
     if (!ctx || !this.musicGain) return;
-
-    this.nextNoteTime = ctx.currentTime + 0.08;
-    this.musicTimerId = setInterval(() => this.scheduleMusicLookahead(), 120);
+    this.ambientMusic.start(ctx, this.musicGain);
   }
 
   private stopMusicLoop(): void {
-    if (this.musicTimerId !== null) {
-      clearInterval(this.musicTimerId);
-      this.musicTimerId = null;
-    }
-  }
-
-  private scheduleMusicLookahead(): void {
-    if (!this.musicEnabled || this.isDocumentHidden || !this.ctx || !this.musicGain) return;
-    if (this.ctx.state !== 'running') return;
-    if (this.nextNoteTime < this.ctx.currentTime) {
-      this.nextNoteTime = this.ctx.currentTime + 0.05;
-    }
-
-    const stepDuration = 0.42; // ~142 BPM eighth-note chill pulse
-    while (this.nextNoteTime < this.ctx.currentTime + 0.35) {
-      this.scheduleAmbientStep(this.nextNoteTime, stepDuration);
-      this.nextNoteTime += stepDuration;
-    }
-  }
-
-  private scheduleAmbientStep(time: number, stepDuration: number): void {
-    const ctx = this.ctx;
-    const musicGain = this.musicGain;
-    if (!ctx || !musicGain) return;
-    const next = scheduleAmbientStepVoice(
-      ctx,
-      musicGain,
-      time,
-      stepDuration,
-      this.musicStep,
-      this.chordIndex
-    );
-    this.musicStep = next.nextStep;
-    this.chordIndex = next.nextChordIndex;
+    this.ambientMusic.stop();
   }
 }

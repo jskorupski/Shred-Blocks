@@ -152,6 +152,7 @@ export function syncTitleOverlayDomImpl(app: AppViewContext): void {
       gameEl.classList.remove('relic-awakening-burst');
     }
     app.renderer.resize();
+    app.sound.setMusicScene('MENU');
     return;
   }
 
@@ -173,13 +174,17 @@ export function syncTitleOverlayDomImpl(app: AppViewContext): void {
     gameEl.inert = false;
     gameEl.classList.remove('title-backdrop-mode');
   }
+  const activeMode = app.saveManager.getPayload().settings.playMode;
+  app.sound.setMusicScene(app.activeScreen === 'game' ? activeMode : 'MENU');
 }
 
 export function syncAllUiFromSaveImpl(app: AppViewContext): void {
   const save = app.saveManager.getPayload();
+  const musicScene = app.titleOverlayOpen || app.activeScreen !== 'game' ? 'MENU' : save.settings.playMode;
 
   app.sound.updateSettings({
     sfxEnabled: save.settings.sfxEnabled,
+    musicScene,
     musicEnabled: save.settings.musicEnabled,
     hapticsEnabled: save.settings.hapticsEnabled,
     equippedParticle: save.equippedParticle,
