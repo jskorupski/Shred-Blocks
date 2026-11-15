@@ -496,6 +496,26 @@ export async function auditViewportGeometry(
             outOfBoundsControls.push('truncated:pwa-update-label');
           }
         }
+        for (const barSel of [
+          '#screen-home:not([hidden]) > .top-economy-bar',
+          '#screen-themes:not([hidden]) > .top-economy-bar',
+        ]) {
+          const bar = document.querySelector<HTMLElement>(barSel);
+          if (!bar) continue;
+          const visibleCenters: number[] = [];
+          for (const ch of Array.from(bar.children)) {
+            if (ch.hasAttribute('hidden')) continue;
+            const cs = getComputedStyle(ch);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+            const r = ch.getBoundingClientRect();
+            if (r.height > 0 && r.width > 0) {
+              visibleCenters.push(r.top + r.height * 0.5);
+            }
+          }
+          if (visibleCenters.length > 1 && Math.max(...visibleCenters) - Math.min(...visibleCenters) > 6) {
+            outOfBoundsControls.push('wrapped:.top-economy-bar');
+          }
+        }
         const homeScreen = document.getElementById('screen-home');
         if (homeScreen && !homeScreen.hidden) {
           const roadmapList = document.getElementById('roadmap-list');

@@ -56,6 +56,7 @@ export interface ProbeCliOptions {
   port?: number;
   outDir: string;
   prefix: string;
+  stressChrome: boolean;
   strictAudit: boolean;
   help: boolean;
 }
@@ -80,6 +81,7 @@ export function formatProbeHelp(): string {
     '  --port <n>           Strict port for vite preview [default: 4180]',
     '  --out-dir <dir>      Output folder for PNGs + probe-audit.json [default: test-results/probe]',
     '  --prefix <name>      Filename prefix [default: probe]',
+    '  --stress-chrome      Show optional Install/Resume CTAs + 5-digit economy counts to stress single-line headers',
     '  --no-strict-audit    Record layout violations without failing process exit code',
     '  --help, -h           Print this usage summary',
   ].join('\n');
@@ -101,6 +103,7 @@ export function parseProbeCliArgs(argv: readonly string[]): ProbeCliOptions {
   let port: number | undefined;
   let outDir = resolve(process.cwd(), 'test-results', 'probe');
   let prefix = 'probe';
+  let stressChrome = false;
   let strictAudit = true;
   let help = false;
 
@@ -179,6 +182,9 @@ export function parseProbeCliArgs(argv: readonly string[]): ProbeCliOptions {
         prefix = takeValue(i, arg).replace(/[^A-Za-z0-9._-]/g, '-');
         i++;
         break;
+      case '--stress-chrome':
+        stressChrome = true;
+        break;
       case '--no-strict-audit':
         strictAudit = false;
         break;
@@ -218,6 +224,7 @@ export function parseProbeCliArgs(argv: readonly string[]): ProbeCliOptions {
     port,
     outDir,
     prefix,
+    stressChrome,
     strictAudit,
     help,
   };
@@ -263,6 +270,29 @@ async function navigateToScene(page: Page, scene: ProbeScene, opts: ProbeCliOpti
 
   await applyBaseFlags(page, opts);
 
+  if (opts.stressChrome) {
+    const stressLevel = Math.max(opts.levelId, 299);
+    await page.evaluate((lvl) => {
+      try {
+        localStorage.removeItem('shredblocks_pwa_installed_v1');
+      } catch {
+        // Ignore storage restrictions
+      }
+      window.__SHREDBLOCKS_DEBUG__.patchSave({
+        coins: 99999,
+        totalStars: 2700,
+        winStreak: 150,
+        highestLevelUnlocked: lvl,
+        currentLevelId: lvl,
+      });
+      const ev = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+        prompt: async () => {},
+        userChoice: Promise.resolve({ outcome: 'dismissed', platform: 'web' }),
+      });
+      window.dispatchEvent(ev);
+    }, stressLevel);
+  }
+
   switch (scene) {
     case 'title':
     case 'title-returning':
@@ -294,7 +324,21 @@ async function navigateToScene(page: Page, scene: ProbeScene, opts: ProbeCliOpti
       break;
     case 'themes':
     case 'themes-locked':
-      await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('themes'));
+      if (opts.stressChrome) {
+        const stressLevel = Math.max(opts.levelId, 299);
+        await page.evaluate((lvl) => {
+          window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('game');
+          window.__SHREDBLOCKS_DEBUG__.loadLevel(lvl);
+          window.__SHREDBLOCKS_DEBUG__.openModal('pause');
+        }, stressLevel);
+        const expanded = await page.locator('#btn-toggle-cosmetics-drawer').getAttribute('aria-expanded');
+        if (expanded !== 'true') {
+          await page.locator('#btn-toggle-cosmetics-drawer').click();
+        }
+        await page.locator('#btn-pause-open-themes').click();
+      } else {
+        await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.dismissTitleScreen('themes'));
+      }
       if (scene === 'themes-locked') {
         const lockedSwatch = page.locator('#themes-grid-particles .theme-card-top').nth(3);
         if ((await lockedSwatch.count()) > 0) {

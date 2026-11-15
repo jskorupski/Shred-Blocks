@@ -78,6 +78,7 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
       'test-results/custom-probe',
       '--prefix',
       'settings audit!',
+      '--stress-chrome',
       '--no-strict-audit',
     ]);
 
@@ -93,13 +94,16 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     expect(parsed.port).toBe(4185);
     expect(parsed.outDir).toBe(path.resolve(process.cwd(), 'test-results/custom-probe'));
     expect(parsed.prefix).toBe('settings-audit-');
+    expect(parsed.stressChrome).toBe(true);
     expect(parsed.strictAudit).toBe(false);
     expect(parsed.help).toBe(false);
+    expect(parseProbeCliArgs([]).stressChrome).toBe(false);
 
     const helpParsed = parseProbeCliArgs(['--help']);
     expect(helpParsed.help).toBe(true);
     const helpText = formatProbeHelp();
     expect(helpText).toContain('--pwa-update');
+    expect(helpText).toContain('--stress-chrome');
     for (const scene of PROBE_SCENES) {
       expect(helpText).toContain(scene);
     }
@@ -208,7 +212,11 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     const agentsMdText = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
     expect(viteConfigText).toContain('chunkSizeWarningLimit: SINGLE_BUNDLE_WARNING_LIMIT_KB');
     expect(agentsMdText).toContain('BUNDLE-BUDGET-01');
+    expect(agentsMdText).toContain('SINGLE-LINE-HEADER-01');
+    expect(agentsMdText).toContain('SIBLING-BUG-SWEEP-01');
     expect(playbook).toContain('BUNDLE-BUDGET-01');
+    expect(playbook).toContain('SINGLE-LINE-HEADER-01');
+    expect(playbook).toContain('--stress-chrome');
   });
 
   it('ANALYTICS-01: keeps forks tracker-free by default, stamps strict non-inline CSP when configured, and isolates offline/busy/blocker states', () => {

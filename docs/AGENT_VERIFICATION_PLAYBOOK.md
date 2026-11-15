@@ -13,7 +13,7 @@ Always run verification in this order so `dist/` is fresh before any preview ser
 | **1. Fast Preflight** | `npm run verify:fast` | `BypassSandbox: false` | None | Runs `biome check` + all Vitest unit suites + `tsc --noEmit && vite build` (stamps fresh `dist/`). |
 | **2. Targeted UI Probe** | `./node_modules/.bin/tsx scripts/ui-probe.ts ...` | `BypassSandbox: true` | `4180` (or `:8443` with `--lan`) | Fast scene & `VIEWPORT-MATRIX-01` screenshot + DOM overflow/clipping audit (`1–8` captures in `< 6s`). |
 | **3. Visual Goldens** | `./node_modules/.bin/playwright test -c playwright.visual.config.ts` | `BypassSandbox: true` | `4178` (strict) | Deterministic 18-snapshot pixel-diff regression check (`--update-snapshots` for intentional UI changes). |
-| **4. Full E2E Suite** | `./node_modules/.bin/playwright test` | `BypassSandbox: true` | `4178` (strict) | Full 58-playtest Desktop Chrome + Mobile Portrait suite. **Never run concurrently with Step 3** (shared port `4178`). |
+| **4. Full E2E Suite** | `./node_modules/.bin/playwright test` | `BypassSandbox: true` | `4178` (strict) | Full 62-playtest Desktop Chrome + Mobile Portrait suite. **Never run concurrently with Step 3** (shared port `4178`). |
 | **5. Full 45-Shot Harness** | `./node_modules/.bin/tsx scripts/visual-harness.ts` | `BypassSandbox: true` | `4179` (strict) | Comprehensive 45-capture gallery across epochs, themes, accessibility modes, and viewports. |
 | **6. Live LAN HTTPS Dev** | `./node_modules/.bin/vite --config vite.lan.config.ts` | `BypassSandbox: false` (`IsDaemon: true`) | `8443` (strict) | Live HMR HTTPS server (`0.0.0.0:8443`) with compile-time LAN DevTools enabled. |
 
@@ -44,11 +44,14 @@ Before writing any custom Playwright script, check if [`scripts/ui-probe.ts`](..
 
 # 3. Inspect a specific stage/mode with High Contrast + Colorblind against the running LAN HTTPS server (:8443)
 ./node_modules/.bin/tsx scripts/ui-probe.ts --scene game --level 91 --mode TIMED --high-contrast --colorblind --lan --out-dir <artifact-dir>
+
+# 4. Stress single-line headers (Install CTA + Resume CTA + 5-digit coins/stars) across the matrix (`SINGLE-LINE-HEADER-01`)
+./node_modules/.bin/tsx scripts/ui-probe.ts --scene home,themes --viewports matrix --stress-chrome --out-dir <artifact-dir>
 ```
 
-* **Built-in `--scene` targets**: `title`, `title-returning`, `home`, `game`, `pause`, `pause-owned`, `pause-expanded`, `themes`, `themes-locked`, `victory`, `failure`, `save-transfer`, `install` (append `--pwa-update` to show `#pwa-update-toast` on compatible scenes).
+* **Built-in `--scene` targets**: `title`, `title-returning`, `home`, `game`, `pause`, `pause-owned`, `pause-expanded`, `themes`, `themes-locked`, `victory`, `failure`, `save-transfer`, `install` (append `--pwa-update` to show `#pwa-update-toast`, or `--stress-chrome` to enable Install/Resume header CTAs and `99,999` economy counts).
 * **Built-in `--viewports` specs**: `quick` (`390x844`, `667x375`, `1280x800`), `matrix` (all 8 `VIEWPORT-MATRIX-01` tiers: `320x568`, `360x640`, `390x844`, `480x800`, `667x375`, `844x390`, `768x1024`, `1280x800`), individual preset keys (`ultra-compact`, `compact`, `mobile`, `mid-split`, `landscape-se`, `landscape`, `tablet`, `desktop`, `desktop-wide`), or custom `WxH` dimensions (`412x915,1024x768`).
-* **Automated Geometry Gate**: Every capture runs `auditViewportGeometry()` checking `docOverflowPx <= 0`, zero unwanted document/shell vertical scroll, `#pwa-update-toast` & `#title-overlay` bounds/label truncation, `.dialog-card` horizontal fit, top-to-bottom `.dialog-card` scroll reachability, non-truncated `.setting-row > span` labels, and zero protruding controls. Pass `--no-strict-audit` when intentionally capturing a broken layout before fixing it.
+* **Automated Geometry Gate**: Every capture runs `auditViewportGeometry()` checking `docOverflowPx <= 0`, zero unwanted document/shell vertical scroll, single-line `.top-economy-bar` (`wrapped:.top-economy-bar` for `SINGLE-LINE-HEADER-01`), `#pwa-update-toast` & `#title-overlay` bounds/label truncation, `.dialog-card` horizontal fit, top-to-bottom `.dialog-card` scroll reachability, non-truncated `.setting-row > span` labels, and zero protruding controls. Pass `--no-strict-audit` when intentionally capturing a broken layout before fixing it.
 * **Visual Inspection & Mandatory User-Facing Screenshot Links (`VISUAL-SUMMARY-01`)**: `auditViewportGeometry()` validates DOM bounds and overflow, not curved-border or high-contrast visual overlap — always inspect `320×568` and `--high-contrast` PNGs via `read_file`. Whenever a task alters UI, CSS, layout, themes, 3D rendering, shaders, or icons, always include clickable `[basename.png](file:///...)` links to updated probe captures or visual goldens in the final user response (plus a carousel `.md` artifact in `<artifact-dir>` when showcasing multiple viewports/modes).
 
 ---
@@ -137,3 +140,9 @@ Run with (`BypassSandbox: true`):
     - `rg` (`ripgrep`) is not installed in the sandbox `PATH`; always use `grep -rn` or file-reading tools to avoid wasted failed commands.
 11. **Antigravity `24,000`-Byte Rule File Cap (`RULE-BUDGET-01`)**:
     - Antigravity silently truncates `AGENTS.md` / `GEMINI.md` above `24,000` bytes. [`tests/unit/sanctums-and-architecture.test.ts`](../tests/unit/sanctums-and-architecture.test.ts) enforces `<= 23,500` bytes on `AGENTS.md` / `GEMINI.md` — keep deep domain specs in `docs/*.md` rather than growing `AGENTS.md`.
+12. **Fast `./node_modules/.bin/tsc --noEmit` Preflight & Exact Signature Checks**:
+    - Run `./node_modules/.bin/tsc --noEmit` (`~2s`, `BypassSandbox: false`) after editing TypeScript/test files before running the `35s` `npm run verify:fast` full solver suite, and inspect exact function signatures (`applyBoosterRocket(board, row, col, axis)`, `boardToScreen(colX, rowY)`) and live UI toast copy before writing test assertions.
+13. **`tsx -e` CJS / Vitest Limits & System Chrome Channel (`launchAgentBrowser`)**:
+    - `tsx -e "..."` evaluates as CJS (top-level `await` fails, and importing `tests/unit/*.test.ts` throws `Vitest cannot be imported in a CommonJS module`); wrap async `src/*` helpers in `(async () => { ... })()` or use an `.mts` scratch script. Never call bare `chromium.launch()` without `launchAgentBrowser()` / `channel: 'chrome'` (standalone Playwright `chromium_headless_shell` binaries are not installed).
+14. **Upfront Root-Cause Headline Before Multi-Turn Async Suites**:
+    - When sequential verification commands (`verify:fast`, `playwright test`, `playwright.visual.config.ts`) span multiple async turns, share a 1–2 sentence root-cause/fix summary before or alongside the first status wait rather than keeping the user waiting through bare status lines until the final turn.
