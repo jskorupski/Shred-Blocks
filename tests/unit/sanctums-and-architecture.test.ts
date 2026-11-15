@@ -622,8 +622,10 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
       const text = buf.toString('utf8');
       const lineCount = text.split('\n').length;
       const byteCount = buf.byteLength;
-      if (lineCount > 800 || byteCount > 45_000) {
-        violations.push(`${rel} (${lineCount} lines, ${byteCount} bytes)`);
+      // RULE-BUDGET-01: Keep always-on root rule files below Antigravity's 24,000-byte silent truncation cap
+      const maxBytes = rel === 'AGENTS.md' || rel === 'GEMINI.md' ? 23_500 : 45_000;
+      if (lineCount > 800 || byteCount > maxBytes) {
+        violations.push(`${rel} (${lineCount} lines, ${byteCount} bytes, max ${maxBytes})`);
       }
       for (const { label, regex } of forbiddenPatterns) {
         const match = text.match(regex);
