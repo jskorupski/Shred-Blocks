@@ -303,6 +303,21 @@ export const PARTICLE_GLYPHS: Readonly<Record<ParticleStyleId, string>> = {
 
 export const PWA_INSTALLED_STORAGE_KEY = 'shredblocks_pwa_installed_v1';
 
+/**
+ * Returns `true` when actively running in a chromeless standalone/fullscreen PWA window,
+ * iOS Home Screen WebClip (`navigator.standalone`), or Android TWA (`android-app://` referrer).
+ */
+export function isStandaloneDisplayMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const standaloneMedia =
+    window.matchMedia?.(
+      '(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)'
+    ).matches ?? false;
+  const iosStandalone = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+  const twaReferrer = typeof document !== 'undefined' && document.referrer.startsWith('android-app://');
+  return standaloneMedia || iosStandalone || twaReferrer;
+}
+
 export interface AppViewContext {
   readonly saveManager: SaveManager;
   readonly sound: SoundEngine;

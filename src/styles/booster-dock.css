@@ -260,6 +260,45 @@
   }
 }
 
+@media (max-width: 380px) {
+  .booster-badge {
+    font-size: 0.54rem;
+    padding: 0.05rem 0.26rem;
+  }
+}
+
+/* BEZEL-CORNER-01: Conform outer bottom corners + concentric inner badges when #screen-game reaches handheld edges */
+@media (pointer: coarse) and (max-width: 720px) {
+  .booster-dock > .booster-btn:is(:first-child, :last-child) {
+    overflow: clip;
+  }
+  .booster-dock > .booster-btn:first-child {
+    border-end-start-radius: var(--radius-bezel);
+    & .booster-badge {
+      border-end-start-radius: calc(var(--radius-bezel) - 6px);
+      padding-inline-start: 0.38rem;
+    }
+  }
+  .booster-dock > .booster-btn:last-child {
+    border-end-end-radius: var(--radius-bezel);
+    & .booster-badge {
+      border-end-end-radius: calc(var(--radius-bezel) - 6px);
+      padding-inline-end: 0.38rem;
+    }
+  }
+  @supports (overflow-clip-margin: content-box) {
+    .booster-dock > .booster-btn:is(:first-child, :last-child) {
+      overflow-clip-margin: content-box;
+    }
+  }
+  @supports (corner-shape: squircle) {
+    .booster-dock > .booster-btn:is(:first-child, :last-child),
+    .booster-dock > .booster-btn:is(:first-child, :last-child) .booster-badge {
+      corner-shape: squircle;
+    }
+  }
+}
+
 /* Floating Stage Banners, Booster Targeting & Helper Toasts
    Uses `inset-inline: 0; margin-inline: auto; width: fit-content;` instead of `left: 50%` so CSS
    shrink-to-fit never constrains banners to 50% of the stage/viewport width on mobile or tablet. */

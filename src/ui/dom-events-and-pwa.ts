@@ -4,6 +4,7 @@ import {
   type AppViewContext,
   type BeforeInstallPromptEvent,
   installNativeAppZoomLock,
+  isStandaloneDisplayMode,
   MAX_ENDLESS_LEVEL,
   PWA_INSTALLED_STORAGE_KEY,
 } from './catalog-meta';
@@ -483,14 +484,7 @@ async function promptNativeInstall(app: AppViewContext): Promise<'handled' | 'fa
 
 export function isPwaInstalledImpl(app: AppViewContext): boolean {
   if (typeof window === 'undefined') return false;
-  const standaloneMedia =
-    window.matchMedia?.(
-      '(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)'
-    ).matches ?? false;
-  const iosStandalone = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-  const twaReferrer = typeof document !== 'undefined' && document.referrer.startsWith('android-app://');
-
-  if (standaloneMedia || iosStandalone || twaReferrer) {
+  if (isStandaloneDisplayMode()) {
     app.pwaInstalledDetected = true;
     setInstalledStorageFlag(true);
     return true;
@@ -565,6 +559,8 @@ export function syncViewportGeometryImpl(app: AppViewContext): void {
     docEl.style.setProperty('--app-height', `${effectiveHeight}px`);
   }
   docEl.style.setProperty('--vv-offset-top', `${vvOffsetTop}px`);
+  const appShell = document.getElementById('app-shell');
+  if (appShell) appShell.dataset.standalone = isStandaloneDisplayMode() ? 'true' : 'false';
 
   if (app.activeScreen === 'game' || app.titleOverlayOpen) {
     app.renderer.resize();

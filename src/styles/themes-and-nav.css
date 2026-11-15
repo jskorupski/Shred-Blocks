@@ -415,6 +415,35 @@
   white-space: nowrap;
 }
 
+/* BEZEL-CORNER-01: Conform outer bottom corners to rounded mobile/tablet bezels (0px real-estate loss) */
+@media (pointer: coarse) and (max-width: 1120px) {
+  .bottom-tab-bar > .tab-item:first-child {
+    border-end-start-radius: var(--radius-bezel);
+  }
+  .bottom-tab-bar > .tab-item:last-child {
+    border-end-end-radius: var(--radius-bezel);
+  }
+  @supports (corner-shape: squircle) {
+    .bottom-tab-bar > .tab-item:is(:first-child, :last-child) {
+      corner-shape: squircle;
+    }
+  }
+}
+
+@media (max-width: 1120px) {
+  #app-shell[data-standalone="true"] .bottom-tab-bar > .tab-item:first-child {
+    border-end-start-radius: var(--radius-bezel);
+  }
+  #app-shell[data-standalone="true"] .bottom-tab-bar > .tab-item:last-child {
+    border-end-end-radius: var(--radius-bezel);
+  }
+  @supports (corner-shape: squircle) {
+    #app-shell[data-standalone="true"] .bottom-tab-bar > .tab-item:is(:first-child, :last-child) {
+      corner-shape: squircle;
+    }
+  }
+}
+
 /* ==========================================================================
    MODE-RESPONSIVE PLANE 2 PLAY / CONTINUE / RESUME BEACONS (`PLAY-CTA-MODE-01`)
    WCAG AAA (>= 8.4:1) dark carved ink on Burnished Gold / Jade / Sky-Sapphire.

@@ -742,3 +742,38 @@ body.high-contrast #screen-game.title-backdrop-mode .board-stage::after {
     display: none;
   }
 }
+
+/* BEZEL-CORNER-01: Standalone PWA / iOS WebClip outer bottom corner + concentric badge curves */
+@media (max-width: 720px) {
+  #app-shell[data-standalone="true"] .booster-dock > .booster-btn:is(:first-child, :last-child) {
+    overflow: clip;
+  }
+  #app-shell[data-standalone="true"] .booster-dock > .booster-btn:first-child {
+    border-end-start-radius: var(--radius-bezel);
+    & .booster-badge {
+      border-end-start-radius: calc(var(--radius-bezel) - 6px);
+      padding-inline-start: 0.38rem;
+    }
+  }
+  #app-shell[data-standalone="true"] .booster-dock > .booster-btn:last-child {
+    border-end-end-radius: var(--radius-bezel);
+    & .booster-badge {
+      border-end-end-radius: calc(var(--radius-bezel) - 6px);
+      padding-inline-end: 0.38rem;
+    }
+  }
+  @supports (overflow-clip-margin: content-box) {
+    #app-shell[data-standalone="true"] .booster-dock > .booster-btn:is(:first-child, :last-child) {
+      overflow-clip-margin: content-box;
+    }
+  }
+  @supports (corner-shape: squircle) {
+    #app-shell[data-standalone="true"] .booster-dock > .booster-btn:is(:first-child, :last-child),
+    #app-shell[data-standalone="true"]
+      .booster-dock
+      > .booster-btn:is(:first-child, :last-child)
+      .booster-badge {
+      corner-shape: squircle;
+    }
+  }
+}

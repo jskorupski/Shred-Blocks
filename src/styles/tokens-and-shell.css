@@ -71,6 +71,7 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-pill: 4px;
+  --radius-bezel: clamp(16px, 5dvw, 20px);
 
   --font-sans:
     "Plus Jakarta Sans", "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -83,6 +84,12 @@
   font-size-adjust: from-font;
   color-scheme: dark;
   accent-color: var(--accent-primary);
+}
+
+@media (max-height: 500px) {
+  :root {
+    --radius-bezel: 15px;
+  }
 }
 
 @media (prefers-contrast: more) {
