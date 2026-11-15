@@ -436,8 +436,12 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
     const tokensCss = fs.readFileSync(path.join(repoRoot, 'src/styles/tokens-and-shell.css'), 'utf8');
     expect(indexHtml).toContain('maximum-scale=1.0');
     expect(indexHtml).toContain('user-scalable=no');
+    expect(indexHtml).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="default" />');
     expect(tokensCss).toContain('--app-height');
     expect(tokensCss).toContain('height: var(--app-height, 100%)');
+    expect(tokensCss).toContain('--edge-inset-inline');
+    expect(tokensCss).not.toContain('--radius-bezel');
+    expect(tokensCss).not.toContain('max(env(safe-area-inset-bottom, 0px), 10px)');
     expect(tokensCss).toContain('touch-action: pan-x pan-y');
     expect(tokensCss).toContain('-webkit-text-size-adjust: 100%');
     expect(tokensCss).toContain('--font-logo');

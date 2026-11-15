@@ -539,7 +539,9 @@ export function syncViewportGeometryImpl(app: AppViewContext): void {
   const vvH = vv && vv.height > 0 && unzoomedVv ? vv.height : innerH;
   const vvOffsetTop = vv && vv.offsetTop > 0 && unzoomedVv ? Math.round(vv.offsetTop) : 0;
 
-  let effectiveHeight = Math.round(Math.min(clientH, innerH, vvH));
+  const rawMinH = Math.min(clientH, innerH, vvH);
+  let effectiveHeight =
+    clientH > 0 && Math.abs(rawMinH - clientH) <= 1 ? Math.round(clientH) : Math.round(rawMinH);
   const isMobileOrStandalone =
     app.isPwaInstalled() || (window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false);
   const screenH = window.screen?.height ?? 0;

@@ -304,7 +304,7 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.3rem;
-  padding: 0.36rem 0.65rem calc(0.42rem + var(--safe-bottom));
+  padding: 0.44rem var(--edge-inset-inline) calc(0.46rem + var(--safe-bottom));
   background: rgba(16, 12, 30, 0.92);
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
@@ -415,35 +415,6 @@
   white-space: nowrap;
 }
 
-/* BEZEL-CORNER-01: Conform outer bottom corners to rounded mobile/tablet bezels (0px real-estate loss) */
-@media (pointer: coarse) and (max-width: 1120px) {
-  .bottom-tab-bar > .tab-item:first-child {
-    border-end-start-radius: var(--radius-bezel);
-  }
-  .bottom-tab-bar > .tab-item:last-child {
-    border-end-end-radius: var(--radius-bezel);
-  }
-  @supports (corner-shape: squircle) {
-    .bottom-tab-bar > .tab-item:is(:first-child, :last-child) {
-      corner-shape: squircle;
-    }
-  }
-}
-
-@media (max-width: 1120px) {
-  #app-shell[data-standalone="true"] .bottom-tab-bar > .tab-item:first-child {
-    border-end-start-radius: var(--radius-bezel);
-  }
-  #app-shell[data-standalone="true"] .bottom-tab-bar > .tab-item:last-child {
-    border-end-end-radius: var(--radius-bezel);
-  }
-  @supports (corner-shape: squircle) {
-    #app-shell[data-standalone="true"] .bottom-tab-bar > .tab-item:is(:first-child, :last-child) {
-      corner-shape: squircle;
-    }
-  }
-}
-
 /* ==========================================================================
    MODE-RESPONSIVE PLANE 2 PLAY / CONTINUE / RESUME BEACONS (`PLAY-CTA-MODE-01`)
    WCAG AAA (>= 8.4:1) dark carved ink on Burnished Gold / Jade / Sky-Sapphire.
@@ -521,7 +492,7 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
 @media (max-width: 520px), (max-height: 740px) {
   .bottom-tab-bar {
     gap: 0.24rem;
-    padding: 0.32rem 0.5rem calc(0.38rem + var(--safe-bottom));
+    padding: 0.38rem var(--edge-inset-inline) calc(0.42rem + var(--safe-bottom));
   }
   .tab-item {
     min-height: 42px;
@@ -529,10 +500,14 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
   }
 }
 
-@media (max-width: 560px) {
-  .top-economy-bar {
-    padding: 0.42rem 0.58rem;
+@media (max-width: 380px) {
+  .tab-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.01em;
   }
+}
+
+@media (max-width: 560px) {
   .brand-subtitle {
     display: none;
   }
@@ -551,7 +526,7 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
 
 @media (max-height: 500px) {
   .home-global-strip {
-    padding: 0.12rem 0.48rem 0.06rem;
+    padding: 0.12rem var(--edge-inset-inline) 0.06rem;
   }
   .chest-card {
     padding: 0.14rem 0.36rem;
@@ -563,7 +538,7 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
     display: none;
   }
   .mode-sanctuary-shell {
-    padding: 0 0.48rem 0.18rem;
+    padding: 0 var(--edge-inset-inline) 0.18rem;
   }
   .map-mode-tab {
     min-height: 26px;
@@ -601,7 +576,7 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
   max-inline-size: 1120px;
   margin-inline: auto;
   padding-block: 0.34rem;
-  padding-inline: 0.72rem;
+  padding-inline: var(--edge-inset-inline);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -690,7 +665,7 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
 @media (max-width: 360px) {
   .pwa-update-toast {
     padding-block: 0.28rem;
-    padding-inline: 0.44rem;
+    padding-inline: var(--edge-inset-inline);
     gap: 0.28rem;
   }
   .pwa-update-meta {
@@ -716,7 +691,7 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
     padding: 0.1rem 0.42rem;
   }
   .top-economy-bar {
-    padding: 0.24rem 0.62rem;
+    padding: 0.24rem var(--edge-inset-inline);
     flex-wrap: nowrap;
   }
   .brand-icon {
@@ -727,7 +702,7 @@ body:not(.high-contrast)[data-play-mode="TIMED"] .tab-item.tab-play-cta {
     display: none;
   }
   .bottom-tab-bar {
-    padding: 0.18rem 0.5rem calc(0.2rem + var(--safe-bottom));
+    padding: 0.18rem var(--edge-inset-inline) calc(0.22rem + var(--safe-bottom));
   }
   .tab-item {
     flex-direction: row;

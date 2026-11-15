@@ -71,7 +71,8 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-pill: 4px;
-  --radius-bezel: clamp(16px, 5dvw, 20px);
+  /* CORNER-INSET-01: Uniform perimeter inset keeping native 4px/6px corner buttons clear of rounded iOS/Android bezels */
+  --edge-inset-inline: 0.625rem;
 
   --font-sans:
     "Plus Jakarta Sans", "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -84,12 +85,6 @@
   font-size-adjust: from-font;
   color-scheme: dark;
   accent-color: var(--accent-primary);
-}
-
-@media (max-height: 500px) {
-  :root {
-    --radius-bezel: 15px;
-  }
 }
 
 @media (prefers-contrast: more) {
@@ -111,10 +106,9 @@
   }
 }
 
-@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui),
-  (hover: none) and (pointer: coarse) {
+@media (max-width: 600px), (max-height: 520px) {
   :root {
-    --safe-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
+    --edge-inset-inline: 0.5rem;
   }
 }
 
@@ -320,7 +314,7 @@ body {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.45rem;
-  padding: 0.48rem 0.78rem;
+  padding: 0.46rem var(--edge-inset-inline);
   background: rgba(18, 14, 34, 0.82);
   border-bottom: 1px solid var(--border-subtle);
   backdrop-filter: blur(10px);
@@ -339,8 +333,8 @@ body {
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 0.2rem 0.38rem;
-  margin: -0.2rem -0.38rem;
+  padding: 0.16rem 0.24rem 0.16rem 0.08rem;
+  margin: -0.16rem 0;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -439,7 +433,7 @@ body {
   .top-economy-bar {
     flex-wrap: nowrap;
     gap: 0.32rem;
-    padding: 0.4rem 0.55rem;
+    padding: 0.42rem var(--edge-inset-inline);
   }
   .brand-cluster {
     gap: 0.32rem;
@@ -477,7 +471,7 @@ body {
   .top-economy-bar {
     flex-wrap: wrap;
     gap: 0.22rem;
-    padding: 0.32rem 0.38rem;
+    padding: 0.34rem var(--edge-inset-inline);
   }
   .brand-cluster {
     gap: 0.24rem;

@@ -3,7 +3,7 @@
    ========================================================================== */
 
 .home-global-strip {
-  padding: 0.34rem 0.62rem 0.22rem;
+  padding: 0.34rem var(--edge-inset-inline) 0.22rem;
   flex-shrink: 0;
 }
 
@@ -19,7 +19,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 0.52rem 0.36rem;
+  padding: 0 var(--edge-inset-inline) 0.36rem;
 }
 
 .map-mode-tablist {
@@ -577,7 +577,7 @@
 
 @media (max-width: 520px) {
   .home-global-strip {
-    padding: 0.26rem 0.42rem 0.16rem;
+    padding: 0.26rem var(--edge-inset-inline) 0.16rem;
   }
   .home-global-strip .chests-row {
     gap: 0.24rem;
@@ -604,7 +604,7 @@
     display: inline;
   }
   .mode-sanctuary-shell {
-    padding: 0 0.36rem 0.26rem;
+    padding: 0 var(--edge-inset-inline) 0.26rem;
   }
   .map-mode-tablist {
     gap: 0.16rem;
@@ -627,10 +627,10 @@
 
 @media (max-height: 700px) {
   .home-global-strip {
-    padding: 0.22rem 0.52rem 0.14rem;
+    padding: 0.22rem var(--edge-inset-inline) 0.14rem;
   }
   .mode-sanctuary-shell {
-    padding: 0 0.44rem 0.24rem;
+    padding: 0 var(--edge-inset-inline) 0.24rem;
   }
   .map-mode-tab {
     min-height: 32px;

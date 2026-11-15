@@ -27,7 +27,7 @@
 
 @media (max-width: 384px) {
   .hud-top-bar {
-    padding: 0.32rem 0.38rem 0.34rem;
+    padding: 0.34rem var(--edge-inset-inline) 0.36rem;
   }
   .hud-arch-subbar,
   .hud-mode-carousel {
@@ -84,7 +84,7 @@
 
 @media (max-height: 520px) and (orientation: landscape) {
   .hud-top-bar {
-    padding: 0.26rem 0.56rem 0.28rem;
+    padding: 0.26rem var(--edge-inset-inline) 0.28rem;
     gap: 0.2rem;
   }
   .btn-mode-wing,
@@ -99,7 +99,7 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.38rem;
-  padding: 0.44rem 0.65rem calc(0.5rem + var(--safe-bottom));
+  padding: 0.44rem var(--edge-inset-inline) calc(0.46rem + var(--safe-bottom));
   background: rgba(18, 14, 34, 0.88);
   border-top: 1px solid var(--border-subtle);
   border-radius: 0;
@@ -247,7 +247,7 @@
 @media (max-width: 520px), (max-height: 740px) {
   .booster-dock {
     gap: 0.3rem;
-    padding: 0.36rem 0.48rem calc(0.42rem + var(--safe-bottom));
+    padding: 0.38rem var(--edge-inset-inline) calc(0.42rem + var(--safe-bottom));
   }
   .booster-btn {
     min-height: 52px;
@@ -264,38 +264,6 @@
   .booster-badge {
     font-size: 0.54rem;
     padding: 0.05rem 0.26rem;
-  }
-}
-
-/* BEZEL-CORNER-01: Conform outer bottom corners + concentric inner badges when #screen-game reaches handheld edges */
-@media (pointer: coarse) and (max-width: 720px) {
-  .booster-dock > .booster-btn:is(:first-child, :last-child) {
-    overflow: clip;
-  }
-  .booster-dock > .booster-btn:first-child {
-    border-end-start-radius: var(--radius-bezel);
-    & .booster-badge {
-      border-end-start-radius: calc(var(--radius-bezel) - 6px);
-      padding-inline-start: 0.38rem;
-    }
-  }
-  .booster-dock > .booster-btn:last-child {
-    border-end-end-radius: var(--radius-bezel);
-    & .booster-badge {
-      border-end-end-radius: calc(var(--radius-bezel) - 6px);
-      padding-inline-end: 0.38rem;
-    }
-  }
-  @supports (overflow-clip-margin: content-box) {
-    .booster-dock > .booster-btn:is(:first-child, :last-child) {
-      overflow-clip-margin: content-box;
-    }
-  }
-  @supports (corner-shape: squircle) {
-    .booster-dock > .booster-btn:is(:first-child, :last-child),
-    .booster-dock > .booster-btn:is(:first-child, :last-child) .booster-badge {
-      corner-shape: squircle;
-    }
   }
 }
 

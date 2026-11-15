@@ -399,7 +399,7 @@ test.describe('Board Aiming, Mid-Drag Origin Ghost Footprint & Mystic Path-Traci
     }
   });
 
-  test('BEZEL-CORNER-01: conforms outer bottom corners of Map tab bar and Game booster dock on touch & standalone viewports with 0px layout shift', async ({
+  test('CORNER-INSET-01: restores native sharp corner radii, removes phantom bottom gaps, and balances 4-edge perimeter clearance', async ({
     page,
   }, testInfo) => {
     const errors: string[] = [];
@@ -418,139 +418,162 @@ test.describe('Board Aiming, Mid-Drag Origin Ghost Footprint & Mystic Path-Traci
         };
       }, elId);
 
+    const readBarPadding = (selector: string) =>
+      page.evaluate((sel) => {
+        const el = document.querySelector<HTMLElement>(sel);
+        if (!el) throw new Error(`Missing ${sel}`);
+        const cs = window.getComputedStyle(el);
+        return {
+          top: Number.parseFloat(cs.paddingTop),
+          bottom: Number.parseFloat(cs.paddingBottom),
+          left: Number.parseFloat(cs.paddingLeft),
+          right: Number.parseFloat(cs.paddingRight),
+        };
+      }, selector);
+
+    const measureEdgeClearance = (
+      selector: string,
+      topLeftSel: string,
+      topRightSel: string,
+      bottomLeftSel: string,
+      bottomRightSel: string
+    ) =>
+      page.evaluate(
+        ([sel, tlSel, trSel, blSel, brSel]) => {
+          const vw = document.documentElement.clientWidth;
+          const scrollW = document.documentElement.scrollWidth;
+          const rectOf = (q: string) => {
+            const node = document.querySelector<HTMLElement>(`${sel} ${q}`);
+            if (!node) throw new Error(`Missing ${sel} ${q}`);
+            const r = node.getBoundingClientRect();
+            return { left: r.left, right: vw - r.right };
+          };
+          const tl = rectOf(tlSel);
+          const tr = rectOf(trSel);
+          const bl = document.querySelector<HTMLElement>(blSel)?.getBoundingClientRect();
+          const br = document.querySelector<HTMLElement>(brSel)?.getBoundingClientRect();
+          if (!bl || !br) throw new Error(`Missing bottom corner selector ${blSel} / ${brSel}`);
+          return {
+            overflowX: scrollW - vw,
+            tlLeft: Math.round(tl.left * 10) / 10,
+            trRight: Math.round(tr.right * 10) / 10,
+            blLeft: Math.round(bl.left * 10) / 10,
+            brRight: Math.round((vw - br.right) * 10) / 10,
+          };
+        },
+        [selector, topLeftSel, topRightSel, bottomLeftSel, bottomRightSel]
+      );
+
     await bootIntoGameLevel(page, 12);
-    const defaultStandaloneAttr = await page.evaluate(
-      () => document.getElementById('app-shell')?.dataset.standalone ?? null
-    );
-    expect(defaultStandaloneAttr).toBe('false');
 
-    if (testInfo.project.name === 'desktop-chrome') {
-      // 1. Wide desktop (1280x800, pointer: fine, non-standalone) keeps uniform 4px/6px/3px radii
-      expect(await readCornerRadii('btn-booster-undo')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
-      expect(await readCornerRadii('btn-booster-vacuum')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
-      expect(await readCornerRadii('badge-booster-undo')).toEqual({ tl: 3, tr: 3, br: 3, bl: 3 });
-      expect(await readCornerRadii('badge-booster-vacuum')).toEqual({ tl: 3, tr: 3, br: 3, bl: 3 });
-      await page.locator('#btn-hud-home').click();
+    // Force standalone mode attribute too, confirming uniform native radii & zero phantom bottom padding
+    await page.evaluate(() => {
+      const shell = document.getElementById('app-shell');
+      if (shell) shell.dataset.standalone = 'true';
+    });
+
+    // Uniform native architectural radii even under standalone + touch
+    expect(await readCornerRadii('btn-booster-undo')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
+    expect(await readCornerRadii('btn-booster-vacuum')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
+    expect(await readCornerRadii('badge-booster-undo')).toEqual({ tl: 3, tr: 3, br: 3, bl: 3 });
+    expect(await readCornerRadii('badge-booster-vacuum')).toEqual({ tl: 3, tr: 3, br: 3, bl: 3 });
+
+    const dockPad = await readBarPadding('.booster-dock');
+    expect(dockPad.bottom).toBeLessThanOrEqual(8.5);
+    expect(Math.abs(dockPad.bottom - dockPad.top)).toBeLessThanOrEqual(2);
+    expect(Math.abs(dockPad.left - dockPad.bottom)).toBeLessThanOrEqual(3.5);
+
+    await page.locator('#btn-hud-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    expect(await readCornerRadii('tab-btn-home')).toEqual({ tl: 4, tr: 4, br: 4, bl: 4 });
+    expect(await readCornerRadii('tab-btn-settings')).toEqual({ tl: 4, tr: 4, br: 4, bl: 4 });
+
+    const tabBarPad = await readBarPadding('#menu-tab-bar');
+    expect(tabBarPad.bottom).toBeLessThanOrEqual(8.5);
+    expect(Math.abs(tabBarPad.bottom - tabBarPad.top)).toBeLessThanOrEqual(2);
+    expect(Math.abs(tabBarPad.left - tabBarPad.bottom)).toBeLessThanOrEqual(3.5);
+
+    const viewportsToAudit =
+      testInfo.project.name === 'desktop-chrome'
+        ? [
+            { width: 472, height: 1024, minInset: 7.5, maxInset: 10.5, checkGame: true },
+            { width: 390, height: 844, minInset: 7.5, maxInset: 10.5, checkGame: true },
+            { width: 375, height: 812, minInset: 7.5, maxInset: 10.5, checkGame: true },
+            { width: 320, height: 568, minInset: 7.5, maxInset: 10.5, checkGame: true },
+            { width: 844, height: 390, minInset: 7.5, maxInset: 10.5, checkGame: false },
+          ]
+        : [
+            { width: 390, height: 844, minInset: 7.5, maxInset: 10.5, checkGame: true },
+            { width: 472, height: 1024, minInset: 7.5, maxInset: 10.5, checkGame: true },
+            { width: 320, height: 568, minInset: 7.5, maxInset: 10.5, checkGame: true },
+            { width: 844, height: 390, minInset: 7.5, maxInset: 10.5, checkGame: false },
+          ];
+
+    for (const vp of viewportsToAudit) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
       await expect(page.locator('#screen-home')).toBeVisible();
-      expect(await readCornerRadii('tab-btn-home')).toEqual({ tl: 4, tr: 4, br: 4, bl: 4 });
-      expect(await readCornerRadii('tab-btn-settings')).toEqual({ tl: 4, tr: 4, br: 4, bl: 4 });
+      const homeTabPad = await readBarPadding('#menu-tab-bar');
+      expect(homeTabPad.bottom).toBeLessThanOrEqual(8.5);
 
-      // 2. Narrow desktop (390x844) non-standalone vs data-standalone="true" loses 0px real estate
-      await page.setViewportSize({ width: 390, height: 844 });
-      const measureBox = (selector: string) =>
-        page.evaluate((sel) => {
-          const el = document.querySelector<HTMLElement>(sel);
-          if (!el) throw new Error(`Missing ${sel}`);
-          const r = el.getBoundingClientRect();
-          return { width: Math.round(r.width), height: Math.round(r.height) };
-        }, selector);
-
-      const navBefore = await measureBox('#menu-tab-bar');
-      const tabBefore = await measureBox('#tab-btn-home');
-      await page.evaluate(() => {
-        const shell = document.getElementById('app-shell');
-        if (shell) shell.dataset.standalone = 'true';
+      const plumbLine = await page.evaluate(() => {
+        const stripEl = document.querySelector<HTMLElement>('#screen-home .home-global-strip .chests-row');
+        const shellEl = document.querySelector<HTMLElement>('#screen-home .mode-sanctuary-panel');
+        if (!stripEl || !shellEl) throw new Error('Missing home plumb-line elements');
+        return {
+          stripLeft: stripEl.getBoundingClientRect().left,
+          shellLeft: shellEl.getBoundingClientRect().left,
+        };
       });
-      const navAfter = await measureBox('#menu-tab-bar');
-      const tabAfter = await measureBox('#tab-btn-home');
-      expect(navAfter).toEqual(navBefore);
-      expect(tabAfter).toEqual(tabBefore);
+      expect(Math.abs(plumbLine.stripLeft - homeTabPad.left)).toBeLessThanOrEqual(1);
+      expect(Math.abs(plumbLine.shellLeft - homeTabPad.left)).toBeLessThanOrEqual(1);
 
-      const homeTab = await readCornerRadii('tab-btn-home');
-      expect(homeTab.bl).toBeGreaterThanOrEqual(19);
-      expect(homeTab.bl).toBeLessThanOrEqual(20.5);
-      expect([homeTab.tl, homeTab.tr, homeTab.br]).toEqual([4, 4, 4]);
+      const homeClearance = await measureEdgeClearance(
+        '#screen-home .top-economy-bar',
+        '#btn-home-title',
+        '.economy-pills',
+        '#tab-btn-home',
+        '#tab-btn-settings'
+      );
+      expect(homeClearance.overflowX).toBeLessThanOrEqual(0);
+      expect(homeClearance.tlLeft).toBeGreaterThanOrEqual(vp.minInset);
+      expect(homeClearance.tlLeft).toBeLessThanOrEqual(vp.maxInset);
+      expect(homeClearance.trRight).toBeGreaterThanOrEqual(vp.minInset);
+      expect(homeClearance.trRight).toBeLessThanOrEqual(vp.maxInset);
+      expect(homeClearance.blLeft).toBeGreaterThanOrEqual(vp.minInset);
+      expect(homeClearance.blLeft).toBeLessThanOrEqual(vp.maxInset);
+      expect(homeClearance.brRight).toBeGreaterThanOrEqual(vp.minInset);
+      expect(homeClearance.brRight).toBeLessThanOrEqual(vp.maxInset);
 
-      const settingsTab = await readCornerRadii('tab-btn-settings');
-      expect(settingsTab.br).toBeGreaterThanOrEqual(19);
-      expect(settingsTab.br).toBeLessThanOrEqual(20.5);
-      expect([settingsTab.tl, settingsTab.tr, settingsTab.bl]).toEqual([4, 4, 4]);
-      expect(await readCornerRadii('tab-btn-play')).toEqual({ tl: 4, tr: 4, br: 4, bl: 4 });
+      if (vp.checkGame) {
+        await page.locator('#tab-btn-play').click();
+        await expect(page.locator('#screen-game')).toBeVisible();
+        expect(await readCornerRadii('btn-booster-undo')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
+        expect(await readCornerRadii('btn-booster-vacuum')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
 
-      await page.locator('#tab-btn-play').click();
-      await expect(page.locator('#screen-game')).toBeVisible();
-      await page.evaluate(() => {
-        const shell = document.getElementById('app-shell');
-        if (shell) shell.dataset.standalone = 'false';
-      });
-      const dockBefore = await measureBox('.booster-dock');
-      const undoBefore = await measureBox('#btn-booster-undo');
-      expect(await readCornerRadii('btn-booster-undo')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
+        const gameDockPad = await readBarPadding('.booster-dock');
+        expect(gameDockPad.bottom).toBeLessThanOrEqual(8.5);
+        expect(Math.abs(gameDockPad.left - gameDockPad.bottom)).toBeLessThanOrEqual(3.5);
 
-      await page.evaluate(() => {
-        const shell = document.getElementById('app-shell');
-        if (shell) shell.dataset.standalone = 'true';
-      });
-      expect(await measureBox('.booster-dock')).toEqual(dockBefore);
-      expect(await measureBox('#btn-booster-undo')).toEqual(undoBefore);
+        const gameClearance = await measureEdgeClearance(
+          '#screen-game .hud-top-bar',
+          '#btn-hud-home',
+          '#btn-restart',
+          '#btn-booster-undo',
+          '#btn-booster-vacuum'
+        );
+        expect(gameClearance.overflowX).toBeLessThanOrEqual(0);
+        expect(gameClearance.tlLeft).toBeGreaterThanOrEqual(vp.minInset);
+        expect(gameClearance.tlLeft).toBeLessThanOrEqual(vp.maxInset);
+        expect(gameClearance.trRight).toBeGreaterThanOrEqual(vp.minInset);
+        expect(gameClearance.trRight).toBeLessThanOrEqual(vp.maxInset);
+        expect(gameClearance.blLeft).toBeGreaterThanOrEqual(vp.minInset);
+        expect(gameClearance.blLeft).toBeLessThanOrEqual(vp.maxInset);
+        expect(gameClearance.brRight).toBeGreaterThanOrEqual(vp.minInset);
+        expect(gameClearance.brRight).toBeLessThanOrEqual(vp.maxInset);
 
-      const undoStandalone = await readCornerRadii('btn-booster-undo');
-      expect(undoStandalone.bl).toBeGreaterThanOrEqual(19);
-      expect(undoStandalone.bl).toBeLessThanOrEqual(20.5);
-      expect([undoStandalone.tl, undoStandalone.tr, undoStandalone.br]).toEqual([6, 6, 6]);
-
-      const undoBadgeStandalone = await readCornerRadii('badge-booster-undo');
-      expect(undoBadgeStandalone.bl).toBeGreaterThanOrEqual(13);
-      expect([undoBadgeStandalone.tl, undoBadgeStandalone.tr, undoBadgeStandalone.br]).toEqual([3, 3, 3]);
-
-      const vacuumStandalone = await readCornerRadii('btn-booster-vacuum');
-      expect(vacuumStandalone.br).toBeGreaterThanOrEqual(19);
-      expect(vacuumStandalone.br).toBeLessThanOrEqual(20.5);
-      expect([vacuumStandalone.tl, vacuumStandalone.tr, vacuumStandalone.bl]).toEqual([6, 6, 6]);
-
-      const vacuumBadgeStandalone = await readCornerRadii('badge-booster-vacuum');
-      expect(vacuumBadgeStandalone.br).toBeGreaterThanOrEqual(13);
-      expect([vacuumBadgeStandalone.tl, vacuumBadgeStandalone.tr, vacuumBadgeStandalone.bl]).toEqual([
-        3, 3, 3,
-      ]);
-      expect(await readCornerRadii('btn-booster-hammer')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
-    } else {
-      // Mobile portrait (pointer: coarse): active immediately even without standalone display mode
-      const undoTouch = await readCornerRadii('btn-booster-undo');
-      expect(undoTouch.bl).toBeGreaterThanOrEqual(19);
-      expect(undoTouch.bl).toBeLessThanOrEqual(20.5);
-      expect([undoTouch.tl, undoTouch.tr, undoTouch.br]).toEqual([6, 6, 6]);
-
-      const undoBadgeTouch = await readCornerRadii('badge-booster-undo');
-      expect(undoBadgeTouch.bl).toBeGreaterThanOrEqual(13);
-      expect([undoBadgeTouch.tl, undoBadgeTouch.tr, undoBadgeTouch.br]).toEqual([3, 3, 3]);
-
-      const vacuumTouch = await readCornerRadii('btn-booster-vacuum');
-      expect(vacuumTouch.br).toBeGreaterThanOrEqual(19);
-      expect(vacuumTouch.br).toBeLessThanOrEqual(20.5);
-      expect([vacuumTouch.tl, vacuumTouch.tr, vacuumTouch.bl]).toEqual([6, 6, 6]);
-
-      const vacuumBadgeTouch = await readCornerRadii('badge-booster-vacuum');
-      expect(vacuumBadgeTouch.br).toBeGreaterThanOrEqual(13);
-      expect([vacuumBadgeTouch.tl, vacuumBadgeTouch.tr, vacuumBadgeTouch.bl]).toEqual([3, 3, 3]);
-
-      await page.locator('#btn-hud-home').click();
-      await expect(page.locator('#screen-home')).toBeVisible();
-      const homeTouch = await readCornerRadii('tab-btn-home');
-      expect(homeTouch.bl).toBeGreaterThanOrEqual(19);
-      expect(homeTouch.bl).toBeLessThanOrEqual(20.5);
-      expect([homeTouch.tl, homeTouch.tr, homeTouch.br]).toEqual([4, 4, 4]);
-
-      const settingsTouch = await readCornerRadii('tab-btn-settings');
-      expect(settingsTouch.br).toBeGreaterThanOrEqual(19);
-      expect(settingsTouch.br).toBeLessThanOrEqual(20.5);
-      expect([settingsTouch.tl, settingsTouch.tr, settingsTouch.bl]).toEqual([4, 4, 4]);
-
-      // 320x568 clamps --radius-bezel to 16px
-      await page.setViewportSize({ width: 320, height: 568 });
-      expect((await readCornerRadii('tab-btn-home')).bl).toBeCloseTo(16, 0);
-      expect((await readCornerRadii('tab-btn-settings')).br).toBeCloseTo(16, 0);
-
-      // 844x390 landscape: 32px tab bar drops --radius-bezel to 15px, centered 720px booster dock reverts to 6px/3px
-      await page.setViewportSize({ width: 844, height: 390 });
-      expect((await readCornerRadii('tab-btn-home')).bl).toBeCloseTo(15, 0);
-      expect((await readCornerRadii('tab-btn-settings')).br).toBeCloseTo(15, 0);
-      await page.locator('#tab-btn-play').click();
-      await expect(page.locator('#screen-game')).toBeVisible();
-      expect(await readCornerRadii('btn-booster-undo')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
-      expect(await readCornerRadii('btn-booster-vacuum')).toEqual({ tl: 6, tr: 6, br: 6, bl: 6 });
-      expect(await readCornerRadii('badge-booster-undo')).toEqual({ tl: 3, tr: 3, br: 3, bl: 3 });
-      expect(await readCornerRadii('badge-booster-vacuum')).toEqual({ tl: 3, tr: 3, br: 3, bl: 3 });
+        await page.locator('#btn-hud-home').click();
+        await expect(page.locator('#screen-home')).toBeVisible();
+      }
     }
 
     expect(errors).toEqual([]);
