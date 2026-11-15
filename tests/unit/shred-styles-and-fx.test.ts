@@ -136,8 +136,8 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
 
     const initialZ = bubbleCtx.particlePool[2];
     const maxAge = bubbleCtx.particlePool[11];
-    expect(maxAge).toBeGreaterThanOrEqual(1.25);
-    expect(maxAge).toBeLessThanOrEqual(1.9);
+    expect(maxAge).toBeGreaterThanOrEqual(0.85);
+    expect(maxAge).toBeLessThanOrEqual(1.32);
     // Zero initial horizontal velocity so any horizontal travel proves swirling air-current eddies
     bubbleCtx.particlePool[3] = 0;
     const startX = bubbleCtx.particlePool[0];
@@ -154,8 +154,8 @@ describe('SHRED-STYLE-01: 5 Distinct Shred Animations, Physics & Reduced-Motion 
       if (s === 4) earlyScaleMul = mul;
       if (age / maxAge > 0.86) popScaleMul = Math.max(popScaleMul, mul);
     }
-    expect(maxLateralMeander).toBeGreaterThan(0.18);
-    expect(bubbleCtx.particlePool[2]).toBeGreaterThan(initialZ + 0.65);
+    expect(maxLateralMeander).toBeGreaterThan(0.14);
+    expect(bubbleCtx.particlePool[2]).toBeGreaterThan(initialZ + 0.55);
     expect(popScaleMul).toBeGreaterThan(earlyScaleMul);
     expect(popScaleMul).toBeGreaterThan(1.1);
 

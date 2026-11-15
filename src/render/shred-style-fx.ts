@@ -548,7 +548,7 @@ export function spawnStyledParticlesImpl(
     } else if (particleStyle === 'soap_bubbles') {
       // Celebratory bubbles launch with a crisp "wand-blow" jet impulse so they billow into an airy cloud immediately
       const rad = celebratory ? 0.68 + ((i * 7) % 11) * 0.11 : 0.32 + ((i * 7) % 11) * 0.075;
-      const fwd = celebratory ? 2.25 + ((i * 13) % 11) * 0.25 : 0.44 + ((i * 13) % 9) * 0.065;
+      const fwd = celebratory ? 2.25 + ((i * 13) % 11) * 0.25 : 0.56 + ((i * 13) % 9) * 0.075;
       vx =
         dirX * fwd +
         (hasDir ? tanX * lateralOffset * (celebratory ? 1.92 : 0.96) : 0) +
@@ -557,7 +557,7 @@ export function spawnStyledParticlesImpl(
         dirY * fwd +
         (hasDir ? tanY * lateralOffset * (celebratory ? 1.92 : 0.96) : 0) +
         Math.sin(angle) * rad;
-      vz = celebratory ? 0.96 + ((i * 5) % 9) * 0.16 : 0.52 + ((i * 5) % 9) * 0.09;
+      vz = celebratory ? 0.96 + ((i * 5) % 9) * 0.16 : 0.68 + ((i * 5) % 9) * 0.09;
       if (isChampagneAccent) {
         pr = 1.0;
         pg = 0.94;
@@ -575,11 +575,11 @@ export function spawnStyledParticlesImpl(
             ? 0.114 + ((i * 5) % 4) * 0.01
             : 0.168 + ((i * 7) % 3) * 0.016;
       scale = baseBubbleScale * (celebratory ? 0.95 : 1.0);
-      // Brisker 1.28..1.86s lifetime during normal play so rapid shreds don't linger over the board;
-      // full 1.85..2.96s lingering flourish reserved for the stage-winning final shred (`celebratory`).
+      // Brisk 0.88..1.28s lifetime during normal play (matching star_confetti cadence) so rapid
+      // non-win shreds clear before follow-up moves; full 1.85..2.96s flourish on stage-winning shreds.
       maxAge = celebratory
         ? (1.85 + ((i * 9) % 10) * 0.105) * (isShimmerTier ? 1.06 : 1.0)
-        : 1.28 + ((i * 9) % 10) * 0.064;
+        : 0.88 + ((i * 9) % 10) * 0.044;
       rotSpeed = (i % 2 === 0 ? 1 : -1) * (1.25 + (i % 7) * 0.28);
     } else if (particleStyle === 'lightning_bolts') {
       const tierMul = celebratory ? (isShimmerTier ? 0.68 : 1.26) : 1.0;
