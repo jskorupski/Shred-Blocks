@@ -5,7 +5,7 @@ import {
   isBlockMovable,
   rebuildOccupancyGrid,
 } from './room-and-occupancy';
-import type { BlockState, BoardState } from './types';
+import type { BlockState, BoardState, ColorId } from './types';
 
 export * from './room-and-occupancy';
 
@@ -564,4 +564,86 @@ export function getReachableAnchors(
   }
 
   return results;
+}
+
+/**
+ * Returns the blocking Colorful Floor Path ID if pushing in `(pullX, pullY)` from `(leadX, leadY)`
+ * is physically free of walls/blocks/obstacles and stopped strictly by a mismatched `floorColor` cell.
+ */
+export function findBlockingFloorPathColor(
+  board: BoardState,
+  blockId: number,
+  leadX: number,
+  leadY: number,
+  pullX: number,
+  pullY: number
+): ColorId {
+  let hasFloorPath = false;
+  for (let i = 0; i < board.floorColor.length; i++) {
+    if (board.floorColor[i] > 0) {
+      hasFloorPath = true;
+      break;
+    }
+  }
+  if (!hasFloorPath) return 0;
+
+  const group = getMovedGroupBlocks(board, blockId);
+  if (group.length === 0) return 0;
+  const lead = group.find((b) => b.id === blockId) ?? group[0];
+  const lock = getGroupAxisLock(group);
+  if (lock === 'LOCKED_BOTH') return 0;
+
+  const curDx = leadX - lead.col;
+  const curDy = leadY - lead.row;
+  const { rows, cols, occupancy, floorColor } = board;
+  const groupIds = new Set<number>(group.map((b) => b.id));
+
+  const probeAxis = (stepDx: number, stepDy: number): ColorId => {
+    let blockedFc: ColorId = 0;
+    for (const b of group) {
+      const shape = getShape(b.shapeId);
+      const activeColor = getActiveColor(b.colorStack, b.colorCursor);
+      const exCells = new Set<number>();
+      for (const [dr, dc] of shape.cells) {
+        const minC = Math.floor(b.col + curDx + dc + EPS);
+        const maxC = Math.floor(b.col + curDx + dc + 1 - EPS);
+        const minR = Math.floor(b.row + curDy + dr + EPS);
+        const maxR = Math.floor(b.row + curDy + dr + 1 - EPS);
+        for (let r = minR; r <= maxR; r++) {
+          for (let c = minC; c <= maxC; c++) {
+            if (r >= 0 && r < rows && c >= 0 && c < cols) exCells.add(r * cols + c);
+          }
+        }
+      }
+      for (const [dr, dc] of shape.cells) {
+        const minC = Math.floor(b.col + curDx + stepDx + dc + EPS);
+        const maxC = Math.floor(b.col + curDx + stepDx + dc + 1 - EPS);
+        const minR = Math.floor(b.row + curDy + stepDy + dr + EPS);
+        const maxR = Math.floor(b.row + curDy + stepDy + dr + 1 - EPS);
+        if (minC < 0 || maxC >= cols || minR < 0 || maxR >= rows) return 0;
+        for (let r = minR; r <= maxR; r++) {
+          for (let c = minC; c <= maxC; c++) {
+            const idx = r * cols + c;
+            const occ = occupancy[idx];
+            if (occ !== 0 && !groupIds.has(occ)) return 0;
+            const fc = floorColor[idx] as ColorId;
+            if (fc !== 0 && fc !== activeColor && !exCells.has(idx) && blockedFc === 0) {
+              blockedFc = fc;
+            }
+          }
+        }
+      }
+    }
+    return blockedFc;
+  };
+
+  if (Math.abs(pullX) > 0.34 && lock !== 'V') {
+    const fcX = probeAxis(Math.sign(pullX) * 0.25, 0);
+    if (fcX > 0) return fcX;
+  }
+  if (Math.abs(pullY) > 0.34 && lock !== 'H') {
+    const fcY = probeAxis(0, Math.sign(pullY) * 0.25);
+    if (fcY > 0) return fcY;
+  }
+  return 0;
 }

@@ -71,6 +71,8 @@ export interface ShredBlocksDebugBridge {
   advanceFrozenFrames: (frames: number, dtSec?: number) => void;
   /** VISUAL-GOLDEN-01: seed cosmetic FX randomness (`null` restores `Math.random`) */
   setFxRandomSeed: (seed: number | null) => void;
+  /** Sync in-game DOM HUD immediately from current `board` + `save` state */
+  syncHud: () => void;
 }
 
 declare global {

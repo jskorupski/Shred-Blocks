@@ -419,7 +419,7 @@ test.describe('Mode Ambience & Simplified Settings Modal (MODE-AMBIENCE-01)', ()
 
     await page.locator('#btn-use-zen-blessing').click();
     await expect(page.locator('#dialog-failure')).toBeHidden();
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves Left: 5');
+    await expect(page.locator('#hud-moves-value')).toHaveText('5');
 
     const postBlessingState = await page.evaluate(() => {
       const s = window.__SHREDBLOCKS_DEBUG__.getSave();

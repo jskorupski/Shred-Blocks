@@ -26,10 +26,10 @@
 ## Features
 
 - **300 Campaign Levels + Canonical Infinite Endless Mode**: Progress across 6 architectural chapters—from approachable `5×5` courtyards to non-rectangular atriums, multi-room portcullis sanctums, sealed mystery vaults, and `9×9` citadels—followed by deterministically seeded Endless Mastery boards (`Level 301+`, identical for every player on every device) with 50-stage Sanctuary Map tier filters and inline archive browsing. Every stage is verified 100% solvable without power-ups by a deterministic A\* solver.
-- **Three Independent Play Modes (`MAP-MODE-SPLIT-01`, `MODE-ISOLATION-01`)**:
-  - **Challenge**: Clear the courtyard within a calibrated move budget to earn 1–3 Gold Stars, first-clear Flow Streak bonuses, and chest rewards on its own campaign ladder.
-  - **Zen**: Untimed, unlimited-move sanctuary flow with inert time-bombs and up to 3 consecutive breather skips—every 3 unique Zen clears awards `+1` Gold Star, and every 4 unique clears banks a **🌿 Zen Blessing** (up to 3) for a free `+5 Moves` / `+20s` Continue in Challenge or Speed Rush.
-  - **Speed Rush**: An arcade countdown ladder for speedrunners with move-paced bomb fuses and additive 1–3 Gold Stars. Switching modes live from the HUD or Sanctuary Map always starts a clean Move-0 attempt while keeping each mode's frontier independent, and global Power-Up unlocks (`L2/8/18/30`) plus 10-stage Level Chests advance through genuine clears across any mode.
+- **Three Independent Play Modes & At-a-Glance Sanctuary Keystone HUD (`MAP-MODE-SPLIT-01`, `MODE-ISOLATION-01`, `HUD-KEYSTONE-01`)**:
+  - **Challenge**: Clear the courtyard within a calibrated move budget shown prominently on the Sanctuary Keystone plaque alongside live star-cutoff progress (`1–3★`), first-clear Flow Streak bonuses, and chest rewards on its own campaign ladder.
+  - **Zen**: Untimed, unlimited-move sanctuary flow in the exact same Keystone silhouette with a serene zero-pressure (`∞ No Limit`, `🌿 Calm Flow` / `🌿 Bombs Inert`) readout and up to 3 consecutive breather skips—every 3 unique Zen clears awards `+1` Gold Star, and every 4 unique clears banks a **🌿 Zen Blessing** (up to 3) for a free `+5 Moves` / `+20s` Continue in Challenge or Speed Rush.
+  - **Speed Rush**: An arcade countdown ladder for speedrunners surfacing a high-legibility `MM:SS` clock, live star cutoffs, move-paced bomb fuses, and near-zero amber/crimson peripheral urgency (`<= 15s` / `<= 5s`). Switching modes live cleanly from the Keystone or Sanctuary Map always starts a Move-0 attempt while keeping each mode's frontier independent, and global Power-Up unlocks (`L2/8/18/30`) plus 10-stage Level Chests advance through genuine clears across any mode.
 - **18 Gradual Mechanics & Guided Onboarding**: Introduces new spatial twists step by step with scannable onboarding hint plaques—including axis-locked rails, stepped-edge gates, multi-room portcullis sanctums, sealed mystery vaults, multi-layer blocks, ice blocks & frozen gates, star gates, keys & locks, neutral stone sliders, wooden crates, time-bombs, glued block groups, ropes & scissors, dynamic shutters, sliding/resizing gates, block generators, colored floor paths, and moving elevators.
 - **Power-Ups, Quick-Swap Cosmetics & Live 3D Themes Studio**: Earn coins through normal play and milestone chests to stock 5 optional boosters (*Undo*, *Hint*, *Hammer*, *Row/Col Rocket*, *Color Vacuum*) and unlock 15 cosmetic **Block Skins**, **Board Trays**, and **Shred Animations** (*Micro Cubes*, *Star Confetti*, *Pixel Sparks*, buoyant *Soap Bubbles*, and *Lightning Bolts* with 120Hz volumetric plasma gate arcs), each paired with its own custom procedural Web Audio shred soundscape. Swap owned themes in 1 tap from the **Settings** Cosmetics drawer or test-drive any locked combination before buying on the pinned **Live 3D Showcase Stage** in Themes Studio—without losing mid-level progress when returning to the same stage.
 - **Player-Friendly & Accessible**: Unlimited lives, 3 free undos per attempt, free Zen skips & Zen Blessing rescues, colorblind symbol badges, high-contrast palettes, full keyboard navigation, and reduced-motion mode.
@@ -39,9 +39,9 @@
 
 | Input | Action |
 | :--- | :--- |
-| **Touch / Mouse** | Drag any movable block along open lanes; pull into a matching perimeter gate to shred. |
+| **Touch / Mouse** | Drag any movable block along open lanes; pull into a matching perimeter gate to shred, or tap locked blocks, obstacles, and colored floor paths to inspect their rules. |
 | **Keyboard** | `Tab` / `Shift+Tab` to cycle blocks · `Arrow Keys` or `WASD` to slide · `Escape` to cancel or close dialogs. |
-| **Sanctuary Map** | Tap the in-game **Level Title / Difficulty Crest** (or `‹ Map`) to jump back to that stage; Map entry, mode switches, and Save Sync/Restore auto-reset filters and scroll straight to your active stage. |
+| **Sanctuary Map & Stage Rules** | Tap the in-game **Level Title / Difficulty Crest** (or `‹ Map`) to jump back to that stage; tap the Keystone metrics plaque anytime to inspect exact `1–3★` cutoffs and mode rules. |
 | **Accessibility** | Toggle **Colorblind Symbols**, **High Contrast**, and **Low Motion** anytime in **Settings**. |
 
 ---

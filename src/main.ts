@@ -38,6 +38,8 @@ import {
 } from './ui/dom-events-and-pwa';
 import {
   buildRenderOptionsImpl,
+  handleBoardFeatureTapImpl,
+  handleFloorPathCollisionImpl,
   handleImmobileBlockTapImpl,
   handleLockedVaultTapImpl,
   isNewPlayerSaveImpl,
@@ -193,6 +195,8 @@ export class ShredBlocksApp implements AppViewContext {
       },
       onImmobileBlockTap: (block) => handleImmobileBlockTapImpl(this, block),
       onLockedVaultTap: (vault) => handleLockedVaultTapImpl(this, vault),
+      onBoardFeatureTap: (row, col) => handleBoardFeatureTapImpl(this, row, col),
+      onFloorPathCollision: (floorColorId) => handleFloorPathCollisionImpl(this, floorColorId),
       onExecuteBooster: (type, target) => executeTargetedBoosterImpl(this, type, target),
       isBoardInteractive: () => {
         return (

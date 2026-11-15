@@ -578,4 +578,180 @@ test.describe('Board Aiming, Mid-Drag Origin Ghost Footprint & Mystic Path-Traci
 
     expect(errors).toEqual([]);
   });
+
+  test('HUD Keystone (HUD-KEYSTONE-01): Challenge/Timed/Zen & conditional controls', async ({ page }) => {
+    const chk = () =>
+      page.evaluate(() => ({
+        ov: document.documentElement.scrollWidth - window.innerWidth,
+        tw: document.getElementById('hud-level-title')?.getBoundingClientRect().width ?? 0,
+        bh: document.querySelector('#screen-game .hud-top-bar')?.getBoundingClientRect().height ?? 999,
+      }));
+    const setRushTime = (sec: number) =>
+      page.evaluate((s) => {
+        const dbg = window.__SHREDBLOCKS_DEBUG__;
+        dbg.freezeTime(1.0);
+        Object.assign(dbg.getBoard(), { timerRunning: true, movesCommitted: 1, timeRemainingSec: s });
+        dbg.syncHud();
+      }, sec);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await bootIntoGameLevel(page, 1);
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
+    await expect(page.locator('#hud-keystone-info')).toBeVisible();
+    expect((await chk()).ov).toBeLessThanOrEqual(0);
+    await page.locator('#hud-keystone-info').click();
+    await expect(page.locator('#game-toast')).toContainText('Challenge');
+    await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
+    await page.locator('#btn-mode-next').click();
+    await expect(page.locator('#app-shell')).toHaveAttribute('data-hud-urgency', 'calm');
+    await expect(page.locator('#hud-moves-value')).toHaveText('∞');
+    await expect(page.locator('#hud-keystone-stars')).toContainText('Calm Flow');
+    await page.locator('#btn-mode-next').click();
+    await expect(page.locator('#hud-timer-pill')).toBeVisible();
+    await setRushTime(12);
+    await expect(page.locator('#app-shell')).toHaveAttribute('data-hud-urgency', 'warn');
+    await setRushTime(4);
+    await expect(page.locator('#app-shell')).toHaveAttribute('data-hud-urgency', 'critical');
+    await page.setViewportSize({ width: 667, height: 375 });
+    expect((await chk()).bh).toBeLessThanOrEqual(58);
+    // Conditional Zen Skip + 99,999 coins + SUPER_HARD + Rocket banner + Map Install & LAN DevTools
+    await page.locator('#btn-mode-prev').click();
+    await page.evaluate(() => {
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      dbg.patchSave({ coins: 99999 });
+      dbg.loadLevel(29);
+      dbg.getBoard().difficulty = 'SUPER_HARD';
+      dbg.syncHud();
+    });
+    await page.locator('#btn-booster-rocket').click();
+    await expect(page.locator('#btn-rocket-axis')).toBeVisible();
+    for (const width of [320, 375, 667]) {
+      await page.setViewportSize({ width, height: width === 667 ? 375 : width === 375 ? 667 : 568 });
+      const m = await chk();
+      expect(m.ov).toBeLessThanOrEqual(0);
+      expect(m.tw).toBeGreaterThanOrEqual(64);
+      if (width === 667) expect(m.bh).toBeLessThanOrEqual(58);
+    }
+    await page.locator('#btn-cancel-booster').click();
+    await page.locator('#btn-hud-home').click();
+    await page.evaluate(() => {
+      window.__SHREDBLOCKS_DEBUG__.patchSave({ coins: 99999, totalStars: 2700, winStreak: 150 });
+      const ev = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+        prompt: async () => {},
+        userChoice: Promise.resolve({ outcome: 'dismissed', platform: 'web' }),
+      });
+      window.dispatchEvent(ev);
+    });
+    await expect(page.locator('#btn-install-header')).toBeVisible();
+    await expect(page.locator('#btn-lan-unlock-home')).toHaveCount(0);
+    const checkSingleLineBar = (screenId: string) =>
+      page.evaluate((sid) => {
+        const bar = document.querySelector(`#${sid} > .top-economy-bar`);
+        const children = Array.from(bar?.children ?? []).filter(
+          (el) => getComputedStyle(el).display !== 'none'
+        );
+        const centers = children.map((el) => {
+          const r = el.getBoundingClientRect();
+          return r.top + r.height * 0.5;
+        });
+        const maxDeltaY = centers.length > 1 ? Math.max(...centers) - Math.min(...centers) : 0;
+        return {
+          ov: document.documentElement.scrollWidth - window.innerWidth,
+          bh: bar?.getBoundingClientRect().height ?? 999,
+          maxDeltaY,
+        };
+      }, screenId);
+    for (const width of [320, 360, 390]) {
+      await page.setViewportSize({ width, height: 640 });
+      const homeBar = await checkSingleLineBar('screen-home');
+      expect(homeBar.ov).toBeLessThanOrEqual(0);
+      expect(homeBar.bh).toBeLessThanOrEqual(48);
+      expect(homeBar.maxDeltaY).toBeLessThanOrEqual(6);
+    }
+    await page.locator('#tab-btn-play').click();
+    await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(299));
+    await page.locator('#btn-pause').click();
+    await page.locator('#btn-toggle-cosmetics-drawer').click();
+    await page.locator('#btn-pause-open-themes').click();
+    await expect(page.locator('#btn-themes-resume-game')).toBeVisible();
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 640 });
+      const themesBar = await checkSingleLineBar('screen-themes');
+      expect(themesBar.ov).toBeLessThanOrEqual(0);
+      expect(themesBar.bh).toBeLessThanOrEqual(54);
+      expect(themesBar.maxDeltaY).toBeLessThanOrEqual(6);
+    }
+  });
+
+  test('FLOOR-PATH-01 & TAP-TOAST-01: Level 176 floor-path tap & drag-collision toasts, glued-group frozen partner tap, and Stone block lock/ice toasts', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await bootIntoGameLevel(page, 176);
+
+    // 1. Direct tap on the exposed Royal Purple Floor Path at (row: 4, col: 3)
+    const fpPt = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.boardToScreen(3.5, 4.5));
+    await page.mouse.click(fpPt.x, fpPt.y);
+    const toast = page.locator('#game-toast');
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText('Royal Purple Floor Path');
+    await expect(toast).toContainText('only Royal Purple blocks can cross');
+
+    // 2. Drag Orange Block 3 at (row: 4, col: 4) leftward into the Royal Purple Floor Path
+    const b3Start = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.boardToScreen(4.5, 4.5));
+    await page.mouse.move(b3Start.x, b3Start.y);
+    await page.mouse.down();
+    await page.mouse.move(fpPt.x, fpPt.y, { steps: 6 });
+    await expect(toast).toContainText('Royal Purple Floor Path');
+    await page.mouse.up();
+    const b3Col = await page.evaluate(
+      () => window.__SHREDBLOCKS_DEBUG__.getBoard().blocks.find((b) => b.id === 3)?.col ?? -1
+    );
+    expect(b3Col).toBe(4);
+
+    // 3. Tapping the un-iced half (Block 2 at r=0, c=2) of a glued pair with frozen Block 9 shows Frozen toast
+    await page.evaluate(() => {
+      const board = window.__SHREDBLOCKS_DEBUG__.getBoard();
+      const b2 = board.blocks.find((b) => b.id === 2);
+      const b9 = board.blocks.find((b) => b.id === 9);
+      if (!b2 || !b9) throw new Error('Expected blocks 2 and 9 on Level 176');
+      b2.groupId = 77;
+      b9.groupId = 77;
+      b2.iceCount = 0;
+      b9.iceCount = 2;
+    });
+    const b2Pt = await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.boardToScreen(2.5, 0.5));
+    await page.mouse.click(b2Pt.x, b2Pt.y);
+    await expect(toast).toContainText('Frozen!');
+
+    // 4. Neutral Stone slider (color 0) immobilized by ice or chain shows accurate blocker toast (not permanent obstacle)
+    await page.evaluate(() => {
+      const board = window.__SHREDBLOCKS_DEBUG__.getBoard();
+      const b2 = board.blocks.find((b) => b.id === 2);
+      const b9 = board.blocks.find((b) => b.id === 9);
+      if (!b2 || !b9) throw new Error('Expected blocks 2 and 9');
+      b2.groupId = 0;
+      b9.groupId = 0;
+      b9.iceCount = 0;
+      b2.colorStack = [0];
+      b2.colorCursor = 0;
+      b2.iceCount = 1;
+      b2.chained = false;
+    });
+    await page.mouse.click(b2Pt.x, b2Pt.y);
+    await expect(toast).toContainText('Frozen!');
+    await expect(toast).not.toContainText('permanent obstacle');
+
+    await page.evaluate(() => {
+      const b2 = window.__SHREDBLOCKS_DEBUG__.getBoard().blocks.find((b) => b.id === 2);
+      if (!b2) throw new Error('Expected block 2');
+      b2.iceCount = 0;
+      b2.chained = true;
+    });
+    await page.mouse.click(b2Pt.x, b2Pt.y);
+    await expect(toast).toContainText('Chained!');
+
+    expect(errors).toEqual([]);
+  });
 });

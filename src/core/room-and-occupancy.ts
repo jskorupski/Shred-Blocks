@@ -212,16 +212,25 @@ export function getGroupAxisLock(group: BlockState[]): AxisLock | 'LOCKED_BOTH' 
 
 /**
  * Rebuilds the `board.occupancy` flat Int16Array from cutouts, pillars, closed portcullis
- * barriers (`-3`), crates (`-100 - id`), and active blocks (`> 0`).
+ * barriers (`-3`), generator housings (`-4`), crates (`-100 - id`), and active blocks (`> 0`).
  * Calling this after any discrete grid mutation guarantees 0 stale cells.
  */
 export function rebuildOccupancyGrid(board: BoardState): void {
   const { rows, cols, occupancy } = board;
-  // Preserve static cutouts (-1) and pillars (-2); clear dynamic entries (>0, -3 portcullis, or <= -100)
+  // Preserve static cutouts (-1) and pillars (-2); clear dynamic/machine entries (>0, -3, -4, or <= -100)
   for (let i = 0; i < rows * cols; i++) {
     const val = occupancy[i];
-    if (val > 0 || val === -3 || val <= -100) {
+    if (val > 0 || val === -3 || val === -4 || val <= -100) {
       occupancy[i] = 0;
+    }
+  }
+
+  for (const gen of board.generators) {
+    if (gen.row >= 0 && gen.row < rows && gen.col >= 0 && gen.col < cols) {
+      const idx = gen.row * cols + gen.col;
+      if (occupancy[idx] === 0) {
+        occupancy[idx] = -4;
+      }
     }
   }
 

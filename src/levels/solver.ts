@@ -460,7 +460,7 @@ function buildCorridorDemandMap(board: BoardState): Uint8Array {
         const c = g.edge === 'LEFT' ? edgeLine + d : g.edge === 'RIGHT' ? edgeLine - d : s;
         if (r < 0 || r >= rows || c < 0 || c >= cols) break;
         const occ = occupancy[r * cols + c];
-        if (occ === -1 || occ === -2 || occ === -3) break;
+        if (occ === -1 || occ === -2 || occ === -3 || occ === -4) break;
         demand[r * cols + c] = Math.min(255, demand[r * cols + c] + Math.max(1, w - (d >= 2 ? 1 : 0)));
       }
     }

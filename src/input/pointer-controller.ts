@@ -7,7 +7,6 @@ import {
 import {
   canGroupOccupyOffset,
   getMovedGroupBlocks,
-  getSealedVaultAtCell,
   isBlockMovable,
   rebuildOccupancyGrid,
   snapGroupToNearestGrid,
@@ -17,11 +16,14 @@ import { getActiveColor, getShape } from '../core/polyomino';
 import type { BoardState, InputMode, RocketAxis } from '../core/types';
 import type { PathWaypoint } from '../render/pass2-drag-fx';
 import {
+  appendOrthogonalDragWaypoint,
   type BoardInputCallbacks,
   buildCommittedMoveTrace,
   executeBoosterTargetTap,
+  findBlockingFloorPathColor,
   type HoverState,
   handleBoardKeyDown,
+  handleEmptyCellPointerTap,
   pickBlockAtBoardPoint,
   playOutcomeAudioHelper,
 } from './targeting-and-keyboard';
@@ -44,6 +46,7 @@ export class BoardInputController {
   private hoverCol = -1;
   private hoverBlockId: number | null = null;
   private dragLeftOrigin = false;
+  private floorPathToastShownInGesture = false;
   private dragWaypoints: PathWaypoint[] = [];
 
   private grabOffsetX = 0;
@@ -266,11 +269,7 @@ export class BoardInputController {
 
     const picked = pickBlockAtBoardPoint(board, pt.x, pt.y);
     if (!picked) {
-      const sealedVault = getSealedVaultAtCell(board, Math.floor(pt.y), Math.floor(pt.x));
-      if (sealedVault) {
-        this.callbacks.sound?.playWallClack();
-        this.callbacks.onLockedVaultTap?.(sealedVault);
-      }
+      handleEmptyCellPointerTap(board, Math.floor(pt.y), Math.floor(pt.x), this.callbacks);
       return;
     }
 
@@ -313,6 +312,7 @@ export class BoardInputController {
 
     this.groupStartCoords.clear();
     this.dragLeftOrigin = false;
+    this.floorPathToastShownInGesture = false;
     const pickedShape = getShape(picked.shapeId);
     this.dragWaypoints = [{ x: picked.col + pickedShape.cols * 0.5, y: picked.row + pickedShape.rows * 0.5 }];
     const group = getMovedGroupBlocks(board, picked.id);
@@ -425,7 +425,7 @@ export class BoardInputController {
             this.lastTickCellRow = cellR;
             this.callbacks.sound?.playSlideTick();
           }
-          this.recordDragCellStep(cellR, cellC, anchorOff.x, anchorOff.y);
+          appendOrthogonalDragWaypoint(this.dragWaypoints, cellR, cellC, anchorOff.x, anchorOff.y);
 
           const capture = checkMidDragGateCapture(
             board,
@@ -457,7 +457,8 @@ export class BoardInputController {
       ) {
         this.dragLeftOrigin = true;
       }
-      this.recordDragCellStep(
+      appendOrthogonalDragWaypoint(
+        this.dragWaypoints,
         Math.round(sweepRes.leadY),
         Math.round(sweepRes.leadX),
         anchorOff.x,
@@ -471,36 +472,24 @@ export class BoardInputController {
       }
     }
 
+    if (!this.floorPathToastShownInGesture && Math.hypot(this.lastPullX, this.lastPullY) > 0.34) {
+      const blockedFc = findBlockingFloorPathColor(
+        board,
+        blockId,
+        this.lastLeadX,
+        this.lastLeadY,
+        this.lastPullX,
+        this.lastPullY
+      );
+      if (blockedFc > 0) {
+        this.floorPathToastShownInGesture = true;
+        this.callbacks.sound?.playWallClack();
+        this.callbacks.onFloorPathCollision?.(blockedFc);
+      }
+    }
+
     if (this.callbacks.onDragFrame) this.callbacks.onDragFrame();
     else this.callbacks.onBoardChanged?.();
-  }
-
-  /**
-   * Records exact integer grid corridor steps with full cycle erasure:
-   * - Eliminates sub-pixel finger jitter inside open rooms so path traces stay grid-centered.
-   * - Automatically erases any exploratory detour or closed loop if the block revisits an earlier cell
-   *   (including returning to its original starting spot), so the post-commit trace cleanly confirms
-   *   the net corridor from Origin -> Final Destination / Shred Gate.
-   */
-  private recordDragCellStep(cellR: number, cellC: number, offX: number, offY: number): void {
-    const wx = cellC + offX;
-    const wy = cellR + offY;
-    for (let i = 0; i < this.dragWaypoints.length; i++) {
-      if (Math.abs(this.dragWaypoints[i].x - wx) < 0.05 && Math.abs(this.dragWaypoints[i].y - wy) < 0.05) {
-        this.dragWaypoints.length = i + 1;
-        return;
-      }
-    }
-    const tail = this.dragWaypoints[this.dragWaypoints.length - 1];
-    if (tail) {
-      const prevC = Math.round(tail.x - offX);
-      const prevR = Math.round(tail.y - offY);
-      if (prevC !== cellC && prevR !== cellR) {
-        // Orthogonalize a diagonal bevel jump across its shared corner cell
-        this.dragWaypoints.push({ x: cellC + offX, y: prevR + offY });
-      }
-    }
-    this.dragWaypoints.push({ x: wx, y: wy });
   }
 
   private handlePointerUp(e: PointerEvent): void {
@@ -610,6 +599,7 @@ export class BoardInputController {
     this.activeBlockId = null;
     this.dragBoardRef = null;
     this.dragLeftOrigin = false;
+    this.floorPathToastShownInGesture = false;
     this.dragWaypoints.length = 0;
     this.hoverRow = -1;
     this.hoverCol = -1;
@@ -749,6 +739,7 @@ export class BoardInputController {
     this.activeBlockId = null;
     this.dragBoardRef = null;
     this.dragLeftOrigin = false;
+    this.floorPathToastShownInGesture = false;
     this.dragWaypoints.length = 0;
     this.hoverRow = -1;
     this.hoverCol = -1;

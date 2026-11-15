@@ -289,20 +289,20 @@ test.describe('ShredBlocks: Color Jam — End-to-End Browser & Interactive Playt
 
     // Make a real non-clearing pointer drag on Level 3: slide Block 1 from (row 1, col 1) up to (row 0, col 1)
     await dragBoardCellToCell(page, 1, 1, 1, 0);
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
 
     // Trigger Undo -> consumes 1 Free Undo and restores Moves Left: 9
     await page.locator('#btn-booster-undo').click();
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
+    await expect(page.locator('#hud-moves-value')).toHaveText('9');
     await expect(page.locator('#badge-booster-undo')).toHaveText('FREE (2)');
 
     // Make another real pointer move, press Restart (#btn-restart), then press Undo to recover pre-restart board!
     await dragBoardCellToCell(page, 1, 1, 1, 0);
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
     await page.locator('#btn-restart').click();
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
+    await expect(page.locator('#hud-moves-value')).toHaveText('9');
     await page.locator('#btn-booster-undo').click();
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
 
     // Jump to Level 41 (Frostbite Thaw) to test immobile Frozen block tap + real Hammer/Rocket/Vacuum execution on canvas
     await page.locator('#btn-pause').click();

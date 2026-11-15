@@ -1,20 +1,8 @@
 import { isBoardRunStarted } from '../core/board';
 import { getTimedBombTickSec } from '../core/board-state';
 import { findEligibleGateForBlockAt } from '../core/gate-clearance';
-import {
-  canGroupOccupyOffset,
-  getBlockRoomId,
-  getMovedGroupBlocks,
-  isBlockInLockedRoom,
-} from '../core/physics';
-import { getActiveColor } from '../core/polyomino';
-import {
-  type BarrierState,
-  type BlockState,
-  type BoosterType,
-  COLOR_PALETTE,
-  type SavePayloadV1,
-} from '../core/types';
+import { canGroupOccupyOffset, getMovedGroupBlocks, isBlockInLockedRoom } from '../core/physics';
+import type { BoosterType, SavePayloadV1 } from '../core/types';
 import type { HoverState } from '../input/pointer-controller';
 import { getLevelSpec } from '../levels/catalog';
 import type { RenderSceneOptions } from '../render/renderer-3d';
@@ -33,42 +21,15 @@ import {
   getPlayModeMeta,
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
+import { syncKeystoneDomImpl } from './hud-keystone';
 import { refreshThemesPreviewIfActive, syncPauseCosmeticsDrawerImpl } from './themes-studio-view';
 
-export function handleImmobileBlockTapImpl(app: AppViewContext, block: BlockState): void {
-  if (isBlockInLockedRoom(app.board, block)) {
-    const roomId = getBlockRoomId(app.board, block);
-    const bar = app.board.barriers.find((b) => !b.open && b.unlocksRoomId === roomId);
-    if (bar?.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0) {
-      app.showGameToast('⛩️ Chamber Sealed! Shred a block with a 🔑 Key to open the Portcullis');
-    } else if (bar && bar.shredsRemaining > 0) {
-      app.showGameToast(
-        `⛩️ Chamber Sealed! Shred ${bar.shredsRemaining} more block(s) to open the Portcullis`
-      );
-    } else {
-      app.showGameToast('⛩️ Chamber Sealed! Open the Portcullis Barrier first');
-    }
-    return;
-  }
-
-  const activeColor = getActiveColor(block.colorStack, block.colorCursor);
-  if (activeColor === 0) {
-    app.showGameToast('🪨 Stone Block — permanent obstacle that never moves');
-  } else if (block.iceCount > 0) {
-    app.showGameToast(`❄️ Frozen! Shred ${block.iceCount} more block(s) to thaw`);
-  } else if (block.chained) {
-    app.showGameToast('🔒 Chained! Shred a block carrying a 🔑 Key to unlock');
-  } else if (block.ropeColor > 0) {
-    const ropeEntry = COLOR_PALETTE[block.ropeColor];
-    const cb = app.saveManager.getPayload().settings.colorblindSymbols;
-    const cName = ropeEntry
-      ? cb
-        ? `${ropeEntry.cbName} (${ropeEntry.symbol})`
-        : ropeEntry.name
-      : 'matching';
-    app.showGameToast(`🪢 Tied with ${cName} Rope! Shred matching ✂️ Scissors first`);
-  }
-}
+export {
+  handleBoardFeatureTapImpl,
+  handleFloorPathCollisionImpl,
+  handleImmobileBlockTapImpl,
+  handleLockedVaultTapImpl,
+} from './board-tap-feedback';
 
 function setAttrIfChanged(el: Element | null, attr: string, value: string): void {
   if (el && el.getAttribute(attr) !== value) {
@@ -165,6 +126,9 @@ export function syncTitleOverlayDomImpl(app: AppViewContext): void {
   if (appShell) {
     appShell.setAttribute('data-title-open', app.titleOverlayOpen ? 'true' : 'false');
     appShell.setAttribute('data-active-screen', app.activeScreen);
+    if (app.titleOverlayOpen) {
+      appShell.setAttribute('data-hud-urgency', 'calm');
+    }
   }
 
   if (app.titleOverlayOpen) {
@@ -451,8 +415,6 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   const nextBtn = document.getElementById('btn-mode-next');
   const nextIcon = document.getElementById('hud-mode-next-icon');
   const nextLabel = document.getElementById('hud-mode-next-label');
-  const movesPill = document.getElementById('hud-moves-pill');
-  const timerPill = document.getElementById('hud-timer-pill');
 
   setTextIfChanged(titleEl, `Level ${app.board.levelId} — ${app.board.name}`);
   if (diffEl) {
@@ -481,33 +443,7 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   const nextTitle = `Switch to ${modeMeta[nextMode].full}`;
   if (nextBtn && nextBtn.title !== nextTitle) nextBtn.title = nextTitle;
 
-  if (movesPill) {
-    if (playMode === 'CHALLENGE') {
-      if (app.board.freeMovesRemaining > 0) {
-        setTextIfChanged(
-          movesPill,
-          `Moves Left: ${app.board.movesRemaining} (+${app.board.freeMovesRemaining} Free)`
-        );
-        setClassIfChanged(movesPill, 'tabular-metric moves-pill moves-bonus');
-      } else {
-        setTextIfChanged(movesPill, `Moves Left: ${app.board.movesRemaining}`);
-        const nextMovesClass =
-          app.board.movesRemaining <= 1
-            ? 'tabular-metric moves-pill moves-critical'
-            : app.board.movesRemaining <= 3
-              ? 'tabular-metric moves-pill moves-low'
-              : 'tabular-metric moves-pill';
-        setClassIfChanged(movesPill, nextMovesClass);
-      }
-    } else {
-      setTextIfChanged(movesPill, `Moves: ${app.board.movesCommitted} / Par ${app.board.parMoves}`);
-      setClassIfChanged(movesPill, 'tabular-metric moves-pill');
-    }
-  }
-  if (timerPill && timerPill.hidden !== (playMode !== 'TIMED')) {
-    timerPill.hidden = playMode !== 'TIMED';
-  }
-  app.syncTimerPillOnly();
+  syncKeystoneDomImpl(app);
 
   // Boosters Dock Badges, Rarity Accents & Progressive Level Unlocking (ECON-01 / ECON-02 / ZEN-SKIP-GUARD-01)
   const effectiveLevel = getEffectiveBoosterUnlockLevel(save, app.board.levelId);
@@ -568,20 +504,8 @@ export function syncInGameHudImpl(app: AppViewContext): void {
 }
 
 export function syncTimerPillOnlyImpl(app: AppViewContext): void {
-  const timerPill = document.getElementById('hud-timer-pill');
-  if (!timerPill || timerPill.hidden) return;
-
-  const totalSec = Math.max(0, Math.ceil(app.board.timeRemainingSec));
-  const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
-  const secs = String(totalSec % 60).padStart(2, '0');
-
-  if (app.board.freezeRemainingSec > 0) {
-    timerPill.textContent = `❄️ ${mins}:${secs} (${Math.ceil(app.board.freezeRemainingSec)}s)`;
-    timerPill.className = 'tabular-metric timer-pill frozen';
-  } else {
-    timerPill.textContent = `⏱ ${mins}:${secs}`;
-    timerPill.className = totalSec <= 15 ? 'tabular-metric timer-pill urgent' : 'tabular-metric timer-pill';
-  }
+  if (app.saveManager.getPayload().settings.playMode !== 'TIMED') return;
+  syncKeystoneDomImpl(app);
 }
 
 export function buildRenderOptionsImpl(
@@ -698,20 +622,6 @@ export function buildRenderOptionsImpl(
     dtSec,
     timeSec,
   };
-}
-
-export function handleLockedVaultTapImpl(app: AppViewContext, vault: BarrierState): void {
-  if (vault.shredsRemaining > 0 && vault.lockId > 0) {
-    app.showGameToast(
-      `🔒 Sealed Mystery Vault: Shred ${vault.shredsRemaining} more block${vault.shredsRemaining > 1 ? 's' : ''} + Key #${vault.lockId} to reveal!`
-    );
-  } else if (vault.shredsRemaining > 0) {
-    app.showGameToast(
-      `🔒 Sealed Mystery Vault: Shred ${vault.shredsRemaining} more block${vault.shredsRemaining > 1 ? 's' : ''} to reveal hidden blocks!`
-    );
-  } else if (vault.lockId > 0) {
-    app.showGameToast(`🔑 Sealed Mystery Vault: Shred the Key #${vault.lockId} block to reveal!`);
-  }
 }
 
 export function stepSimulationImpl(app: AppViewContext, dtSec: number): void {

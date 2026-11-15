@@ -681,7 +681,7 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
 
     // 1. Fresh boot defaults to CHALLENGE mode (`⚔️ Challenge` + `Moves Left: 8` on Level 1)
     await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
 
     // 2. Touch-Move Coalescing: two consecutive non-clearing adjustments of Block 1 on Level 3 (`Moves Left: 9 -> 8`) count as 1 Move
     await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.loadLevel(3));
@@ -698,11 +698,11 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
       await page.mouse.move(pts.e.x, pts.e.y, { steps: 8 });
       await page.mouse.up();
     };
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 9');
+    await expect(page.locator('#hud-moves-value')).toHaveText('9');
     await dragCell(1, 1, 1, 0);
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
     await dragCell(1, 0, 2, 0);
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
 
     // 3. Exhaust remaining moves on Level 1 to trigger OUT_OF_MOVES, then click "🌿 Finish in Zen Mode (Free)"
     await page.evaluate(() => {
@@ -742,13 +742,13 @@ test.describe('ShredBlocks: Browser History Navigation, Infinite Mode Saves & Cr
     await page.locator('.level-node-card[data-level-id="1"]').click();
     await expect(page.locator('#hud-level-title')).toContainText('Level 1');
     await dragCell(3, 2, 3, 1);
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 1 / Par');
+    await expect(page.locator('#hud-moves-badge')).toHaveText('Moves 1');
     await page.locator('#btn-mode-toggle').click(); // ZEN -> TIMED -> restarts at Move 0
     await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
-    await expect(page.locator('#hud-moves-pill')).toContainText('Moves: 0 / Par');
+    await expect(page.locator('#hud-timer-badge')).toHaveText('Ready');
     await page.locator('#btn-mode-next').click(); // TIMED -> CHALLENGE via right wing keycap
     await expect(page.locator('#hud-mode-label')).toContainText('Challenge');
-    await expect(page.locator('#hud-moves-pill')).toHaveText('Moves Left: 8');
+    await expect(page.locator('#hud-moves-value')).toHaveText('8');
     await page.locator('#btn-mode-prev').click(); // CHALLENGE -> TIMED via left wing keycap
     await expect(page.locator('#hud-mode-label')).toContainText('Speed Rush');
     await page.locator('#btn-mode-toggle').click(); // TIMED -> CHALLENGE via center toggle

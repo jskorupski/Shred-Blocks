@@ -246,7 +246,7 @@ export function autoAdvanceColorQueues(board: BoardState, forceRescue = false): 
  */
 export function trySpawnReadyGenerators(board: BoardState): BlockState[] {
   const spawned: BlockState[] = [];
-  const { rows, cols, occupancy } = board;
+  const { rows, cols, occupancy, floorColor } = board;
 
   for (const gen of board.generators) {
     if (gen.state !== 'READY_TO_SPAWN') continue;
@@ -262,12 +262,18 @@ export function trySpawnReadyGenerators(board: BoardState): BlockState[] {
 
     const spec = gen.queue[gen.queueCursor];
     const shape = getShape(spec.shapeId);
+    const spawnColor = getActiveColor(spec.colorStack, 0);
 
     let canFit = true;
     for (const [dr, dc] of shape.cells) {
       const r = gen.spawnRow + dr;
       const c = gen.spawnCol + dc;
       if (r < 0 || r >= rows || c < 0 || c >= cols || occupancy[r * cols + c] !== 0) {
+        canFit = false;
+        break;
+      }
+      const fc = floorColor[r * cols + c];
+      if (fc !== 0 && fc !== spawnColor) {
         canFit = false;
         break;
       }

@@ -17,6 +17,9 @@ import {
   isBlockMovable,
 } from '../core/physics';
 import { getActiveColor, getShape } from '../core/polyomino';
+
+export { findBlockingFloorPathColor } from '../core/physics';
+
 import type {
   BarrierState,
   BlockState,
@@ -73,10 +76,14 @@ export interface BoardInputCallbacks {
   onMoveCommitted?: (outcome: CommitMoveOutcome) => void;
   /** Called after a move or shred commits so the renderer can trace the path taken (`MYSTIC-TRACE-01`) */
   onPathTrace?: (trace: CommittedPathTraceInfo) => void;
-  /** Called when a player taps an immobile block (Stone, Frozen, Chained, Roped) */
+  /** Called when a player taps an immobile block (Frozen, Chained, Roped, Locked Chamber) */
   onImmobileBlockTap?: (block: BlockState) => void;
   /** Called when a player taps a closed Sealed Mystery Vault lid (`bar.isVault`) */
   onLockedVaultTap?: (vault: BarrierState) => void;
+  /** Called when a player taps a non-block obstacle, Colorful Floor Path, crate, generator, or elevator */
+  onBoardFeatureTap?: (row: number, col: number) => void;
+  /** Called once per drag gesture when a dragged block is stopped solely by a mismatched floor tile */
+  onFloorPathCollision?: (floorColorId: ColorId) => void;
   /** Called when a targeted booster (Hammer, Rocket, Vacuum) is executed on a valid target */
   onExecuteBooster?: (type: BoosterType, target: BoosterTargetPayload) => boolean;
   /** Called when a keyboard shortcut triggers a quick action or booster slot 1..5 */
@@ -89,6 +96,72 @@ export interface BoardInputCallbacks {
   onDragFrame?: () => void;
   /** Called during drag updates */
   onBoardChanged?: () => void;
+}
+
+/**
+ * Appends grid-centered waypoints along the dragged block's orthogonal corridor, erasing loops.
+ */
+export function appendOrthogonalDragWaypoint(
+  dragWaypoints: PathWaypoint[],
+  cellR: number,
+  cellC: number,
+  offX: number,
+  offY: number
+): void {
+  const wx = cellC + offX;
+  const wy = cellR + offY;
+  for (let i = 0; i < dragWaypoints.length; i++) {
+    if (Math.abs(dragWaypoints[i].x - wx) < 0.05 && Math.abs(dragWaypoints[i].y - wy) < 0.05) {
+      dragWaypoints.length = i + 1;
+      return;
+    }
+  }
+  const tail = dragWaypoints[dragWaypoints.length - 1];
+  if (tail) {
+    const prevC = Math.round(tail.x - offX);
+    const prevR = Math.round(tail.y - offY);
+    if (prevC !== cellC && prevR !== cellR) {
+      dragWaypoints.push({ x: cellC + offX, y: prevR + offY });
+    }
+  }
+  dragWaypoints.push({ x: wx, y: wy });
+}
+
+/**
+ * Handles taps on non-block board cells: Sealed Mystery Vaults, Portcullis Barriers,
+ * Crates, Block Generators, Stone Pillars, Colorful Floor Paths, and Moving Elevators.
+ */
+export function handleEmptyCellPointerTap(
+  board: BoardState,
+  row: number,
+  col: number,
+  callbacks: BoardInputCallbacks
+): void {
+  const sealedVault = getSealedVaultAtCell(board, row, col);
+  if (sealedVault) {
+    callbacks.sound?.playWallClack();
+    callbacks.onLockedVaultTap?.(sealedVault);
+    return;
+  }
+  if (row < 0 || row >= board.rows || col < 0 || col >= board.cols) return;
+  const idx = row * board.cols + col;
+  const occ = board.occupancy[idx];
+  const fc = board.floorColor[idx] ?? 0;
+  const onElevator = board.elevators.some((e) => {
+    const dir = e.atAlternatePos ? -1 : 1;
+    const minR = Math.min(e.row, e.row + e.deltaRow * dir);
+    const maxR = Math.max(e.row, e.row + e.deltaRow * dir) + e.height - 1;
+    const minC = Math.min(e.col, e.col + e.deltaCol * dir);
+    const maxC = Math.max(e.col, e.col + e.deltaCol * dir) + e.width - 1;
+    return row >= minR && row <= maxR && col >= minC && col <= maxC;
+  });
+  if (occ === -2 || occ === -3 || occ === -4 || occ <= -100) {
+    callbacks.sound?.playWallClack();
+    callbacks.onBoardFeatureTap?.(row, col);
+  } else if (fc > 0 || onElevator) {
+    callbacks.sound?.playSlideTick();
+    callbacks.onBoardFeatureTap?.(row, col);
+  }
 }
 
 /**
@@ -229,7 +302,8 @@ export function executeBoosterTargetTap(
   const inBounds = row >= 0 && row < board.rows && col >= 0 && col < board.cols;
   const cellOcc = inBounds ? board.occupancy[row * board.cols + col] : -1;
   const isDirectNonBlockHammerCell =
-    inputMode === 'TARGET_HAMMER' && (!inBounds || cellOcc === -1 || cellOcc === -3 || cellOcc <= -100);
+    inputMode === 'TARGET_HAMMER' &&
+    (!inBounds || cellOcc === -1 || cellOcc === -2 || cellOcc === -3 || cellOcc === -4 || cellOcc <= -100);
 
   const rawPicked = isDirectNonBlockHammerCell ? null : pickBlockAtBoardPoint(board, boardX, boardY);
   const picked = rawPicked && !isBlockInLockedRoom(board, rawPicked) ? rawPicked : null;

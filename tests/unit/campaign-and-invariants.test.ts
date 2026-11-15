@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applyBoosterHammer, commitBlockMove, createBoardState, isBoardWon } from '../../src/core/board';
+import {
+  applyBoosterHammer,
+  applyBoosterRocket,
+  commitBlockMove,
+  createBoardState,
+  isBoardWon,
+} from '../../src/core/board';
 import {
   checkBlockGateClearance,
   checkMidDragGateCapture,
@@ -9,6 +15,8 @@ import {
   stepMovingElevators,
 } from '../../src/core/gate-clearance';
 import {
+  canGroupOccupyOffset,
+  findBlockingFloorPathColor,
   isBlockInLockedRoom,
   isContinuousOffsetValid,
   isRoomUnlocked,
@@ -161,7 +169,7 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
 
       // 2. Verify no generator housing/spawn cell or elevator footprint overlaps cutouts, pillars, or barriers
       for (const gen of board.generators) {
-        expect(board.occupancy[gen.row * board.cols + gen.col]).toBeGreaterThanOrEqual(0);
+        expect(board.occupancy[gen.row * board.cols + gen.col]).toBe(-4);
         expect(board.occupancy[gen.spawnRow * board.cols + gen.spawnCol]).toBeGreaterThanOrEqual(0);
         expect(isRoomUnlocked(board, board.roomMap[gen.row * board.cols + gen.col])).toBe(true);
       }
@@ -179,6 +187,13 @@ describe('300-Level Campaign + Endless Solvability, Pacing & UX-03 Audit', () =>
             }
           }
         }
+      }
+      for (const fp of spec.floorPaths ?? []) {
+        expect(
+          board.occupancy[fp.row * board.cols + fp.col],
+          `Level ${spec.id} floorPath at (${fp.row},${fp.col}) must be open at Move 0`
+        ).toBe(0);
+        expect(board.floorColor[fp.row * board.cols + fp.col]).toBe(fp.color);
       }
 
       // 3. On multi-room TWIN_SANCTUM levels, verify carrier payloads and bombs start in unlocked Room 0
@@ -550,5 +565,73 @@ describe('Physics, Gate Cascade & Solver Edge-Case Invariants', () => {
     expect(m2.moved).toBe(true);
     expect(m2.clearedBlockIds).toContain(2);
     expect(isBoardWon(board)).toBe(true);
+  });
+
+  it('FLOOR-PATH-01 & GEN-OCC-01: generator housing (-4) blocks movement & survives boosters, and findBlockingFloorPathColor isolates floor-color collisions', () => {
+    const spec: LevelSpec = {
+      id: 970,
+      name: 'Floor Path & Generator Occupancy Audit',
+      difficulty: 'NORMAL',
+      rows: 4,
+      cols: 4,
+      blocks: [
+        { id: 1, shapeId: '1x1', row: 1, col: 1, colorStack: [2] }, // Blue block blocked by Purple floor path
+        { id: 2, shapeId: '1x1', row: 0, col: 2, colorStack: [5] }, // Purple block permitted on Purple floor path
+      ],
+      gates: [
+        { edge: 'RIGHT', spanStart: 1, spanLength: 1, colorQueue: [2] },
+        { edge: 'TOP', spanStart: 2, spanLength: 1, colorQueue: [5] },
+      ],
+      generators: [
+        {
+          id: 1,
+          row: 2,
+          col: 2,
+          spawnRow: 2,
+          spawnCol: 3,
+          cooldown: 2,
+          queue: [{ shapeId: '1x1', colorStack: [2] }],
+        },
+      ],
+      floorPaths: [{ row: 1, col: 2, color: 5 }],
+    };
+
+    const board = createBoardState(spec);
+    const blue = board.blocks[0];
+    const purple = board.blocks[1];
+
+    // Generator housing stamps solid occupancy -4, blocks sliding overlap, and survives Hammer/Rocket strikes
+    expect(board.occupancy[2 * board.cols + 2]).toBe(-4);
+    expect(canGroupOccupyOffset(board, [purple], 2, 0)).toBe(false);
+    expect(applyBoosterHammer(board, 2, 2)).toBe(false);
+    applyBoosterRocket(board, 2, 0, 'ROW');
+    expect(board.generators.length).toBe(1);
+    expect(board.occupancy[2 * board.cols + 2]).toBe(-4);
+
+    // Blue block is stopped at col=1 by the Purple floor path at (1, 2), and findBlockingFloorPathColor reports 5
+    const sweepBlue = sweepBlockToTarget(board, 1, 2, 1);
+    expect(sweepBlue.leadX).toBe(1);
+    expect(sweepBlue.leadY).toBe(1);
+    expect(findBlockingFloorPathColor(board, 1, 1, 1, 1, 0)).toBe(5);
+
+    // Non-floor-path blocks (board walls or solid -4 generator housing) return 0
+    expect(findBlockingFloorPathColor(board, 1, 1, 0, 0, -1)).toBe(0);
+    expect(canGroupOccupyOffset(board, [blue], -1, 0)).toBe(true);
+    expect(findBlockingFloorPathColor(board, 1, 0, 1, -1, 0)).toBe(0);
+
+    // Matching Purple block CAN cross (1, 2), and stops cleanly at (2, 2) generator housing with floor block = 0
+    expect(canGroupOccupyOffset(board, [purple], 1, 0)).toBe(true);
+    expect(findBlockingFloorPathColor(board, 2, 2, 1, 0, 1)).toBe(0);
+
+    // Level 176 ("Cascade Corridor") exposes a 2-tile Royal Purple corridor open at Move 0
+    const s176 = getLevelSpec(176);
+    const b176 = createBoardState(s176);
+    expect(s176.floorPaths).toEqual([
+      { row: 4, col: 3, color: 5 },
+      { row: 5, col: 3, color: 5 },
+    ]);
+    for (const fp of s176.floorPaths ?? []) {
+      expect(b176.occupancy[fp.row * b176.cols + fp.col]).toBe(0);
+    }
   });
 });

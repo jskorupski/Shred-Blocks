@@ -29,6 +29,7 @@ On-demand reference for **WebGL2 / Canvas2D rendering**, **Z-layer depth orderin
 | Layer / Feature | Relative `Z` | Notes |
 | :--- | :--- | :--- |
 | **Courtyard Floor Tile** | `0.000` (`-0.042` locked room) | Sunken Twilight Chambers (`roomId > 0` while locked) rise smoothly to `0.000` when unlocked. |
+| **Sanctuary Color-Filter Mosaic Runner (`FLOOR-PATH-01`)** | `0.005 .. 0.013` | `pathColorId > 0` renders the base `STONE_SURFACE_STYLE` floor tile first, then layers a neighbor-bridged `materialStyle = 0` inlaid runner (`0.005`), beveled outer trim rails (`0.006`), and center diamond filigree (`0.0095..0.013`) or `AX-01` `drawToneOnToneSigil3D` (`0.0115`), isolating true filter hue from tray shaders across all 5 trays + Canvas2D fallback. |
 | **Block Top Face** | `0.580` | Base top face of all 19 polyomino shapes (`BLOCK_TOP_Z = 0.58`). |
 | **3D Straps, Chains, Ropes & Side Rails** | `0.588 .. 0.626` | Side-flange rails (`0.13` / `0.87`) leave central `[0.34, 0.66]` circular studs 100% uncovered. |
 | **Multi-Layer Inner Core Top Face** | `0.602` | Exposed through the outer shell's central cutout window. |

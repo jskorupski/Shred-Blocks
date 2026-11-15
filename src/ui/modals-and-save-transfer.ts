@@ -461,6 +461,7 @@ export function createDebugBridgeImpl(app: AppViewContext): ShredBlocksDebugBrid
     dismissTitleScreen: (targetScreen = 'game', animateAwakening = false) =>
       app.dismissTitleScreen(targetScreen, animateAwakening),
     isTitleScreenOpen: () => app.titleOverlayOpen,
+    syncHud: () => app.syncInGameHud(),
     getBlueprintMix: () => app.blueprintMix,
     setPwaUpdateBannerVisible: (visible: boolean) => {
       app.pwaUpdateAvailable = visible;

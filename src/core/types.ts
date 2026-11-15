@@ -443,7 +443,7 @@ export interface BoardState {
   layoutId: CourtyardLayoutId;
   rows: number;
   cols: number;
-  /** Flat occupancy: 0=empty, -1=exterior void cutout, -2=pillar, -3=closed portcullis barrier, -100-id=crate, >0=blockId */
+  /** Flat occupancy: 0=empty, -1=exterior void cutout, -2=pillar, -3=closed portcullis barrier, -4=generator housing, -100-id=crate, >0=blockId */
   occupancy: Int16Array;
   /** Flat colorful floor path: 0=normal floor, 1..9=restricted to ColorId */
   floorColor: Uint8Array;

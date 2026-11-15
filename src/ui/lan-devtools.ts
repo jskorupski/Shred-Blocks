@@ -152,7 +152,7 @@ function createUnlockButton(id: string, label: string, app: AppViewContext): HTM
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.id = id;
-  btn.className = 'btn-tactile btn-warning btn-compact';
+  btn.className = 'btn-tactile btn-secondary btn-compact';
   btn.textContent = label;
   btn.title = 'LAN-only debug helper: unlock all cosmetics, coins, power-ups, and levels';
   btn.addEventListener('click', () => applyLanUnlockAll(app));
@@ -160,20 +160,12 @@ function createUnlockButton(id: string, label: string, app: AppViewContext): HTM
 }
 
 /**
- * Mounts LAN-only debug unlock/restore buttons when compiled with `__SHREDBLOCKS_LAN_DEVTOOLS__ === true`
- * (`vite.lan.config.ts`). Dead-code-stripped (`0` bytes) from production `vite.config.ts` builds.
+ * Mounts LAN-only debug unlock/restore controls exclusively inside `#pause-diagnostics-footer`
+ * (`#dialog-pause` Settings) when compiled with `__SHREDBLOCKS_LAN_DEVTOOLS__ === true`
+ * (`vite.lan.config.ts`), keeping `.top-economy-bar` headers strictly single-line.
+ * Dead-code-stripped (`0` bytes) from production `vite.config.ts` builds.
  */
 export function mountLanDevTools(app: AppViewContext): void {
-  const homeActions = document.querySelector('#screen-home .header-actions');
-  if (homeActions && !document.getElementById('btn-lan-unlock-home')) {
-    homeActions.prepend(createUnlockButton('btn-lan-unlock-home', '🛠 Unlock All', app));
-  }
-
-  const themesEcon = document.querySelector('#screen-themes .economy-pills');
-  if (themesEcon && !document.getElementById('btn-lan-unlock-themes')) {
-    themesEcon.prepend(createUnlockButton('btn-lan-unlock-themes', '🛠 Unlock All', app));
-  }
-
   const diagnosticsFooter =
     document.getElementById('pause-diagnostics-footer') ??
     document.querySelector('#dialog-pause .pause-dialog-card');
@@ -189,7 +181,6 @@ export function mountLanDevTools(app: AppViewContext): void {
     grid.className = 'dialog-actions-grid pause-dev-grid';
 
     const unlockBtn = createUnlockButton('btn-lan-unlock-pause', '🛠 LAN Unlock All', app);
-    unlockBtn.className = 'btn-tactile btn-secondary btn-compact';
 
     const restoreBtn = document.createElement('button');
     restoreBtn.type = 'button';

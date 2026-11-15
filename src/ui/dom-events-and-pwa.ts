@@ -8,6 +8,7 @@ import {
   MAX_ENDLESS_LEVEL,
   PWA_INSTALLED_STORAGE_KEY,
 } from './catalog-meta';
+import { showKeystoneRuleToastImpl } from './hud-keystone';
 import { handlePopstateNavigationImpl, refreshSaveTransferModalImpl } from './modals-and-save-transfer';
 import { bindThemesAndCosmeticsEventsImpl, refreshThemesPreviewIfActive } from './themes-studio-view';
 
@@ -199,6 +200,11 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     const cur = app.saveManager.getPayload().settings.playMode;
     const next: PlayMode = cur === 'CHALLENGE' ? 'ZEN' : cur === 'ZEN' ? 'TIMED' : 'CHALLENGE';
     app.switchPlayMode(next);
+  });
+
+  document.getElementById('hud-keystone-info')?.addEventListener('click', () => {
+    app.sound.playButtonTap();
+    showKeystoneRuleToastImpl(app);
   });
 
   document.getElementById('btn-hud-sfx')?.addEventListener('click', () => {

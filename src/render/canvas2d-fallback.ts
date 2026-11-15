@@ -129,22 +129,36 @@ export function renderCanvas2DFallbackImpl(
       const roomVis = rctx.getRoomVisualState(board, roomId);
       const zOff = roomVis.zOffset;
       const fc = (board.floorColor[idx] ?? 0) as ColorId;
-      const fill =
-        fc > 0
-          ? pickPrimaryHex(COLOR_PALETTE[fc])
-          : (r + c) % 2 === 0
-            ? toCssRgb(palette.floorTileA, roomVis.luminanceMul)
-            : toCssRgb(palette.floorTileB, roomVis.luminanceMul);
-      fillCellPad(c, r, 0.04, zOff, fill);
-      if (fc > 0 && colorblind) {
+      const baseFill =
+        (r + c) % 2 === 0
+          ? toCssRgb(palette.floorTileA, roomVis.luminanceMul)
+          : toCssRgb(palette.floorTileB, roomVis.luminanceMul);
+      fillCellPad(c, r, 0.04, zOff, baseFill);
+      if (fc > 0) {
         const fE = COLOR_PALETTE[fc];
+        const m = 0.09;
+        const padL = c > 0 && board.floorColor[idx - 1] === fc ? 0 : m;
+        const padR = c + 1 < board.cols && board.floorColor[idx + 1] === fc ? 0 : m;
+        const padT = r > 0 && board.floorColor[idx - board.cols] === fc ? 0 : m;
+        const padB = r + 1 < board.rows && board.floorColor[idx + board.cols] === fc ? 0 : m;
+        fillProjectedQuad(
+          c + padL,
+          r + padT,
+          c + 1 - padR,
+          r + 1 - padB,
+          zOff + 0.01,
+          pickPrimaryHex(fE),
+          pickLipHex(fE),
+          2
+        );
+        const sym = colorblind ? fE.symbol : '◇';
         drawCenteredText(
-          fE.symbol,
+          sym,
           c + 0.5,
           r + 0.5,
           zOff + 0.02,
           fE.cbGlyphHex,
-          'bold 13px sans-serif',
+          colorblind ? 'bold 13px sans-serif' : 'bold 11px sans-serif',
           true
         );
       }

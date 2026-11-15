@@ -48,6 +48,21 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
       lockedCellKeys.add(r * cols + c);
     }
   }
+  const isRoom0Cell = (r: number, c: number): boolean => {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
+    if (layoutId === 'TWIN_SANCTUM' && r <= 2) return false;
+    return !lockedCellKeys.has(r * cols + c);
+  };
+  const isReservedMechanismCell = (r: number, c: number): boolean => {
+    if (!isRoom0Cell(r, c)) return true;
+    if (grid[r * cols + c] < 0) return true;
+    for (const g of generators) {
+      if ((g.row === r && g.col === c) || (g.spawnRow === r && g.spawnCol === c)) {
+        return true;
+      }
+    }
+    return false;
+  };
   const isInStartingRoom = (b: LevelSpec['blocks'][number]): boolean => {
     if (layoutId === 'TWIN_SANCTUM' && b.row <= 2) return false;
     const sh = getShape(b.shapeId);
@@ -497,32 +512,89 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
     }
   }
 
-  // 15. Colorful Floor Paths (L171+): 1..2 corridor tiles (1 on retry attempts so corridors never seal off)
+  // 15. Colorful Floor Paths (L171+): visible open 2-cell corridor (or 1 open cell on retries)
   if (useFloorPaths && coloredBlocks.length > 0) {
-    const maxTiles = isBreather || attempt >= 3 || rows < 8 ? 1 : 2;
-    const seen = new Set<number>();
-    for (const b of coloredBlocks) {
-      if (floorPaths.length >= maxTiles) break;
-      if (!isInStartingRoom(b)) continue;
-      const key = b.row * cols + b.col;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      floorPaths.push({
-        row: b.row,
-        col: b.col,
-        color: b.colorStack[0],
-      });
+    const startBlock = coloredBlocks.find(isInStartingRoom) ?? coloredBlocks[0];
+    const pathColor = startBlock.colorStack[0];
+    const centerR = (rows - 1) * 0.5;
+    const centerC = (cols - 1) * 0.5;
+
+    const blocksForeignGateMouth = (r: number, c: number): boolean => {
+      for (const g of gates) {
+        if (g.colorQueue[0] === pathColor) continue;
+        const edgeLine =
+          g.edgeLine ??
+          (g.edge === 'TOP' || g.edge === 'LEFT' ? 0 : g.edge === 'BOTTOM' ? rows - 1 : cols - 1);
+        const onSpan =
+          g.edge === 'TOP' || g.edge === 'BOTTOM'
+            ? r === edgeLine && c >= g.spanStart && c < g.spanStart + g.spanLength
+            : c === edgeLine && r >= g.spanStart && r < g.spanStart + g.spanLength;
+        if (onSpan) return true;
+      }
+      return false;
+    };
+
+    const openCells: Array<{ r: number; c: number; score: number }> = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r * cols + c] !== 0 || isReservedMechanismCell(r, c)) continue;
+        const isInterior = r >= 1 && r < rows - 1 && c >= 1 && c < cols - 1;
+        const distCenter = Math.abs(r - centerR) + Math.abs(c - centerC);
+        const penalty = (isInterior ? 0 : 12) + (blocksForeignGateMouth(r, c) ? 40 : 0);
+        openCells.push({ r, c, score: distCenter + penalty });
+      }
+    }
+    openCells.sort((a, b) => a.score - b.score || a.r - b.r || a.c - b.c);
+
+    if (attempt < 4 && openCells.length >= 2) {
+      let bestPair: [{ r: number; c: number }, { r: number; c: number }] | null = null;
+      let bestPairScore = Infinity;
+      for (let i = 0; i < openCells.length; i++) {
+        const a = openCells[i];
+        for (let j = i + 1; j < openCells.length; j++) {
+          const b = openCells[j];
+          if (Math.abs(a.r - b.r) + Math.abs(a.c - b.c) !== 1) continue;
+          const pairScore = a.score + b.score;
+          if (pairScore < bestPairScore) {
+            bestPairScore = pairScore;
+            bestPair = [a, b];
+          }
+        }
+      }
+      if (bestPair) {
+        floorPaths.push(
+          { row: bestPair[0].r, col: bestPair[0].c, color: pathColor },
+          { row: bestPair[1].r, col: bestPair[1].c, color: pathColor }
+        );
+      } else {
+        floorPaths.push({ row: openCells[0].r, col: openCells[0].c, color: pathColor });
+      }
+    } else if (openCells.length >= 1) {
+      floorPaths.push({ row: openCells[0].r, col: openCells[0].c, color: pathColor });
     }
   }
 
-  // 16. Moving Elevators (L181+)
-  if (useElevators) {
+  // 16. Moving Elevators (L181+): never overlap mechanisms/floorPaths; prefer rows visible at Move 0
+  if (useElevators && cols >= 5) {
     const midR = Math.floor(rows / 2);
     const candidateRows = [midR, midR + 1, midR - 1, rows - 2];
+    const floorPathKeys = new Set(floorPaths.map((fp) => fp.row * cols + fp.col));
+    let fallbackRow = -1;
     for (const er of candidateRows) {
       if (er < 1 || er >= rows - 1) continue;
       if (layoutId === 'TWIN_SANCTUM' && er <= 2) continue;
-      if (cols >= 5 && grid[er * cols + 1] >= 0 && grid[er * cols + 2] >= 0 && grid[er * cols + 3] >= 0) {
+      let trackClear = true;
+      let hasOpenMove0Cell = false;
+      for (let c = 1; c <= 3; c++) {
+        const idx = er * cols + c;
+        if (isReservedMechanismCell(er, c) || floorPathKeys.has(idx)) {
+          trackClear = false;
+          break;
+        }
+        if (grid[idx] === 0) hasOpenMove0Cell = true;
+      }
+      if (!trackClear) continue;
+      if (hasOpenMove0Cell) {
         elevators.push({
           id: 1,
           row: er,
@@ -532,8 +604,21 @@ export function applyProgressiveMechanicsToCandidate(ctx: CandidateMechanicsCont
           deltaRow: 0,
           deltaCol: 1,
         });
+        fallbackRow = -1;
         break;
       }
+      if (fallbackRow < 0) fallbackRow = er;
+    }
+    if (fallbackRow >= 0 && elevators.length === 0) {
+      elevators.push({
+        id: 1,
+        row: fallbackRow,
+        col: 1,
+        width: 2,
+        height: 1,
+        deltaRow: 0,
+        deltaCol: 1,
+      });
     }
   }
 }
