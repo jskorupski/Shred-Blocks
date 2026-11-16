@@ -445,7 +445,7 @@ export function syncInGameHudImpl(app: AppViewContext): void {
   setAttrIfChanged(appShell, 'data-play-mode', playMode);
   setAttrIfChanged(document.body, 'data-play-mode', playMode);
 
-  // Skips exist strictly in Zen Mode and cap at 3 consecutive un-cleared skips (`ZEN-SKIP-GUARD-01`)
+  // Skips exist strictly in Zen Mode and cap at 50 consecutive un-cleared skips (`ZEN-SKIP-GUARD-01`)
   const isZenMode = playMode === 'ZEN';
   const skipAllowed = canSkipZenLevel(save, app.board.levelId);
   const skipHudBtn = document.getElementById('btn-skip-hud') as HTMLButtonElement | null;

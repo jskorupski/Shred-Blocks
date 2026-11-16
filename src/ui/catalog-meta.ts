@@ -14,7 +14,13 @@ import type {
 } from '../core/types';
 import type { BoardInputController, HoverState } from '../input/pointer-controller';
 import type { Renderer3D } from '../render/renderer-3d';
-import { BOOSTER_COIN_COSTS, type SaveManager, THEME_TIER_PRICES } from '../storage/save-manager';
+import {
+  BOOSTER_COIN_COSTS,
+  countUniqueClearedLevels,
+  getEffectiveBoosterUnlockLevel,
+  type SaveManager,
+  THEME_TIER_PRICES,
+} from '../storage/save-manager';
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -97,6 +103,31 @@ export const BOOSTER_DEBUT_NOTES: Partial<Record<number, string>> = {
   18: '🚀 EPIC Power-Up Unlocked: Rocket! Blasts an entire row or column of blocks.',
   30: '🧲 LEGENDARY Power-Up Unlocked: Color Vacuum! Sweeps all unlocked blocks of a chosen color off the board.',
 };
+
+const LOCKED_BOOSTER_GUIDANCE_NOTES: Partial<Record<number, (cleared: number) => string>> = {
+  2: () => '💡 UNCOMMON Power-Up: Hint — clear 1 stage to unlock!',
+  8: (c) => `🔨 RARE Power-Up: Hammer — clear 7 stages (${c}/7) to unlock!`,
+  18: (c) => `🚀 EPIC Power-Up: Rocket — clear 17 stages (${c}/17) to unlock!`,
+  30: (c) => `🧲 LEGENDARY Power-Up: Color Vacuum — clear 29 stages (${c}/29) to unlock!`,
+};
+
+/** Returns a debut unlock toast only once genuine progression unlocks the milestone Power-Up. */
+export function resolveBoosterDebutToastNote(save: SavePayloadV1, levelId: number): string | undefined {
+  const note = BOOSTER_DEBUT_NOTES[levelId];
+  if (!note) return undefined;
+  return getEffectiveBoosterUnlockLevel(save, levelId) >= levelId ? note : undefined;
+}
+
+/** Shows truthful clear-count guidance on roadmap debut nodes when skipped ahead in Zen Mode. */
+export function resolveRoadmapBoosterDebutNote(save: SavePayloadV1, levelId: number): string | undefined {
+  const unlocked = resolveBoosterDebutToastNote(save, levelId);
+  if (unlocked) return unlocked;
+  if (save.settings.playMode !== 'ZEN') return BOOSTER_DEBUT_NOTES[levelId];
+  const formatter = LOCKED_BOOSTER_GUIDANCE_NOTES[levelId];
+  if (!formatter) return undefined;
+  const cleared = Math.min(levelId - 1, countUniqueClearedLevels(save));
+  return formatter(cleared);
+}
 
 export const SANCTUARY_AWAKENING_MILESTONES: ReadonlyArray<{ levelId: number; label: string }> = [
   { levelId: 2, label: 'Hint Power-Up' },

@@ -647,13 +647,13 @@ export function evaluateModeLevelWin(
       payload.levelRecords[levelId] = nextRecord;
 
       const ladder = payload.modeState[targetMode];
-      if (levelId + 1 > ladder.highestUnlocked) {
-        ladder.highestUnlocked = levelId + 1;
+      const nextTarget = Math.min(MAX_MODE_LEVEL, levelId + 1);
+      if (nextTarget > ladder.highestUnlocked) {
+        ladder.highestUnlocked = nextTarget;
       }
-      ladder.currentLevelId = Math.min(
-        ladder.highestUnlocked,
-        Math.max(ladder.currentLevelId || 1, levelId + 1)
-      );
+      ladder.currentLevelId = isZenRun
+        ? Math.min(ladder.highestUnlocked, nextTarget)
+        : Math.min(ladder.highestUnlocked, Math.max(ladder.currentLevelId || 1, nextTarget));
       if (payload.settings.playMode === targetMode) {
         payload.currentLevelId = ladder.currentLevelId;
       }
@@ -665,7 +665,7 @@ export function evaluateModeLevelWin(
   };
 }
 
-export const ZEN_MAX_CONSECUTIVE_SKIPS = 3;
+export const ZEN_MAX_CONSECUTIVE_SKIPS = 50;
 
 /**
  * Returns `true` iff `rec` represents a genuine non-skipped clear in at least one mode (`ZEN-SKIP-GUARD-01`).
@@ -714,7 +714,7 @@ export function countTrailingUnclearedStages(payload: SavePayloadV1, levelId: nu
 
 /**
  * Enforces `ZEN-SKIP-GUARD-01`: Zen Free Skips are only permitted in `'ZEN'` mode and can never advance
- * more than `ZEN_MAX_CONSECUTIVE_SKIPS` (`3`) consecutive un-cleared stages ahead of a genuinely cleared stage.
+ * more than `ZEN_MAX_CONSECUTIVE_SKIPS` (`50`) consecutive un-cleared stages ahead of a genuinely cleared stage.
  */
 export function canSkipZenLevel(payload: SavePayloadV1, levelId: number): boolean {
   if (payload.settings.playMode !== 'ZEN') return false;
@@ -741,13 +741,14 @@ export function getEffectiveBoosterUnlockLevel(payload: SavePayloadV1, activeBoa
 
 /**
  * Applies a Zen-only Free Skip (`0 Coins`). Returns `false` (strict no-op) if `playMode !== 'ZEN'`
- * or if `ZEN_MAX_CONSECUTIVE_SKIPS` (`3`) consecutive un-cleared stages have already been skipped.
+ * or if `ZEN_MAX_CONSECUTIVE_SKIPS` (`50`) consecutive un-cleared stages have already been skipped.
  */
 export function applyZenOnlySkip(payload: SavePayloadV1, levelId: number): boolean {
-  if (!canSkipZenLevel(payload, levelId)) return false;
-  const existing = payload.levelRecords[levelId];
+  const cleanId = Math.min(MAX_MODE_LEVEL, Math.max(1, Math.floor(levelId)));
+  if (!canSkipZenLevel(payload, cleanId)) return false;
+  const existing = payload.levelRecords[cleanId];
   if (!existing) {
-    payload.levelRecords[levelId] = {
+    payload.levelRecords[cleanId] = {
       stars: 0,
       bestMoves: 0,
       bestTimeSec: 0,
@@ -755,18 +756,19 @@ export function applyZenOnlySkip(payload: SavePayloadV1, levelId: number): boole
       zenSkipped: true,
     };
   } else if (!existing.zenCleared) {
-    payload.levelRecords[levelId] = {
+    payload.levelRecords[cleanId] = {
       ...existing,
       skipped: existing.stars === 0 ? true : existing.skipped,
       zenSkipped: true,
     };
   }
+  const nextId = Math.min(MAX_MODE_LEVEL, cleanId + 1);
   const zenLadder = payload.modeState.ZEN;
-  if (levelId + 1 > zenLadder.highestUnlocked) {
-    zenLadder.highestUnlocked = levelId + 1;
+  if (nextId > zenLadder.highestUnlocked) {
+    zenLadder.highestUnlocked = nextId;
   }
-  zenLadder.currentLevelId = levelId + 1;
-  payload.currentLevelId = levelId + 1;
+  zenLadder.currentLevelId = nextId;
+  payload.currentLevelId = nextId;
   payload.highestLevelUnlocked = computeGlobalHighestUnlocked(
     payload.modeState,
     payload.highestLevelUnlocked

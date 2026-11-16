@@ -18,9 +18,9 @@ import { extractImportCodeFromHash, migrateLegacyEconomy } from '../storage/save
 import {
   type AppHistoryState,
   type AppViewContext,
-  BOOSTER_DEBUT_NOTES,
   type ModalId,
   renderStructuredBannerText,
+  resolveBoosterDebutToastNote,
   type ShredBlocksDebugBridge,
 } from './catalog-meta';
 import {
@@ -205,8 +205,14 @@ export function previewSaveImportImpl(app: AppViewContext, rawInput: string): bo
     const renderSummaryItems = (targetUl: HTMLElement | null, p: SavePayloadV1) => {
       if (!targetUl) return;
       const dateStr = new Date(p.updatedAt || Date.now()).toLocaleString();
+      const nonZenMax = Math.max(p.modeState.CHALLENGE.highestUnlocked, p.modeState.TIMED.highestUnlocked);
+      const zenMax = p.modeState.ZEN.highestUnlocked;
+      const maxLine =
+        zenMax > nonZenMax
+          ? `Max Level: Level ${nonZenMax} (Zen: Level ${zenMax})`
+          : `Max Level: Level ${p.highestLevelUnlocked}`;
       const items = [
-        `Max Level: Level ${p.highestLevelUnlocked}`,
+        maxLine,
         `Total Stars: ★ ${p.totalStars}`,
         `Coins: ${p.coins} Coins`,
         `Updated: ${dateStr}`,
@@ -622,7 +628,9 @@ export function dismissTitleScreenImpl(
   }
   if (targetScreen === 'game' && app.board.movesCommitted === 0) {
     const spec = getLevelSpec(app.board.levelId);
-    app.showUnlockNoteIfPresent(spec.unlockNote ?? BOOSTER_DEBUT_NOTES[app.board.levelId]);
+    app.showUnlockNoteIfPresent(
+      spec.unlockNote ?? resolveBoosterDebutToastNote(app.saveManager.getPayload(), app.board.levelId)
+    );
     app.lastPointerActivityMs = performance.now();
   }
 }

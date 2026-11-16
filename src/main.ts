@@ -15,13 +15,14 @@ import { getLevelSpec } from './levels/catalog';
 import { findNextHintMove } from './levels/solver';
 import { hasActiveVisualFxImpl } from './render/particle-fx';
 import { Renderer3D } from './render/renderer-3d';
-import { canSkipZenLevel, SaveManager } from './storage/save-manager';
+import { canSkipZenLevel, SaveManager, ZEN_MAX_CONSECUTIVE_SKIPS } from './storage/save-manager';
 import { activateBoosterImpl, executeTargetedBoosterImpl } from './ui/boosters-controller';
 import {
   type AppViewContext,
   type BeforeInstallPromptEvent,
-  BOOSTER_DEBUT_NOTES,
+  MAX_ENDLESS_LEVEL,
   type ModalId,
+  resolveBoosterDebutToastNote,
   type ShredBlocksDebugBridge,
 } from './ui/catalog-meta';
 import { ensureDialogsMounted, prewarmDialogsLayout } from './ui/dialogs-template';
@@ -374,7 +375,9 @@ export class ShredBlocksApp implements AppViewContext {
       this.switchScreen('game');
     }
 
-    this.showUnlockNoteIfPresent(spec.unlockNote ?? BOOSTER_DEBUT_NOTES[cleanId]);
+    this.showUnlockNoteIfPresent(
+      spec.unlockNote ?? resolveBoosterDebutToastNote(this.saveManager.getPayload(), cleanId)
+    );
     this.syncAllUiFromSave();
     this.syncInGameHud();
     this.renderer.resize();
@@ -430,14 +433,17 @@ export class ShredBlocksApp implements AppViewContext {
     const currentId = this.board.levelId;
     if (!canSkipZenLevel(save, currentId)) {
       this.sound.playWallClack();
-      this.showGameToast('🌿 Clear a stage first to unlock more free skips (max 3 skipped in a row)!');
+      this.showGameToast(
+        `🌿 Clear a stage first to unlock more free skips (max ${ZEN_MAX_CONSECUTIVE_SKIPS} skipped in a row)!`
+      );
       return;
     }
     this.sound.playButtonTap();
     this.saveManager.recordLevelSkip(currentId);
     this.closeAllModals();
-    this.loadLevel(currentId + 1, true);
-    this.showGameToast(`🌿 Skipped Level ${currentId} — Level ${currentId + 1} Ready!`);
+    const nextId = Math.min(MAX_ENDLESS_LEVEL, currentId + 1);
+    this.loadLevel(nextId, true);
+    this.showGameToast(`🌿 Skipped Level ${currentId} — Level ${nextId} Ready!`);
   }
 
   public pushUndoSnapshot(boardState: BoardState): void {
@@ -460,7 +466,11 @@ export class ShredBlocksApp implements AppViewContext {
     if (!outcome.moved) {
       this.undoStack.pop();
     } else {
-      if (!this.saveManager.getPayload().settings.reducedMotion && preBlock) {
+      const curSave = this.saveManager.getPayload();
+      if (playMode === 'ZEN' && curSave.modeState.ZEN.currentLevelId !== this.board.levelId) {
+        this.saveManager.setCurrentLevel(this.board.levelId);
+      }
+      if (!curSave.settings.reducedMotion && preBlock) {
         const afterBlk = this.board.blocks.find((b) => b.id === blockId);
         const endR = afterBlk ? afterBlk.row : targetRow;
         const endC = afterBlk ? afterBlk.col : targetCol;

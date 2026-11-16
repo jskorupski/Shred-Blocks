@@ -26,6 +26,7 @@ import {
   UNDER_PAR_ORACLE_COINS,
   ZEN_MAX_CONSECUTIVE_SKIPS,
 } from '../../src/storage/save-manager';
+import { resolveBoosterDebutToastNote, resolveRoadmapBoosterDebutNote } from '../../src/ui/catalog-meta';
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
@@ -256,6 +257,49 @@ describe('MAP-MODE-SPLIT-01, ZEN-STARS-01 & SAVE-COMPAT-01: Per-Mode Ladders, Ze
     expect(decodedQr.zenBlessings).toBe(1);
     expect(decodedQr.levelRecords[1]?.timedStars).toBe(3);
     expect(decodedQr.levelRecords[3]?.zenSkipped).toBe(true);
+
+    // 4. qrCompact (>1,500 records) keeps all genuinely cleared stages ahead of skip-only records
+    const spamSave = createDefaultSavePayload();
+    spamSave.modeLadderVersion = 1;
+    for (let id = 1; id <= 50; id++) {
+      spamSave.levelRecords[id] = {
+        stars: 3,
+        challengeStars: 3,
+        bestMoves: 4,
+        bestTimeSec: 10,
+      };
+    }
+    for (let id = 301; id <= 370; id++) {
+      spamSave.levelRecords[id] = {
+        stars: 0,
+        bestMoves: 7,
+        bestTimeSec: 18,
+        zenCleared: true,
+      };
+    }
+    for (let id = 371; id <= 1850; id++) {
+      spamSave.levelRecords[id] = {
+        stars: 0,
+        bestMoves: 0,
+        bestTimeSec: 0,
+        skipped: true,
+        zenSkipped: true,
+      };
+    }
+    spamSave.modeState.CHALLENGE = { currentLevelId: 51, highestUnlocked: 51 };
+    spamSave.modeState.ZEN = { currentLevelId: 1851, highestUnlocked: 1851 };
+    spamSave.highestLevelUnlocked = 1851;
+    spamSave.currentLevelId = 1851;
+    const qrSpamDecoded = decodeSaveCode(encodeSaveCode(spamSave, { qrCompact: true }));
+    expect(Object.keys(qrSpamDecoded.levelRecords).length).toBe(1500);
+    for (let id = 1; id <= 50; id++) {
+      expect(qrSpamDecoded.levelRecords[id]?.challengeStars).toBe(3);
+    }
+    for (let id = 301; id <= 370; id++) {
+      expect(qrSpamDecoded.levelRecords[id]?.zenCleared).toBe(true);
+    }
+    const fullSpamDecoded = decodeSaveCode(encodeSaveCode(spamSave, { qrCompact: false }));
+    expect(Object.keys(fullSpamDecoded.levelRecords).length).toBe(1600);
   });
 
   it('preserves rescued +5 Moves and defused bomb fuses across Undo after a Zen Blessing or Paid Continue', () => {
@@ -293,36 +337,39 @@ describe('MAP-MODE-SPLIT-01, ZEN-STARS-01 & SAVE-COMPAT-01: Per-Mode Ladders, Ze
     expect(preExplosionTimed.blocks[0].bombCount).toBe(5);
   });
 
-  it('ZEN-SKIP-GUARD-01, STREAK-INTEGRITY-01 & MODE-ISOLATION-01: caps consecutive Zen skips at 3, gates chests & power-ups on genuine clears, blocks replay streak farming, and keeps TIMED clock running across Undo-to-Move-0', () => {
+  it('ZEN-SKIP-GUARD-01, STREAK-INTEGRITY-01 & MODE-ISOLATION-01: caps consecutive Zen skips at 50, gates chests/power-ups/debut notes on genuine clears, updates active Zen bookmark on win, blocks replay streak farming, and keeps TIMED clock running across Undo-to-Move-0', () => {
     const mgr = new SaveManager();
     mgr.updateSettings({ playMode: 'ZEN' });
 
-    // 1. Consecutive Zen Free Skips cap strictly at ZEN_MAX_CONSECUTIVE_SKIPS (3)
-    expect(ZEN_MAX_CONSECUTIVE_SKIPS).toBe(3);
+    // 1. Consecutive Zen Free Skips cap strictly at ZEN_MAX_CONSECUTIVE_SKIPS (50)
+    expect(ZEN_MAX_CONSECUTIVE_SKIPS).toBe(50);
     expect(canSkipZenLevel(mgr.getPayload(), 1)).toBe(true);
-    mgr.recordLevelSkip(1);
-    mgr.recordLevelSkip(2);
-    mgr.recordLevelSkip(3);
-    expect(mgr.getPayload().modeState.ZEN).toEqual({ currentLevelId: 4, highestUnlocked: 4 });
-    // 4th consecutive un-cleared skip is rejected (strict no-op)
-    expect(canSkipZenLevel(mgr.getPayload(), 4)).toBe(false);
+    for (let lvl = 1; lvl <= 50; lvl++) {
+      mgr.recordLevelSkip(lvl);
+    }
+    expect(mgr.getPayload().modeState.ZEN).toEqual({ currentLevelId: 51, highestUnlocked: 51 });
+    // 51st consecutive un-cleared skip is rejected (strict no-op)
+    expect(canSkipZenLevel(mgr.getPayload(), 51)).toBe(false);
     const seqBeforeBlockedSkip = mgr.getPayload().writeSeq;
-    mgr.recordLevelSkip(4);
+    mgr.recordLevelSkip(51);
     expect(mgr.getPayload().writeSeq).toBe(seqBeforeBlockedSkip);
-    expect(mgr.getPayload().modeState.ZEN).toEqual({ currentLevelId: 4, highestUnlocked: 4 });
+    expect(mgr.getPayload().modeState.ZEN).toEqual({ currentLevelId: 51, highestUnlocked: 51 });
 
-    // 2. Zero genuine clears -> effective booster unlock level stays 1 (Hint L2 & Hammer L8 NOT unlocked by skips!)
+    // 2. Zero genuine clears -> effective booster unlock level stays 1 & debut toasts stay suppressed
     expect(countUniqueClearedLevels(mgr.getPayload())).toBe(0);
-    expect(getEffectiveBoosterUnlockLevel(mgr.getPayload(), 4)).toBe(1);
+    expect(getEffectiveBoosterUnlockLevel(mgr.getPayload(), 51)).toBe(1);
+    expect(resolveBoosterDebutToastNote(mgr.getPayload(), 8)).toBeUndefined();
+    expect(resolveBoosterDebutToastNote(mgr.getPayload(), 30)).toBeUndefined();
+    expect(resolveRoadmapBoosterDebutNote(mgr.getPayload(), 8)).toContain('clear 7 stages (0/7)');
 
-    // Beating Level 10 alone after skips (only 1 unique clear!) does NOT open the Level-10 Milestone Chest
-    const prematureTen = mgr.recordLevelWin(10, 6, 20, 4, 0, 5, 'SUPER_HARD', true);
-    expect(prematureTen.milestoneChestOpened).toBe(false);
+    // Beating stage 51 alone after skips (only 1 unique clear!) does NOT open the Milestone Chest,
+    // resets trailing skip debt so stage 52 can be skipped, and later clearing L12 moves Zen bookmark to L13
+    const firstPostSkipWin = mgr.recordLevelWin(51, 6, 20, 4, 0, 5, 'SUPER_HARD', true);
+    expect(firstPostSkipWin.milestoneChestOpened).toBe(false);
     expect(mgr.getPayload().milestoneChestLevel).toBe(0);
-
-    // Clearing stage 4 resets consecutive skip debt on `mgr` so Zen skips work again on stage 5!
-    mgr.recordLevelWin(4, 5, 15, 4, 0, 5, 'NORMAL', true);
-    expect(canSkipZenLevel(mgr.getPayload(), 5)).toBe(true);
+    expect(canSkipZenLevel(mgr.getPayload(), 52)).toBe(true);
+    mgr.recordLevelWin(12, 5, 15, 4, 0, 5, 'NORMAL', true);
+    expect(mgr.getPayload().modeState.ZEN).toEqual({ currentLevelId: 13, highestUnlocked: 52 });
 
     // Skipping stage 10 and achieving the 10th genuine clear on stage 11 STILL awards the Level-10 Milestone Chest (HAMMER debut)!
     localStorage.clear();

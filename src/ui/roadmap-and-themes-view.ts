@@ -7,10 +7,10 @@ import {
 } from '../levels/catalog';
 import {
   type AppViewContext,
-  BOOSTER_DEBUT_NOTES,
   createModeIconSvg,
   getChapterMetaForLevel,
   getPlayModeMeta,
+  resolveRoadmapBoosterDebutNote,
   setButtonIconLabel,
   setRichModeText,
 } from './catalog-meta';
@@ -232,7 +232,9 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
     const isUnlocked = spec.id <= unlockedMax || hasClearedStars || isZenCleared || isSkipped;
     const isCompleted = hasClearedStars && !isCurrent;
     const isZenNode = isZenCleared && !isCurrent;
-    const milestoneNote = !isEndlessNode ? (spec.unlockNote ?? BOOSTER_DEBUT_NOTES[spec.id]) : undefined;
+    const milestoneNote = !isEndlessNode
+      ? (spec.unlockNote ?? resolveRoadmapBoosterDebutNote(save, spec.id))
+      : undefined;
     const isMilestone = Boolean(milestoneNote);
 
     const btn = document.createElement('button');
@@ -606,6 +608,9 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
       }
     }
 
+    const endlessRecordIds = Object.keys(save.levelRecords)
+      .map(Number)
+      .filter((n) => Number.isInteger(n) && n >= endlessStart);
     let prevEnd = endlessStart - 1;
     for (const [wStart, wEnd] of windows) {
       if (wStart > prevEnd + 1) {
@@ -617,14 +622,14 @@ export function renderRoadmapImpl(app: AppViewContext, focusStageId?: number): v
         let gapProgress = '';
         if (playMode === 'ZEN') {
           let gZen = 0;
-          for (let lid = gapStart; lid <= gapEnd; lid++) {
-            if (save.levelRecords[lid]?.zenCleared) gZen++;
+          for (const lid of endlessRecordIds) {
+            if (lid >= gapStart && lid <= gapEnd && save.levelRecords[lid]?.zenCleared) gZen++;
           }
           gapProgress = `🌿 ${gZen}/${archivedCount}`;
         } else {
           let gStars = 0;
-          for (let lid = gapStart; lid <= gapEnd; lid++) {
-            gStars += getModeStars(lid);
+          for (const lid of endlessRecordIds) {
+            if (lid >= gapStart && lid <= gapEnd) gStars += getModeStars(lid);
           }
           gapProgress = `★ ${gStars}`;
         }

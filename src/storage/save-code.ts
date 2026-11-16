@@ -17,7 +17,12 @@ import {
   decompressFramedBytes,
   SaveCodeError,
 } from './save-lz77-crc';
-import { packModeSplitTrailer, sanitizeModeState, unpackModeSplitTrailer } from './save-mode-ladders';
+import {
+  isRecordGenuinelyCleared,
+  packModeSplitTrailer,
+  sanitizeModeState,
+  unpackModeSplitTrailer,
+} from './save-mode-ladders';
 
 export {
   CODEC_HEADER_LZ77_V1,
@@ -243,6 +248,28 @@ function writeVarint(out: number[], value: number): void {
 }
 
 /**
+ * Selects up to 1,500 records for `qrCompact` exports, prioritizing genuinely cleared stages
+ * ahead of skip-only records so Zen skips never displace real stars or progression from QR backups.
+ */
+function selectEncodedRecordIds(
+  allIds: number[],
+  records: SavePayloadV1['levelRecords'],
+  qrCompact: boolean
+): number[] {
+  if (!qrCompact || allIds.length <= 1500) return allIds;
+  const clearedIds = allIds.filter((id) => isRecordGenuinelyCleared(records[id]));
+  if (clearedIds.length >= 1500) {
+    const campaignCleared = clearedIds.filter((id) => id <= 300);
+    const endlessCleared = clearedIds.filter((id) => id > 300);
+    return [...campaignCleared, ...endlessCleared.slice(-(1500 - campaignCleared.length))];
+  }
+  const remainingSlots = 1500 - clearedIds.length;
+  const nonClearedIds = allIds.filter((id) => !isRecordGenuinelyCleared(records[id]));
+  const keptNonCleared = remainingSlots > 0 ? nonClearedIds.slice(-remainingSlots) : [];
+  return [...clearedIds, ...keptNonCleared].sort((a, b) => a - b);
+}
+
+/**
  * Packs a validated `SavePayloadV1` into a pure binary varint + columnar stream (`0x02` magic byte).
  * Shrinks save codes to ~64 chars (new player) and ~185-550 chars (300-level campaign).
  */
@@ -300,10 +327,7 @@ function packCompactSaveBytes(payload: SavePayloadV1, qrCompact = false): Uint8A
   // Full SB1 save codes (`qrCompact = false`) preserve 100% of Infinite/Endless level records
   // (stars, skipped, bestMoves, bestTimeSec); QR-compact mode caps records at 1,500 and recent
   // move/time telemetry at 60 so QR codes stay within ISO/IEC 18004 Version 40 capacity.
-  const ids =
-    qrCompact && allIds.length > 1500
-      ? [...allIds.filter((id) => id <= 300), ...allIds.filter((id) => id > 300).slice(-1200)]
-      : allIds;
+  const ids = selectEncodedRecordIds(allIds, payload.levelRecords, qrCompact);
   const telemetryCutoffIdx = qrCompact ? Math.max(0, ids.length - 60) : 0;
   writeVarint(out, ids.length);
   writeVarint(out, telemetryCutoffIdx);
