@@ -301,4 +301,56 @@ test.describe('Booster Jewel Crests & Dynamic Multi-Digit CTA Geometry', () => {
       expect(hudPause).toEqual({ toastGlow: true, hud: 'TIMED', prev: 'ZEN', next: 'CHALLENGE', bad: [] });
     }
   });
+
+  test('OUTCOME-TRANSITION-01: #dialog-victory maintains constant 520px desktop width with zero scrollbar or scale flicker across every entrance frame', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await seedAndOpenGame(page, 1);
+    await page.addStyleTag({
+      content:
+        'dialog::-webkit-scrollbar { width: 15px; height: 15px; } dialog::-webkit-scrollbar-thumb { background: #888; }',
+    });
+    const probe = await page.evaluate(async () => {
+      const dlg = document.getElementById('dialog-victory') as HTMLDialogElement | null;
+      const card = dlg?.querySelector<HTMLElement>('.victory-dialog-card') ?? null;
+      if (!dlg || !card) throw new Error('Missing #dialog-victory elements');
+      const frames: Array<{
+        overflowY: string;
+        dlgClientW: number;
+        cardOffsetW: number;
+        cardRectW: number;
+      }> = [];
+      const start = performance.now();
+      window.__SHREDBLOCKS_DEBUG__.autoSolveCurrentLevel();
+      await new Promise((resolve) => {
+        const tick = () => {
+          if (dlg.open) {
+            frames.push({
+              overflowY: getComputedStyle(dlg).overflowY,
+              dlgClientW: dlg.clientWidth,
+              cardOffsetW: card.offsetWidth,
+              cardRectW: Math.round(card.getBoundingClientRect().width),
+            });
+          }
+          if (performance.now() - start < 650) {
+            requestAnimationFrame(tick);
+          } else {
+            resolve(null);
+          }
+        };
+        requestAnimationFrame(tick);
+      });
+      return frames;
+    });
+    expect(probe.length).toBeGreaterThanOrEqual(5);
+    for (const frame of probe) {
+      expect(frame).toEqual({
+        overflowY: 'visible',
+        dlgClientW: 520,
+        cardOffsetW: 520,
+        cardRectW: 520,
+      });
+    }
+  });
 });

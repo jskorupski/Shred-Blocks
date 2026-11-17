@@ -604,7 +604,7 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     }
   });
 
-  it('OUTCOME-TRANSITION-01: accelerates particle age decay 1.8x at 1.0x velocity, spawns 3D bomb bursts, and normalizes 0.935x card scale', () => {
+  it('OUTCOME-TRANSITION-01: accelerates particle age decay 1.8x at 1.0x velocity, spawns 3D bomb bursts, and keeps #victory-fx-canvas layout sizing at 1.0x', () => {
     expect(VICTORY_MODAL_BEAT_MS).toBe(290);
     expect(FAILURE_SETTLE_BEAT_MS).toBe(220);
     expect(BOMB_DETONATION_BEAT_MS).toBe(350);
@@ -715,7 +715,7 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     expect(ctxBombReduced.activeGateBursts.length).toBe(1);
     expect(ctxBombReduced.activeGateBursts[0]?.mode).toBe('REDUCED_MOTION_SEAL');
 
-    // 3. Frame-0 `scale: 0.96` entrance on `.victory-dialog-card` still sizes #victory-fx-canvas to 1.0x layout width
+    // 3. Even under scale transforms on .victory-dialog-card, #victory-fx-canvas normalizes to 1.0x layout width
     const fxCanvas = {
       width: 0,
       height: 0,
