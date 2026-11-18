@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
-async function seedAndOpenGame(page: Page, levelId: number, highestUnlocked = 60): Promise<void> {
-  const seededSave = {
+function buildReturningSaveJson(levelId: number, highestUnlocked = 60): string {
+  return JSON.stringify({
     schemaVersion: 1,
     appId: 'shredblocks-color-jam',
     writeSeq: 12,
@@ -36,11 +36,13 @@ async function seedAndOpenGame(page: Page, levelId: number, highestUnlocked = 60
       qualityTier: 'ULTRA_120',
     },
     levelRecords: {},
-  };
+  });
+}
 
+async function seedAndOpenGame(page: Page, levelId: number, highestUnlocked = 60): Promise<void> {
   await page.addInitScript(
     (raw) => window.localStorage.setItem('shredblocks.save.v1', raw),
-    JSON.stringify(seededSave)
+    buildReturningSaveJson(levelId, highestUnlocked)
   );
   await page.goto('/');
   await page.evaluate((id) => {
@@ -352,5 +354,161 @@ test.describe('Booster Jewel Crests & Dynamic Multi-Digit CTA Geometry', () => {
         cardRectW: 520,
       });
     }
+  });
+
+  test('PWA-UPDATE-01: clicking #btn-pwa-update-now reloads page for stale background-activated workers (macOS Chrome App) and suppressed controllerchange', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+
+    await page.addInitScript(
+      (rawSave: string) => {
+        if (!window.localStorage.getItem('shredblocks.save.v1')) {
+          window.localStorage.setItem('shredblocks.save.v1', rawSave);
+        }
+
+        const makeWorker = (initialState: ServiceWorkerState, onSkip?: () => void) => {
+          const target = new EventTarget() as EventTarget & {
+            state: ServiceWorkerState;
+            postMessage: (msg: unknown) => void;
+            __setState: (s: ServiceWorkerState) => void;
+          };
+          target.state = initialState;
+          target.postMessage = (msg: unknown) => {
+            if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'SKIP_WAITING') {
+              onSkip?.();
+            }
+          };
+          target.__setState = (next: ServiceWorkerState) => {
+            target.state = next;
+            target.dispatchEvent(new Event('statechange'));
+          };
+          return target;
+        };
+
+        const v1 = makeWorker('activated');
+        const v2 = makeWorker('installing');
+        const v3 = makeWorker('installing', () => {
+          window.sessionStorage.setItem('__skipWaitingPosted', '1');
+          // Simulate a standalone window that activates cleanly without emitting controllerchange
+          setTimeout(() => v3.__setState('activated'), 20);
+        });
+
+        const winApi = window as unknown as {
+          __BOOT_ID__?: number;
+          __SW_REG_BOUND__?: boolean;
+          __EMIT_WAITING_WORKER__?: (which: 'v2' | 'v3') => void;
+          __TRIGGER_BG_PROMOTION__?: () => void;
+        };
+        const bootCount = Number(window.sessionStorage.getItem('__pwaBootCount') || '0') + 1;
+        window.sessionStorage.setItem('__pwaBootCount', String(bootCount));
+        winApi.__BOOT_ID__ = bootCount;
+        winApi.__SW_REG_BOUND__ = false;
+
+        const reg = new EventTarget() as EventTarget & {
+          installing: unknown;
+          waiting: unknown;
+          active: unknown;
+          update: () => Promise<void>;
+        };
+        reg.installing = null;
+        reg.waiting = null;
+        reg.active = v1;
+        reg.update = () => Promise.resolve();
+        const origRegAdd = reg.addEventListener.bind(reg);
+        reg.addEventListener = (
+          type: string,
+          listener: EventListenerOrEventListenerObject | null,
+          opts?: boolean | AddEventListenerOptions
+        ) => {
+          origRegAdd(type, listener, opts);
+          if (type === 'updatefound') {
+            winApi.__SW_REG_BOUND__ = true;
+          }
+        };
+
+        const swContainer = new EventTarget() as EventTarget & {
+          controller: unknown;
+          register: () => Promise<unknown>;
+        };
+        swContainer.controller = v1;
+        swContainer.register = () => Promise.resolve(reg);
+
+        Object.defineProperty(navigator, 'serviceWorker', {
+          configurable: true,
+          value: swContainer,
+        });
+
+        winApi.__EMIT_WAITING_WORKER__ = (which) => {
+          const next = which === 'v2' ? v2 : v3;
+          reg.installing = next;
+          reg.dispatchEvent(new Event('updatefound'));
+          reg.installing = null;
+          reg.waiting = next;
+          next.__setState('installed');
+        };
+        winApi.__TRIGGER_BG_PROMOTION__ = () => {
+          reg.waiting = null;
+          reg.active = v2;
+          swContainer.controller = v2;
+          v2.__setState('activated');
+          swContainer.dispatchEvent(new Event('controllerchange'));
+        };
+      },
+      buildReturningSaveJson(3, 5)
+    );
+
+    const waitForBootReady = async (expectedBootId: number) => {
+      await page.waitForFunction((id) => {
+        const w = window as unknown as {
+          __SHREDBLOCKS_DEBUG__?: unknown;
+          __BOOT_ID__?: number;
+          __SW_REG_BOUND__?: boolean;
+        };
+        return Boolean(w.__SHREDBLOCKS_DEBUG__ && w.__BOOT_ID__ === id && w.__SW_REG_BOUND__);
+      }, expectedBootId);
+      await expect(page.locator('#title-overlay')).toBeVisible();
+    };
+
+    await page.goto('/');
+    await waitForBootReady(1);
+    await page.locator('#btn-title-map').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+
+    // 1. Install v2 -> promote v2 in the background (Chrome App sibling tab / sleep-wake) -> click Update must still reload
+    await page.evaluate(() => {
+      (window as unknown as { __EMIT_WAITING_WORKER__: (w: 'v2' | 'v3') => void }).__EMIT_WAITING_WORKER__(
+        'v2'
+      );
+    });
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+
+    await page.evaluate(() => {
+      (window as unknown as { __TRIGGER_BG_PROMOTION__: () => void }).__TRIGGER_BG_PROMOTION__();
+    });
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+
+    await page.locator('#btn-pwa-update-now').click();
+    await waitForBootReady(2);
+
+    // 2. After reload, install v3 -> click Update posts SKIP_WAITING and reloads on statechange === 'activated' without controllerchange
+    await page.locator('#btn-title-map').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    await page.evaluate(() => {
+      (window as unknown as { __EMIT_WAITING_WORKER__: (w: 'v2' | 'v3') => void }).__EMIT_WAITING_WORKER__(
+        'v3'
+      );
+    });
+    await expect(page.locator('#pwa-update-toast')).toBeVisible();
+
+    await page.locator('#btn-pwa-update-now').click();
+    await waitForBootReady(3);
+    const skipPosted = await page.evaluate(() => window.sessionStorage.getItem('__skipWaitingPosted'));
+    expect(skipPosted).toBe('1');
+    expect(errors).toEqual([]);
   });
 });
