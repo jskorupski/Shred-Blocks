@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createBoardState } from '../../src/core/board';
 import { getLevelSpec } from '../../src/levels/catalog';
@@ -11,12 +13,15 @@ import {
   setClipPlaneStateImpl,
   syncFrameProgramState,
 } from '../../src/render/gl-program-state';
-import { ENVIRONMENT_MESHES } from '../../src/render/mesh-generator';
+import { ENVIRONMENT_MESHES, type MeshData } from '../../src/render/mesh-generator';
 import { getRoomVisualStateImpl } from '../../src/render/particle-fx';
 import { getOrBuildStaticPass1Topology } from '../../src/render/pass1-board-cache';
 import { renderPass1Courtyard } from '../../src/render/pass1-courtyard';
 import { renderPass1WallsAndGates } from '../../src/render/pass1-gates-barriers';
-import { warmUpWebGLPipelinesImpl } from '../../src/render/relic-awakening-fx';
+import {
+  uploadAtlasAndStaticMeshesImpl,
+  warmUpWebGLPipelinesImpl,
+} from '../../src/render/relic-awakening-fx';
 import { type GLMeshHandle, type RenderPassContext, TRAY_PALETTES } from '../../src/render/render-types';
 import {
   MAIN_FRAGMENT_SHADER,
@@ -420,5 +425,120 @@ describe('Mobile GPU Pipeline, Zero-Discard Solid Shader & Pass 1 Instancing (PE
     expect(relicClusterUnits).toContain(1);
     expect(activeTextures).toContain(0x84c1);
     expect(activeTextures[activeTextures.length - 1]).toBe(0x84c0);
+  });
+
+  it('uploads only core environment meshes upfront (lazy polyomino upload) and skips Title plate buffers on preview renderers', () => {
+    const { gl } = createMockGl();
+    const glRec = gl as unknown as Record<string, unknown>;
+    const noop = () => {};
+    for (const m of [
+      'createTexture',
+      'bindTexture',
+      'texParameteri',
+      'texImage2D',
+      'scissor',
+      'colorMask',
+      'depthMask',
+      'depthFunc',
+      'cullFace',
+      'blendFuncSeparate',
+      'activeTexture',
+      'uniform4fv',
+      'flush',
+    ]) {
+      glRec[m] = m === 'createTexture' ? () => ({ id: 'tex' }) : noop;
+    }
+
+    const uploaded: MeshData[] = [];
+    uploadAtlasAndStaticMeshesImpl(gl, {} as HTMLCanvasElement, (_g, mesh) => {
+      uploaded.push(mesh);
+      return {
+        vao: {} as WebGLVertexArrayObject,
+        posBuffer: {} as WebGLBuffer,
+        normBuffer: {} as WebGLBuffer,
+        uvBuffer: {} as WebGLBuffer,
+        indexBuffer: {} as WebGLBuffer,
+        indexCount: mesh.indices.length,
+      };
+    });
+    expect(uploaded.length).toBe(Object.keys(ENVIRONMENT_MESHES).length);
+
+    // Preview warmup (`skipRelicPlates = true`) must skip Title cluster texture binding & style-11 plate draws
+    const previewStyles: number[] = [];
+    let activeTexCalls = 0;
+    glRec.activeTexture = () => {
+      activeTexCalls++;
+    };
+    const mainProg = { id: 'main' } as unknown as WebGLProgram;
+    const solidProg = { id: 'solid' } as unknown as WebGLProgram;
+    const state = createGlProgramState(gl, mainProg, solidProg);
+    const quadHandle: GLMeshHandle = {
+      vao: {} as WebGLVertexArrayObject,
+      posBuffer: {} as WebGLBuffer,
+      normBuffer: {} as WebGLBuffer,
+      uvBuffer: {} as WebGLBuffer,
+      indexBuffer: {} as WebGLBuffer,
+      indexCount: 6,
+    };
+    const rctx = {
+      camera: new Camera3D(),
+      drawMesh: (...args: unknown[]) => {
+        previewStyles.push(Number(args[args.length - 1]));
+      },
+      drawMeshInstanced: noop,
+      drawAtlasBadge: noop,
+    } as unknown as RenderPassContext;
+    warmUpWebGLPipelinesImpl(
+      rctx,
+      gl,
+      state,
+      {} as WebGLTexture,
+      {
+        program: null,
+        vao: null,
+        instanceBuffer: null,
+        indexCount: 0,
+        uViewProj: null,
+        uStyle: null,
+        smokeVao: null,
+        smokeInstanceBuffer: null,
+        smokeIndexCount: 0,
+      },
+      quadHandle,
+      true
+    );
+    expect(previewStyles).not.toContain(11);
+    expect(activeTexCalls).toBe(1); // TEXTURE0 atlas only; zero TEXTURE1 relic cluster texture
+  });
+
+  it('enforces Wave 2 mobile CSS compositor hygiene (zero backdrop-filter, scoped will-change, filter-free spinning astrolabe) and MYSTIC-TRACE-01 ALU guards', () => {
+    const repoRoot = path.resolve(process.cwd());
+    const stylesDir = path.join(repoRoot, 'src/styles');
+    for (const file of fs.readdirSync(stylesDir)) {
+      if (!file.endsWith('.css')) continue;
+      const css = fs.readFileSync(path.join(stylesDir, file), 'utf8');
+      expect(css, `${file} must contain zero backdrop-filter`).not.toContain('backdrop-filter:');
+    }
+
+    const titleCss = fs.readFileSync(path.join(stylesDir, 'title-and-a11y.css'), 'utf8');
+    const astrolabeStart = titleCss.indexOf('.title-astrolabe-wrap {');
+    const astrolabeEnd = titleCss.indexOf('}', astrolabeStart);
+    expect(astrolabeStart).toBeGreaterThan(-1);
+    const astrolabeBody = titleCss.slice(astrolabeStart, astrolabeEnd).replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(astrolabeBody).not.toContain('filter:');
+
+    const screenGameCss = fs.readFileSync(path.join(stylesDir, 'screen-game.css'), 'utf8');
+    const baseGodRayIdx = screenGameCss.indexOf('#screen-game .board-stage::before,');
+    const firstGodRayBrace = screenGameCss.indexOf('}', baseGodRayIdx);
+    expect(screenGameCss.slice(baseGodRayIdx, firstGodRayBrace)).not.toContain('will-change:');
+
+    const themesViewTs = fs.readFileSync(path.join(repoRoot, 'src/ui/themes-studio-view.ts'), 'utf8');
+    expect(themesViewTs).toContain('{ isPreview: true }');
+    expect(themesViewTs).toContain('releaseBackbufferForSuspend()');
+
+    // MYSTIC-TRACE-01 squared-distance early-out, straight-move fast path, and row-bounded headCellMask loop
+    expect(MAIN_FRAGMENT_SHADER).toContain('if (dMin2 >= 1.0)');
+    expect(MAIN_FRAGMENT_SHADER).toContain('if (segCount > 1)');
+    expect(MAIN_FRAGMENT_SHADER).toContain('if (cIdx >= maxCellIdx) break;');
   });
 });

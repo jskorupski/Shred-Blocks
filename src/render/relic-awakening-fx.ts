@@ -8,7 +8,7 @@ import {
   syncFrameProgramState,
   warmUpSolidProgramImpl,
 } from './gl-program-state';
-import { ENVIRONMENT_MESHES, type MeshData, POLYOMINO_MESH_CATALOG } from './mesh-generator';
+import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 import {
   allocParticleSlot,
   type GLMeshHandle,
@@ -308,7 +308,8 @@ export function warmUpWebGLPipelinesImpl(
   programState: GlProgramState,
   atlasTexture: WebGLTexture | null,
   h: ParticleDrawHandles,
-  quadHandle: GLMeshHandle
+  quadHandle: GLMeshHandle,
+  skipRelicPlates = false
 ): void {
   const mainProgram = programState.mainProgram;
   const mu = programState.mainUniforms;
@@ -338,33 +339,39 @@ export function warmUpWebGLPipelinesImpl(
     gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
     gl.uniform1i(mu.uAtlas, 0);
   }
-  bindRelicClusterTextureImpl(rctx, gl, mainProgram);
-  syncFrameProgramState(programState, viewProj, 3, 3, 0, 1, 1, 1, 0, 0, 1.0, 0, 0);
+  if (!skipRelicPlates) {
+    bindRelicClusterTextureImpl(rctx, gl, mainProgram);
+  }
+  syncFrameProgramState(programState, viewProj, 3, 3, 0, 1, 1, 1, 0, 0, skipRelicPlates ? 0.0 : 1.0, 0, 0);
 
   // Warm opaque (blend=false, depthMask=true) mainProgram PSOs for Title & relic unwrapping
   setGlBlendEnabled(gl, false);
-  for (const mix of [1.0, 0.5, 0.0]) {
-    gl.uniform1f(mu.uBlueprintMix, mix);
-    rctx.drawMesh(
-      gl,
-      ENVIRONMENT_MESHES.unitParticleCube,
-      0,
-      0,
-      -50,
-      0.01,
-      0.01,
-      0.01,
-      0.5,
-      0.5,
-      0.5,
-      1,
-      0,
-      0,
-      0
-    );
+  if (!skipRelicPlates) {
+    for (const mix of [1.0, 0.5, 0.0]) {
+      gl.uniform1f(mu.uBlueprintMix, mix);
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        0,
+        0,
+        -50,
+        0.01,
+        0.01,
+        0.01,
+        0.5,
+        0.5,
+        0.5,
+        1,
+        0,
+        0,
+        0
+      );
+    }
+    // Warm mainProgram instanced layout (opaque Title tiles/walls + translucent 0.9 wall rims)
+    rctx.drawMeshInstanced?.(gl, ENVIRONMENT_MESHES.overlayQuad, WARMUP_MESH_INST, 1, 1.0, 5);
+  } else {
+    gl.uniform1f(mu.uBlueprintMix, 0.0);
   }
-  // Warm mainProgram instanced layout (opaque Title tiles/walls + translucent 0.9 wall rims)
-  rctx.drawMeshInstanced?.(gl, ENVIRONMENT_MESHES.overlayQuad, WARMUP_MESH_INST, 1, 1.0, 5);
   rctx.drawMeshInstanced?.(gl, ENVIRONMENT_MESHES.overlayQuad, WARMUP_MESH_INST, 1, 0.9, 0);
 
   gl.disable(gl.CULL_FACE);
@@ -406,14 +413,18 @@ export function warmUpWebGLPipelinesImpl(
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 4);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 7);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 10);
-  rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 11);
+  if (!skipRelicPlates) {
+    rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 11);
+  }
   gl.enable(gl.CULL_FACE);
 
   // Warm zero-discard solidProgram (regular + instanced layouts) for hardware Adreno LRZ gameplay draws
   warmUpSolidProgramImpl(gl, programState, ENVIRONMENT_MESHES.overlayQuad, quadHandle);
 
-  // Pre-allocate PlateGlHandles VAO/VBOs/IBO & warm u_materialStyle=11 under both solid & fading PSO states
-  warmUpRelicPlatePipelineImpl(gl, mainProgram);
+  // Pre-allocate PlateGlHandles VAO/VBOs/IBO & warm u_materialStyle=11 (omitted on preview diorama renderers)
+  if (!skipRelicPlates) {
+    warmUpRelicPlatePipelineImpl(gl, mainProgram);
+  }
   setGlBlendEnabled(gl, true);
   if (WARMUP_MESH_INST.length !== MESH_INSTANCE_STRIDE) {
     throw new Error('Invalid warmup instance stride');
@@ -484,6 +495,11 @@ export function disposeWebGLResourcesImpl(
   meshHandles.clear();
 }
 
+/**
+ * Uploads the shared 2D glyph atlas texture and the 12 core environment meshes upfront (`PERF-GPU-01`).
+ * Polyomino block meshes (`114` skin×shape variants) upload lazily on first use via `getOrCreateMeshHandle`,
+ * cutting WebGL initialization & Themes Studio tab-switch object churn by ~90%.
+ */
 export function uploadAtlasAndStaticMeshesImpl(
   gl: WebGL2RenderingContext,
   atlasCanvas: HTMLCanvasElement,
@@ -497,18 +513,6 @@ export function uploadAtlasAndStaticMeshesImpl(
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlasCanvas);
-  }
-  for (const entry of Object.values(POLYOMINO_MESH_CATALOG)) {
-    for (const m of [
-      entry.meshOuter,
-      entry.meshInnerCore,
-      entry.meshOuterStudded,
-      entry.meshInnerCoreStudded,
-      entry.meshOuterWorn,
-      entry.meshInnerCoreWorn,
-    ]) {
-      ensureMesh(gl, m);
-    }
   }
   for (const envMesh of Object.values(ENVIRONMENT_MESHES) as MeshData[]) {
     ensureMesh(gl, envMesh);

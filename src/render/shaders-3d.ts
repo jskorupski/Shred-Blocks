@@ -338,9 +338,9 @@ void main() {
     float tailBaseHw = u_tracePts[0].w;
     float tipMinScale = clamp(0.15 + max(0.0, tailBaseHw - taperLen * 0.85) * 0.24, 0.15, 0.42);
 
-    float segNormD[15];
+    float segNormD2[15];
     float segArcS[15];
-    float dMin = 99.0;
+    float dMin2 = 9801.0;
     vec2 blockSpan = max(u_clipPlane.zw, vec2(1.0));
     float tailCap = max(tailBaseHw * tipMinScale, 0.06);
     for (int i = 0; i < 15; i++) {
@@ -365,12 +365,13 @@ void main() {
       bool isOuterEnd = (i == 0 && along < 0.0) || (i == segCount - 1 && along >= 0.0);
       float longCap = isOuterEnd ? endCap : jointCap;
       if (i == 0 && along < 0.0) { tailCap = longCap; }
-      float nd = sqrt(dot(latVec, latVec) / (hw * hw) + (along * along) / (longCap * longCap));
-      segNormD[i] = nd;
+      float nd2 = dot(latVec, latVec) / (hw * hw) + (along * along) / (longCap * longCap);
+      segNormD2[i] = nd2;
       segArcS[i] = (i == 0 && rawProj < 0.0) ? (a.z + rawProj) : ((i == segCount - 1 && rawProj > segLen) ? (b.z + (rawProj - segLen)) : sClamped);
-      dMin = min(dMin, nd);
+      dMin2 = min(dMin2, nd2);
     }
-    if (dMin >= 1.0) { outColor = vec4(0.0); return; }
+    if (dMin2 >= 1.0) { outColor = vec4(0.0); return; }
+    float dMin = sqrt(dMin2);
 
     float leadMask = 1.0;
     int headMask = int(u_blockSeed + 0.5);
@@ -383,7 +384,9 @@ void main() {
         float bestShadowD = 99.0;
         float dDiff = headDir.x - headDir.y;
         float dSum = headDir.x + headDir.y;
+        int maxCellIdx = min(16, int(ceil(blockSpan.y)) * 4);
         for (int cIdx = 0; cIdx < 16; cIdx++) {
+          if (cIdx >= maxCellIdx) break;
           if ((headMask & (1 << cIdx)) == 0) continue;
           vec2 q = (u_clipPlane.xy + vec2(float(cIdx & 3) + 0.5, float(cIdx >> 2) + 0.5)) - p;
           float fMin = max(abs(q.x), abs(q.y));
@@ -398,15 +401,18 @@ void main() {
     }
     if (leadMask < 0.002) { outColor = vec4(0.0); return; }
 
-    float wSum = 0.0;
-    float sSum = 0.0;
-    for (int i = 0; i < 15; i++) {
-      if (i >= segCount) break;
-      float w = exp(-14.0 * (segNormD[i] - dMin));
-      wSum += w;
-      sSum += w * segArcS[i];
+    float smoothS = segArcS[0];
+    if (segCount > 1) {
+      float wSum = 0.0;
+      float sSum = 0.0;
+      for (int i = 0; i < 15; i++) {
+        if (i >= segCount) break;
+        float w = exp(-14.0 * (sqrt(segNormD2[i]) - dMin));
+        wSum += w;
+        sSum += w * segArcS[i];
+      }
+      smoothS = sSum / max(wSum, 1e-5);
     }
-    float smoothS = sSum / max(wSum, 1e-5);
     float smoothU = clamp(smoothS / span, 0.0, 1.0);
     float tailT = clamp((smoothS + tailCap) / max(taperLen + tailCap, 1e-4), 0.0, 1.0);
     float crossProfile = pow(smoothstep(1.0, mix(0.0, 0.14, tailT), dMin), mix(1.58, 0.96, tailT));

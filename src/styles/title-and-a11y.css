@@ -1,6 +1,5 @@
 /* ==========================================================================
    SACRED-GEOMETRY TITLE CREST OVERLAY (#title-overlay)
-   Frames the live 3D courtyard backdrop with Top Crest + Bottom Pedestal
    ========================================================================== */
 
 #screen-game.title-backdrop-mode .hud-top-bar,
@@ -21,9 +20,7 @@
   touch-action: none;
 }
 
-/* Luminous radial halo backlight & relic aura behind #game-canvas (PERF-TRANSITION-01):
-   Uses pure analytical radial-gradients + compositor-only opacity/scale so #game-canvas stays 100%
-   filter-free (hardware overlay) with zero per-frame Skia Gaussian blur / drop-shadow rasterization. */
+/* Luminous radial halo backlight behind #game-canvas (PERF-TRANSITION-01, zero canvas filter). */
 .astrolabe-backlight-halo {
   position: absolute;
   top: 50%;
@@ -35,7 +32,6 @@
   pointer-events: none;
   z-index: 1;
   opacity: 0;
-  will-change: opacity, scale;
   background: radial-gradient(
     50% 50% at 50% 50%,
     rgba(255, 236, 178, 0.64) 0%,
@@ -92,6 +88,7 @@
 }
 
 #screen-game.title-backdrop-mode .astrolabe-backlight-halo {
+  will-change: opacity, scale;
   opacity: 1;
   animation: mysticRelicAura 3.8s ease-in-out infinite;
   @media (prefers-reduced-motion: reduce) {
@@ -105,6 +102,7 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
 }
 
 #screen-game.relic-awakening-burst:not(.title-backdrop-mode) .astrolabe-backlight-halo {
+  will-change: opacity, scale;
   background: radial-gradient(
     50% 50% at 50% 50%,
     rgba(255, 234, 248, 0.8) 0%,
@@ -212,7 +210,14 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
   align-items: center;
   justify-content: center;
   color: var(--accent-gold);
-  filter: drop-shadow(0 2px 10px rgba(229, 178, 93, 0.35));
+  /* Static radial glow replaces filter:drop-shadow around spinning SVG rings (zero 120Hz Gaussian re-raster) */
+  background: radial-gradient(
+    circle,
+    rgba(229, 178, 93, 0.22) 0%,
+    rgba(229, 178, 93, 0.07) 48%,
+    transparent 72%
+  );
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
@@ -241,15 +246,6 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
   }
 }
 
-@keyframes titleAstrolabeSpinReverse {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
 .title-crest-astrolabe .astrolabe-ring-outer {
   transform-origin: 90px 90px;
   animation: titleAstrolabeSpin 24s linear infinite;
@@ -260,7 +256,7 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
 
 .title-crest-astrolabe .astrolabe-star-group {
   transform-origin: 90px 90px;
-  animation: titleAstrolabeSpinReverse 32s linear infinite;
+  animation: titleAstrolabeSpin 32s linear infinite reverse;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }

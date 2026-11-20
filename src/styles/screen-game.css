@@ -483,7 +483,6 @@
   position: absolute;
   pointer-events: none;
   mix-blend-mode: normal;
-  will-change: transform, opacity;
   opacity: 0;
   transition: opacity 0.58s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -555,6 +554,7 @@
 }
 
 #screen-game:is(.title-backdrop-mode, .relic-awakening-burst) .board-stage::before {
+  will-change: transform, opacity;
   animation: mysticGodRays 38s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -566,6 +566,7 @@
 }
 
 #screen-game:is(.title-backdrop-mode, .relic-awakening-burst) .board-stage::after {
+  will-change: transform, opacity;
   animation: mysticGodRaysCounter 52s linear infinite;
   @media (prefers-reduced-motion: reduce) {
     animation: none;

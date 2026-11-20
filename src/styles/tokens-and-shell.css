@@ -315,9 +315,8 @@ body {
   flex-wrap: nowrap;
   gap: 0.45rem;
   padding: 0.46rem var(--edge-inset-inline);
-  background: rgba(18, 14, 34, 0.82);
+  background: rgba(18, 14, 34, 0.94);
   border-bottom: 1px solid var(--border-subtle);
-  backdrop-filter: blur(10px);
   flex-shrink: 0;
 }
 

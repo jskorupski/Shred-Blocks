@@ -99,7 +99,7 @@ The entire game—3D WebGL2 renderer, swept grid physics, A\* puzzle solver, pro
 
 | Subsystem | Highlights | Key Paths |
 | :--- | :--- | :--- |
-| **3D Renderer & Shaders** | 4-pass WebGL2 pipeline, procedural 3D polyomino & courtyard meshes, custom GLSL skin/tray shaders, GPU-instanced 3D particles, adaptive `60Hz`/`120Hz` quality scaling, and `Canvas2D` fallback | [`src/render/`](src/render/) |
+| **3D Renderer & Shaders** | 4-pass WebGL2 pipeline with dual zero-`discard` solid/overlay shaders, GPU-instanced courtyard & 3D particles, procedural polyomino meshes, custom GLSL skin/tray shaders, adaptive `60Hz`/`120Hz` quality scaling, and `Canvas2D` fallback | [`src/render/`](src/render/) |
 | **Physics & Puzzle Engine** | Continuous swept grid raycast with corner bevel assist, gate aperture & mid-drag capture rules, multi-room/vault gating, and deterministic clear cascades | [`src/core/`](src/core/), [`src/input/`](src/input/) |
 | **Campaign, Generator & Solver** | 300 campaign stages (curated showcases + canonical `Mulberry32` procedural ramp), Infinite Endless generator (`Level 301+`), and Zobrist A\* macro-move solver & hint engine | [`src/levels/`](src/levels/) |
 | **UI, Audio & Offline Storage** | Self-hosted `Fraunces` & `Plus Jakarta Sans` variable `.woff2` fonts, mode-attuned procedural Web Audio drumless warm analog synthwave soundtrack (`AMBIENT-MUSIC-01`) + custom shred SFX, dual-layer `localStorage` + `IndexedDB` saves, compressed `SB1-...` codec + ISO 18004 QR SVG, and offline Service Worker | [`src/ui/`](src/ui/), [`src/audio/`](src/audio/), [`src/storage/`](src/storage/), [`public/sw.js`](public/sw.js) |

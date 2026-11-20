@@ -180,11 +180,13 @@ export class Renderer3D implements RenderPassContext {
   public lastOptions: RenderSceneOptions = {};
   public startTimeMs = performance.now();
 
+  private readonly isPreview: boolean;
   private readonly onContextLostBound: (e: Event) => void;
   private readonly onContextRestoredBound: () => void;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, opts?: { isPreview?: boolean }) {
     this.canvas = canvas;
+    this.isPreview = Boolean(opts?.isPreview);
     this.camera = new Camera3D(6, 6, 1);
     this.qualityGovernor = new QualityGovernor();
     this.atlasData = createAtlasTextureData();
@@ -328,7 +330,8 @@ export class Renderer3D implements RenderPassContext {
   }
 
   private computeEffectiveDpr(cssW: number, cssH: number): { dpr: number; rawDpr: number } {
-    const maxDpr = this.qualityGovernor.getTargetMaxDpr();
+    const govMaxDpr = this.qualityGovernor.getTargetMaxDpr();
+    const maxDpr = this.isPreview ? Math.min(govMaxDpr, 2.0) : govMaxDpr;
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     const f = computeBoardBleedFraming(
       this.lastBoard?.rows ?? 6,
@@ -347,7 +350,8 @@ export class Renderer3D implements RenderPassContext {
   }
 
   private applyCanvasDpr(cssW: number, cssH: number): void {
-    const maxDpr = this.qualityGovernor.getTargetMaxDpr();
+    const govMaxDpr = this.qualityGovernor.getTargetMaxDpr();
+    const maxDpr = this.isPreview ? Math.min(govMaxDpr, 2.0) : govMaxDpr;
     if (maxDpr === this.lastAppliedMaxDpr && this.canvas.width >= 64 && this.canvas.height >= 64) {
       return;
     }
@@ -366,6 +370,13 @@ export class Renderer3D implements RenderPassContext {
       this.canvas.width = targetW;
       this.canvas.height = targetH;
     }
+  }
+
+  /** Reclaims WebGL2 color/depth/MSAA backbuffer VRAM while a preview canvas is offscreen (`PERF-GPU-01`). */
+  public releaseBackbufferForSuspend(): void {
+    this.canvas.width = 1;
+    this.canvas.height = 1;
+    this.lastAppliedMaxDpr = 0;
   }
 
   public resize(): void {
@@ -452,7 +463,8 @@ export class Renderer3D implements RenderPassContext {
       this.programState,
       this.atlasTexture,
       this.getParticleDrawHandles(),
-      this.getOrCreateMeshHandle(gl, ENVIRONMENT_MESHES.overlayQuad)
+      this.getOrCreateMeshHandle(gl, ENVIRONMENT_MESHES.overlayQuad),
+      this.isPreview
     );
   }
 
@@ -549,26 +561,15 @@ export class Renderer3D implements RenderPassContext {
     spawnRelicAwakeningBurstImpl(this, board);
   }
 
-  public spawnBlockShredBurst(
-    board: BoardState,
-    block: BlockState,
-    gate?: GateState,
-    colorOverride?: ColorId
-  ): void {
-    spawnBlockShredBurstImpl(this, board, block, gate, colorOverride);
+  public spawnBlockShredBurst(board: BoardState, block: BlockState, gate?: GateState, color?: ColorId): void {
+    spawnBlockShredBurstImpl(this, board, block, gate, color);
   }
-
   public stepParticles(dtSec: number): void {
     stepParticlesImpl(this, dtSec);
   }
-
-  public getRoomVisualState(
-    board: BoardState,
-    roomId: number
-  ): { zOffset: number; luminanceMul: number; isLocked: boolean } {
+  public getRoomVisualState(board: BoardState, roomId: number) {
     return getRoomVisualStateImpl(this, board, roomId);
   }
-
   public renderFrame(board: BoardState, options: RenderSceneOptions = {}): void {
     this.render(board, options);
   }
@@ -651,18 +652,9 @@ export class Renderer3D implements RenderPassContext {
     if (this.programState) bindMainProgramImpl(gl, this.programState);
   }
 
-  public setClipPlaneState(
-    gl: WebGL2RenderingContext,
-    enabled: boolean,
-    nx = 0,
-    ny = 0,
-    nz = 1,
-    d = 0,
-    capR = 0.2,
-    capG = 0.2,
-    capB = 0.2
-  ): void {
+  public setClipPlaneState(...args: Parameters<NonNullable<RenderPassContext['setClipPlaneState']>>): void {
     if (this.programState) {
+      const [gl, enabled, nx = 0, ny = 0, nz = 1, d = 0, capR = 0.2, capG = 0.2, capB = 0.2] = args;
       setClipPlaneStateImpl(gl, this.programState, enabled, nx, ny, nz, d, capR, capG, capB);
     }
   }

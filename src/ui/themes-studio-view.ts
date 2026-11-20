@@ -202,7 +202,7 @@ function requestPreviewFrames(app: AppViewContext, minFrames = 3): void {
   if (app.activeScreen !== 'themes' || app.titleOverlayOpen) return;
   const canvas = document.getElementById('themes-preview-canvas') as HTMLCanvasElement | null;
   if (!canvas) return;
-  if (!previewRenderer) previewRenderer = new Renderer3D(canvas);
+  if (!previewRenderer) previewRenderer = new Renderer3D(canvas, { isPreview: true });
   if (!previewBoard) resetPreviewShowcaseBoard(false);
   previewSettleFrames = Math.max(previewSettleFrames, minFrames);
   renderSinglePreviewFrame(app, 1 / 60);
@@ -235,6 +235,7 @@ export function notifyThemesScreenActiveState(app: AppViewContext, active: boole
     }
     previewOverride = null;
     previewRenderer?.resetTransientFx();
+    previewRenderer?.releaseBackbufferForSuspend();
     resetPreviewShowcaseBoard(false);
     return;
   }
@@ -255,7 +256,7 @@ export function triggerThemePreviewShred(app: AppViewContext): void {
     previewResetTimerId = null;
   }
   const canvas = document.getElementById('themes-preview-canvas') as HTMLCanvasElement | null;
-  if (canvas && !previewRenderer) previewRenderer = new Renderer3D(canvas);
+  if (canvas && !previewRenderer) previewRenderer = new Renderer3D(canvas, { isPreview: true });
   let board = previewBoard ?? resetPreviewShowcaseBoard(false);
   if (isBoardWon(board)) {
     board = resetPreviewShowcaseBoard(false);
