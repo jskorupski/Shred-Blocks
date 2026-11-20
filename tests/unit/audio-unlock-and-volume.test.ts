@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AmbientMusicController } from '../../src/audio/ambient-music';
 import {
   MUSIC_MASTER_GAIN,
   MUSIC_VOLUME_GAINS,
@@ -15,6 +16,7 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
   const docState = { hidden: false };
   const audioSession = { type: 'auto' };
   const vibrateSpy = vi.fn((_pattern: number | number[]) => true);
+  let lastCtorOptions: AudioContextOptions | undefined;
   let resumeCount = 0;
   let silentBufferCount = 0;
 
@@ -28,6 +30,7 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
         sfxGainNode.gain.value = v;
       }),
       cancelScheduledValues: vi.fn(),
+      cancelAndHoldAtTime: vi.fn(),
       exponentialRampToValueAtTime: vi.fn(),
     },
     connect: vi.fn(),
@@ -43,6 +46,7 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
         musicGainNode.gain.value = v;
       }),
       cancelScheduledValues: vi.fn(),
+      cancelAndHoldAtTime: vi.fn(),
     },
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -136,7 +140,8 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
 
   vi.stubGlobal('window', {
     AudioContext: class {
-      constructor() {
+      constructor(opts?: AudioContextOptions) {
+        lastCtorOptions = opts;
         Object.defineProperties(this, Object.getOwnPropertyDescriptors(mockCtx));
       }
     },
@@ -181,7 +186,7 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
     emitDoc: (t: string) => {
       for (const cb of docListeners.get(t) ?? []) cb();
     },
-    getStats: () => ({ resumeCount, silentBufferCount }),
+    getStats: () => ({ resumeCount, silentBufferCount, lastCtorOptions }),
   };
 }
 
@@ -374,5 +379,152 @@ describe('Audio Unlock Gaps & 4-State Stepped Sanctuary Volume Controls', () => 
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('prevents Web Audio static: requests balanced latency, skips foreground tap gain-resets, ramps notes to 0, and cleans up wow LFO/voice graphs onended', () => {
+    const env = createMockSoundDomEnv('running');
+    try {
+      const sound = new SoundEngine();
+      sound.unlock();
+      expect(env.getStats().lastCtorOptions).toEqual({ latencyHint: 'balanced' });
+
+      // Foreground gesture events must not cancel/reschedule live master gains every tap
+      env.sfxGainNode.gain.cancelAndHoldAtTime.mockClear();
+      env.sfxGainNode.gain.cancelScheduledValues.mockClear();
+      env.sfxGainNode.gain.setTargetAtTime.mockClear();
+      env.musicGainNode.gain.cancelAndHoldAtTime.mockClear();
+      env.musicGainNode.gain.cancelScheduledValues.mockClear();
+      env.musicGainNode.gain.setTargetAtTime.mockClear();
+
+      for (const evt of ['touchstart', 'pointerdown', 'touchend', 'pointerup', 'click']) {
+        env.emitWindow(evt);
+      }
+      expect(env.sfxGainNode.gain.cancelAndHoldAtTime).not.toHaveBeenCalled();
+      expect(env.sfxGainNode.gain.cancelScheduledValues).not.toHaveBeenCalled();
+      expect(env.sfxGainNode.gain.setTargetAtTime).not.toHaveBeenCalled();
+      expect(env.musicGainNode.gain.cancelAndHoldAtTime).not.toHaveBeenCalled();
+      expect(env.musicGainNode.gain.cancelScheduledValues).not.toHaveBeenCalled();
+      expect(env.musicGainNode.gain.setTargetAtTime).not.toHaveBeenCalled();
+
+      // Volume change anchors live gain smoothly via cancelAndHoldAtTime
+      sound.setMusicVolume(1);
+      expect(env.musicGainNode.gain.cancelAndHoldAtTime).toHaveBeenCalledTimes(1);
+      expect(env.musicGainNode.gain.setTargetAtTime).toHaveBeenCalledWith(0.22, 1.5, 0.08);
+      sound.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // Verify all 5 AmbientMusicController voices ramp gain to 0 and tear down subgraphs + wowDepthGain fan-out onended
+    const activeWowTargets = new Set<AudioParam>();
+    let wowDepthNode: Record<string, unknown> | null = null;
+    const endedHandlers: Array<() => void> = [];
+    const disconnectedNodes = new Set<object>();
+    const noteGainNodes: Array<{ rampedToZero: boolean }> = [];
+    let gainIndex = 0;
+
+    const makeParam = (onLinearRamp?: (v: number) => void) => ({
+      value: 0,
+      setValueAtTime: vi.fn(),
+      linearRampToValueAtTime: vi.fn((v: number) => onLinearRamp?.(v)),
+      exponentialRampToValueAtTime: vi.fn(),
+    });
+
+    const musicGain = { gain: makeParam(), connect: vi.fn(), disconnect: vi.fn() } as unknown as GainNode;
+    const mockCtx = {
+      currentTime: 0,
+      sampleRate: 44100,
+      createGain: () => {
+        gainIndex += 1;
+        // gainIndex === 2 is wowDepthGain inside ensureGraph (dryBus=1, wowDepthGain=2)
+        const state = { rampedToZero: false };
+        const node: Record<string, unknown> = {
+          gain: makeParam((v) => {
+            if (v === 0) state.rampedToZero = true;
+          }),
+          connect: vi.fn((dest: unknown) => {
+            if (node === wowDepthNode && dest && typeof dest === 'object') {
+              activeWowTargets.add(dest as AudioParam);
+            }
+          }),
+          disconnect: vi.fn((dest?: unknown) => {
+            if (node === wowDepthNode && dest && typeof dest === 'object') {
+              activeWowTargets.delete(dest as AudioParam);
+            } else {
+              disconnectedNodes.add(node);
+            }
+          }),
+        };
+        if (gainIndex === 2) {
+          wowDepthNode = node;
+        } else if (gainIndex >= 11) {
+          noteGainNodes.push(state);
+        }
+        return node;
+      },
+      createBiquadFilter: () => {
+        const node = {
+          type: 'lowpass',
+          frequency: makeParam(),
+          Q: makeParam(),
+          connect: vi.fn(),
+          disconnect: vi.fn(() => disconnectedNodes.add(node)),
+        };
+        return node;
+      },
+      createDelay: () => ({ delayTime: makeParam(), connect: vi.fn(), disconnect: vi.fn() }),
+      createDynamicsCompressor: () => ({
+        threshold: makeParam(),
+        knee: makeParam(),
+        ratio: makeParam(),
+        attack: makeParam(),
+        release: makeParam(),
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      }),
+      createStereoPanner: () => ({ pan: makeParam(), connect: vi.fn(), disconnect: vi.fn() }),
+      createOscillator: () => {
+        const osc = {
+          type: 'sine',
+          frequency: makeParam(),
+          detune: makeParam(),
+          connect: vi.fn(),
+          disconnect: vi.fn(() => disconnectedNodes.add(osc)),
+          start: vi.fn(),
+          stop: vi.fn(),
+          onended: null as (() => void) | null,
+        };
+        const origStop = osc.stop;
+        osc.stop = vi.fn((when?: number) => {
+          origStop(when);
+          if (typeof osc.onended === 'function') {
+            endedHandlers.push(osc.onended);
+          }
+        });
+        return osc;
+      },
+    } as unknown as AudioContext;
+
+    const ctrl = new AmbientMusicController();
+    // Run 1 full bar across MENU (horizon_awake), CHALLENGE (starlight_kids -> LeadSigh), ZEN (coastal_dive -> HorizonPluck)
+    for (const scene of ['MENU', 'CHALLENGE', 'ZEN'] as const) {
+      ctrl.setScene(scene, mockCtx, musicGain, true);
+      let t = 0.05;
+      for (let step = 0; step < 16; step++) {
+        t += ctrl.advanceStep(mockCtx, musicGain, t);
+      }
+    }
+
+    expect(activeWowTargets.size).toBeGreaterThan(0);
+    expect(endedHandlers.length).toBeGreaterThan(20);
+    expect(noteGainNodes.some((g) => g.rampedToZero)).toBe(true);
+
+    // Fire all natural note completion handlers and verify zero leaked wow targets or subgraphs
+    for (const onEnded of endedHandlers) {
+      onEnded();
+    }
+    expect(activeWowTargets.size).toBe(0);
+    expect(disconnectedNodes.size).toBeGreaterThan(endedHandlers.length);
+    ctrl.destroy();
   });
 });

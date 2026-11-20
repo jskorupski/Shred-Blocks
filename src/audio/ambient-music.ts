@@ -64,6 +64,24 @@ function stopOscs(oscs: ReadonlyArray<OscillatorNode>): void {
   }
 }
 
+/** Disconnects finished per-note subgraphs and any persistent LFO AudioParam fan-out edges on note end. */
+function attachVoiceCleanup(
+  triggerOsc: OscillatorNode,
+  nodes: ReadonlyArray<AudioNode>,
+  wow?: { readonly source: GainNode; readonly params: ReadonlyArray<AudioParam> }
+): void {
+  triggerOsc.onended = () => {
+    if (wow) {
+      for (const p of wow.params) {
+        try {
+          (wow.source as GainNode & { disconnect: (dest: AudioParam) => void }).disconnect(p);
+        } catch {}
+      }
+    }
+    disconnectAll(nodes);
+  };
+}
+
 interface MasterSynthwaveGraph {
   readonly ctx: AudioContext;
   readonly musicGain: GainNode;
@@ -228,8 +246,11 @@ export class AmbientMusicController {
 
     if (typeof ctx.createDynamicsCompressor === 'function') {
       const comp = ctx.createDynamicsCompressor();
-      setParam(comp.threshold, -4, now);
-      setParam(comp.ratio, 3, now);
+      setParam(comp.threshold, -6, now);
+      setParam(comp.knee, 14, now);
+      setParam(comp.ratio, 3.5, now);
+      setParam(comp.attack, 0.008, now);
+      setParam(comp.release, 0.24, now);
       dryBus.connect(comp);
       comp.connect(musicGain);
       ownedNodes.push(comp);
@@ -398,10 +419,10 @@ export class AmbientMusicController {
 
   private tickLookahead(ctx: AudioContext, musicGain: GainNode): void {
     if (ctx.state !== 'running') return;
-    if (this.nextNoteTime < ctx.currentTime) {
-      this.nextNoteTime = ctx.currentTime + 0.03;
+    if (this.nextNoteTime < ctx.currentTime + 0.005) {
+      this.nextNoteTime = ctx.currentTime + 0.035;
     }
-    while (this.nextNoteTime < ctx.currentTime + 0.24) {
+    while (this.nextNoteTime < ctx.currentTime + 0.3) {
       this.nextNoteTime += this.advanceStep(ctx, musicGain, this.nextNoteTime);
     }
   }
@@ -513,7 +534,11 @@ export class AmbientMusicController {
       linearRamp(g.gain, opts.amp, when + opts.attack);
       linearRamp(g.gain, opts.amp * 0.85, when + dur * 0.76);
       expRamp(g.gain, 0.0002, when + dur);
+      linearRamp(g.gain, 0, when + dur + 0.04);
 
+      const voiceNodes: AudioNode[] = [lp, g];
+      const detuneParams: AudioParam[] = [];
+      const noteOscs: OscillatorNode[] = [];
       const stack: ReadonlyArray<{
         readonly type: OscillatorType;
         readonly dt: number;
@@ -533,8 +558,9 @@ export class AmbientMusicController {
         setParam(vg.gain, voice.gain, when);
         osc.connect(vg);
         vg.connect(lp);
-        osc.start(when);
-        osc.stop(when + dur + 0.06);
+        voiceNodes.push(osc, vg);
+        detuneParams.push(osc.detune);
+        noteOscs.push(osc);
       }
 
       lp.connect(g);
@@ -543,6 +569,18 @@ export class AmbientMusicController {
       setParam(ws.gain, opts.wetAmt, when);
       g.connect(ws);
       ws.connect(stem.wet);
+      voiceNodes.push(ws);
+      const triggerOsc = noteOscs[noteOscs.length - 1];
+      if (triggerOsc) {
+        attachVoiceCleanup(triggerOsc, voiceNodes, {
+          source: graph.wowDepthGain,
+          params: detuneParams,
+        });
+      }
+      for (const osc of noteOscs) {
+        osc.start(when);
+        osc.stop(when + dur + 0.06);
+      }
     }
   }
 
@@ -565,6 +603,7 @@ export class AmbientMusicController {
     linearRamp(g.gain, amp, when + opts.attack);
     linearRamp(g.gain, amp * 0.82, when + dur * 0.7);
     expRamp(g.gain, 0.0002, when + dur);
+    linearRamp(g.gain, 0, when + dur + 0.025);
 
     const sub = ctx.createOscillator();
     const subG = ctx.createGain();
@@ -574,6 +613,7 @@ export class AmbientMusicController {
     sub.connect(subG);
     subG.connect(lp);
 
+    const voiceNodes: AudioNode[] = [lp, g, sub, subG];
     if (opts.sawAmt > 0) {
       const saw = ctx.createOscillator();
       const sawG = ctx.createGain();
@@ -583,13 +623,15 @@ export class AmbientMusicController {
       saw.connect(sawG);
       sawG.connect(lp);
       saw.start(when);
-      saw.stop(when + dur + 0.04);
+      saw.stop(when + dur + 0.045);
+      voiceNodes.push(saw, sawG);
     }
 
     lp.connect(g);
     g.connect(stem.dry);
+    attachVoiceCleanup(sub, voiceNodes);
     sub.start(when);
-    sub.stop(when + dur + 0.04);
+    sub.stop(when + dur + 0.045);
   }
 
   private playAnalogArp(
@@ -613,6 +655,7 @@ export class AmbientMusicController {
     setParam(g.gain, 0.0002, when);
     linearRamp(g.gain, opts.amp, when + opts.attack);
     expRamp(g.gain, 0.0002, when + opts.decay);
+    linearRamp(g.gain, 0, when + opts.decay + 0.03);
 
     const tri = ctx.createOscillator();
     const saw = ctx.createOscillator();
@@ -635,6 +678,7 @@ export class AmbientMusicController {
     g.connect(ws);
     ws.connect(stem.wet);
 
+    attachVoiceCleanup(tri, [tri, saw, sawG, lp, g, ws]);
     tri.start(when);
     saw.start(when);
     tri.stop(when + opts.decay + 0.05);
@@ -652,6 +696,7 @@ export class AmbientMusicController {
     setParam(g.gain, 0.0002, when);
     linearRamp(g.gain, 0.072, when + 0.042);
     expRamp(g.gain, 0.0002, when + 1.05);
+    linearRamp(g.gain, 0, when + 1.08);
 
     const tri = ctx.createOscillator();
     const oct = ctx.createOscillator();
@@ -673,6 +718,7 @@ export class AmbientMusicController {
     g.connect(ws);
     ws.connect(stem.wet);
 
+    attachVoiceCleanup(tri, [tri, oct, octG, lp, g, ws]);
     tri.start(when);
     oct.start(when);
     tri.stop(when + 1.1);
@@ -697,6 +743,7 @@ export class AmbientMusicController {
     linearRamp(g.gain, amp, when + 0.42);
     linearRamp(g.gain, amp * 0.72, when + dur * 0.65);
     expRamp(g.gain, 0.0002, when + dur);
+    linearRamp(g.gain, 0, when + dur + 0.04);
 
     const vib = ctx.createOscillator();
     const vibG = ctx.createGain();
@@ -705,6 +752,7 @@ export class AmbientMusicController {
     setParam(vibG.gain, freq * 0.004, when);
     vib.connect(vibG);
 
+    const voiceNodes: AudioNode[] = [lp, g, vib, vibG];
     const stack: ReadonlyArray<{
       readonly type: OscillatorType;
       readonly dt: number;
@@ -725,6 +773,7 @@ export class AmbientMusicController {
       og.connect(lp);
       osc.start(when);
       osc.stop(when + dur + 0.06);
+      voiceNodes.push(osc, og);
     }
 
     lp.connect(g);
@@ -733,7 +782,9 @@ export class AmbientMusicController {
     setParam(ws.gain, 0.75, when);
     g.connect(ws);
     ws.connect(stem.wet);
+    voiceNodes.push(ws);
 
+    attachVoiceCleanup(vib, voiceNodes);
     vib.start(when);
     vib.stop(when + dur + 0.06);
   }

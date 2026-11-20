@@ -63,6 +63,21 @@ interface NavigatorWithAudioSession extends Navigator {
   };
 }
 
+function setSmoothGainTarget(node: GainNode | null, target: number, now: number, tau: number): void {
+  if (!node) return;
+  const withHold = node.gain as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam };
+  if (typeof withHold.cancelAndHoldAtTime === 'function') {
+    withHold.cancelAndHoldAtTime(now);
+  } else {
+    node.gain.cancelScheduledValues?.(now);
+  }
+  if (typeof node.gain.setTargetAtTime === 'function') {
+    node.gain.setTargetAtTime(target, now, tau);
+  } else {
+    node.gain.value = target;
+  }
+}
+
 export class SoundEngine {
   public sfxEnabled = true;
   public musicEnabled = true;
@@ -76,6 +91,7 @@ export class SoundEngine {
   private musicGain: GainNode | null = null;
   private unlocked = false;
   private buffersPrewarmed = false;
+  private gainsMutedForBackground = false;
   private lastSlideTickMs = 0;
   private lastWallClackMs = 0;
 
@@ -144,13 +160,7 @@ export class SoundEngine {
       this.isPageHidden = true;
       this.enterBackground();
     };
-    this.boundPageShow = () => {
-      this.isPageHidden = false;
-      this.isFrozen = false;
-      this.isWindowBlurred = false;
-      this.isDocumentHidden = typeof document !== 'undefined' ? Boolean(document.hidden) : false;
-      this.recoverForeground();
-    };
+    this.boundPageShow = this.boundFocus;
     this.boundFreeze = () => {
       this.isFrozen = true;
       this.enterBackground();
@@ -298,8 +308,8 @@ export class SoundEngine {
     this.sfxVolume = step;
     this.sfxEnabled = step > 0;
     this.syncAudioSessionType();
-    if (this.sfxGain && this.ctx && !this.isBackgrounded()) {
-      this.sfxGain.gain.setTargetAtTime?.(SFX_VOLUME_GAINS[step], this.ctx.currentTime, 0.015);
+    if (this.ctx && !this.isBackgrounded()) {
+      setSmoothGainTarget(this.sfxGain, SFX_VOLUME_GAINS[step], this.ctx.currentTime, 0.015);
     }
   }
 
@@ -307,8 +317,8 @@ export class SoundEngine {
     this.musicVolume = step;
     this.musicEnabled = step > 0;
     this.syncAudioSessionType();
-    if (this.musicGain && this.ctx && !this.isBackgrounded()) {
-      this.musicGain.gain.setTargetAtTime?.(MUSIC_VOLUME_GAINS[step], this.ctx.currentTime, 0.08);
+    if (this.ctx && !this.isBackgrounded()) {
+      setSmoothGainTarget(this.musicGain, MUSIC_VOLUME_GAINS[step], this.ctx.currentTime, 0.08);
     }
     if (this.musicEnabled && this.unlocked && !this.isBackgrounded()) {
       if (this.ctx && this.ctx.state !== 'running') {
@@ -383,6 +393,7 @@ export class SoundEngine {
   }
 
   private muteMasterGainsImmediate(): void {
+    this.gainsMutedForBackground = true;
     const now = this.ctx ? this.ctx.currentTime : 0;
     for (const node of [this.sfxGain, this.musicGain]) {
       if (!node) continue;
@@ -394,25 +405,12 @@ export class SoundEngine {
 
   private restoreMasterGains(): void {
     if (!this.ctx || this.isBackgrounded()) return;
+    this.gainsMutedForBackground = false;
     const now = this.ctx.currentTime;
     const targetSfx = SFX_VOLUME_GAINS[this.sfxEnabled ? this.sfxVolume : 0];
     const targetMusic = MUSIC_VOLUME_GAINS[this.musicEnabled ? this.musicVolume : 0];
-    if (this.sfxGain) {
-      this.sfxGain.gain.cancelScheduledValues?.(now);
-      if (typeof this.sfxGain.gain.setTargetAtTime === 'function') {
-        this.sfxGain.gain.setTargetAtTime(targetSfx, now, 0.015);
-      } else {
-        this.sfxGain.gain.value = targetSfx;
-      }
-    }
-    if (this.musicGain) {
-      this.musicGain.gain.cancelScheduledValues?.(now);
-      if (typeof this.musicGain.gain.setTargetAtTime === 'function') {
-        this.musicGain.gain.setTargetAtTime(targetMusic, now, 0.06);
-      } else {
-        this.musicGain.gain.value = targetMusic;
-      }
-    }
+    setSmoothGainTarget(this.sfxGain, targetSfx, now, 0.015);
+    setSmoothGainTarget(this.musicGain, targetMusic, now, 0.06);
   }
 
   private enterBackground(): void {
@@ -446,8 +444,19 @@ export class SoundEngine {
     if (!AudioCtx) return null;
 
     try {
-      this.ctx = new AudioCtx();
+      // Request 'balanced' buffer sizing (~12–16ms) rather than default 'interactive' (~3ms)
+      // so mobile Chrome Android AAudio threads never underrun during 120Hz WebGL2 frames.
+      let ctx: AudioContext;
+      try {
+        ctx = new (AudioCtx as unknown as new (opts?: AudioContextOptions) => AudioContext)({
+          latencyHint: 'balanced',
+        });
+      } catch {
+        ctx = new AudioCtx();
+      }
+      this.ctx = ctx;
       const backgrounded = this.isBackgrounded();
+      this.gainsMutedForBackground = backgrounded;
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.value = backgrounded ? 0 : SFX_VOLUME_GAINS[this.sfxEnabled ? this.sfxVolume : 0];
       this.sfxGain.connect(this.ctx.destination);
@@ -469,13 +478,16 @@ export class SoundEngine {
 
   public unlock(): void {
     if (typeof document !== 'undefined' && document.hidden) return;
+    const wasBackgrounded = this.isBackgrounded();
     this.isWindowBlurred = false;
     this.isPageHidden = false;
     this.isFrozen = false;
 
     if (this.unlocked && this.ctx?.state === 'running') {
-      this.syncAudioSessionType();
-      this.restoreMasterGains();
+      if (wasBackgrounded || this.gainsMutedForBackground) {
+        this.syncAudioSessionType();
+        this.restoreMasterGains();
+      }
       if (this.musicEnabled && !this.isBackgrounded() && !this.ambientMusic.isRunning()) {
         this.startMusicLoop();
       }
