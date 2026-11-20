@@ -11,7 +11,7 @@ import {
   type SkinId,
   type TrayId,
 } from '../core/types';
-import { type AtlasTextureData, type AtlasUVRegion, createAtlasTextureData } from './atlas-3d';
+import { type AtlasTextureData, createAtlasTextureData } from './atlas-3d';
 import {
   Camera3D,
   computeBoardBleedFraming,
@@ -19,7 +19,16 @@ import {
   measureStageContentBox,
 } from './camera-3d';
 import { renderCanvas2DFallbackImpl } from './canvas2d-fallback';
-import type { MeshData } from './mesh-generator';
+import {
+  bindMainProgramImpl,
+  createGlProgramState,
+  disposeGlProgramState,
+  drawMeshInstancedWithStateCache,
+  drawMeshWithStateCache,
+  type GlProgramState,
+  setClipPlaneStateImpl,
+} from './gl-program-state';
+import { ENVIRONMENT_MESHES, type MeshData } from './mesh-generator';
 import {
   detectAutomaticShredEventsImpl,
   getRoomVisualStateImpl,
@@ -65,7 +74,6 @@ import {
   type RelicFracturePlate,
   type RenderPassContext,
   type RenderSceneOptions,
-  setGlBlendEnabled,
   TRAY_PALETTES,
   type TrayPalette,
   type VisualGateBurst,
@@ -83,6 +91,8 @@ import {
   PARTICLE_FRAGMENT_SHADER,
   PARTICLE_VERTEX_SHADER,
   type ParticleInstancedVaoHandle,
+  SOLID_OPAQUE_FRAGMENT_SHADER,
+  SOLID_OPAQUE_VERTEX_SHADER,
 } from './shaders-3d';
 import { renderRelicPlatesWebGL2Impl } from './voronoi-plates';
 
@@ -98,6 +108,7 @@ export class Renderer3D implements RenderPassContext {
   private contextLost = false;
 
   private mainProgram: WebGLProgram | null = null;
+  private programState: GlProgramState | null = null;
   private particleProgram: WebGLProgram | null = null;
   private atlasTexture: WebGLTexture | null = null;
   private atlasData: AtlasTextureData;
@@ -106,28 +117,13 @@ export class Renderer3D implements RenderPassContext {
   private particleHandle: ParticleInstancedVaoHandle | null = null;
   private smokeHandle: ParticleInstancedVaoHandle | null = null;
 
-  // Uniform locations for main program
-  private uViewProj: WebGLUniformLocation | null = null;
-  private uTranslate: WebGLUniformLocation | null = null;
-  private uScale: WebGLUniformLocation | null = null;
-  private uRotX: WebGLUniformLocation | null = null;
-  private uRotZ: WebGLUniformLocation | null = null;
-  private uUvRect: WebGLUniformLocation | null = null;
-  private uColor: WebGLUniformLocation | null = null;
+  // Exposed `mainProgram` uniform handles for custom FX passes (`MYSTIC-TRACE-01`, `PLASMA_ARCS`, shockwaves)
   public uCapColor: WebGLUniformLocation | null = null;
   public uTraceCount: WebGLUniformLocation | null = null;
   public uTracePts: WebGLUniformLocation | null = null;
   public uClipPlane: WebGLUniformLocation | null = null;
   public uUseClipPlane: WebGLUniformLocation | null = null;
   public uBlockSeed: WebGLUniformLocation | null = null;
-  private uUseTexture: WebGLUniformLocation | null = null;
-  private uMaterialStyle: WebGLUniformLocation | null = null;
-  private uAtlas: WebGLUniformLocation | null = null;
-  private uBlueprintMix: WebGLUniformLocation | null = null;
-  private uBoardInfo: WebGLUniformLocation | null = null;
-  private uStoneTint: WebGLUniformLocation | null = null;
-  private uTrayMaterial: WebGLUniformLocation | null = null;
-  private uHighContrast: WebGLUniformLocation | null = null;
 
   // Uniform locations for particle program
   private uPartViewProj: WebGLUniformLocation | null = null;
@@ -391,6 +387,8 @@ export class Renderer3D implements RenderPassContext {
   }
 
   private releaseWebGLResources(): void {
+    disposeGlProgramState(this.gl, this.programState);
+    this.programState = null;
     disposeWebGLResourcesImpl(
       this.gl,
       this.meshHandles,
@@ -414,10 +412,12 @@ export class Renderer3D implements RenderPassContext {
     this.releaseWebGLResources();
 
     const mainProg = createShaderProgram(gl, MAIN_VERTEX_SHADER, MAIN_FRAGMENT_SHADER);
+    const solidProg = createShaderProgram(gl, SOLID_OPAQUE_VERTEX_SHADER, SOLID_OPAQUE_FRAGMENT_SHADER);
     const partProg = createShaderProgram(gl, PARTICLE_VERTEX_SHADER, PARTICLE_FRAGMENT_SHADER);
 
     if (!mainProg || !partProg) {
       if (mainProg) gl.deleteProgram(mainProg);
+      if (solidProg) gl.deleteProgram(solidProg);
       if (partProg) gl.deleteProgram(partProg);
       this.gl = null;
       this.ctx2d = this.canvas.getContext('2d');
@@ -427,29 +427,14 @@ export class Renderer3D implements RenderPassContext {
 
     this.mainProgram = mainProg;
     this.particleProgram = partProg;
-
-    this.uViewProj = gl.getUniformLocation(mainProg, 'u_viewProj');
-    this.uTranslate = gl.getUniformLocation(mainProg, 'u_translate');
-    this.uScale = gl.getUniformLocation(mainProg, 'u_scale');
-    this.uRotX = gl.getUniformLocation(mainProg, 'u_rotX');
-    this.uRotZ = gl.getUniformLocation(mainProg, 'u_rotZ');
-    this.uUvRect = gl.getUniformLocation(mainProg, 'u_uvRect');
-    this.uColor = gl.getUniformLocation(mainProg, 'u_color');
-    this.uCapColor = gl.getUniformLocation(mainProg, 'u_capColor');
-    this.uClipPlane = gl.getUniformLocation(mainProg, 'u_clipPlane');
-    this.uUseClipPlane = gl.getUniformLocation(mainProg, 'u_useClipPlane');
-    this.uBlockSeed = gl.getUniformLocation(mainProg, 'u_blockSeed');
-    this.uUseTexture = gl.getUniformLocation(mainProg, 'u_useTexture');
-    this.uMaterialStyle = gl.getUniformLocation(mainProg, 'u_materialStyle');
-    this.uAtlas = gl.getUniformLocation(mainProg, 'u_atlas');
-    this.uBlueprintMix = gl.getUniformLocation(mainProg, 'u_blueprintMix');
-    this.uBoardInfo = gl.getUniformLocation(mainProg, 'u_boardInfo');
-    this.uStoneTint = gl.getUniformLocation(mainProg, 'u_stoneTint');
-    this.uTrayMaterial = gl.getUniformLocation(mainProg, 'u_trayMaterial');
-    this.uHighContrast = gl.getUniformLocation(mainProg, 'u_highContrast');
-    this.uTraceCount = gl.getUniformLocation(mainProg, 'u_traceCount');
-    this.uTracePts =
-      gl.getUniformLocation(mainProg, 'u_tracePts[0]') ?? gl.getUniformLocation(mainProg, 'u_tracePts');
+    this.programState = createGlProgramState(gl, mainProg, solidProg);
+    const mu = this.programState.mainUniforms;
+    this.uCapColor = mu.uCapColor;
+    this.uClipPlane = mu.uClipPlane;
+    this.uUseClipPlane = mu.uUseClipPlane;
+    this.uBlockSeed = mu.uBlockSeed;
+    this.uTraceCount = mu.uTraceCount;
+    this.uTracePts = mu.uTracePts;
 
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
     this.uPartStyle = gl.getUniformLocation(partProg, 'u_particleStyle');
@@ -464,12 +449,10 @@ export class Renderer3D implements RenderPassContext {
     warmUpWebGLPipelinesImpl(
       this,
       gl,
-      mainProg,
-      this.uViewProj,
-      this.uBlueprintMix,
-      this.uAtlas,
+      this.programState,
       this.atlasTexture,
-      this.getParticleDrawHandles()
+      this.getParticleDrawHandles(),
+      this.getOrCreateMeshHandle(gl, ENVIRONMENT_MESHES.overlayQuad)
     );
   }
 
@@ -664,51 +647,73 @@ export class Renderer3D implements RenderPassContext {
     return getMaterialStyleCodeForSkin(skin);
   }
 
-  public drawMesh(
+  public useMainProgram(gl: WebGL2RenderingContext): void {
+    if (this.programState) bindMainProgramImpl(gl, this.programState);
+  }
+
+  public setClipPlaneState(
+    gl: WebGL2RenderingContext,
+    enabled: boolean,
+    nx = 0,
+    ny = 0,
+    nz = 1,
+    d = 0,
+    capR = 0.2,
+    capG = 0.2,
+    capB = 0.2
+  ): void {
+    if (this.programState) {
+      setClipPlaneStateImpl(gl, this.programState, enabled, nx, ny, nz, d, capR, capG, capB);
+    }
+  }
+
+  public setBlockSeed(seed: number): void {
+    if (this.programState) this.programState.currentBlockSeed = seed;
+  }
+
+  public drawMesh(...args: Parameters<RenderPassContext['drawMesh']>): void {
+    if (!this.programState) return;
+    const [gl, mesh, tx, ty, tz, sx, sy, sz, r, g, b, a = 1, rotX = 0, rotZ = 0, style = 0, uv = null] = args;
+    drawMeshWithStateCache(
+      gl,
+      this.programState,
+      this.getOrCreateMeshHandle(gl, mesh),
+      tx,
+      ty,
+      tz,
+      sx,
+      sy,
+      sz,
+      r,
+      g,
+      b,
+      a,
+      rotX,
+      rotZ,
+      style,
+      uv
+    );
+  }
+
+  public drawMeshInstanced(
     gl: WebGL2RenderingContext,
     mesh: MeshData,
-    tx: number,
-    ty: number,
-    tz: number,
-    sx: number,
-    sy: number,
-    sz: number,
-    r: number,
-    g: number,
-    b: number,
-    a = 1.0,
-    rotX = 0,
-    rotZ = 0,
-    materialStyle = 0,
-    uvRegion: AtlasUVRegion | null = null
+    instanceData: Float32Array,
+    instanceCount: number,
+    alpha = 1.0,
+    materialStyle = 0
   ): void {
-    const handle = this.getOrCreateMeshHandle(gl, mesh);
-    setGlBlendEnabled(gl, uvRegion !== null || a < 0.999 || materialStyle === 4 || materialStyle >= 8);
-    gl.bindVertexArray(handle.vao);
-    const shakeAmp =
-      this.boardShakeTimer > 0 && !this.lastOptions.reducedMotion
-        ? Math.sin(this.boardShakeTimer * 54.0) * (this.boardShakeTimer / 0.16) * 0.055
-        : 0;
-    gl.uniform3f(
-      this.uTranslate,
-      tx + this.boardShakeDirX * shakeAmp,
-      ty + this.boardShakeDirY * shakeAmp,
-      tz
+    if (!this.programState || instanceCount <= 0) return;
+    drawMeshInstancedWithStateCache(
+      gl,
+      this.programState,
+      mesh,
+      this.getOrCreateMeshHandle(gl, mesh),
+      instanceData,
+      instanceCount,
+      alpha,
+      materialStyle
     );
-    gl.uniform3f(this.uScale, sx, sy, sz);
-    gl.uniform1f(this.uRotX, rotX);
-    gl.uniform1f(this.uRotZ, rotZ);
-    gl.uniform4f(this.uColor, r, g, b, a);
-    gl.uniform1i(this.uMaterialStyle, materialStyle);
-    gl.uniform1i(this.uUseTexture, uvRegion ? 1 : 0);
-    gl.uniform4f(
-      this.uUvRect,
-      uvRegion ? uvRegion.u0 : 0,
-      uvRegion ? uvRegion.v0 : 0,
-      uvRegion ? uvRegion.u1 : 1,
-      uvRegion ? uvRegion.v1 : 1
-    );
-    gl.drawElements(gl.TRIANGLES, handle.indexCount, gl.UNSIGNED_SHORT, 0);
   }
 
   public drawAtlasBadge(...args: Parameters<RenderPassContext['drawAtlasBadge']>): void {
@@ -730,7 +735,7 @@ export class Renderer3D implements RenderPassContext {
 
   private renderWebGL2(board: BoardState, options: RenderSceneOptions, dtSec = 1 / 60): void {
     const gl = this.gl;
-    if (!gl) return;
+    if (!gl || !this.programState) return;
     const trayId = options.equippedTray ?? 'industrial_slate';
     const skinId = options.equippedSkin ?? 'classic_studs';
     const highContrast = Boolean(options.highContrast);
@@ -742,14 +747,7 @@ export class Renderer3D implements RenderPassContext {
     prepareWebGL2FrameStateImpl(
       this,
       gl,
-      this.mainProgram,
-      this.uViewProj,
-      this.uBlueprintMix,
-      this.uBoardInfo,
-      this.uStoneTint,
-      this.uTrayMaterial,
-      this.uHighContrast,
-      this.uAtlas,
+      this.programState,
       this.atlasTexture,
       board,
       trayId,

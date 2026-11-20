@@ -687,6 +687,7 @@ function renderShockwaveRings(rctx: RenderPassContext, gl: WebGL2RenderingContex
       const eased = 1 - (1 - progress) * (1 - progress);
       const radius = sw.minRadius + (sw.maxRadius - sw.minRadius) * eased;
       if (sw.feathered) {
+        rctx.useMainProgram?.(gl);
         usedFeatheredClip = true;
         const peak = sw.peakAlpha ?? 0.68;
         const fade = 1 - progress * progress;

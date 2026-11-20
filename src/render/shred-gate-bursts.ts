@@ -282,6 +282,7 @@ function drawBranchingBoltTree3D(
 export function renderGateBursts3D(rctx: RenderPassContext, gl: WebGL2RenderingContext): void {
   if (rctx.activeGateBursts.length === 0) return;
 
+  rctx.useMainProgram?.(gl);
   gl.depthMask(false);
   gl.disable(gl.CULL_FACE);
 

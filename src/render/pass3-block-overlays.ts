@@ -53,12 +53,20 @@ export function renderBlockSurfaceOverlays3D(
   // Zone A: Integrated 3D Axis-Lock Side-Flange Rails + Sculpted Tone-on-Tone Medallion (`UX-10`, `R3D-07`)
   // Circular studs occupy [0.34, 0.66]; placing 3D side rails at 0.13 and 0.87 leaves the 3D studs 100% uncovered!
   if (block.axisLock === 'H') {
-    const rowCells = shape.cells.filter((c) => c[0] === anchor[0]);
     let minCol = anchor[1];
     let maxCol = anchor[1];
-    for (const rc of rowCells) {
-      if (rc[1] < minCol) minCol = rc[1];
-      if (rc[1] > maxCol) maxCol = rc[1];
+    let freeRowCell: readonly [number, number] | undefined;
+    let freeAnyCell: readonly [number, number] | undefined;
+    for (let i = 0; i < shape.cells.length; i++) {
+      const cell = shape.cells[i];
+      if (cell[0] === anchor[0]) {
+        if (cell[1] < minCol) minCol = cell[1];
+        if (cell[1] > maxCol) maxCol = cell[1];
+        if (!freeRowCell && cell[1] !== anchor[1]) freeRowCell = cell;
+      }
+      if (!freeAnyCell && (cell[0] !== anchor[0] || cell[1] !== anchor[1])) {
+        freeAnyCell = cell;
+      }
     }
     const spanW = maxCol - minCol + 1;
     const railCenterX = drawX + minCol + spanW * 0.5;
@@ -112,9 +120,7 @@ export function renderBlockSurfaceOverlays3D(
     let iconSize = spanW >= 2 ? 0.5 : 0.42;
 
     if (hasImmobilizer || hasPayload) {
-      const freeCell =
-        rowCells.find((c) => c[1] !== anchor[1]) ??
-        shape.cells.find((c) => c[0] !== anchor[0] || c[1] !== anchor[1]);
+      const freeCell = freeRowCell ?? freeAnyCell;
       if (freeCell) {
         arrowCx = drawX + freeCell[1] + 0.5;
         arrowCy = drawY + freeCell[0] + 0.5;
@@ -135,12 +141,20 @@ export function renderBlockSurfaceOverlays3D(
     const lockBadgeZ = rctx.drawBadgeMedallion3D(gl, arrowCx, arrowCy, zMedallionBase, medW, medH, r, g, b);
     rctx.drawAtlasBadge(gl, 'LOCK_H', arrowCx, arrowCy, lockBadgeZ, iconSize, 1.0, 0.99, 0.94, 1.0);
   } else if (block.axisLock === 'V') {
-    const colCells = shape.cells.filter((c) => c[1] === anchor[1]);
     let minRow = anchor[0];
     let maxRow = anchor[0];
-    for (const cc of colCells) {
-      if (cc[0] < minRow) minRow = cc[0];
-      if (cc[0] > maxRow) maxRow = cc[0];
+    let freeColCell: readonly [number, number] | undefined;
+    let freeAnyCell: readonly [number, number] | undefined;
+    for (let i = 0; i < shape.cells.length; i++) {
+      const cell = shape.cells[i];
+      if (cell[1] === anchor[1]) {
+        if (cell[0] < minRow) minRow = cell[0];
+        if (cell[0] > maxRow) maxRow = cell[0];
+        if (!freeColCell && cell[0] !== anchor[0]) freeColCell = cell;
+      }
+      if (!freeAnyCell && (cell[0] !== anchor[0] || cell[1] !== anchor[1])) {
+        freeAnyCell = cell;
+      }
     }
     const spanH = maxRow - minRow + 1;
     const railCenterY = drawY + minRow + spanH * 0.5;
@@ -194,9 +208,7 @@ export function renderBlockSurfaceOverlays3D(
     let iconSize = spanH >= 2 ? 0.5 : 0.42;
 
     if (hasImmobilizer || hasPayload) {
-      const freeCell =
-        colCells.find((c) => c[0] !== anchor[0]) ??
-        shape.cells.find((c) => c[0] !== anchor[0] || c[1] !== anchor[1]);
+      const freeCell = freeColCell ?? freeAnyCell;
       if (freeCell) {
         arrowCx = drawX + freeCell[1] + 0.5;
         arrowCy = drawY + freeCell[0] + 0.5;

@@ -1,6 +1,8 @@
 import { getGateActiveColor } from '../core/gate-clearance';
-import type { BoardState, GateState } from '../core/types';
+import type { BoardState } from '../core/types';
+import { MESH_INSTANCE_STRIDE } from './gl-program-state';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
+import { acquirePass1InstanceScratch, getOrBuildStaticPass1Topology } from './pass1-board-cache';
 import {
   drawToneOnToneSigil3D,
   getToneOnToneGlyphRgb,
@@ -18,284 +20,99 @@ export function renderPass1WallsAndGates(
   colorblind: boolean,
   timeSec: number
 ): void {
-  const { rows, cols, occupancy } = board;
+  const { rows, cols } = board;
   const isStoneRuin = (rctx.lastOptions.blueprintMix ?? 0) > 0.45;
   const live3DMix = Math.max(0, 1.0 - (rctx.lastOptions.blueprintMix ?? 0));
-  const isCellPlayable = (r: number, c: number): boolean =>
-    r >= 0 && r < rows && c >= 0 && c < cols && occupancy[r * cols + c] !== -1;
+  const topo = getOrBuildStaticPass1Topology(board);
 
-  // 1F. Contoured Perimeter Parapet Walls, Corner Posts & Stepped-Edge Exit Gates (`COURTYARD-01`, `GATE-STEP-01`)
+  // 1F. Contoured Perimeter Parapet Walls, Corner Posts & Rim Strips (cached + batched into 2 instanced draws)
   const wallThick = 0.42;
   const [wr, wg, wb] = palette.wallColor;
   const [rhr, rhg, rhb] = palette.rimHighlight;
 
-  const isUnitEdgeCoveredByGate = (edge: GateState['edge'], edgeLine: number, spanCell: number): boolean => {
-    for (const gate of board.gates) {
-      if (
-        gate.edge === edge &&
-        gate.edgeLine === edgeLine &&
-        spanCell >= gate.spanStart &&
-        spanCell < gate.spanStart + gate.spanLength
-      ) {
-        return true;
+  const wallCount = topo.wallSegments.length;
+  if (wallCount > 0) {
+    if (rctx.drawMeshInstanced) {
+      const buf = acquirePass1InstanceScratch(wallCount);
+      let ptr = 0;
+      for (const seg of topo.wallSegments) {
+        const roomVis = rctx.getRoomVisualState(board, seg.roomId);
+        const lum = roomVis.luminanceMul;
+        buf[ptr] = seg.x;
+        buf[ptr + 1] = seg.y;
+        buf[ptr + 2] = roomVis.zOffset;
+        buf[ptr + 3] = seg.w;
+        buf[ptr + 4] = seg.h;
+        buf[ptr + 5] = 1.0;
+        buf[ptr + 6] = wr * lum;
+        buf[ptr + 7] = wg * lum;
+        buf[ptr + 8] = wb * lum;
+        ptr += MESH_INSTANCE_STRIDE;
       }
-    }
-    return false;
-  };
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (!isCellPlayable(r, c)) continue;
-
-      const roomId = board.roomMap[r * cols + c] ?? 0;
-      const roomVis = rctx.getRoomVisualState(board, roomId);
-      const zOff = roomVis.zOffset;
-      const lum = roomVis.luminanceMul;
-      const cwr = wr * lum;
-      const cwg = wg * lum;
-      const cwb = wb * lum;
-      const crhr = rhr * lum;
-      const crhg = rhg * lum;
-      const crhb = rhb * lum;
-
-      const topOpen = !isCellPlayable(r - 1, c);
-      const botOpen = !isCellPlayable(r + 1, c);
-      const leftOpen = !isCellPlayable(r, c - 1);
-      const rightOpen = !isCellPlayable(r, c + 1);
-
-      const gateThick = wallThick - 0.03;
-      if (topOpen && !isUnitEdgeCoveredByGate('TOP', r, c)) {
-        const trimLeft =
-          isCellPlayable(r - 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r - 1) ? gateThick : 0;
-        const trimRight =
-          isCellPlayable(r - 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r - 1) ? gateThick : 0;
-        const segW = 1 - trimLeft - trimRight;
-        if (segW > 0.02) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.wallSegment,
-            c + trimLeft,
-            r - wallThick,
-            zOff,
-            segW,
-            wallThick,
-            1,
-            cwr,
-            cwg,
-            cwb,
-            1.0,
-            0,
-            0,
-            TRAY_WALL_STYLE
-          );
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.overlayQuad,
-            c + trimLeft,
-            r - 0.09,
-            zOff + 0.682,
-            segW,
-            0.08,
-            1,
-            crhr,
-            crhg,
-            crhb,
-            0.9
-          );
-        }
-      }
-      if (botOpen && !isUnitEdgeCoveredByGate('BOTTOM', r, c)) {
-        const trimLeft =
-          isCellPlayable(r + 1, c - 1) && isUnitEdgeCoveredByGate('RIGHT', c - 1, r + 1) ? gateThick : 0;
-        const trimRight =
-          isCellPlayable(r + 1, c + 1) && isUnitEdgeCoveredByGate('LEFT', c + 1, r + 1) ? gateThick : 0;
-        const segW = 1 - trimLeft - trimRight;
-        if (segW > 0.02) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.wallSegment,
-            c + trimLeft,
-            r + 1,
-            zOff,
-            segW,
-            wallThick,
-            1,
-            cwr,
-            cwg,
-            cwb,
-            1.0,
-            0,
-            0,
-            TRAY_WALL_STYLE
-          );
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.overlayQuad,
-            c + trimLeft,
-            r + 1.01,
-            zOff + 0.682,
-            segW,
-            0.08,
-            1,
-            crhr,
-            crhg,
-            crhb,
-            0.9
-          );
-        }
-      }
-      if (leftOpen && !isUnitEdgeCoveredByGate('LEFT', c, r)) {
-        const trimTop = isCellPlayable(r - 1, c - 1)
-          ? isUnitEdgeCoveredByGate('BOTTOM', r - 1, c - 1)
-            ? gateThick
-            : wallThick
-          : 0;
-        const trimBot = isCellPlayable(r + 1, c - 1)
-          ? isUnitEdgeCoveredByGate('TOP', r + 1, c - 1)
-            ? gateThick
-            : wallThick
-          : 0;
-        const segH = 1 - trimTop - trimBot;
-        if (segH > 0.02) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.wallSegment,
-            c - wallThick,
-            r + trimTop,
-            zOff,
-            wallThick,
-            segH,
-            1,
-            cwr,
-            cwg,
-            cwb,
-            1.0,
-            0,
-            0,
-            TRAY_WALL_STYLE
-          );
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.overlayQuad,
-            c - 0.09,
-            r + trimTop,
-            zOff + 0.682,
-            0.08,
-            segH,
-            1,
-            crhr,
-            crhg,
-            crhb,
-            0.9
-          );
-        }
-      }
-      if (rightOpen && !isUnitEdgeCoveredByGate('RIGHT', c, r)) {
-        const trimTop = isCellPlayable(r - 1, c + 1)
-          ? isUnitEdgeCoveredByGate('BOTTOM', r - 1, c + 1)
-            ? gateThick
-            : wallThick
-          : 0;
-        const trimBot = isCellPlayable(r + 1, c + 1)
-          ? isUnitEdgeCoveredByGate('TOP', r + 1, c + 1)
-            ? gateThick
-            : wallThick
-          : 0;
-        const segH = 1 - trimTop - trimBot;
-        if (segH > 0.02) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.wallSegment,
-            c + 1,
-            r + trimTop,
-            zOff,
-            wallThick,
-            segH,
-            1,
-            cwr,
-            cwg,
-            cwb,
-            1.0,
-            0,
-            0,
-            TRAY_WALL_STYLE
-          );
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.overlayQuad,
-            c + 1.01,
-            r + trimTop,
-            zOff + 0.682,
-            0.08,
-            segH,
-            1,
-            crhr,
-            crhg,
-            crhb,
-            0.9
-          );
-        }
-      }
-
-      // Convex outer corner posts & concave inner elbow posts when stepped-edge gates abut an inward corner
-      const drawCornerPost = (px: number, py: number): void => {
+      rctx.drawMeshInstanced(gl, ENVIRONMENT_MESHES.wallSegment, buf, wallCount, 1.0, TRAY_WALL_STYLE);
+    } else {
+      for (const seg of topo.wallSegments) {
+        const roomVis = rctx.getRoomVisualState(board, seg.roomId);
+        const lum = roomVis.luminanceMul;
         rctx.drawMesh(
           gl,
           ENVIRONMENT_MESHES.wallSegment,
-          px,
-          py,
-          zOff,
-          wallThick,
-          wallThick,
+          seg.x,
+          seg.y,
+          roomVis.zOffset,
+          seg.w,
+          seg.h,
           1,
-          cwr,
-          cwg,
-          cwb,
+          wr * lum,
+          wg * lum,
+          wb * lum,
           1.0,
           0,
           0,
           TRAY_WALL_STYLE
         );
-      };
-      if (topOpen && leftOpen) drawCornerPost(c - wallThick, r - wallThick);
-      if (topOpen && rightOpen) drawCornerPost(c + 1, r - wallThick);
-      if (botOpen && leftOpen) drawCornerPost(c - wallThick, r + 1);
-      if (botOpen && rightOpen) drawCornerPost(c + 1, r + 1);
-      if (
-        !topOpen &&
-        !leftOpen &&
-        !isCellPlayable(r - 1, c - 1) &&
-        isUnitEdgeCoveredByGate('LEFT', c, r - 1) &&
-        isUnitEdgeCoveredByGate('TOP', r, c - 1)
-      ) {
-        drawCornerPost(c - wallThick, r - wallThick);
       }
-      if (
-        !topOpen &&
-        !rightOpen &&
-        !isCellPlayable(r - 1, c + 1) &&
-        isUnitEdgeCoveredByGate('RIGHT', c, r - 1) &&
-        isUnitEdgeCoveredByGate('TOP', r, c + 1)
-      ) {
-        drawCornerPost(c + 1, r - wallThick);
+    }
+  }
+
+  const rimCount = topo.wallRims.length;
+  if (rimCount > 0) {
+    if (rctx.drawMeshInstanced) {
+      const buf = acquirePass1InstanceScratch(rimCount);
+      let ptr = 0;
+      for (const rim of topo.wallRims) {
+        const roomVis = rctx.getRoomVisualState(board, rim.roomId);
+        const lum = roomVis.luminanceMul;
+        buf[ptr] = rim.x;
+        buf[ptr + 1] = rim.y;
+        buf[ptr + 2] = roomVis.zOffset + 0.682;
+        buf[ptr + 3] = rim.w;
+        buf[ptr + 4] = rim.h;
+        buf[ptr + 5] = 1.0;
+        buf[ptr + 6] = rhr * lum;
+        buf[ptr + 7] = rhg * lum;
+        buf[ptr + 8] = rhb * lum;
+        ptr += MESH_INSTANCE_STRIDE;
       }
-      if (
-        !botOpen &&
-        !leftOpen &&
-        !isCellPlayable(r + 1, c - 1) &&
-        isUnitEdgeCoveredByGate('LEFT', c, r + 1) &&
-        isUnitEdgeCoveredByGate('BOTTOM', r, c - 1)
-      ) {
-        drawCornerPost(c - wallThick, r + 1);
-      }
-      if (
-        !botOpen &&
-        !rightOpen &&
-        !isCellPlayable(r + 1, c + 1) &&
-        isUnitEdgeCoveredByGate('RIGHT', c, r + 1) &&
-        isUnitEdgeCoveredByGate('BOTTOM', r, c + 1)
-      ) {
-        drawCornerPost(c + 1, r + 1);
+      rctx.drawMeshInstanced(gl, ENVIRONMENT_MESHES.overlayQuad, buf, rimCount, 0.9, 0);
+    } else {
+      for (const rim of topo.wallRims) {
+        const roomVis = rctx.getRoomVisualState(board, rim.roomId);
+        const lum = roomVis.luminanceMul;
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.overlayQuad,
+          rim.x,
+          rim.y,
+          roomVis.zOffset + 0.682,
+          rim.w,
+          rim.h,
+          1,
+          rhr * lum,
+          rhg * lum,
+          rhb * lum,
+          0.9
+        );
       }
     }
   }

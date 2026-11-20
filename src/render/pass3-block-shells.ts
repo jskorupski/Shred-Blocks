@@ -12,6 +12,9 @@ import { renderBlockSurfaceOverlays3D, renderGhostAndWeldClamps3D } from './pass
 import { drawToneOnToneSigil3D, type RenderPassContext, type RenderSceneOptions } from './render-types';
 import { renderGateBursts3D } from './shred-style-fx';
 
+const DRAGGED_GROUP_SCRATCH = new Set<number>();
+const IDLE_MOVABLE_SCRATCH: number[] = [];
+
 export function renderPass3BlocksImpl(
   rctx: RenderPassContext,
   gl: WebGL2RenderingContext,
@@ -31,7 +34,8 @@ export function renderPass3BlocksImpl(
   const live3DMix = Math.max(0, 1.0 - (options.blueprintMix ?? 0));
 
   // Identify all blocks in the currently grabbed/dragged group (`F-03`)
-  const draggedGroupIds = new Set<number>();
+  DRAGGED_GROUP_SCRATCH.clear();
+  const draggedGroupIds = DRAGGED_GROUP_SCRATCH;
   const liftedBlock = board.blocks.find((b) => b.status === 'ACTIVE' && b.liftAlpha > 0.05);
   const leadDraggedId = liftedBlock ? liftedBlock.id : null;
   if (leadDraggedId !== null) {
@@ -70,9 +74,13 @@ export function renderPass3BlocksImpl(
     else if (gate.edge === 'RIGHT') planeD = gate.edgeLine + 1 + 0.21;
 
     gl.disable(gl.CULL_FACE);
-    gl.uniform1i(rctx.uUseClipPlane, 1);
-    gl.uniform4f(rctx.uClipPlane, planeNx, planeNy, 0, planeD);
-    gl.uniform3f(rctx.uCapColor, r * 0.72, g * 0.72, b * 0.72);
+    if (rctx.setClipPlaneState) {
+      rctx.setClipPlaneState(gl, true, planeNx, planeNy, 0, planeD, r * 0.72, g * 0.72, b * 0.72);
+    } else {
+      gl.uniform1i(rctx.uUseClipPlane, 1);
+      gl.uniform4f(rctx.uClipPlane, planeNx, planeNy, 0, planeD);
+      gl.uniform3f(rctx.uCapColor, r * 0.72, g * 0.72, b * 0.72);
+    }
 
     const shredOuterMesh =
       anim.colorId === 0
@@ -89,7 +97,12 @@ export function renderPass3BlocksImpl(
         : 0;
     const shredRoomVis = rctx.getRoomVisualState(board, shredRoomId);
 
-    gl.uniform1f(rctx.uBlockSeed, (anim.gateIndex * 17 + anim.colorId * 7) % 97);
+    const shredSeed = (anim.gateIndex * 17 + anim.colorId * 7) % 97;
+    if (rctx.setBlockSeed) {
+      rctx.setBlockSeed(shredSeed);
+    } else {
+      gl.uniform1f(rctx.uBlockSeed, shredSeed);
+    }
     rctx.drawMesh(
       gl,
       shredOuterMesh,
@@ -108,12 +121,17 @@ export function renderPass3BlocksImpl(
       anim.colorId === 0 ? 6 : matStyle
     );
 
-    gl.uniform1i(rctx.uUseClipPlane, 0);
+    if (rctx.setClipPlaneState) {
+      rctx.setClipPlaneState(gl, false);
+    } else {
+      gl.uniform1i(rctx.uUseClipPlane, 0);
+    }
     gl.enable(gl.CULL_FACE);
   }
 
   // Identify all idle movable blocks so we can cycle the Staggered Spotlight Double-Bounce Hop (`IDLE-02`)
-  const idleMovableBlockIds: number[] = [];
+  IDLE_MOVABLE_SCRATCH.length = 0;
+  const idleMovableBlockIds = IDLE_MOVABLE_SCRATCH;
   for (const blk of board.blocks) {
     if (
       blk.status === 'ACTIVE' &&
@@ -265,9 +283,15 @@ export function renderPass3BlocksImpl(
 
       useClip = true;
       gl.disable(gl.CULL_FACE);
-      gl.uniform1i(rctx.uUseClipPlane, 1);
-      gl.uniform4f(rctx.uClipPlane, planeNx, planeNy, 0, planeD);
-      gl.uniform3f(rctx.uCapColor, r * 0.72, g * 0.72, b * 0.72);
+      if (rctx.setClipPlaneState) {
+        rctx.setClipPlaneState(gl, true, planeNx, planeNy, 0, planeD, r * 0.72, g * 0.72, b * 0.72);
+      } else {
+        gl.uniform1i(rctx.uUseClipPlane, 1);
+        gl.uniform4f(rctx.uClipPlane, planeNx, planeNy, 0, planeD);
+        gl.uniform3f(rctx.uCapColor, r * 0.72, g * 0.72, b * 0.72);
+      }
+    } else if (rctx.setClipPlaneState) {
+      rctx.setClipPlaneState(gl, false);
     } else {
       gl.uniform1i(rctx.uUseClipPlane, 0);
     }
@@ -325,7 +349,11 @@ export function renderPass3BlocksImpl(
           ? (POLYOMINO_MESH_CATALOG[block.shapeId]?.meshOuter ?? meshPair.meshOuter)
           : meshPair.meshOuter;
 
-    gl.uniform1f(rctx.uBlockSeed, block.id % 97);
+    if (rctx.setBlockSeed) {
+      rctx.setBlockSeed(block.id % 97);
+    } else {
+      gl.uniform1f(rctx.uBlockSeed, block.id % 97);
+    }
     rctx.drawMesh(
       gl,
       outerMesh,
@@ -346,7 +374,11 @@ export function renderPass3BlocksImpl(
 
     if (isStoneRuin) {
       if (useClip) {
-        gl.uniform1i(rctx.uUseClipPlane, 0);
+        if (rctx.setClipPlaneState) {
+          rctx.setClipPlaneState(gl, false);
+        } else {
+          gl.uniform1i(rctx.uUseClipPlane, 0);
+        }
         gl.enable(gl.CULL_FACE);
       }
       continue;
@@ -356,7 +388,11 @@ export function renderPass3BlocksImpl(
     if (layersLeft > 1) {
       const innerColor = block.colorStack[block.colorCursor + 1] ?? activeColor;
       const [ir, ig, ib] = rctx.getColorRgb(innerColor, highContrast);
-      gl.uniform1f(rctx.uBlockSeed, (block.id + 37) % 97);
+      if (rctx.setBlockSeed) {
+        rctx.setBlockSeed((block.id + 37) % 97);
+      } else {
+        gl.uniform1f(rctx.uBlockSeed, (block.id + 37) % 97);
+      }
       rctx.drawMesh(
         gl,
         meshPair.meshInnerCore,
@@ -556,11 +592,19 @@ export function renderPass3BlocksImpl(
     );
 
     if (useClip) {
-      gl.uniform1i(rctx.uUseClipPlane, 0);
+      if (rctx.setClipPlaneState) {
+        rctx.setClipPlaneState(gl, false);
+      } else {
+        gl.uniform1i(rctx.uUseClipPlane, 0);
+      }
       gl.enable(gl.CULL_FACE);
     }
   }
-  gl.uniform1f(rctx.uBlockSeed, 0);
+  if (rctx.setBlockSeed) {
+    rctx.setBlockSeed(0);
+  } else {
+    gl.uniform1f(rctx.uBlockSeed, 0);
+  }
 
   if (!isStoneRuin) {
     renderGhostAndWeldClamps3D(

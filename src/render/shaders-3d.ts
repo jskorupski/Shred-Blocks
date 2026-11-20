@@ -1,9 +1,9 @@
 import type { MeshData } from './mesh-generator';
 import type { GLMeshHandle } from './render-types';
 
-export { MAIN_VERTEX_SHADER } from './shaders-main-vertex';
+export { MAIN_VERTEX_SHADER, SOLID_OPAQUE_VERTEX_SHADER } from './shaders-main-vertex';
 
-import { GLSL_STONE_LIB } from './shaders-glsl-lib';
+import { GLSL_GAMEPLAY_STONE_LIB, GLSL_STONE_LIB } from './shaders-glsl-lib';
 import {
   GLSL_RELIC_CRUST_PRECHECK,
   GLSL_RELIC_CRUST_SHADE,
@@ -19,266 +19,12 @@ export {
   type ParticleInstancedVaoHandle,
 } from './shaders-particles';
 
-export const MAIN_FRAGMENT_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-
-in vec3 v_worldPos;
-in vec3 v_localPos;
-in vec3 v_normal;
-in vec2 v_uv;
-
-uniform vec4 u_color;
-uniform vec3 u_capColor;
-uniform vec4 u_clipPlane;
-uniform int u_useClipPlane;
-uniform int u_useTexture;
-uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=tray_floor, 6=relic_stone, 7=tray_wall, 8=trace, 9=plasma_arc
-uniform sampler2D u_atlas;
-uniform sampler2D u_relicClusterTex;
-uniform float u_blueprintMix;
-uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
-uniform vec3 u_stoneTint;
-uniform int u_trayMaterial; // TRAY-IDENTITY-01: 0 slate, 1 birch planks, 2 obsidian grid, 3 frost crystal, 4 jade terrazzo
-uniform float u_blockSeed; // BLOCK-STONE-01: integer per-block seed (offsets the rune/chip cell grid) // subtle mineral tint multiplier from equipped tray + skin
-uniform int u_highContrast;
-uniform int u_traceCount;
-uniform vec4 u_tracePts[16]; // xy = board pos, z = 0..1 sub-curve progress, w = halfWidth
-
-out vec4 outColor;
-
-${GLSL_STONE_LIB}
-${GLSL_TRAY_MATERIALS}
-
-void main() {
-  if (u_useClipPlane == 1) {
-    float clipDist = dot(v_worldPos, u_clipPlane.xyz) + u_clipPlane.w;
-    if (clipDist < 0.0) {
-      discard;
-    }
-    if (!gl_FrontFacing) {
-      outColor = vec4(u_capColor, u_color.a);
-      return;
-    }
-  }
-
-  if (u_materialStyle == 8) {
-    // MYSTIC-TRACE-01: Single-quad rounded capsule-spline motion blur + exact polyomino leading-silhouette mask
-    if (u_traceCount < 2) { discard; }
-    vec2 p = v_worldPos.xy;
-    int segCount = min(u_traceCount - 1, 15);
-    float span = max(u_tracePts[segCount].z, 0.08);
-    float taperLen = min(span * 0.84, max(0.42, min(span * 0.68, 2.35)));
-    float tailBaseHw = u_tracePts[0].w;
-    float tipMinScale = clamp(0.15 + max(0.0, tailBaseHw - taperLen * 0.85) * 0.24, 0.15, 0.42);
-
-    float segNormD[15];
-    float segArcS[15];
-    float dMin = 99.0;
-    vec2 blockSpan = max(u_clipPlane.zw, vec2(1.0));
-    float tailCap = max(tailBaseHw * tipMinScale, 0.06);
-    for (int i = 0; i < 15; i++) {
-      if (i >= segCount) break;
-      vec4 a = u_tracePts[i];
-      vec4 b = u_tracePts[i + 1];
-      vec2 ab = b.xy - a.xy;
-      float segLen = sqrt(max(dot(ab, ab), 1e-5));
-      vec2 dir = ab / segLen;
-      float rawProj = dot(p - a.xy, dir);
-      float h = clamp(rawProj / segLen, 0.0, 1.0);
-      vec2 dVec = p - (a.xy + dir * (h * segLen));
-      float sClamped = mix(a.z, b.z, h);
-      float taperT = clamp(sClamped / max(taperLen, 1e-4), 0.0, 1.0);
-      float widthScale = mix(tipMinScale, 1.0, smoothstep(0.0, 1.0, pow(taperT, 0.66)));
-      float hw = max(mix(a.w, b.w, h) * widthScale, 0.06);
-      float along = dot(dVec, dir);
-      vec2 latVec = dVec - dir * along;
-      float alongHalf = 0.5 * (abs(dir.x) * blockSpan.x + abs(dir.y) * blockSpan.y);
-      float endCap = min(hw, max(0.32, alongHalf * 0.84));
-      float jointCap = min(hw, min(blockSpan.x, blockSpan.y) * 0.44);
-      bool isOuterEnd = (i == 0 && along < 0.0) || (i == segCount - 1 && along >= 0.0);
-      float longCap = isOuterEnd ? endCap : jointCap;
-      if (i == 0 && along < 0.0) { tailCap = longCap; }
-      float nd = sqrt(dot(latVec, latVec) / (hw * hw) + (along * along) / (longCap * longCap));
-      segNormD[i] = nd;
-      segArcS[i] = (i == 0 && rawProj < 0.0) ? (a.z + rawProj) : ((i == segCount - 1 && rawProj > segLen) ? (b.z + (rawProj - segLen)) : sClamped);
-      dMin = min(dMin, nd);
-    }
-    if (dMin >= 1.0) { outColor = vec4(0.0); return; }
-
-    float leadMask = 1.0;
-    int headMask = int(u_blockSeed + 0.5);
-    if (headMask > 0) {
-      vec2 hAb = u_tracePts[segCount].xy - u_tracePts[segCount - 1].xy;
-      vec2 headDir = hAb / sqrt(max(dot(hAb, hAb), 1e-5));
-      vec2 headCenter = u_clipPlane.xy + u_clipPlane.zw * 0.5;
-      float frontWeight = smoothstep(-0.38, 0.0, dot(p - headCenter, headDir));
-      if (frontWeight > 0.001) {
-        float bestShadowD = 99.0;
-        float dDiff = headDir.x - headDir.y;
-        float dSum = headDir.x + headDir.y;
-        for (int cIdx = 0; cIdx < 16; cIdx++) {
-          if ((headMask & (1 << cIdx)) == 0) continue;
-          vec2 q = (u_clipPlane.xy + vec2(float(cIdx & 3) + 0.5, float(cIdx >> 2) + 0.5)) - p;
-          float fMin = max(abs(q.x), abs(q.y));
-          if (abs(headDir.x) > 1e-4) { float tx = max(0.0, q.x / headDir.x); fMin = min(fMin, max(abs(q.x - tx * headDir.x), abs(q.y - tx * headDir.y))); }
-          if (abs(headDir.y) > 1e-4) { float ty = max(0.0, q.y / headDir.y); fMin = min(fMin, max(abs(q.x - ty * headDir.x), abs(q.y - ty * headDir.y))); }
-          if (abs(dDiff) > 1e-4) { float t1 = max(0.0, (q.x - q.y) / dDiff); fMin = min(fMin, max(abs(q.x - t1 * headDir.x), abs(q.y - t1 * headDir.y))); }
-          if (abs(dSum) > 1e-4) { float t2 = max(0.0, (q.x + q.y) / dSum); fMin = min(fMin, max(abs(q.x - t2 * headDir.x), abs(q.y - t2 * headDir.y))); }
-          bestShadowD = min(bestShadowD, fMin - 0.46);
-        }
-        leadMask = mix(1.0, smoothstep(0.02, -0.18, bestShadowD), frontWeight);
-      }
-    }
-    if (leadMask < 0.002) { outColor = vec4(0.0); return; }
-
-    float wSum = 0.0;
-    float sSum = 0.0;
-    for (int i = 0; i < 15; i++) {
-      if (i >= segCount) break;
-      float w = exp(-14.0 * (segNormD[i] - dMin));
-      wSum += w;
-      sSum += w * segArcS[i];
-    }
-    float smoothS = sSum / max(wSum, 1e-5);
-    float smoothU = clamp(smoothS / span, 0.0, 1.0);
-    float tailT = clamp((smoothS + tailCap) / max(taperLen + tailCap, 1e-4), 0.0, 1.0);
-    float crossProfile = pow(smoothstep(1.0, mix(0.0, 0.14, tailT), dMin), mix(1.58, 0.96, tailT));
-    float tailRise = pow(smoothstep(0.0, 1.0, tailT), 1.32);
-    float coreMix = smoothstep(0.78, 0.0, dMin) * tailRise * (0.42 + 0.58 * smoothU) * 0.64;
-    vec3 smearRgb = mix(u_color.rgb, u_capColor, coreMix);
-    if (u_blueprintMix > 0.001) { smearRgb = mix(smearRgb, vec3(0.82, 0.72, 0.58), u_blueprintMix * 0.88); }
-    float alpha = u_color.a * crossProfile * tailRise * leadMask * mix(1.0, 0.52, u_blueprintMix);
-    if (alpha < 0.003) { outColor = vec4(0.0); return; }
-    outColor = vec4(smearRgb, alpha);
-    return;
-  }
-
-  if (u_materialStyle == 9) {
-    // SHRED-STYLE-01: Single-quad volumetric plasma bolt tree (u_traceCount >= 1) & gate-jaw corona flash (u_traceCount <= 0)
-    if (u_traceCount <= 0) {
-      float halfLen = u_clipPlane.x;
-      float rad = max(u_clipPlane.y, 0.02);
-      vec2 q = (v_uv - 0.5) * vec2(halfLen * 2.0 + rad * 2.0, rad * 2.0);
-      float dx = q.x - clamp(q.x, -halfLen, halfLen);
-      float d = length(vec2(dx, q.y)) / rad;
-      if (d >= 1.0) { outColor = vec4(0.0); return; }
-      float bloom = pow(1.0 - d, 2.2);
-      float sheath = exp(-d * d * 7.5) * (1.0 - d);
-      float core = exp(-d * d * 32.0) * (1.0 - d) * u_clipPlane.z;
-      vec3 glowCol = mix(u_color.rgb, u_capColor, 0.42);
-      vec3 col = mix(glowCol, vec3(0.98, 0.995, 1.0), clamp(core * 1.15, 0.0, 1.0));
-      float alpha = clamp(u_color.a * (bloom * 0.54 + sheath * 0.42 + core * 0.65), 0.0, 1.0) * mix(1.0, 0.45, u_blueprintMix);
-      outColor = vec4(clamp(col, 0.0, 1.0), alpha);
-      return;
-    }
-    vec2 p = v_worldPos.xy;
-    int segCount = min(u_traceCount, 8);
-    float tArc = u_boardInfo.z >= 0.0 ? (u_boardInfo.z * 28.0 + u_clipPlane.w) : u_clipPlane.w;
-    float dMin = 99.0;
-    float bestArc = 0.0;
-    for (int i = 0; i < 8; i++) {
-      if (i >= segCount) break;
-      vec4 a = u_tracePts[i * 2];
-      vec4 b = u_tracePts[i * 2 + 1];
-      vec2 ab = b.xy - a.xy;
-      float segLen = sqrt(max(dot(ab, ab), 1e-5));
-      vec2 dir = ab / segLen;
-      vec2 perp = vec2(-dir.y, dir.x);
-      float h = clamp(dot(p - a.xy, dir) / segLen, 0.0, 1.0);
-      float glowR = max(mix(a.w, b.w, h), 0.025);
-      float fi = float(i);
-      float pin = sin(h * 3.14159265);
-      // Crisp angular triangle-wave micro-jags (never sinusoidal curls)
-      float triA = abs(fract(h * 2.0 + fi * 0.37) * 2.0 - 1.0) * 2.0 - 1.0;
-      float jitterFlip = sin(tArc + fi * 2.3);
-      float microJag = pin * triA * jitterFlip * glowR * 0.11;
-      float nd = length(p - (a.xy + dir * (h * segLen) + perp * microJag)) / glowR;
-      if (nd < dMin) {
-        dMin = nd;
-        bestArc = mix(a.z, b.z, h);
-      }
-    }
-    if (dMin >= 1.0) { outColor = vec4(0.0); return; }
-    float pulseDist = (bestArc - u_clipPlane.x) * 4.4;
-    float surgeWave = exp(-pulseDist * pulseDist) * u_clipPlane.y;
-    float rootMask = u_clipPlane.z > 0.001 ? smoothstep(u_clipPlane.z - 0.14, u_clipPlane.z + 0.24, bestArc) : 1.0;
-    float tipTaper = smoothstep(1.04, 0.68, bestArc) * 0.38 + 0.62;
-    // Wide saturated electric corona + tight mid-sheath + razor-sharp white spine that flares with surgeWave
-    float corona = pow(1.0 - dMin, 2.05);
-    float sheath = exp(-dMin * dMin * mix(20.0, 10.0, surgeWave)) * (1.0 - dMin);
-    float core = exp(-dMin * dMin * mix(155.0, 32.0, surgeWave)) * (1.0 - dMin);
-    vec3 outerHue = mix(u_color.rgb, u_capColor, 0.38);
-    vec3 midHue = mix(u_color.rgb, mix(vec3(0.32, 0.92, 1.0), vec3(1.0, 0.94, 0.58), step(0.65, u_color.r)), 0.58);
-    vec3 col = mix(outerHue, midHue, clamp(sheath * 1.3, 0.0, 1.0));
-    float hotness = clamp(u_color.a * (0.82 + 0.45 * surgeWave), 0.0, 1.0);
-    col = mix(col, vec3(0.99, 0.998, 1.0), clamp(core * (1.1 + 0.5 * surgeWave) * hotness * hotness, 0.0, 1.0));
-    float intensity = (corona * 0.54 + sheath * 0.56 + core * (0.88 + 0.45 * surgeWave)) * (0.78 + 0.56 * surgeWave) * rootMask * tipTaper;
-    float alpha = clamp(u_color.a * intensity, 0.0, 1.0) * mix(1.0, 0.45, u_blueprintMix);
-    if (alpha < 0.003) { outColor = vec4(0.0); return; }
-    outColor = vec4(clamp(col, 0.0, 1.0), alpha);
-    return;
-  }
-
-  if (u_useTexture == 1) {
-    vec4 texel = texture(u_atlas, v_uv);
-    if (texel.a < 0.08) {
-      discard;
-    }
-    if (u_materialStyle == 4) {
-      vec3 badgeRgb = texel.rgb * u_color.rgb;
-      if (u_blueprintMix > 0.001) {
-        float bLum = dot(badgeRgb, vec3(0.299, 0.587, 0.114));
-        vec3 carvedBadge = mix(vec3(0.22, 0.18, 0.20), vec3(0.90, 0.82, 0.68), smoothstep(0.08, 0.72, bLum));
-        badgeRgb = mix(badgeRgb, carvedBadge, u_blueprintMix);
-      }
-      outColor = vec4(badgeRgb, texel.a * u_color.a * mix(1.0, 0.90, u_blueprintMix));
-      return;
-    }
-  }
-
-  if (u_materialStyle == 4) {
-    vec3 flatRgb = u_color.rgb;
-    if (u_blueprintMix > 0.001) {
-      flatRgb = mix(flatRgb, vec3(0.76, 0.66, 0.52), u_blueprintMix * 0.88);
-    }
-    outColor = vec4(flatRgb, u_color.a * mix(1.0, 0.52, u_blueprintMix));
-    return;
-  }
-
-  if (u_materialStyle == 10) {
-    vec2 q = (v_uv - 0.5) * 2.0;
-    float d = length(q), hasGold = step(0.01, u_clipPlane.w), innerD = mix(0.50, 0.64, hasGold);
-    if (d <= innerD || d >= 1.0) { outColor = vec4(0.0); return; }
-    float wake = pow(sin(((d - innerD) / (1.0 - innerD)) * 3.14159265), 1.6), ang = atan(q.y, q.x);
-    float fan = mix(1.0, u_clipPlane.z + (1.0 - u_clipPlane.z) * smoothstep(-0.55, 0.45, dot(q / d, u_clipPlane.xy)), step(0.05, dot(u_clipPlane.xy, u_clipPlane.xy)));
-    float shimmer = 0.5 + 0.31 * sin(ang * 5.0 + u_clipPlane.w) + 0.19 * sin(ang * 11.0 - u_clipPlane.w * 1.35);
-    vec3 baseRgb = mix(u_color.rgb, min(vec3(1.0), u_color.rgb * 0.76 + 0.34), wake * 0.38);
-    float glint = shimmer * shimmer * wake;
-    vec3 goldRgb = mix(u_capColor, vec3(1.0, 0.96, 0.82), shimmer * 0.48);
-    vec3 waveRgb = mix(baseRgb, goldRgb, hasGold * 0.56 * glint);
-    outColor = vec4(waveRgb, min(1.0, u_color.a * (1.0 + hasGold * 0.28 * glint)) * wake * fan * mix(1.0, 0.52, u_blueprintMix));
-    return;
-  }
-
-${GLSL_RELIC_PLATE_STYLE}
-
-  vec3 N = normalize(v_normal);
-  vec3 L1 = normalize(vec3(-0.35, -0.55, 0.76));
-  vec3 L2 = normalize(vec3(0.45, 0.35, 0.82));
-  vec3 V = normalize(vec3(0.0, 0.21, 0.97));
-  vec3 H = normalize(L1 + V);
-
-  float diff1 = max(dot(N, L1), 0.0);
-  float diff2 = max(dot(N, L2), 0.0) * 0.28;
-  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
-  float localPxW = fwidth(v_localPos.x);
-
-${GLSL_RELIC_CRUST_PRECHECK}
-
-  vec3 lit = vec3(0.0);
-  if (needGameplayLit) {
-  vec3 base = u_color.rgb;
+/**
+ * Single-source-of-truth gameplay material + lighting block shared identically by both
+ * `MAIN_FRAGMENT_SHADER` and `SOLID_OPAQUE_FRAGMENT_SHADER` (`PERF-GPU-01`).
+ */
+const GLSL_GAMEPLAY_LIT_BODY = `
+  vec3 base = v_color.rgb;
   float specPower = 28.0;
   float specStrength = 0.26;
   vec3 emissive = vec3(0.0);
@@ -491,6 +237,314 @@ ${GLSL_RELIC_CRUST_PRECHECK}
     vec3 bevelTarget = isDarkPiece ? min(vec3(1.0), base * 0.75 + vec3(0.62)) : lit * 0.34;
     lit = mix(min(vec3(1.0), lit * 1.08), bevelTarget, edgeBevel * (isDarkPiece ? 0.78 : 0.58));
   }
+`;
+
+/**
+ * Zero-`discard` opaque gameplay fragment shader (`PERF-GPU-01`).
+ * Used for 100% opaque gameplay plinths, floor tiles, walls, gates, and non-shredding blocks so
+ * Qualcomm Adreno / ARM Mali / Apple AGX keep hardware LRZ Early-Z active and run at higher wave
+ * occupancy without Title Voronoi/crust or trace-array register bloat.
+ */
+export const SOLID_OPAQUE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+
+in vec3 v_worldPos;
+in vec3 v_localPos;
+in vec3 v_normal;
+in vec2 v_uv;
+flat in vec4 v_color;
+
+uniform int u_materialStyle;
+uniform vec3 u_boardInfo;
+uniform vec3 u_stoneTint;
+uniform int u_trayMaterial;
+uniform float u_blockSeed;
+uniform int u_highContrast;
+
+out vec4 outColor;
+
+${GLSL_GAMEPLAY_STONE_LIB}
+${GLSL_TRAY_MATERIALS}
+
+void main() {
+  vec3 N = normalize(v_normal);
+  vec3 L1 = normalize(vec3(-0.35, -0.55, 0.76));
+  vec3 L2 = normalize(vec3(0.45, 0.35, 0.82));
+  vec3 V = normalize(vec3(0.0, 0.21, 0.97));
+  vec3 H = normalize(L1 + V);
+
+  float diff1 = max(dot(N, L1), 0.0);
+  float diff2 = max(dot(N, L2), 0.0) * 0.28;
+  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  float localPxW = fwidth(v_localPos.x);
+
+  vec3 lit = vec3(0.0);
+${GLSL_GAMEPLAY_LIT_BODY}
+  outColor = vec4(clamp(lit, 0.0, 1.0), 1.0);
+}
+`;
+
+export const MAIN_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+
+in vec3 v_worldPos;
+in vec3 v_localPos;
+in vec3 v_normal;
+in vec2 v_uv;
+flat in vec4 v_color;
+
+uniform vec3 u_capColor;
+uniform vec4 u_clipPlane;
+uniform int u_useClipPlane;
+uniform int u_useTexture;
+uniform int u_materialStyle; // 0=standard, 1=gummy, 2=wood, 3=neon, 4=unlit_overlay, 5=tray_floor, 6=relic_stone, 7=tray_wall, 8=trace, 9=plasma_arc
+uniform sampler2D u_atlas;
+uniform sampler2D u_relicClusterTex;
+uniform float u_blueprintMix;
+uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec
+uniform vec3 u_stoneTint;
+uniform int u_trayMaterial; // TRAY-IDENTITY-01: 0 slate, 1 birch planks, 2 obsidian grid, 3 frost crystal, 4 jade terrazzo
+uniform float u_blockSeed; // BLOCK-STONE-01: integer per-block seed (offsets the rune/chip cell grid) // subtle mineral tint multiplier from equipped tray + skin
+uniform int u_highContrast;
+uniform int u_traceCount;
+uniform vec4 u_tracePts[16]; // xy = board pos, z = 0..1 sub-curve progress, w = halfWidth
+
+out vec4 outColor;
+
+${GLSL_STONE_LIB}
+${GLSL_TRAY_MATERIALS}
+
+void main() {
+  if (u_useClipPlane == 1) {
+    float clipDist = dot(v_worldPos, u_clipPlane.xyz) + u_clipPlane.w;
+    if (clipDist < 0.0) {
+      discard;
+    }
+    if (!gl_FrontFacing) {
+      outColor = vec4(u_capColor, v_color.a);
+      return;
+    }
+  }
+
+  if (u_materialStyle == 8) {
+    // MYSTIC-TRACE-01: Single-quad rounded capsule-spline motion blur + exact polyomino leading-silhouette mask
+    if (u_traceCount < 2) { discard; }
+    vec2 p = v_worldPos.xy;
+    int segCount = min(u_traceCount - 1, 15);
+    float span = max(u_tracePts[segCount].z, 0.08);
+    float taperLen = min(span * 0.84, max(0.42, min(span * 0.68, 2.35)));
+    float tailBaseHw = u_tracePts[0].w;
+    float tipMinScale = clamp(0.15 + max(0.0, tailBaseHw - taperLen * 0.85) * 0.24, 0.15, 0.42);
+
+    float segNormD[15];
+    float segArcS[15];
+    float dMin = 99.0;
+    vec2 blockSpan = max(u_clipPlane.zw, vec2(1.0));
+    float tailCap = max(tailBaseHw * tipMinScale, 0.06);
+    for (int i = 0; i < 15; i++) {
+      if (i >= segCount) break;
+      vec4 a = u_tracePts[i];
+      vec4 b = u_tracePts[i + 1];
+      vec2 ab = b.xy - a.xy;
+      float segLen = sqrt(max(dot(ab, ab), 1e-5));
+      vec2 dir = ab / segLen;
+      float rawProj = dot(p - a.xy, dir);
+      float h = clamp(rawProj / segLen, 0.0, 1.0);
+      vec2 dVec = p - (a.xy + dir * (h * segLen));
+      float sClamped = mix(a.z, b.z, h);
+      float taperT = clamp(sClamped / max(taperLen, 1e-4), 0.0, 1.0);
+      float widthScale = mix(tipMinScale, 1.0, smoothstep(0.0, 1.0, pow(taperT, 0.66)));
+      float hw = max(mix(a.w, b.w, h) * widthScale, 0.06);
+      float along = dot(dVec, dir);
+      vec2 latVec = dVec - dir * along;
+      float alongHalf = 0.5 * (abs(dir.x) * blockSpan.x + abs(dir.y) * blockSpan.y);
+      float endCap = min(hw, max(0.32, alongHalf * 0.84));
+      float jointCap = min(hw, min(blockSpan.x, blockSpan.y) * 0.44);
+      bool isOuterEnd = (i == 0 && along < 0.0) || (i == segCount - 1 && along >= 0.0);
+      float longCap = isOuterEnd ? endCap : jointCap;
+      if (i == 0 && along < 0.0) { tailCap = longCap; }
+      float nd = sqrt(dot(latVec, latVec) / (hw * hw) + (along * along) / (longCap * longCap));
+      segNormD[i] = nd;
+      segArcS[i] = (i == 0 && rawProj < 0.0) ? (a.z + rawProj) : ((i == segCount - 1 && rawProj > segLen) ? (b.z + (rawProj - segLen)) : sClamped);
+      dMin = min(dMin, nd);
+    }
+    if (dMin >= 1.0) { outColor = vec4(0.0); return; }
+
+    float leadMask = 1.0;
+    int headMask = int(u_blockSeed + 0.5);
+    if (headMask > 0) {
+      vec2 hAb = u_tracePts[segCount].xy - u_tracePts[segCount - 1].xy;
+      vec2 headDir = hAb / sqrt(max(dot(hAb, hAb), 1e-5));
+      vec2 headCenter = u_clipPlane.xy + u_clipPlane.zw * 0.5;
+      float frontWeight = smoothstep(-0.38, 0.0, dot(p - headCenter, headDir));
+      if (frontWeight > 0.001) {
+        float bestShadowD = 99.0;
+        float dDiff = headDir.x - headDir.y;
+        float dSum = headDir.x + headDir.y;
+        for (int cIdx = 0; cIdx < 16; cIdx++) {
+          if ((headMask & (1 << cIdx)) == 0) continue;
+          vec2 q = (u_clipPlane.xy + vec2(float(cIdx & 3) + 0.5, float(cIdx >> 2) + 0.5)) - p;
+          float fMin = max(abs(q.x), abs(q.y));
+          if (abs(headDir.x) > 1e-4) { float tx = max(0.0, q.x / headDir.x); fMin = min(fMin, max(abs(q.x - tx * headDir.x), abs(q.y - tx * headDir.y))); }
+          if (abs(headDir.y) > 1e-4) { float ty = max(0.0, q.y / headDir.y); fMin = min(fMin, max(abs(q.x - ty * headDir.x), abs(q.y - ty * headDir.y))); }
+          if (abs(dDiff) > 1e-4) { float t1 = max(0.0, (q.x - q.y) / dDiff); fMin = min(fMin, max(abs(q.x - t1 * headDir.x), abs(q.y - t1 * headDir.y))); }
+          if (abs(dSum) > 1e-4) { float t2 = max(0.0, (q.x + q.y) / dSum); fMin = min(fMin, max(abs(q.x - t2 * headDir.x), abs(q.y - t2 * headDir.y))); }
+          bestShadowD = min(bestShadowD, fMin - 0.46);
+        }
+        leadMask = mix(1.0, smoothstep(0.02, -0.18, bestShadowD), frontWeight);
+      }
+    }
+    if (leadMask < 0.002) { outColor = vec4(0.0); return; }
+
+    float wSum = 0.0;
+    float sSum = 0.0;
+    for (int i = 0; i < 15; i++) {
+      if (i >= segCount) break;
+      float w = exp(-14.0 * (segNormD[i] - dMin));
+      wSum += w;
+      sSum += w * segArcS[i];
+    }
+    float smoothS = sSum / max(wSum, 1e-5);
+    float smoothU = clamp(smoothS / span, 0.0, 1.0);
+    float tailT = clamp((smoothS + tailCap) / max(taperLen + tailCap, 1e-4), 0.0, 1.0);
+    float crossProfile = pow(smoothstep(1.0, mix(0.0, 0.14, tailT), dMin), mix(1.58, 0.96, tailT));
+    float tailRise = pow(smoothstep(0.0, 1.0, tailT), 1.32);
+    float coreMix = smoothstep(0.78, 0.0, dMin) * tailRise * (0.42 + 0.58 * smoothU) * 0.64;
+    vec3 smearRgb = mix(v_color.rgb, u_capColor, coreMix);
+    if (u_blueprintMix > 0.001) { smearRgb = mix(smearRgb, vec3(0.82, 0.72, 0.58), u_blueprintMix * 0.88); }
+    float alpha = v_color.a * crossProfile * tailRise * leadMask * mix(1.0, 0.52, u_blueprintMix);
+    if (alpha < 0.003) { outColor = vec4(0.0); return; }
+    outColor = vec4(smearRgb, alpha);
+    return;
+  }
+
+  if (u_materialStyle == 9) {
+    // SHRED-STYLE-01: Single-quad volumetric plasma bolt tree (u_traceCount >= 1) & gate-jaw corona flash (u_traceCount <= 0)
+    if (u_traceCount <= 0) {
+      float halfLen = u_clipPlane.x;
+      float rad = max(u_clipPlane.y, 0.02);
+      vec2 q = (v_uv - 0.5) * vec2(halfLen * 2.0 + rad * 2.0, rad * 2.0);
+      float dx = q.x - clamp(q.x, -halfLen, halfLen);
+      float d = length(vec2(dx, q.y)) / rad;
+      if (d >= 1.0) { outColor = vec4(0.0); return; }
+      float bloom = pow(1.0 - d, 2.2);
+      float sheath = exp(-d * d * 7.5) * (1.0 - d);
+      float core = exp(-d * d * 32.0) * (1.0 - d) * u_clipPlane.z;
+      vec3 glowCol = mix(v_color.rgb, u_capColor, 0.42);
+      vec3 col = mix(glowCol, vec3(0.98, 0.995, 1.0), clamp(core * 1.15, 0.0, 1.0));
+      float alpha = clamp(v_color.a * (bloom * 0.54 + sheath * 0.42 + core * 0.65), 0.0, 1.0) * mix(1.0, 0.45, u_blueprintMix);
+      outColor = vec4(clamp(col, 0.0, 1.0), alpha);
+      return;
+    }
+    vec2 p = v_worldPos.xy;
+    int segCount = min(u_traceCount, 8);
+    float tArc = u_boardInfo.z >= 0.0 ? (u_boardInfo.z * 28.0 + u_clipPlane.w) : u_clipPlane.w;
+    float dMin = 99.0;
+    float bestArc = 0.0;
+    for (int i = 0; i < 8; i++) {
+      if (i >= segCount) break;
+      vec4 a = u_tracePts[i * 2];
+      vec4 b = u_tracePts[i * 2 + 1];
+      vec2 ab = b.xy - a.xy;
+      float segLen = sqrt(max(dot(ab, ab), 1e-5));
+      vec2 dir = ab / segLen;
+      vec2 perp = vec2(-dir.y, dir.x);
+      float h = clamp(dot(p - a.xy, dir) / segLen, 0.0, 1.0);
+      float glowR = max(mix(a.w, b.w, h), 0.025);
+      float fi = float(i);
+      float pin = sin(h * 3.14159265);
+      // Crisp angular triangle-wave micro-jags (never sinusoidal curls)
+      float triA = abs(fract(h * 2.0 + fi * 0.37) * 2.0 - 1.0) * 2.0 - 1.0;
+      float jitterFlip = sin(tArc + fi * 2.3);
+      float microJag = pin * triA * jitterFlip * glowR * 0.11;
+      float nd = length(p - (a.xy + dir * (h * segLen) + perp * microJag)) / glowR;
+      if (nd < dMin) {
+        dMin = nd;
+        bestArc = mix(a.z, b.z, h);
+      }
+    }
+    if (dMin >= 1.0) { outColor = vec4(0.0); return; }
+    float pulseDist = (bestArc - u_clipPlane.x) * 4.4;
+    float surgeWave = exp(-pulseDist * pulseDist) * u_clipPlane.y;
+    float rootMask = u_clipPlane.z > 0.001 ? smoothstep(u_clipPlane.z - 0.14, u_clipPlane.z + 0.24, bestArc) : 1.0;
+    float tipTaper = smoothstep(1.04, 0.68, bestArc) * 0.38 + 0.62;
+    // Wide saturated electric corona + tight mid-sheath + razor-sharp white spine that flares with surgeWave
+    float corona = pow(1.0 - dMin, 2.05);
+    float sheath = exp(-dMin * dMin * mix(20.0, 10.0, surgeWave)) * (1.0 - dMin);
+    float core = exp(-dMin * dMin * mix(155.0, 32.0, surgeWave)) * (1.0 - dMin);
+    vec3 outerHue = mix(v_color.rgb, u_capColor, 0.38);
+    vec3 midHue = mix(v_color.rgb, mix(vec3(0.32, 0.92, 1.0), vec3(1.0, 0.94, 0.58), step(0.65, v_color.r)), 0.58);
+    vec3 col = mix(outerHue, midHue, clamp(sheath * 1.3, 0.0, 1.0));
+    float hotness = clamp(v_color.a * (0.82 + 0.45 * surgeWave), 0.0, 1.0);
+    col = mix(col, vec3(0.99, 0.998, 1.0), clamp(core * (1.1 + 0.5 * surgeWave) * hotness * hotness, 0.0, 1.0));
+    float intensity = (corona * 0.54 + sheath * 0.56 + core * (0.88 + 0.45 * surgeWave)) * (0.78 + 0.56 * surgeWave) * rootMask * tipTaper;
+    float alpha = clamp(v_color.a * intensity, 0.0, 1.0) * mix(1.0, 0.45, u_blueprintMix);
+    if (alpha < 0.003) { outColor = vec4(0.0); return; }
+    outColor = vec4(clamp(col, 0.0, 1.0), alpha);
+    return;
+  }
+
+  if (u_useTexture == 1) {
+    vec4 texel = texture(u_atlas, v_uv);
+    if (texel.a < 0.08) {
+      discard;
+    }
+    if (u_materialStyle == 4) {
+      vec3 badgeRgb = texel.rgb * v_color.rgb;
+      if (u_blueprintMix > 0.001) {
+        float bLum = dot(badgeRgb, vec3(0.299, 0.587, 0.114));
+        vec3 carvedBadge = mix(vec3(0.22, 0.18, 0.20), vec3(0.90, 0.82, 0.68), smoothstep(0.08, 0.72, bLum));
+        badgeRgb = mix(badgeRgb, carvedBadge, u_blueprintMix);
+      }
+      outColor = vec4(badgeRgb, texel.a * v_color.a * mix(1.0, 0.90, u_blueprintMix));
+      return;
+    }
+  }
+
+  if (u_materialStyle == 4) {
+    vec3 flatRgb = v_color.rgb;
+    if (u_blueprintMix > 0.001) {
+      flatRgb = mix(flatRgb, vec3(0.76, 0.66, 0.52), u_blueprintMix * 0.88);
+    }
+    outColor = vec4(flatRgb, v_color.a * mix(1.0, 0.52, u_blueprintMix));
+    return;
+  }
+
+  if (u_materialStyle == 10) {
+    vec2 q = (v_uv - 0.5) * 2.0;
+    float d = length(q), hasGold = step(0.01, u_clipPlane.w), innerD = mix(0.50, 0.64, hasGold);
+    if (d <= innerD || d >= 1.0) { outColor = vec4(0.0); return; }
+    float wake = pow(sin(((d - innerD) / (1.0 - innerD)) * 3.14159265), 1.6), ang = atan(q.y, q.x);
+    float fan = mix(1.0, u_clipPlane.z + (1.0 - u_clipPlane.z) * smoothstep(-0.55, 0.45, dot(q / d, u_clipPlane.xy)), step(0.05, dot(u_clipPlane.xy, u_clipPlane.xy)));
+    float shimmer = 0.5 + 0.31 * sin(ang * 5.0 + u_clipPlane.w) + 0.19 * sin(ang * 11.0 - u_clipPlane.w * 1.35);
+    vec3 baseRgb = mix(v_color.rgb, min(vec3(1.0), v_color.rgb * 0.76 + 0.34), wake * 0.38);
+    float glint = shimmer * shimmer * wake;
+    vec3 goldRgb = mix(u_capColor, vec3(1.0, 0.96, 0.82), shimmer * 0.48);
+    vec3 waveRgb = mix(baseRgb, goldRgb, hasGold * 0.56 * glint);
+    outColor = vec4(waveRgb, min(1.0, v_color.a * (1.0 + hasGold * 0.28 * glint)) * wake * fan * mix(1.0, 0.52, u_blueprintMix));
+    return;
+  }
+
+${GLSL_RELIC_PLATE_STYLE}
+
+  vec3 N = normalize(v_normal);
+  vec3 L1 = normalize(vec3(-0.35, -0.55, 0.76));
+  vec3 L2 = normalize(vec3(0.45, 0.35, 0.82));
+  vec3 V = normalize(vec3(0.0, 0.21, 0.97));
+  vec3 H = normalize(L1 + V);
+
+  float diff1 = max(dot(N, L1), 0.0);
+  float diff2 = max(dot(N, L2), 0.0) * 0.28;
+  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  float localPxW = fwidth(v_localPos.x);
+
+${GLSL_RELIC_CRUST_PRECHECK}
+
+  vec3 lit = vec3(0.0);
+  if (needGameplayLit) {
+${GLSL_GAMEPLAY_LIT_BODY}
   } else if (u_materialStyle == 6) {
     // Preserve exact relic_stone worn-chamfer normal & Fresnel rim under solid Title stone (0% visual drift)
     vec2 bp6 = v_localPos.xy + vec2(13.0, 7.0) * u_blockSeed;
@@ -513,7 +567,7 @@ ${GLSL_RELIC_CRUST_PRECHECK}
 
 ${GLSL_RELIC_CRUST_SHADE}
 
-  outColor = vec4(clamp(lit, 0.0, 1.0), u_color.a * blueprintAlpha);
+  outColor = vec4(clamp(lit, 0.0, 1.0), v_color.a * blueprintAlpha);
 }
 `;
 

@@ -2,6 +2,12 @@ import { fxRandom } from '../core/fx-random';
 import { isBlockInLockedRoom } from '../core/physics';
 import { getShape } from '../core/polyomino';
 import type { BoardState, SkinId, TrayId } from '../core/types';
+import {
+  type GlProgramState,
+  MESH_INSTANCE_STRIDE,
+  syncFrameProgramState,
+  warmUpSolidProgramImpl,
+} from './gl-program-state';
 import { ENVIRONMENT_MESHES, type MeshData, POLYOMINO_MESH_CATALOG } from './mesh-generator';
 import {
   allocParticleSlot,
@@ -288,22 +294,26 @@ export function renderPass4ParticlesImpl(
 
 const WARMUP_SOLID_INST = new Float32Array([0, 0, -50, -0.1, 0.3, 0.3, 0.4, 0]);
 const WARMUP_SMOKE_INST = new Float32Array([0, 0, -50, -10.5, 0.4, 0.4, 0.5, 0.5]);
+const WARMUP_MESH_INST = new Float32Array([0, 0, -50, 0.01, 0.01, 0.01, 0.5, 0.5, 0.5]);
 
 /**
  * Pre-warms WebGL2 / ANGLE-Vulkan hardware pipeline state objects (`VkPipeline`) inside a 1x1
- * color-masked scissor box during `initWebGLResources()` (`PERF-TRANSITION-01`) so Frame 1 of
- * clicking Play and Frame 1 of block shredding never suffer lazy mobile driver PSO compilation stalls.
+ * color-masked scissor box during `initWebGLResources()` (`PERF-TRANSITION-01`, `PERF-GPU-01`) so
+ * Frame 1 of clicking Play, Frame 1 of solid gameplay, and Frame 1 of block shredding never suffer
+ * lazy mobile driver PSO compilation stalls.
  */
 export function warmUpWebGLPipelinesImpl(
   rctx: RenderPassContext,
   gl: WebGL2RenderingContext,
-  mainProgram: WebGLProgram,
-  uViewProj: WebGLUniformLocation | null,
-  uBlueprintMix: WebGLUniformLocation | null,
-  uAtlas: WebGLUniformLocation | null,
+  programState: GlProgramState,
   atlasTexture: WebGLTexture | null,
-  h: ParticleDrawHandles
+  h: ParticleDrawHandles,
+  quadHandle: GLMeshHandle
 ): void {
+  const mainProgram = programState.mainProgram;
+  const mu = programState.mainUniforms;
+  const viewProj = rctx.camera.getViewProjectionMatrix(false);
+
   gl.enable(gl.SCISSOR_TEST);
   gl.scissor(0, 0, 1, 1);
   gl.colorMask(false, false, false, false);
@@ -316,20 +326,25 @@ export function warmUpWebGLPipelinesImpl(
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
   gl.useProgram(mainProgram);
-  gl.uniformMatrix4fv(uViewProj, false, rctx.camera.getViewProjectionMatrix(false));
-  gl.uniform1i(rctx.uUseClipPlane, 0);
-  gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
+  gl.uniformMatrix4fv(mu.uViewProj, false, viewProj);
+  gl.uniform1i(mu.uUseClipPlane, 0);
+  gl.uniform4f(mu.uClipPlane, 0, 0, 1, 0);
+  gl.uniform3f(mu.uBoardInfo, 3, 3, 0);
+  gl.uniform3f(mu.uStoneTint, 1, 1, 1);
+  gl.uniform1i(mu.uTrayMaterial, 0);
+  gl.uniform1i(mu.uHighContrast, 0);
   if (atlasTexture) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
-    gl.uniform1i(uAtlas, 0);
+    gl.uniform1i(mu.uAtlas, 0);
   }
   bindRelicClusterTextureImpl(rctx, gl, mainProgram);
+  syncFrameProgramState(programState, viewProj, 3, 3, 0, 1, 1, 1, 0, 0, 1.0, 0, 0);
 
-  // Warm opaque (blend=false, depthMask=true) mainProgram PSOs for Pass 1/3 & Title relic unwrapping
+  // Warm opaque (blend=false, depthMask=true) mainProgram PSOs for Title & relic unwrapping
   setGlBlendEnabled(gl, false);
   for (const mix of [1.0, 0.5, 0.0]) {
-    gl.uniform1f(uBlueprintMix, mix);
+    gl.uniform1f(mu.uBlueprintMix, mix);
     rctx.drawMesh(
       gl,
       ENVIRONMENT_MESHES.unitParticleCube,
@@ -348,8 +363,12 @@ export function warmUpWebGLPipelinesImpl(
       0
     );
   }
+  // Warm mainProgram instanced layout (opaque Title tiles/walls + translucent 0.9 wall rims)
+  rctx.drawMeshInstanced?.(gl, ENVIRONMENT_MESHES.overlayQuad, WARMUP_MESH_INST, 1, 1.0, 5);
+  rctx.drawMeshInstanced?.(gl, ENVIRONMENT_MESHES.overlayQuad, WARMUP_MESH_INST, 1, 0.9, 0);
+
   gl.disable(gl.CULL_FACE);
-  gl.uniform1i(rctx.uUseClipPlane, 1);
+  rctx.setClipPlaneState?.(gl, true, 0, 0, 1, 0, 0.2, 0.2, 0.2);
   rctx.drawMesh(
     gl,
     ENVIRONMENT_MESHES.unitParticleCube,
@@ -367,22 +386,22 @@ export function warmUpWebGLPipelinesImpl(
     0,
     0
   );
-  gl.uniform1i(rctx.uUseClipPlane, 0);
+  rctx.setClipPlaneState?.(gl, false);
 
   // Warm translucent overlay/badge/trace/plasma/shockwave PSOs (blend=true, depthMask=false)
   setGlBlendEnabled(gl, true);
   gl.depthMask(false);
   rctx.drawAtlasBadge(gl, 'DIGIT_1', 0, 0, -50, 0.01, 1, 1, 1, 1);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  gl.uniform1i(rctx.uTraceCount, 2);
-  if (rctx.uTracePts) {
-    gl.uniform4fv(rctx.uTracePts, new Float32Array([0, 0, 0.5, 0.1, 1, 0, 0.5, 0.1]));
+  gl.uniform1i(mu.uTraceCount, 2);
+  if (mu.uTracePts) {
+    gl.uniform4fv(mu.uTracePts, new Float32Array([0, 0, 0.5, 0.1, 1, 0, 0.5, 0.1]));
   }
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 8);
-  gl.uniform1i(rctx.uTraceCount, 0);
-  gl.uniform4f(rctx.uClipPlane, 0.2, 0.2, 1.0, 0.0);
+  gl.uniform1i(mu.uTraceCount, 0);
+  gl.uniform4f(mu.uClipPlane, 0.2, 0.2, 1.0, 0.0);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 9);
-  gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
+  gl.uniform4f(mu.uClipPlane, 0, 0, 1, 0);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 4);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 7);
@@ -390,9 +409,15 @@ export function warmUpWebGLPipelinesImpl(
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 11);
   gl.enable(gl.CULL_FACE);
 
+  // Warm zero-discard solidProgram (regular + instanced layouts) for hardware Adreno LRZ gameplay draws
+  warmUpSolidProgramImpl(gl, programState, ENVIRONMENT_MESHES.overlayQuad, quadHandle);
+
   // Pre-allocate PlateGlHandles VAO/VBOs/IBO & warm u_materialStyle=11 under both solid & fading PSO states
   warmUpRelicPlatePipelineImpl(gl, mainProgram);
   setGlBlendEnabled(gl, true);
+  if (WARMUP_MESH_INST.length !== MESH_INSTANCE_STRIDE) {
+    throw new Error('Invalid warmup instance stride');
+  }
 
   if (h.program && h.vao && h.instanceBuffer && h.smokeVao && h.smokeInstanceBuffer) {
     gl.useProgram(h.program);
@@ -525,14 +550,7 @@ export function resetTransientFxImpl(rctx: RenderPassContext): void {
 export function prepareWebGL2FrameStateImpl(
   rctx: RenderPassContext,
   gl: WebGL2RenderingContext,
-  mainProgram: WebGLProgram | null,
-  uViewProj: WebGLUniformLocation | null,
-  uBlueprintMix: WebGLUniformLocation | null,
-  uBoardInfo: WebGLUniformLocation | null,
-  uStoneTint: WebGLUniformLocation | null,
-  uTrayMaterial: WebGLUniformLocation | null,
-  uHighContrast: WebGLUniformLocation | null,
-  uAtlas: WebGLUniformLocation | null,
+  programState: GlProgramState,
   atlasTexture: WebGLTexture | null,
   board: BoardState,
   trayId: TrayId,
@@ -542,6 +560,18 @@ export function prepareWebGL2FrameStateImpl(
   timeSec: number,
   blueprintMix: number
 ): void {
+  const mainProgram = programState.mainProgram;
+  const mu = programState.mainUniforms;
+  const viewProj = rctx.camera.getViewProjectionMatrix(false);
+  const stoneTint = getStoneThemeMineralTint(trayId, skinId);
+  const shaderTime = reducedMotion ? -1.0 : timeSec;
+  const trayMatCode = getTrayMaterialCode(trayId);
+  const hcInt = highContrast ? 1 : 0;
+  const shakeAmp =
+    rctx.boardShakeTimer > 0 && !reducedMotion
+      ? Math.sin(rctx.boardShakeTimer * 54.0) * (rctx.boardShakeTimer / 0.16) * 0.055
+      : 0;
+
   gl.viewport(0, 0, rctx.canvas.width, rctx.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 0.0);
   gl.enable(gl.DEPTH_TEST);
@@ -552,22 +582,38 @@ export function prepareWebGL2FrameStateImpl(
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  const stoneTint = getStoneThemeMineralTint(trayId, skinId);
   gl.useProgram(mainProgram);
-  gl.uniformMatrix4fv(uViewProj, false, rctx.camera.getViewProjectionMatrix(false));
-  gl.uniform1i(rctx.uUseClipPlane, 0);
-  gl.uniform1f(rctx.uBlockSeed, 0);
-  gl.uniform4f(rctx.uClipPlane, 0, 0, 1, 0);
-  gl.uniform3f(rctx.uCapColor, 0.2, 0.2, 0.2);
-  gl.uniform1f(uBlueprintMix, blueprintMix);
-  gl.uniform3f(uBoardInfo, board.cols * 0.5, board.rows * 0.5, reducedMotion ? -1.0 : timeSec);
-  gl.uniform3f(uStoneTint, stoneTint[0], stoneTint[1], stoneTint[2]);
-  gl.uniform1i(uTrayMaterial, getTrayMaterialCode(trayId));
-  gl.uniform1i(uHighContrast, highContrast ? 1 : 0);
+  gl.uniformMatrix4fv(mu.uViewProj, false, viewProj);
+  gl.uniform1i(mu.uUseClipPlane, 0);
+  gl.uniform1f(mu.uBlockSeed, 0);
+  gl.uniform4f(mu.uClipPlane, 0, 0, 1, 0);
+  gl.uniform3f(mu.uCapColor, 0.2, 0.2, 0.2);
+  gl.uniform1f(mu.uBlueprintMix, blueprintMix);
+  gl.uniform3f(mu.uBoardInfo, board.cols * 0.5, board.rows * 0.5, shaderTime);
+  gl.uniform3f(mu.uStoneTint, stoneTint[0], stoneTint[1], stoneTint[2]);
+  gl.uniform1i(mu.uTrayMaterial, trayMatCode);
+  gl.uniform1i(mu.uHighContrast, hcInt);
   if (atlasTexture) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
-    gl.uniform1i(uAtlas, 0);
+    gl.uniform1i(mu.uAtlas, 0);
   }
-  bindRelicClusterTextureImpl(rctx, gl, mainProgram);
+  if (blueprintMix > 0.001) {
+    bindRelicClusterTextureImpl(rctx, gl, mainProgram);
+  }
+  syncFrameProgramState(
+    programState,
+    viewProj,
+    board.cols * 0.5,
+    board.rows * 0.5,
+    shaderTime,
+    stoneTint[0],
+    stoneTint[1],
+    stoneTint[2],
+    trayMatCode,
+    hcInt,
+    blueprintMix,
+    rctx.boardShakeDirX * shakeAmp,
+    rctx.boardShakeDirY * shakeAmp
+  );
 }

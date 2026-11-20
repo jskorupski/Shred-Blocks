@@ -189,7 +189,7 @@ export const GLSL_RELIC_CRUST_SHADE = `
 
     if (rc_crustMask > 0.0001) {
       float isSunkenRoom = smoothstep(-0.02, -0.10, v_worldPos.z);
-      vec3 restoredRgb = clamp(u_color.rgb / mix(1.0, 0.58, isSunkenRoom), 0.0, 1.0);
+      vec3 restoredRgb = clamp(v_color.rgb / mix(1.0, 0.58, isSunkenRoom), 0.0, 1.0);
       float maxC = max(restoredRgb.r, max(restoredRgb.g, restoredRgb.b));
       float minC = min(restoredRgb.r, min(restoredRgb.g, restoredRgb.b));
       float chroma = maxC - minC;

@@ -35,6 +35,7 @@ export {
 };
 
 const TRACE_UNIFORM_BUF = new Float32Array(MAX_TRACE_UNIFORM_PTS * 4);
+const CORNER_OCC_SCRATCH = new Set<number>();
 
 /**
  * Returns the `(offsetX, offsetY)` from `(block.col, block.row)` to the center of the occupied cell
@@ -72,11 +73,11 @@ function drawCellOuterCornerBrackets3D(
   inset = 0.07,
   expand = 0
 ): void {
-  const occ = new Set<number>();
+  CORNER_OCC_SCRATCH.clear();
   for (const [dr, dc] of shape.cells) {
-    occ.add((dr + 1) * 16 + (dc + 1));
+    CORNER_OCC_SCRATCH.add((dr + 1) * 16 + (dc + 1));
   }
-  const has = (dr: number, dc: number) => occ.has((dr + 1) * 16 + (dc + 1));
+  const has = (dr: number, dc: number) => CORNER_OCC_SCRATCH.has((dr + 1) * 16 + (dc + 1));
 
   const arm = 0.25;
   const thick = 0.058;
@@ -420,6 +421,7 @@ export function renderMysticPathTraces3D(
     }
 
     const alpha = envelope * (tr.alphaScale ?? 1.0) * baseAlpha;
+    rctx.useMainProgram?.(gl);
     gl.uniform1i(rctx.uTraceCount, win.pointCount);
     gl.uniform4fv(rctx.uTracePts, TRACE_UNIFORM_BUF, 0, win.pointCount * 4);
     gl.uniform3f(rctx.uCapColor, coreR, coreG, coreB);
@@ -430,7 +432,11 @@ export function renderMysticPathTraces3D(
       tr.spanCols ?? 1,
       tr.spanRows ?? 1
     );
-    gl.uniform1f(rctx.uBlockSeed, tr.headCellMask ?? 0);
+    if (rctx.setBlockSeed) {
+      rctx.setBlockSeed(tr.headCellMask ?? 0);
+    } else {
+      gl.uniform1f(rctx.uBlockSeed, tr.headCellMask ?? 0);
+    }
     rctx.drawMesh(
       gl,
       ENVIRONMENT_MESHES.overlayQuad,
@@ -449,8 +455,13 @@ export function renderMysticPathTraces3D(
       8
     );
   }
+  rctx.useMainProgram?.(gl);
   gl.uniform1i(rctx.uTraceCount, 0);
-  gl.uniform1f(rctx.uBlockSeed, 0);
+  if (rctx.setBlockSeed) {
+    rctx.setBlockSeed(0);
+  } else {
+    gl.uniform1f(rctx.uBlockSeed, 0);
+  }
 
   gl.enable(gl.CULL_FACE);
   gl.depthMask(true);

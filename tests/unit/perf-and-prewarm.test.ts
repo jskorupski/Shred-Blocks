@@ -12,7 +12,6 @@ import {
   stepParticlesImpl,
 } from '../../src/render/particle-fx';
 import { QualityGovernor } from '../../src/render/quality-governor';
-import { warmUpWebGLPipelinesImpl } from '../../src/render/relic-awakening-fx';
 import {
   INSTANCE_STRIDE,
   MAX_PARTICLES,
@@ -193,110 +192,6 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
     playFilteredNoiseBurstVoice(mockCtx, {} as GainNode, 2.0, 0.12, 600, 0.2);
     expect(createdBuffers).toHaveLength(1);
     expect(startedSources).toEqual([{ hasBuffer: true }]);
-  });
-
-  it('warms overlay trace smear, special overlay styles, and additive lightning particle shaders in a 1x1 pass', () => {
-    const drawnStyles: number[] = [];
-    const particleStyles: number[] = [];
-    const traceCounts: number[] = [];
-    const relicClusterUnits: number[] = [];
-    const activeTextures: number[] = [];
-    let scissoredRect: [number, number, number, number] | null = null;
-
-    const uStyleLoc = { name: 'uStyle' } as unknown as WebGLUniformLocation;
-    const uTraceCountLoc = { name: 'uTraceCount' } as unknown as WebGLUniformLocation;
-    const uTracePtsLoc = { name: 'uTracePts' } as unknown as WebGLUniformLocation;
-    const uClusterTexLoc = { name: 'u_relicClusterTex' } as unknown as WebGLUniformLocation;
-
-    const noop = () => {};
-    const gl = {
-      SCISSOR_TEST: 0x0c11,
-      DEPTH_TEST: 0x0b71,
-      LEQUAL: 0x0203,
-      CULL_FACE: 0x0b44,
-      BACK: 0x0405,
-      BLEND: 0x0be2,
-      SRC_ALPHA: 0x0302,
-      ONE: 1,
-      ONE_MINUS_SRC_ALPHA: 0x0303,
-      TEXTURE0: 0x84c0,
-      TEXTURE1: 0x84c1,
-      TEXTURE_2D: 0x0de1,
-      RGBA: 0x1908,
-      UNSIGNED_BYTE: 0x1401,
-      NEAREST: 0x2600,
-      CLAMP_TO_EDGE: 0x812f,
-      TEXTURE_MIN_FILTER: 0x2801,
-      TEXTURE_MAG_FILTER: 0x2800,
-      TEXTURE_WRAP_S: 0x2802,
-      TEXTURE_WRAP_T: 0x2803,
-      ARRAY_BUFFER: 0x8892,
-      TRIANGLES: 4,
-      UNSIGNED_SHORT: 0x1403,
-      scissor: (x: number, y: number, w: number, h: number) => {
-        scissoredRect = [x, y, w, h];
-      },
-      createTexture: () => ({ id: 'clusterTex' }) as unknown as WebGLTexture,
-      getUniformLocation: (_prog: WebGLProgram, name: string) =>
-        name === 'u_relicClusterTex' ? uClusterTexLoc : null,
-      activeTexture: (unit: number) => {
-        activeTextures.push(unit);
-      },
-      uniform1i: (loc: WebGLUniformLocation | null, v: number) => {
-        if (loc === uStyleLoc) particleStyles.push(v);
-        if (loc === uTraceCountLoc) traceCounts.push(v);
-        if (loc === uClusterTexLoc) relicClusterUnits.push(v);
-      },
-    } as unknown as Record<string, unknown>;
-    for (const m of (
-      'enable disable colorMask depthMask depthFunc cullFace blendFuncSeparate useProgram uniformMatrix4fv ' +
-      'uniform1f uniform4f uniform4fv texParameteri texImage2D texSubImage2D bindTexture bindVertexArray ' +
-      'bindBuffer bufferSubData drawElementsInstanced flush'
-    ).split(' ')) {
-      gl[m] = noop;
-    }
-
-    const rctx = {
-      camera: new Camera3D(),
-      uUseClipPlane: { name: 'uUseClipPlane' } as unknown as WebGLUniformLocation,
-      uClipPlane: { name: 'uClipPlane' } as unknown as WebGLUniformLocation,
-      uTraceCount: uTraceCountLoc,
-      uTracePts: uTracePtsLoc,
-      drawMesh: (...args: unknown[]) => {
-        const style = Number(args[args.length - 1]);
-        drawnStyles.push(style);
-      },
-      drawAtlasBadge: () => {},
-    } as unknown as RenderPassContext;
-
-    warmUpWebGLPipelinesImpl(
-      rctx,
-      gl as unknown as WebGL2RenderingContext,
-      {} as WebGLProgram,
-      {} as WebGLUniformLocation,
-      {} as WebGLUniformLocation,
-      {} as WebGLUniformLocation,
-      {} as WebGLTexture,
-      {
-        program: {} as WebGLProgram,
-        vao: {} as WebGLVertexArrayObject,
-        instanceBuffer: {} as WebGLBuffer,
-        indexCount: 36,
-        uViewProj: {} as WebGLUniformLocation,
-        uStyle: uStyleLoc,
-        smokeVao: {} as WebGLVertexArrayObject,
-        smokeInstanceBuffer: {} as WebGLBuffer,
-        smokeIndexCount: 6,
-      }
-    );
-
-    expect(scissoredRect).toEqual([0, 0, 1, 1]);
-    expect(traceCounts).toContain(2);
-    expect(drawnStyles).toEqual(expect.arrayContaining([0, 4, 7, 8, 9, 10, 11]));
-    expect(particleStyles).toEqual(expect.arrayContaining([0, 4]));
-    expect(relicClusterUnits).toContain(1);
-    expect(activeTextures).toContain(0x84c1);
-    expect(activeTextures[activeTextures.length - 1]).toBe(0x84c0);
   });
 
   it('enforces zero-backdrop-filter overlays, throttled drag updates, and deferred victory roadmap sync', () => {

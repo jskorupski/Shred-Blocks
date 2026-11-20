@@ -1,6 +1,9 @@
 /**
- * Main vertex shader (`R3D-02`): block/board transforms, stone-relic levitation twist (`rotateRelicVec`) and
- * `zRelief` bas-relief compression. Re-exported from `shaders-3d.ts`.
+ * Main & Solid-Opaque vertex shaders (`R3D-02`, `PERF-GPU-01`):
+ * - Both support optional GPU instancing on locations `3..5` (`a_instTranslate`, `a_instScale`, `a_instColor`),
+ *   which default to `(0, 0, 0)` per the WebGL2 spec on non-instanced VAOs so regular `drawMesh` and instanced
+ *   Pass 1 batches share bit-for-bit identical transform & `flat out vec4 v_color` output with zero branches.
+ * - `SOLID_OPAQUE_VERTEX_SHADER` strips Title-only `rotateRelicVec` / `u_blueprintMix` for pure gameplay draws.
  */
 export const MAIN_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -9,6 +12,9 @@ precision highp int;
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_uv;
+layout(location = 3) in vec3 a_instTranslate;
+layout(location = 4) in vec3 a_instScale;
+layout(location = 5) in vec3 a_instColor;
 
 uniform mat4 u_viewProj;
 uniform vec3 u_translate;
@@ -16,6 +22,7 @@ uniform vec3 u_scale;
 uniform float u_rotX;
 uniform float u_rotZ;
 uniform vec4 u_uvRect;
+uniform vec4 u_color;
 uniform float u_blueprintMix;
 uniform vec3 u_boardInfo; // x = cols * 0.5, y = rows * 0.5, z = timeSec (-1.0 when reducedMotion)
 
@@ -23,6 +30,7 @@ out vec3 v_worldPos;
 out vec3 v_localPos;
 out vec3 v_normal;
 out vec2 v_uv;
+flat out vec4 v_color;
 
 vec3 rotateRelicVec(vec3 v, float rx, float ry, float rz) {
   float cz = cos(rz);
@@ -37,7 +45,7 @@ vec3 rotateRelicVec(vec3 v, float rx, float ry, float rz) {
 }
 
 void main() {
-  vec3 p = a_position * u_scale;
+  vec3 p = a_position * (u_scale + a_instScale);
   vec3 n = a_normal;
 
   if (abs(u_rotX) > 0.0001) {
@@ -54,10 +62,11 @@ void main() {
     n = vec3(n.x * cz - n.y * sz, n.x * sz + n.y * cz, n.z);
   }
 
-  vec3 rawWorldPos = p + u_translate;
+  vec3 rawWorldPos = p + u_translate + a_instTranslate;
   v_worldPos = rawWorldPos;
   v_localPos = p;
   v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
+  v_color = vec4(u_color.rgb + a_instColor, u_color.a);
 
   // In Satin Astrolabe Slate Title Mode (u_blueprintMix = 1.0), preserve tactile 3D block & stud depth
   // (zRelief = 0.76) while levitating the dormant precision-sealed board with a gentle floating twist
@@ -86,5 +95,58 @@ void main() {
 
   v_normal = worldNorm;
   gl_Position = u_viewProj * vec4(stagePos, 1.0);
+}
+`;
+
+export const SOLID_OPAQUE_VERTEX_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_uv;
+layout(location = 3) in vec3 a_instTranslate;
+layout(location = 4) in vec3 a_instScale;
+layout(location = 5) in vec3 a_instColor;
+
+uniform mat4 u_viewProj;
+uniform vec3 u_translate;
+uniform vec3 u_scale;
+uniform float u_rotX;
+uniform float u_rotZ;
+uniform vec4 u_uvRect;
+uniform vec4 u_color;
+
+out vec3 v_worldPos;
+out vec3 v_localPos;
+out vec3 v_normal;
+out vec2 v_uv;
+flat out vec4 v_color;
+
+void main() {
+  vec3 p = a_position * (u_scale + a_instScale);
+  vec3 n = a_normal;
+
+  if (abs(u_rotX) > 0.0001) {
+    float cx = cos(u_rotX);
+    float sx = sin(u_rotX);
+    p = vec3(p.x, p.y * cx - p.z * sx, p.y * sx + p.z * cx);
+    n = vec3(n.x, n.y * cx - n.z * sx, n.y * sx + n.z * cx);
+  }
+
+  if (abs(u_rotZ) > 0.0001) {
+    float cz = cos(u_rotZ);
+    float sz = sin(u_rotZ);
+    p = vec3(p.x * cz - p.y * sz, p.x * sz + p.y * cz, p.z);
+    n = vec3(n.x * cz - n.y * sz, n.x * sz + n.y * cz, n.z);
+  }
+
+  vec3 rawWorldPos = p + u_translate + a_instTranslate;
+  v_worldPos = rawWorldPos;
+  v_localPos = p;
+  v_uv = mix(u_uvRect.xy, u_uvRect.zw, a_uv);
+  v_color = vec4(u_color.rgb + a_instColor, u_color.a);
+  v_normal = normalize(n);
+  gl_Position = u_viewProj * vec4(rawWorldPos, 1.0);
 }
 `;

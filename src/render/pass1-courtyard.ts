@@ -1,6 +1,8 @@
 import { getShape } from '../core/polyomino';
-import type { BoardState, ColorId } from '../core/types';
+import type { BoardState } from '../core/types';
+import { MESH_INSTANCE_STRIDE } from './gl-program-state';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
+import { acquirePass1InstanceScratch, getOrBuildStaticPass1Topology } from './pass1-board-cache';
 import {
   drawToneOnToneSigil3D,
   type RenderPassContext,
@@ -18,414 +20,391 @@ export function renderPass1Courtyard(
   colorblind: boolean,
   timeSec: number
 ): void {
-  const { rows, cols, occupancy, floorColor } = board;
+  const { rows, cols } = board;
   const isStoneRuin = (rctx.lastOptions.blueprintMix ?? 0) > 0.45;
-  const isCellPlayable = (r: number, c: number): boolean =>
-    r >= 0 && r < rows && c >= 0 && c < cols && occupancy[r * cols + c] !== -1;
+  const reducedMotion = Boolean(rctx.lastOptions.reducedMotion);
+  const topo = getOrBuildStaticPass1Topology(board);
 
-  // 1A. Contoured Stepped Sanctuary Pedestal Plinth (merged contiguous spans to minimize draw calls & overdraw)
-  const plinthSpans: Array<{ r0: number; r1: number; c0: number; c1: number; roomId: number }> = [];
-  for (let r = 0; r < rows; r++) {
-    let c = 0;
-    while (c < cols) {
-      if (!isCellPlayable(r, c)) {
-        c++;
-        continue;
+  // 1A. Contoured Stepped Sanctuary Pedestal Plinth (cached per BoardState & batched into 1 instanced draw)
+  const plinthCount = topo.plinthSpans.length * 2;
+  if (plinthCount > 0) {
+    const [wr, wg, wb] = palette.wallColor;
+    if (rctx.drawMeshInstanced) {
+      const buf = acquirePass1InstanceScratch(plinthCount);
+      let ptr = 0;
+      for (const span of topo.plinthSpans) {
+        const roomVis = rctx.getRoomVisualState(board, span.roomId);
+        const zOff = roomVis.zOffset;
+        const lum = roomVis.luminanceMul;
+        buf[ptr] = span.lowerX;
+        buf[ptr + 1] = span.lowerY;
+        buf[ptr + 2] = -0.34 + zOff * 0.45;
+        buf[ptr + 3] = span.lowerW;
+        buf[ptr + 4] = span.lowerH;
+        buf[ptr + 5] = 0.16;
+        buf[ptr + 6] = wr * 0.56 * lum;
+        buf[ptr + 7] = wg * 0.55 * lum;
+        buf[ptr + 8] = wb * 0.62 * lum;
+        ptr += MESH_INSTANCE_STRIDE;
+
+        buf[ptr] = span.upperX;
+        buf[ptr + 1] = span.upperY;
+        buf[ptr + 2] = -0.18 + zOff * 0.65;
+        buf[ptr + 3] = span.upperW;
+        buf[ptr + 4] = span.upperH;
+        buf[ptr + 5] = 0.18;
+        buf[ptr + 6] = wr * 0.78 * lum;
+        buf[ptr + 7] = wg * 0.76 * lum;
+        buf[ptr + 8] = wb * 0.82 * lum;
+        ptr += MESH_INSTANCE_STRIDE;
       }
-      const roomId = board.roomMap[r * cols + c] ?? 0;
-      const c0 = c;
-      while (
-        c + 1 < cols &&
-        isCellPlayable(r, c + 1) &&
-        (board.roomMap[r * cols + (c + 1)] ?? 0) === roomId
-      ) {
-        c++;
-      }
-      const c1 = c;
-      const prev = plinthSpans.find(
-        (s) => s.r1 === r - 1 && s.c0 === c0 && s.c1 === c1 && s.roomId === roomId
-      );
-      if (prev) {
-        prev.r1 = r;
-      } else {
-        plinthSpans.push({ r0: r, r1: r, c0, c1, roomId });
-      }
-      c++;
-    }
-  }
-
-  for (const span of plinthSpans) {
-    const roomVis = rctx.getRoomVisualState(board, span.roomId);
-    const zOff = roomVis.zOffset;
-    const lum = roomVis.luminanceMul;
-    let bordersDiffRoomTop = false;
-    let bordersDiffRoomBot = false;
-    for (let c = span.c0; c <= span.c1; c++) {
-      if (
-        span.r0 > 0 &&
-        isCellPlayable(span.r0 - 1, c) &&
-        (board.roomMap[(span.r0 - 1) * cols + c] ?? 0) !== span.roomId
-      ) {
-        bordersDiffRoomTop = true;
-      }
-      if (
-        span.r1 < rows - 1 &&
-        isCellPlayable(span.r1 + 1, c) &&
-        (board.roomMap[(span.r1 + 1) * cols + c] ?? 0) !== span.roomId
-      ) {
-        bordersDiffRoomBot = true;
-      }
-    }
-    let bordersDiffRoomLeft = false;
-    let bordersDiffRoomRight = false;
-    for (let r = span.r0; r <= span.r1; r++) {
-      if (
-        span.c0 > 0 &&
-        isCellPlayable(r, span.c0 - 1) &&
-        (board.roomMap[r * cols + (span.c0 - 1)] ?? 0) !== span.roomId
-      ) {
-        bordersDiffRoomLeft = true;
-      }
-      if (
-        span.c1 < cols - 1 &&
-        isCellPlayable(r, span.c1 + 1) &&
-        (board.roomMap[r * cols + (span.c1 + 1)] ?? 0) !== span.roomId
-      ) {
-        bordersDiffRoomRight = true;
-      }
-    }
-
-    const stepL = bordersDiffRoomLeft ? 0.02 : 0.55;
-    const stepR = bordersDiffRoomRight ? 0.02 : 0.55;
-    const stepT = bordersDiffRoomTop ? 0.02 : 0.55;
-    const stepB = bordersDiffRoomBot ? 0.02 : 0.55;
-    const spanW = span.c1 - span.c0 + 1;
-    const spanH = span.r1 - span.r0 + 1;
-
-    rctx.drawMesh(
-      gl,
-      ENVIRONMENT_MESHES.wallSegment,
-      span.c0 - stepL,
-      span.r0 - stepT,
-      -0.34 + zOff * 0.45,
-      spanW + stepL + stepR,
-      spanH + stepT + stepB,
-      0.16,
-      palette.wallColor[0] * 0.56 * lum,
-      palette.wallColor[1] * 0.55 * lum,
-      palette.wallColor[2] * 0.62 * lum,
-      1.0,
-      0,
-      0,
-      TRAY_WALL_STYLE
-    );
-
-    const padL = bordersDiffRoomLeft ? 0.02 : 0.38;
-    const padR = bordersDiffRoomRight ? 0.02 : 0.38;
-    const padT = bordersDiffRoomTop ? 0.02 : 0.38;
-    const padB = bordersDiffRoomBot ? 0.02 : 0.38;
-    rctx.drawMesh(
-      gl,
-      ENVIRONMENT_MESHES.wallSegment,
-      span.c0 - padL,
-      span.r0 - padT,
-      -0.18 + zOff * 0.65,
-      spanW + padL + padR,
-      spanH + padT + padB,
-      0.18,
-      palette.wallColor[0] * 0.78 * lum,
-      palette.wallColor[1] * 0.76 * lum,
-      palette.wallColor[2] * 0.82 * lum,
-      1.0,
-      0,
-      0,
-      TRAY_WALL_STYLE
-    );
-  }
-
-  // 1B. Interior Floor Tiles, Sunken Twilight Veil, Pillars & Floor Paths
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const idx = r * cols + c;
-      const occ = occupancy[idx];
-
-      if (occ === -1) {
-        // Exterior VOID cell (`COURTYARD-01`): carved completely away into open negative space!
-        continue;
-      }
-
-      const roomId = board.roomMap[idx] ?? 0;
-      const roomVis = rctx.getRoomVisualState(board, roomId);
-      const zOff = roomVis.zOffset;
-      const lum = roomVis.luminanceMul;
-
-      const checker = (r + c) % 2 === 0 ? palette.floorTileA : palette.floorTileB;
-      const primaryWave = Math.max(0, Math.sin(timeSec * 1.1 - (c * 0.58 + r * 0.46))) ** 3;
-      const crossWave = Math.max(0, Math.cos(timeSec * 0.8 + (c - r) * 0.52)) ** 4;
-      const sheen =
-        !isStoneRuin && !rctx.lastOptions.reducedMotion && !roomVis.isLocked
-          ? primaryWave * 0.048 + crossWave * 0.022
-          : 0;
-      const pathColorId = isStoneRuin ? (0 as ColorId) : ((floorColor[idx] ?? 0) as ColorId);
-
-      // Always ground every cell with its Board Tray stone/wood/arcade floor tile first
-      rctx.drawMesh(
-        gl,
-        ENVIRONMENT_MESHES.trayFloorTile,
-        c,
-        r,
-        zOff,
-        1.0,
-        1.0,
-        1.0,
-        Math.min(1, (checker[0] + sheen) * lum),
-        Math.min(1, (checker[1] + sheen * 0.9) * lum),
-        Math.min(1, (checker[2] + sheen * 0.65) * lum + (1 - lum) * 0.05),
-        1.0,
-        0,
-        0,
-        STONE_SURFACE_STYLE
-      );
-
-      // Dedicated Sanctuary Color-Filter Mosaic Runner (`FLOOR_PATHS`): isolated from tray shaders so
-      // gameplay color legibility, beveled trim rails, and neighbor bridging hold across all 5 Board Trays.
-      if (pathColorId > 0) {
-        const [pr, pg, pb] = rctx.getColorRgb(pathColorId, highContrast);
-        const sameColorAt = (nr: number, nc: number): boolean =>
-          isCellPlayable(nr, nc) &&
-          (board.roomMap[nr * cols + nc] ?? 0) === roomId &&
-          floorColor[nr * cols + nc] === pathColorId;
-        const sameTop = sameColorAt(r - 1, c);
-        const sameBot = sameColorAt(r + 1, c);
-        const sameLeft = sameColorAt(r, c - 1);
-        const sameRight = sameColorAt(r, c + 1);
-        const m = 0.085;
-        const x0 = c + (sameLeft ? 0 : m);
-        const x1 = c + 1 - (sameRight ? 0 : m);
-        const y0 = r + (sameTop ? 0 : m);
-        const y1 = r + 1 - (sameBot ? 0 : m);
-        const padW = x1 - x0;
-        const padH = y1 - y0;
-        const padCx = (x0 + x1) * 0.5;
-        const padCy = (y0 + y1) * 0.5;
-        const sheenBoost = sheen * 0.45;
-        const padR = Math.min(1, (pr * 0.84 + sheenBoost) * lum);
-        const padG = Math.min(1, (pg * 0.84 + sheenBoost) * lum);
-        const padB = Math.min(1, (pb * 0.84 + sheenBoost * 0.7) * lum);
+      rctx.drawMeshInstanced(gl, ENVIRONMENT_MESHES.wallSegment, buf, plinthCount, 1.0, TRAY_WALL_STYLE);
+    } else {
+      for (const span of topo.plinthSpans) {
+        const roomVis = rctx.getRoomVisualState(board, span.roomId);
+        const zOff = roomVis.zOffset;
+        const lum = roomVis.luminanceMul;
         rctx.drawMesh(
           gl,
-          ENVIRONMENT_MESHES.unitParticleCube,
-          padCx,
-          padCy,
-          zOff + 0.005,
-          padW,
-          padH,
-          0.006,
-          padR,
-          padG,
-          padB,
-          1.0,
-          0,
-          0,
-          0
-        );
-
-        const trimR = Math.min(1, pr * 0.55 + 0.42) * lum;
-        const trimG = Math.min(1, pg * 0.55 + 0.4) * lum;
-        const trimB = Math.min(1, pb * 0.55 + 0.36) * lum;
-        const railW = 0.042;
-        if (!sameTop) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            padCx,
-            y0 + railW * 0.5,
-            zOff + 0.006,
-            padW,
-            railW,
-            0.0085,
-            trimR,
-            trimG,
-            trimB,
-            1.0,
-            0,
-            0,
-            0
-          );
-        }
-        if (!sameBot) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            padCx,
-            y1 - railW * 0.5,
-            zOff + 0.006,
-            padW,
-            railW,
-            0.0085,
-            trimR,
-            trimG,
-            trimB,
-            1.0,
-            0,
-            0,
-            0
-          );
-        }
-        if (!sameLeft) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            x0 + railW * 0.5,
-            padCy,
-            zOff + 0.006,
-            railW,
-            padH,
-            0.0085,
-            trimR,
-            trimG,
-            trimB,
-            1.0,
-            0,
-            0,
-            0
-          );
-        }
-        if (!sameRight) {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            x1 - railW * 0.5,
-            padCy,
-            zOff + 0.006,
-            railW,
-            padH,
-            0.0085,
-            trimR,
-            trimG,
-            trimB,
-            1.0,
-            0,
-            0,
-            0
-          );
-        }
-
-        if (colorblind) {
-          const tileLum = padR * 0.2126 + padG * 0.7152 + padB * 0.0722;
-          drawToneOnToneSigil3D(
-            rctx,
-            gl,
-            pathColorId,
-            c + 0.5,
-            r + 0.5,
-            zOff + 0.0115,
-            0.46,
-            lum,
-            highContrast,
-            tileLum < 0.18
-          );
-        } else {
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            c + 0.5,
-            r + 0.5,
-            zOff + 0.0095,
-            0.29,
-            0.29,
-            0.004,
-            trimR,
-            trimG,
-            trimB,
-            0.94,
-            0,
-            Math.PI * 0.25,
-            0
-          );
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            c + 0.5,
-            r + 0.5,
-            zOff + 0.0105,
-            0.2,
-            0.2,
-            0.004,
-            pr * 0.68 * lum,
-            pg * 0.68 * lum,
-            pb * 0.68 * lum,
-            1.0,
-            0,
-            Math.PI * 0.25,
-            0
-          );
-          rctx.drawAtlasBadge(gl, 'DIAMOND', c + 0.5, r + 0.5, zOff + 0.013, 0.22, trimR, trimG, trimB, 0.78);
-        }
-      }
-
-      // Interior Stone Pillar (`occ === -2`): Fixed architectural wall column (devoid of floating UI badges in Stone Ruin mode)
-      if (occ === -2) {
-        const pr = Math.min(1, palette.wallColor[0] * 1.38 * lum);
-        const pg = Math.min(1, palette.wallColor[1] * 1.38 * lum);
-        const pb = Math.min(1, palette.wallColor[2] * 1.38 * lum);
-        rctx.drawMesh(
-          gl,
-          ENVIRONMENT_MESHES.pillarMesh,
-          c,
-          r,
-          zOff,
-          1.0,
-          1.0,
-          1.0,
-          pr,
-          pg,
-          pb,
+          ENVIRONMENT_MESHES.wallSegment,
+          span.lowerX,
+          span.lowerY,
+          -0.34 + zOff * 0.45,
+          span.lowerW,
+          span.lowerH,
+          0.16,
+          wr * 0.56 * lum,
+          wg * 0.55 * lum,
+          wb * 0.62 * lum,
           1.0,
           0,
           0,
           TRAY_WALL_STYLE
         );
-        if (!isStoneRuin) {
-          const pillarBobZ =
-            !rctx.lastOptions.reducedMotion && !roomVis.isLocked
-              ? Math.sin(timeSec * 2.8 + r * 0.9 + c * 1.1) * 0.024
-              : 0;
-          const pillarSpinZ =
-            !rctx.lastOptions.reducedMotion && !roomVis.isLocked
-              ? Math.PI * 0.25 + timeSec * 0.95
-              : Math.PI * 0.25;
-          rctx.drawMesh(
-            gl,
-            ENVIRONMENT_MESHES.unitParticleCube,
-            c + 0.5,
-            r + 0.5,
-            zOff + 0.652 + pillarBobZ,
-            0.38,
-            0.38,
-            0.056,
-            Math.min(1, pr * 0.85 + 0.22 * lum),
-            Math.min(1, pg * 0.82 + 0.18 * lum),
-            Math.min(1, pb * 0.78 + 0.12 * lum),
-            1.0,
-            0,
-            pillarSpinZ,
-            0
-          );
-          rctx.drawAtlasBadge(
-            gl,
-            'DIAMOND',
-            c + 0.5,
-            r + 0.5,
-            zOff + 0.686 + pillarBobZ,
-            0.36,
-            0.98 * lum,
-            0.86 * lum,
-            0.58 * lum,
-            0.95
-          );
-        }
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.wallSegment,
+          span.upperX,
+          span.upperY,
+          -0.18 + zOff * 0.65,
+          span.upperW,
+          span.upperH,
+          0.18,
+          wr * 0.78 * lum,
+          wg * 0.76 * lum,
+          wb * 0.82 * lum,
+          1.0,
+          0,
+          0,
+          TRAY_WALL_STYLE
+        );
       }
+    }
+  }
+
+  // 1B. Interior Floor Tiles (batched into 1 instanced draw), Color-Filter Mosaic Runners & Pillars
+  const tileCount = topo.playableTiles.length;
+  const allowSheen = !isStoneRuin && !reducedMotion;
+  if (tileCount > 0) {
+    const tileA = palette.floorTileA;
+    const tileB = palette.floorTileB;
+    if (rctx.drawMeshInstanced) {
+      const buf = acquirePass1InstanceScratch(tileCount);
+      let ptr = 0;
+      for (const tile of topo.playableTiles) {
+        const roomVis = rctx.getRoomVisualState(board, tile.roomId);
+        const lum = roomVis.luminanceMul;
+        const checker = tile.isCheckerA ? tileA : tileB;
+        let sheen = 0;
+        if (allowSheen && !roomVis.isLocked) {
+          const primaryWave = Math.max(0, Math.sin(timeSec * 1.1 - (tile.c * 0.58 + tile.r * 0.46))) ** 3;
+          const crossWave = Math.max(0, Math.cos(timeSec * 0.8 + (tile.c - tile.r) * 0.52)) ** 4;
+          sheen = primaryWave * 0.048 + crossWave * 0.022;
+        }
+        buf[ptr] = tile.c;
+        buf[ptr + 1] = tile.r;
+        buf[ptr + 2] = roomVis.zOffset;
+        buf[ptr + 3] = 1.0;
+        buf[ptr + 4] = 1.0;
+        buf[ptr + 5] = 1.0;
+        buf[ptr + 6] = Math.min(1, (checker[0] + sheen) * lum);
+        buf[ptr + 7] = Math.min(1, (checker[1] + sheen * 0.9) * lum);
+        buf[ptr + 8] = Math.min(1, (checker[2] + sheen * 0.65) * lum + (1 - lum) * 0.05);
+        ptr += MESH_INSTANCE_STRIDE;
+      }
+      rctx.drawMeshInstanced(gl, ENVIRONMENT_MESHES.trayFloorTile, buf, tileCount, 1.0, STONE_SURFACE_STYLE);
+    } else {
+      for (const tile of topo.playableTiles) {
+        const roomVis = rctx.getRoomVisualState(board, tile.roomId);
+        const lum = roomVis.luminanceMul;
+        const checker = tile.isCheckerA ? tileA : tileB;
+        let sheen = 0;
+        if (allowSheen && !roomVis.isLocked) {
+          const primaryWave = Math.max(0, Math.sin(timeSec * 1.1 - (tile.c * 0.58 + tile.r * 0.46))) ** 3;
+          const crossWave = Math.max(0, Math.cos(timeSec * 0.8 + (tile.c - tile.r) * 0.52)) ** 4;
+          sheen = primaryWave * 0.048 + crossWave * 0.022;
+        }
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.trayFloorTile,
+          tile.c,
+          tile.r,
+          roomVis.zOffset,
+          1.0,
+          1.0,
+          1.0,
+          Math.min(1, (checker[0] + sheen) * lum),
+          Math.min(1, (checker[1] + sheen * 0.9) * lum),
+          Math.min(1, (checker[2] + sheen * 0.65) * lum + (1 - lum) * 0.05),
+          1.0,
+          0,
+          0,
+          STONE_SURFACE_STYLE
+        );
+      }
+    }
+  }
+
+  // Dedicated Sanctuary Color-Filter Mosaic Runners (`FLOOR_PATHS`) — sparse cached iteration
+  if (!isStoneRuin && topo.floorPathTiles.length > 0) {
+    for (const fp of topo.floorPathTiles) {
+      const roomVis = rctx.getRoomVisualState(board, fp.roomId);
+      const zOff = roomVis.zOffset;
+      const lum = roomVis.luminanceMul;
+      let sheen = 0;
+      if (allowSheen && !roomVis.isLocked) {
+        const primaryWave = Math.max(0, Math.sin(timeSec * 1.1 - (fp.c * 0.58 + fp.r * 0.46))) ** 3;
+        const crossWave = Math.max(0, Math.cos(timeSec * 0.8 + (fp.c - fp.r) * 0.52)) ** 4;
+        sheen = primaryWave * 0.048 + crossWave * 0.022;
+      }
+      const [pr, pg, pb] = rctx.getColorRgb(fp.colorId, highContrast);
+      const sheenBoost = sheen * 0.45;
+      const padR = Math.min(1, (pr * 0.84 + sheenBoost) * lum);
+      const padG = Math.min(1, (pg * 0.84 + sheenBoost) * lum);
+      const padB = Math.min(1, (pb * 0.84 + sheenBoost * 0.7) * lum);
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        fp.padCx,
+        fp.padCy,
+        zOff + 0.005,
+        fp.padW,
+        fp.padH,
+        0.006,
+        padR,
+        padG,
+        padB,
+        1.0,
+        0,
+        0,
+        0
+      );
+
+      const trimR = Math.min(1, pr * 0.55 + 0.42) * lum;
+      const trimG = Math.min(1, pg * 0.55 + 0.4) * lum;
+      const trimB = Math.min(1, pb * 0.55 + 0.36) * lum;
+      const railW = 0.042;
+      if (!fp.sameTop) {
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          fp.padCx,
+          fp.y0 + railW * 0.5,
+          zOff + 0.006,
+          fp.padW,
+          railW,
+          0.0085,
+          trimR,
+          trimG,
+          trimB,
+          1.0,
+          0,
+          0,
+          0
+        );
+      }
+      if (!fp.sameBot) {
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          fp.padCx,
+          fp.y1 - railW * 0.5,
+          zOff + 0.006,
+          fp.padW,
+          railW,
+          0.0085,
+          trimR,
+          trimG,
+          trimB,
+          1.0,
+          0,
+          0,
+          0
+        );
+      }
+      if (!fp.sameLeft) {
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          fp.x0 + railW * 0.5,
+          fp.padCy,
+          zOff + 0.006,
+          railW,
+          fp.padH,
+          0.0085,
+          trimR,
+          trimG,
+          trimB,
+          1.0,
+          0,
+          0,
+          0
+        );
+      }
+      if (!fp.sameRight) {
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          fp.x1 - railW * 0.5,
+          fp.padCy,
+          zOff + 0.006,
+          railW,
+          fp.padH,
+          0.0085,
+          trimR,
+          trimG,
+          trimB,
+          1.0,
+          0,
+          0,
+          0
+        );
+      }
+
+      if (colorblind) {
+        const tileLum = padR * 0.2126 + padG * 0.7152 + padB * 0.0722;
+        drawToneOnToneSigil3D(
+          rctx,
+          gl,
+          fp.colorId,
+          fp.c + 0.5,
+          fp.r + 0.5,
+          zOff + 0.0115,
+          0.46,
+          lum,
+          highContrast,
+          tileLum < 0.18
+        );
+      } else {
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          fp.c + 0.5,
+          fp.r + 0.5,
+          zOff + 0.0095,
+          0.29,
+          0.29,
+          0.004,
+          trimR,
+          trimG,
+          trimB,
+          0.94,
+          0,
+          Math.PI * 0.25,
+          0
+        );
+        rctx.drawMesh(
+          gl,
+          ENVIRONMENT_MESHES.unitParticleCube,
+          fp.c + 0.5,
+          fp.r + 0.5,
+          zOff + 0.0105,
+          0.2,
+          0.2,
+          0.004,
+          pr * 0.68 * lum,
+          pg * 0.68 * lum,
+          pb * 0.68 * lum,
+          1.0,
+          0,
+          Math.PI * 0.25,
+          0
+        );
+        rctx.drawAtlasBadge(
+          gl,
+          'DIAMOND',
+          fp.c + 0.5,
+          fp.r + 0.5,
+          zOff + 0.013,
+          0.22,
+          trimR,
+          trimG,
+          trimB,
+          0.78
+        );
+      }
+    }
+  }
+
+  // Interior Stone Pillars (`occ === -2`) — sparse cached iteration
+  for (const pil of topo.pillarTiles) {
+    const roomVis = rctx.getRoomVisualState(board, pil.roomId);
+    const zOff = roomVis.zOffset;
+    const lum = roomVis.luminanceMul;
+    const pr = Math.min(1, palette.wallColor[0] * 1.38 * lum);
+    const pg = Math.min(1, palette.wallColor[1] * 1.38 * lum);
+    const pb = Math.min(1, palette.wallColor[2] * 1.38 * lum);
+    rctx.drawMesh(
+      gl,
+      ENVIRONMENT_MESHES.pillarMesh,
+      pil.c,
+      pil.r,
+      zOff,
+      1.0,
+      1.0,
+      1.0,
+      pr,
+      pg,
+      pb,
+      1.0,
+      0,
+      0,
+      TRAY_WALL_STYLE
+    );
+    if (!isStoneRuin) {
+      const pillarBobZ =
+        !reducedMotion && !roomVis.isLocked ? Math.sin(timeSec * 2.8 + pil.r * 0.9 + pil.c * 1.1) * 0.024 : 0;
+      const pillarSpinZ =
+        !reducedMotion && !roomVis.isLocked ? Math.PI * 0.25 + timeSec * 0.95 : Math.PI * 0.25;
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        pil.c + 0.5,
+        pil.r + 0.5,
+        zOff + 0.652 + pillarBobZ,
+        0.38,
+        0.38,
+        0.056,
+        Math.min(1, pr * 0.85 + 0.22 * lum),
+        Math.min(1, pg * 0.82 + 0.18 * lum),
+        Math.min(1, pb * 0.78 + 0.12 * lum),
+        1.0,
+        0,
+        pillarSpinZ,
+        0
+      );
+      rctx.drawAtlasBadge(
+        gl,
+        'DIAMOND',
+        pil.c + 0.5,
+        pil.r + 0.5,
+        zOff + 0.686 + pillarBobZ,
+        0.36,
+        0.98 * lum,
+        0.86 * lum,
+        0.58 * lum,
+        0.95
+      );
     }
   }
 

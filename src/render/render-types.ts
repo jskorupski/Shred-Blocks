@@ -465,6 +465,27 @@ export interface RenderPassContext {
     materialStyle?: number,
     uvRegion?: AtlasUVRegion | null
   ): void;
+  drawMeshInstanced?(
+    gl: WebGL2RenderingContext,
+    mesh: MeshData,
+    instanceData: Float32Array,
+    instanceCount: number,
+    alpha?: number,
+    materialStyle?: number
+  ): void;
+  useMainProgram?(gl: WebGL2RenderingContext): void;
+  setClipPlaneState?(
+    gl: WebGL2RenderingContext,
+    enabled: boolean,
+    nx?: number,
+    ny?: number,
+    nz?: number,
+    d?: number,
+    capR?: number,
+    capG?: number,
+    capB?: number
+  ): void;
+  setBlockSeed?(seed: number): void;
   drawAtlasBadge(
     gl: WebGL2RenderingContext,
     regionKey: string,

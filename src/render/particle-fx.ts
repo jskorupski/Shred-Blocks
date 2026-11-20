@@ -315,20 +315,33 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
   rctx.qualityGovernor.setActiveParticles(active + activeSmoke + rctx.activeRelicPlateCount);
 }
 
+const ROOM_VISUAL_UNLOCKED = Object.freeze({ zOffset: 0, luminanceMul: 1.0, isLocked: false });
+const ROOM_VISUAL_LOCKED = Object.freeze({ zOffset: -0.14, luminanceMul: 0.58, isLocked: true });
+
 export function getRoomVisualStateImpl(
   rctx: RenderPassContext,
   board: BoardState,
   roomId: number
 ): { zOffset: number; luminanceMul: number; isLocked: boolean } {
   if (roomId <= 0) {
-    return { zOffset: 0, luminanceMul: 1.0, isLocked: false };
+    return ROOM_VISUAL_UNLOCKED;
   }
-  const lockedByNonVault =
-    board.barriers?.some((b) => b.unlocksRoomId === roomId && !b.open && !b.isVault) ?? false;
-  if (lockedByNonVault) {
-    return { zOffset: -0.14, luminanceMul: 0.58, isLocked: true };
+  const barriers = board.barriers;
+  if (!barriers || barriers.length === 0) {
+    return ROOM_VISUAL_UNLOCKED;
   }
-  const isVaultRoom = board.barriers?.some((b) => b.unlocksRoomId === roomId && b.isVault) ?? false;
+  let isVaultRoom = false;
+  for (let i = 0; i < barriers.length; i++) {
+    const b = barriers[i];
+    if (b.unlocksRoomId === roomId) {
+      if (!b.open && !b.isVault) {
+        return ROOM_VISUAL_LOCKED;
+      }
+      if (b.isVault) {
+        isVaultRoom = true;
+      }
+    }
+  }
   const elapsed = rctx.roomAwakenMap.get(roomId);
   if (!isVaultRoom && elapsed !== undefined && elapsed < 0.55 && !rctx.lastOptions.reducedMotion) {
     const t = Math.min(1, Math.max(0, elapsed / 0.55));
@@ -339,7 +352,7 @@ export function getRoomVisualStateImpl(
       isLocked: false,
     };
   }
-  return { zOffset: 0, luminanceMul: 1.0, isLocked: false };
+  return ROOM_VISUAL_UNLOCKED;
 }
 
 /**
