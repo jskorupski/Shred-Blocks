@@ -13,7 +13,7 @@ Always run verification in this order so `dist/` is fresh before any preview ser
 | **1. Fast Preflight** | `npm run verify:fast` | `BypassSandbox: false` | None | Runs `biome check` + all Vitest unit suites + `tsc --noEmit && vite build` (stamps fresh `dist/`). |
 | **2. Targeted UI Probe** | `./node_modules/.bin/tsx scripts/ui-probe.ts ...` | `BypassSandbox: true` | `4180` (or `:8443` with `--lan`) | Fast scene & `VIEWPORT-MATRIX-01` screenshot + DOM overflow/clipping audit (`1–8` captures in `< 6s`). |
 | **3. Visual Goldens** | `./node_modules/.bin/playwright test -c playwright.visual.config.ts` | `BypassSandbox: true` | `4178` (strict) | Deterministic 18-snapshot pixel-diff regression check (`--update-snapshots` for intentional UI changes). |
-| **4. Full E2E Suite** | `./node_modules/.bin/playwright test` | `BypassSandbox: true` | `4178` (strict) | Full 74-playtest Desktop Chrome + Mobile Portrait suite (`playwright test --list` counts fast in `< 1s`). **Never run concurrently with Step 3** (shared port `4178`). |
+| **4. Full E2E Suite** | `./node_modules/.bin/playwright test` | `BypassSandbox: true` | `4178` (strict) | Full 76-playtest Desktop Chrome + Mobile Portrait suite (`playwright test --list` counts fast in `< 1s`). **Never run concurrently with Step 3** (shared port `4178`). |
 | **5. Full 45-Shot Harness** | `./node_modules/.bin/tsx scripts/visual-harness.ts` | `BypassSandbox: true` | `4179` (strict) | Comprehensive 45-capture gallery across epochs, themes, accessibility modes, and viewports. |
 | **6. Live LAN HTTPS Dev** | `./node_modules/.bin/vite --config vite.lan.config.ts` | `BypassSandbox: false` (`IsDaemon: true`) | `8443` (strict) | Live HMR HTTPS server (`0.0.0.0:8443`) with compile-time LAN DevTools enabled. |
 

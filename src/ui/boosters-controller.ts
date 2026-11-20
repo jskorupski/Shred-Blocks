@@ -20,8 +20,11 @@ import {
   type AppViewContext,
   BOOSTER_DISPLAY_NAMES,
   BOOSTER_TOKENS,
+  dismissGameToastImpl,
+  dismissUnlockToastImpl,
   UI_BOOSTER_PRICES,
 } from './catalog-meta';
+import { cancelStuckBoardCheckImpl } from './outcome-modals-view';
 
 /**
  * Booster & Undo controller (`UX-04`, `UX-11`, `F-08`, `MECH-10`, `UNDO-RES-01`), extracted from `main.ts`
@@ -96,12 +99,14 @@ export function activateBoosterImpl(app: BoosterAppContext, type: BoosterType): 
   if (!canAffordBooster(app, type)) return;
 
   app.sound.playButtonTap();
+  dismissUnlockToastImpl(app);
   app.inputController.setInputMode(targetMode);
   app.syncBoosterTargetingBanner(app.inputController.getHoverState());
   app.renderNow();
 }
 
 function executeUndoBoosterImpl(app: BoosterAppContext): void {
+  cancelStuckBoardCheckImpl();
   // UX-11: Check if undoing an accidental level restart first
   if (app.undoStack.length === 0 && app.preRestartSnapshot) {
     app.board = cloneBoardState(app.preRestartSnapshot);
@@ -133,6 +138,7 @@ function executeUndoBoosterImpl(app: BoosterAppContext): void {
     return;
   }
 
+  dismissGameToastImpl(app);
   if (app.freeUndosRemaining > 0) {
     app.freeUndosRemaining--;
   } else {

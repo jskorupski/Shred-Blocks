@@ -1,14 +1,16 @@
 import { isBoardFailed, isBoardWon } from '../core/board';
 import type { ParticleStyleId } from '../core/types';
+import { getLevelSpec } from '../levels/catalog';
 import {
   type AppViewContext,
   getThemeItemPrice,
   PARTICLE_CATALOG,
   PARTICLE_GLYPHS,
+  presentStageUnlockBannerImpl,
   SKIN_CATALOG,
   TRAY_CATALOG,
 } from './catalog-meta';
-import { cancelPendingOutcomeTransition } from './outcome-modals-view';
+import { cancelPendingOutcomeTransition, cancelStuckBoardCheckImpl } from './outcome-modals-view';
 import { renderThemesStudioImpl } from './themes-studio-view';
 
 let pauseDrawerExpanded = false;
@@ -46,6 +48,7 @@ export function resumeOrLoadLevelImpl(
     return;
   }
   cancelPendingOutcomeTransition();
+  cancelStuckBoardCheckImpl();
   app.inputController.cancelTargeting();
   app.lastPointerActivityMs = performance.now();
   const save = app.saveManager.getPayload();
@@ -57,6 +60,9 @@ export function resumeOrLoadLevelImpl(
     app.blueprintMix = 0;
     app.closeAllModals();
     app.switchScreen('game');
+    if (app.board.movesCommitted === 0 && app.boardUnlockNoteShown === false) {
+      presentStageUnlockBannerImpl(app, app.board.levelId, getLevelSpec(app.board.levelId).unlockNote);
+    }
   }
   app.syncAllUiFromSave();
   app.syncInGameHud();

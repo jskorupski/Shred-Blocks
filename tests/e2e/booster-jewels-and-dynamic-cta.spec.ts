@@ -620,4 +620,99 @@ test.describe('Booster Jewel Crests & Dynamic Multi-Digit CTA Geometry', () => {
     ).toEqual([12]);
     expect(errors).toEqual([]);
   });
+
+  test('BANNER-CLEANUP-01: leaving game clears active power-up/intro/targeting banners cleanly and differentiates first-time unlock vs calm stage guide', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
+
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.removeItem('shredblocks.seen_booster_debuts.v1');
+      const dbg = window.__SHREDBLOCKS_DEBUG__;
+      const cur = dbg.getSave();
+      const records: typeof cur.levelRecords = {};
+      for (let lvl = 1; lvl <= 7; lvl++) {
+        records[lvl] = { stars: 3, bestMoves: 3, bestTimeSec: 12 };
+      }
+      dbg.patchSave({
+        coins: 500,
+        currentLevelId: 8,
+        highestLevelUnlocked: 8,
+        levelRecords: records,
+        modeState: {
+          CHALLENGE: { currentLevelId: 8, highestUnlocked: 8 },
+          ZEN: { currentLevelId: 1, highestUnlocked: 1 },
+          TIMED: { currentLevelId: 1, highestUnlocked: 1 },
+        },
+        boosters: { ...cur.boosters, HINT: 3, HAMMER: 3 },
+      });
+    });
+
+    // 1. Fresh arrival at Level 8 from Title Screen -> celebratory golden `'unlock'` plaque
+    await page.reload();
+    await expect(page.locator('#btn-title-play')).toBeVisible();
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#screen-game')).toBeVisible();
+    await expect(page.locator('#unlock-toast')).toBeVisible();
+    await expect(page.locator('#unlock-toast')).toHaveAttribute('data-banner-kind', 'unlock');
+    await expect(page.locator('#unlock-toast-text')).toContainText('RARE Power-Up Unlocked: Hammer!');
+    const unlockBg = await page
+      .locator('#unlock-toast')
+      .evaluate((el) => getComputedStyle(el).backgroundImage);
+
+    // Trigger a live power-up #game-toast (Hint) and Hammer targeting banner while in gameplay
+    await page.locator('#btn-booster-hint').click();
+    await expect(page.locator('#game-toast')).toBeVisible();
+    await expect(page.locator('#game-toast')).toContainText('Hint');
+    await page.locator('#btn-booster-hammer').click();
+    await expect(page.locator('#booster-target-banner')).toBeVisible();
+
+    // 2. Leave game back to Home Map -> ALL transient banners dismiss immediately
+    await page.locator('#btn-hud-home').click();
+    await expect(page.locator('#screen-home')).toBeVisible();
+    await expect(page.locator('#game-toast')).toBeHidden();
+    await expect(page.locator('#unlock-toast')).toBeHidden();
+    await expect(page.locator('#booster-target-banner')).toBeHidden();
+
+    // 3. Resume the same Level 8 board from Home Map -> ZERO stale banners reappear
+    await page.locator('#btn-play-current').click();
+    await expect(page.locator('#screen-game')).toBeVisible();
+    await expect(page.locator('#game-toast')).toBeHidden();
+    await expect(page.locator('#unlock-toast')).toBeHidden();
+    await expect(page.locator('#booster-target-banner')).toBeHidden();
+
+    // 4. Refresh & start Level 8 again from Title Screen -> calm teal-slate `'guide'` plaque (not duplicate "Unlocked!")
+    await page.reload();
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#screen-game')).toBeVisible();
+    await expect(page.locator('#unlock-toast')).toBeVisible();
+    await expect(page.locator('#unlock-toast')).toHaveAttribute('data-banner-kind', 'guide');
+    await expect(page.locator('#unlock-toast-text')).toContainText('Power-Up Guide — Hammer:');
+    const guideBg = await page
+      .locator('#unlock-toast')
+      .evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(guideBg).not.toBe(unlockBg);
+
+    // 5. Switch to Level 7 on the Map and return to Level 8 -> calm `'guide'` plaque remains available for players learning/replaying
+    await page.locator('#btn-hud-home').click();
+    await expect(page.locator('#unlock-toast')).toBeHidden();
+    await page.locator('.level-node-card[data-level-id="7"]').click();
+    await expect(page.locator('#hud-level-title')).toContainText('Level 7');
+    await page.locator('#btn-hud-home').click();
+    await page.locator('.level-node-card[data-level-id="8"]').click();
+    await expect(page.locator('#unlock-toast')).toBeVisible();
+    await expect(page.locator('#unlock-toast')).toHaveAttribute('data-banner-kind', 'guide');
+    await expect(page.locator('#unlock-toast-text')).toContainText('Power-Up Guide — Hammer:');
+
+    // Leaving directly to Home then Title Screen also leaves banners cleanly dismissed
+    await page.locator('#btn-hud-home').click();
+    await expect(page.locator('#unlock-toast')).toBeHidden();
+    await page.locator('#btn-home-title').click();
+    await expect(page.locator('#title-overlay')).toBeVisible();
+    await expect(page.locator('#game-toast')).toBeHidden();
+    await expect(page.locator('#unlock-toast')).toBeHidden();
+    expect(errors).toEqual([]);
+  });
 });

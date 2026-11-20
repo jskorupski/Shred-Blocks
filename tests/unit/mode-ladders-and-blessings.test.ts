@@ -26,7 +26,20 @@ import {
   UNDER_PAR_ORACLE_COINS,
   ZEN_MAX_CONSECUTIVE_SKIPS,
 } from '../../src/storage/save-manager';
-import { resolveBoosterDebutToastNote, resolveRoadmapBoosterDebutNote } from '../../src/ui/catalog-meta';
+import {
+  type AppViewContext,
+  clearSeenBoosterDebutNotes,
+  clearTransientBannersImpl,
+  markBoosterDebutNoteSeen,
+  presentStageUnlockBannerImpl,
+  resolveBoosterDebutToastNote,
+  resolveRoadmapBoosterDebutNote,
+  resolveStageUnlockBanner,
+  showGameToastImpl,
+  showUnlockNoteIfPresentImpl,
+} from '../../src/ui/catalog-meta';
+import { openTitleScreenImpl, switchScreenImpl } from '../../src/ui/modals-and-save-transfer';
+import { cancelStuckBoardCheckImpl, scheduleStuckBoardCheckImpl } from '../../src/ui/outcome-modals-view';
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
@@ -516,5 +529,191 @@ describe('MAP-MODE-SPLIT-01, ZEN-STARS-01 & SAVE-COMPAT-01: Per-Mode Ladders, Ze
     const decoded = decodeSaveCode(code);
     expect(decoded.levelRecords[312]?.underParCleared).toBe(true);
     expect(decoded.levelRecords[10]?.underParCleared).toBeUndefined();
+  });
+
+  it('BANNER-CLEANUP-01: differentiates first-time Power-Up unlock celebrations from calm replay guides without suppressing stage tutorials', () => {
+    clearSeenBoosterDebutNotes();
+    const mgr = new SaveManager();
+    for (let lvl = 1; lvl <= 7; lvl++) {
+      mgr.recordLevelWin(lvl, 4, 15, 4, 3, 5, 'NORMAL', false);
+    }
+
+    // 1. Brand-new arrival at Level 8 (7 clears, unseen, not yet cleared): celebratory golden `'unlock'` banner
+    const firstArrival = resolveStageUnlockBanner(mgr.getPayload(), 8);
+    expect(firstArrival.kind).toBe('unlock');
+    expect(firstArrival.boosterDebutLevelId).toBe(8);
+    expect(firstArrival.note).toContain('RARE Power-Up Unlocked: Hammer!');
+
+    // 2. Once celebrated on this device (refreshing on L8 or returning from another stage), switches to calm `'guide'` copy
+    markBoosterDebutNoteSeen(8);
+    const revisited = resolveStageUnlockBanner(mgr.getPayload(), 8);
+    expect(revisited.kind).toBe('guide');
+    expect(revisited.boosterDebutLevelId).toBeUndefined();
+    expect(revisited.note).toContain('Power-Up Guide — Hammer:');
+
+    // 3. Even on a brand-new browser (`clearSeenBoosterDebutNotes`), already-cleared stages show calm `'guide'` copy
+    clearSeenBoosterDebutNotes();
+    mgr.recordLevelWin(8, 5, 18, 4, 3, 6, 'NORMAL', false);
+    const afterClear = resolveStageUnlockBanner(mgr.getPayload(), 8);
+    expect(afterClear.kind).toBe('guide');
+    expect(afterClear.note).toContain('Power-Up Guide — Hammer:');
+    expect(resolveRoadmapBoosterDebutNote(mgr.getPayload(), 8)).toContain('Hammer');
+
+    // 4. Mechanic debut notes (`spec.unlockNote`) always resolve as calm `'guide'` plaques
+    const mechDebut = resolveStageUnlockBanner(mgr.getPayload(), 11, getLevelSpec(11).unlockNote);
+    expect(mechDebut.kind).toBe('guide');
+    expect(mechDebut.note).toContain('Axis-Locked');
+  });
+
+  it('BANNER-CLEANUP-01: clears #game-toast, #unlock-toast, timers, and deferred STUCK-01 checks on screen exit, Title open, and off-screen calls', () => {
+    vi.useFakeTimers();
+    const origDocument = globalThis.document;
+    const elements = new Map<
+      string,
+      {
+        hidden: boolean;
+        dataset: Record<string, string>;
+        textContent: string;
+        classList: { add: () => void; remove: () => void; toggle: () => void };
+        replaceChildren: (...nodes: unknown[]) => void;
+      }
+    >();
+    const makeEl = (hidden = true) => {
+      const el = {
+        hidden,
+        className: '',
+        dataset: {} as Record<string, string>,
+        textContent: '',
+        classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
+        setAttribute: vi.fn(),
+        appendChild: vi.fn(),
+        append: vi.fn(),
+        replaceChildren: (...nodes: unknown[]) => {
+          el.textContent = nodes
+            .map((n) => (typeof n === 'string' ? n : ((n as { textContent?: string })?.textContent ?? '')))
+            .join('');
+        },
+      };
+      return el;
+    };
+    const gameToastEl = makeEl(true);
+    const unlockToastEl = makeEl(true);
+    const unlockTextEl = makeEl(false);
+    elements.set('game-toast', gameToastEl);
+    elements.set('unlock-toast', unlockToastEl);
+    elements.set('unlock-toast-text', unlockTextEl);
+    elements.set('screen-game', makeEl(false));
+    elements.set('tab-btn-home', makeEl(false));
+    elements.set('tab-btn-themes', makeEl(false));
+
+    vi.stubGlobal('document', {
+      getElementById: (id: string) => elements.get(id) ?? null,
+      createElement: () => makeEl(false),
+      createTextNode: (text: string) => ({ textContent: text }),
+      createElementNS: () => ({
+        setAttribute: vi.fn(),
+        appendChild: vi.fn(),
+      }),
+    });
+
+    try {
+      clearSeenBoosterDebutNotes();
+      const mgr = new SaveManager();
+      for (let lvl = 1; lvl <= 7; lvl++) {
+        mgr.recordLevelWin(lvl, 4, 15, 4, 3, 5, 'NORMAL', false);
+      }
+      const board = createBoardState(getLevelSpec(8));
+      const cancelTargeting = vi.fn();
+      const toastSpy = vi.fn((msg: string, dur?: number) => showGameToastImpl(mockApp, msg, dur));
+
+      const mockApp = {
+        saveManager: mgr,
+        board,
+        boardPlayMode: 'CHALLENGE',
+        activeScreen: 'home' as 'home' | 'game' | 'themes',
+        titleOverlayOpen: true,
+        themesEnteredFromGame: false,
+        blueprintMix: 1,
+        activeRoadmapRange: 'all',
+        expandedEndlessRanges: [],
+        levelOutcomeHandled: false,
+        toastTimerId: null,
+        unlockToastTimerId: null,
+        boardUnlockNoteShown: false,
+        historyInitialized: true,
+        isApplyingPopstate: true,
+        inputController: { cancelTargeting },
+        renderer: { resetTransientFx: vi.fn(), resize: vi.fn() },
+        loadLevel: vi.fn(),
+        syncAllUiFromSave: vi.fn(),
+        syncTitleOverlayDom: vi.fn(),
+        syncPwaUpdateBanner: vi.fn(),
+        syncInGameHud: vi.fn(),
+        checkForPwaUpdate: vi.fn(),
+        renderRoadmap: vi.fn(),
+        renderThemesStudio: vi.fn(),
+        renderNow: vi.fn(),
+        showGameToast: toastSpy,
+        showUnlockNoteIfPresent: (note?: string, kind?: 'guide' | 'unlock') =>
+          showUnlockNoteIfPresentImpl(mockApp, note, kind),
+      } as unknown as AppViewContext;
+
+      // 1. Off-screen / Title-open unlock toast call is a strict no-op (never arms a hidden timer)
+      showUnlockNoteIfPresentImpl(mockApp, 'Should not arm behind Title', 'unlock');
+      expect(unlockToastEl.hidden).toBe(true);
+      expect(mockApp.unlockToastTimerId).toBeNull();
+
+      // 2. Active gameplay: present first-time L8 unlock banner + power-up toast + pending STUCK-01 probe
+      mockApp.activeScreen = 'game';
+      mockApp.titleOverlayOpen = false;
+      presentStageUnlockBannerImpl(mockApp, 8);
+      expect(unlockToastEl.hidden).toBe(false);
+      expect(unlockToastEl.dataset.bannerKind).toBe('unlock');
+      expect(mockApp.unlockToastTimerId).not.toBeNull();
+
+      showGameToastImpl(mockApp, '💡 Hint + 2 Free Moves!', 3000);
+      expect(gameToastEl.hidden).toBe(false);
+      expect(mockApp.toastTimerId).not.toBeNull();
+
+      // Force board deadlock and schedule deferred STUCK-01 check right before leaving to Home Map
+      for (const blk of board.blocks) {
+        blk.axisLock = 'H';
+      }
+      toastSpy.mockClear();
+      scheduleStuckBoardCheckImpl(mockApp);
+
+      // 3. Leaving 'game' to 'home' immediately hides BOTH banners, clears BOTH timers, and cancels STUCK-01
+      switchScreenImpl(mockApp, 'home');
+      expect(gameToastEl.hidden).toBe(true);
+      expect(unlockToastEl.hidden).toBe(true);
+      expect(mockApp.toastTimerId).toBeNull();
+      expect(mockApp.unlockToastTimerId).toBeNull();
+      expect(cancelTargeting).toHaveBeenCalled();
+
+      vi.advanceTimersByTime(10_000);
+      expect(toastSpy).not.toHaveBeenCalled();
+      expect(gameToastEl.hidden).toBe(true);
+      expect(unlockToastEl.hidden).toBe(true);
+
+      // 4. Returning to L8 a second time uses calm `'guide'` aesthetic, and opening Title cleans up immediately
+      mockApp.activeScreen = 'game';
+      mockApp.titleOverlayOpen = false;
+      presentStageUnlockBannerImpl(mockApp, 8);
+      expect(unlockToastEl.hidden).toBe(false);
+      expect(unlockToastEl.dataset.bannerKind).toBe('guide');
+      showGameToastImpl(mockApp, '↩️ Restored board!', 3000);
+
+      openTitleScreenImpl(mockApp);
+      expect(gameToastEl.hidden).toBe(true);
+      expect(unlockToastEl.hidden).toBe(true);
+      expect(mockApp.toastTimerId).toBeNull();
+      expect(mockApp.unlockToastTimerId).toBeNull();
+
+      clearTransientBannersImpl(mockApp);
+      cancelStuckBoardCheckImpl();
+    } finally {
+      vi.useRealTimers();
+      vi.stubGlobal('document', origDocument);
+    }
   });
 });

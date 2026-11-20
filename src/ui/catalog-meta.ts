@@ -18,9 +18,11 @@ import {
   BOOSTER_COIN_COSTS,
   countUniqueClearedLevels,
   getEffectiveBoosterUnlockLevel,
+  isRecordGenuinelyCleared,
   type SaveManager,
   THEME_TIER_PRICES,
 } from '../storage/save-manager';
+import { renderStructuredBannerText } from './mode-and-booster-icons';
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -97,11 +99,21 @@ export const BOOSTER_DISPLAY_NAMES: Record<BoosterType, string> = {
   VACUUM: 'Color Vacuum',
 };
 
+export type UnlockBannerKind = 'guide' | 'unlock';
+
 export const BOOSTER_DEBUT_NOTES: Partial<Record<number, string>> = {
   2: '💡 UNCOMMON Power-Up Unlocked: Hint! Highlights the optimal move (+2 Free Moves in Challenge Mode, or +10s Freeze in Speed Rush).',
   8: '🔨 RARE Power-Up Unlocked: Hammer! Tap any block, crate, or locked gate to shatter it.',
   18: '🚀 EPIC Power-Up Unlocked: Rocket! Blasts an entire row or column of blocks.',
   30: '🧲 LEGENDARY Power-Up Unlocked: Color Vacuum! Sweeps all unlocked blocks of a chosen color off the board.',
+};
+
+/** Calm helper-guide phrasing shown when revisiting a Power-Up debut stage after it was already unlocked/seen. */
+export const BOOSTER_GUIDE_NOTES: Partial<Record<number, string>> = {
+  2: '💡 Power-Up Guide — Hint: Highlights the optimal move (+2 Free Moves in Challenge Mode, or +10s Freeze in Speed Rush).',
+  8: '🔨 Power-Up Guide — Hammer: Tap any block, crate, or locked gate to shatter it.',
+  18: '🚀 Power-Up Guide — Rocket: Blasts an entire row or column of blocks.',
+  30: '🧲 Power-Up Guide — Color Vacuum: Sweeps all unlocked blocks of a chosen color off the board.',
 };
 
 const LOCKED_BOOSTER_GUIDANCE_NOTES: Partial<Record<number, (cleared: number) => string>> = {
@@ -111,18 +123,96 @@ const LOCKED_BOOSTER_GUIDANCE_NOTES: Partial<Record<number, (cleared: number) =>
   30: (c) => `🧲 LEGENDARY Power-Up: Color Vacuum — clear 29 stages (${c}/29) to unlock!`,
 };
 
-/** Returns a debut unlock toast only once genuine progression unlocks the milestone Power-Up. */
+export const SEEN_BOOSTER_DEBUTS_STORAGE_KEY = 'shredblocks.seen_booster_debuts.v1';
+
+function readSeenBoosterDebutLevels(): Set<number> {
+  const seen = new Set<number>();
+  try {
+    if (typeof localStorage === 'undefined') return seen;
+    const raw = localStorage.getItem(SEEN_BOOSTER_DEBUTS_STORAGE_KEY);
+    if (!raw) return seen;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      for (const item of parsed) {
+        if (typeof item === 'number' && Number.isInteger(item) && item >= 1) {
+          seen.add(item);
+        }
+      }
+    }
+  } catch {
+    // Ignore storage quota/privacy restrictions
+  }
+  return seen;
+}
+
+export function hasSeenBoosterDebutNote(levelId: number): boolean {
+  return readSeenBoosterDebutLevels().has(levelId);
+}
+
+/** Records that a one-time Power-Up unlock celebration banner was shown on screen (`BANNER-CLEANUP-01`). */
+export function markBoosterDebutNoteSeen(levelId: number): void {
+  if (!BOOSTER_DEBUT_NOTES[levelId]) return;
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const seen = readSeenBoosterDebutLevels();
+    if (seen.has(levelId)) return;
+    seen.add(levelId);
+    localStorage.setItem(SEEN_BOOSTER_DEBUTS_STORAGE_KEY, JSON.stringify(Array.from(seen)));
+  } catch {
+    // Ignore storage quota/privacy restrictions
+  }
+}
+
+export function clearSeenBoosterDebutNotes(): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(SEEN_BOOSTER_DEBUTS_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage restrictions
+  }
+}
+
+/**
+ * Returns the Power-Up milestone banner text once genuine progression unlocks `levelId` (`ZEN-SKIP-GUARD-01`):
+ * - First fresh arrival (`effectiveLevel === levelId`, not yet cleared, not yet celebrated): celebratory `"Unlocked!"` copy.
+ * - Subsequent visits / replays (e.g., refreshing on Stage 8 or handing the device to a new player to try earlier stages):
+ *   calm `"Power-Up Guide"` helper copy so tutorial guidance stays available without re-announcing a fake unlock.
+ */
 export function resolveBoosterDebutToastNote(save: SavePayloadV1, levelId: number): string | undefined {
-  const note = BOOSTER_DEBUT_NOTES[levelId];
-  if (!note) return undefined;
-  return getEffectiveBoosterUnlockLevel(save, levelId) >= levelId ? note : undefined;
+  const unlockNote = BOOSTER_DEBUT_NOTES[levelId];
+  if (!unlockNote) return undefined;
+  const effectiveLevel = getEffectiveBoosterUnlockLevel(save, levelId);
+  if (effectiveLevel < levelId) return undefined;
+  const isFirstUnlockCelebration =
+    effectiveLevel === levelId &&
+    !isRecordGenuinelyCleared(save.levelRecords[levelId]) &&
+    !hasSeenBoosterDebutNote(levelId);
+  return isFirstUnlockCelebration ? unlockNote : (BOOSTER_GUIDE_NOTES[levelId] ?? unlockNote);
+}
+
+/**
+ * Resolves the stage-intro `#unlock-toast` payload, distinguishing calm `'guide'` tutorial plaques
+ * (mechanic intros and revisited Power-Up guides) from one-time golden `'unlock'` milestone banners.
+ */
+export function resolveStageUnlockBanner(
+  save: SavePayloadV1,
+  levelId: number,
+  specUnlockNote?: string
+): { note?: string; kind: UnlockBannerKind; boosterDebutLevelId?: number } {
+  if (specUnlockNote) return { note: specUnlockNote, kind: 'guide' };
+  const note = resolveBoosterDebutToastNote(save, levelId);
+  if (!note) return { kind: 'guide' };
+  const isFirstUnlock = note === BOOSTER_DEBUT_NOTES[levelId];
+  return isFirstUnlock ? { note, kind: 'unlock', boosterDebutLevelId: levelId } : { note, kind: 'guide' };
 }
 
 /** Shows truthful clear-count guidance on roadmap debut nodes when skipped ahead in Zen Mode. */
 export function resolveRoadmapBoosterDebutNote(save: SavePayloadV1, levelId: number): string | undefined {
-  const unlocked = resolveBoosterDebutToastNote(save, levelId);
-  if (unlocked) return unlocked;
-  if (save.settings.playMode !== 'ZEN') return BOOSTER_DEBUT_NOTES[levelId];
+  const debutNote = BOOSTER_DEBUT_NOTES[levelId];
+  if (!debutNote) return undefined;
+  if (getEffectiveBoosterUnlockLevel(save, levelId) >= levelId) return debutNote;
+  if (save.settings.playMode !== 'ZEN') return debutNote;
   const formatter = LOCKED_BOOSTER_GUIDANCE_NOTES[levelId];
   if (!formatter) return undefined;
   const cleared = Math.min(levelId - 1, countUniqueClearedLevels(save));
@@ -373,6 +463,8 @@ export interface AppViewContext {
   toastTimerId: ReturnType<typeof setTimeout> | null;
   unlockToastTimerId: ReturnType<typeof setTimeout> | null;
   currentLevelHasUnlockNote: boolean;
+  /** Tracks whether the current board instance has already presented its intro `#unlock-toast` on `#screen-game`. */
+  boardUnlockNoteShown: boolean;
   cachedAutoGuideMove: { blockId: number; targetRow: number; targetCol: number } | null;
   commitMove(blockId: number, targetRow: number, targetCol: number): CommitMoveOutcome;
   pushUndoSnapshot(boardState: BoardState): void;
@@ -425,11 +517,120 @@ export interface AppViewContext {
   confirmPendingSaveImport(): void;
   checkUrlHashForSaveImport(): void;
   showGameToast(message: string, durationMs?: number): void;
-  showUnlockNoteIfPresent(note?: string): void;
+  showUnlockNoteIfPresent(note?: string, kind?: UnlockBannerKind): void;
   isNewPlayerSave(save?: SavePayloadV1): boolean;
   isPwaInstalled(): boolean;
   markPwaInstalled(): void;
   handleInstallAction(): Promise<void>;
+}
+
+/**
+ * Dismisses the global `#game-toast` notification and clears any pending auto-hide timer (`BANNER-CLEANUP-01`).
+ */
+export function dismissGameToastImpl(app: Pick<AppViewContext, 'toastTimerId'>): void {
+  if (app.toastTimerId !== null) {
+    clearTimeout(app.toastTimerId);
+    app.toastTimerId = null;
+  }
+  const toast = typeof document !== 'undefined' ? document.getElementById('game-toast') : null;
+  if (toast) {
+    toast.hidden = true;
+  }
+}
+
+/**
+ * Dismisses the in-game `#unlock-toast` banner and clears any pending auto-hide timer (`BANNER-CLEANUP-01`).
+ */
+export function dismissUnlockToastImpl(app: Pick<AppViewContext, 'unlockToastTimerId'>): void {
+  if (app.unlockToastTimerId !== null) {
+    clearTimeout(app.unlockToastTimerId);
+    app.unlockToastTimerId = null;
+  }
+  const banner = typeof document !== 'undefined' ? document.getElementById('unlock-toast') : null;
+  if (banner) {
+    banner.hidden = true;
+  }
+}
+
+/**
+ * Displays the global `#game-toast` notification and arms a fresh auto-hide timer (`BANNER-CLEANUP-01`).
+ */
+export function showGameToastImpl(
+  app: Pick<AppViewContext, 'toastTimerId'>,
+  message: string,
+  durationMs = 3000
+): void {
+  const toast = typeof document !== 'undefined' ? document.getElementById('game-toast') : null;
+  if (!toast) return;
+  renderStructuredBannerText(toast, message);
+  toast.hidden = false;
+  if (app.toastTimerId !== null) {
+    clearTimeout(app.toastTimerId);
+  }
+  app.toastTimerId = setTimeout(() => {
+    app.toastTimerId = null;
+    toast.hidden = true;
+  }, durationMs);
+}
+
+/**
+ * Displays the in-game `#unlock-toast` stage guide / Power-Up unlock banner strictly while on `#screen-game`
+ * with `#title-overlay` dismissed, so off-screen level preloads never arm stale countdowns (`BANNER-CLEANUP-01`).
+ */
+export function showUnlockNoteIfPresentImpl(
+  app: Pick<AppViewContext, 'unlockToastTimerId' | 'activeScreen' | 'titleOverlayOpen'>,
+  note?: string,
+  kind: UnlockBannerKind = 'guide'
+): void {
+  const banner = typeof document !== 'undefined' ? document.getElementById('unlock-toast') : null;
+  const textEl = typeof document !== 'undefined' ? document.getElementById('unlock-toast-text') : null;
+  if (!banner || !textEl) return;
+
+  dismissUnlockToastImpl(app);
+
+  if (!note || app.activeScreen !== 'game' || app.titleOverlayOpen) {
+    return;
+  }
+
+  banner.dataset.bannerKind = kind;
+  renderStructuredBannerText(textEl, note);
+  banner.hidden = false;
+  app.unlockToastTimerId = setTimeout(() => {
+    app.unlockToastTimerId = null;
+    banner.hidden = true;
+  }, 6400);
+}
+
+/**
+ * Resolves and displays the stage-intro `#unlock-toast` banner for `levelId` (and records first-time
+ * Power-Up milestone celebration views) strictly when `#screen-game` is active (`BANNER-CLEANUP-01`).
+ */
+export function presentStageUnlockBannerImpl(
+  app: Pick<AppViewContext, 'saveManager' | 'activeScreen' | 'titleOverlayOpen' | 'boardUnlockNoteShown'> & {
+    showUnlockNoteIfPresent?: AppViewContext['showUnlockNoteIfPresent'];
+  },
+  levelId: number,
+  specUnlockNote?: string
+): void {
+  if (app.activeScreen !== 'game' || app.titleOverlayOpen) return;
+  const banner = resolveStageUnlockBanner(app.saveManager.getPayload(), levelId, specUnlockNote);
+  app.boardUnlockNoteShown = true;
+  app.showUnlockNoteIfPresent?.(banner.note, banner.kind);
+  if (banner.note && banner.boosterDebutLevelId !== undefined) {
+    markBoosterDebutNoteSeen(banner.boosterDebutLevelId);
+  }
+}
+
+/**
+ * Clears all transient gameplay notification banners (`#game-toast`, `#unlock-toast`) and their timers
+ * whenever leaving gameplay, switching screens, opening the Title Screen, loading/restarting a stage,
+ * or ending a run (`BANNER-CLEANUP-01`).
+ */
+export function clearTransientBannersImpl(
+  app: Pick<AppViewContext, 'toastTimerId' | 'unlockToastTimerId'>
+): void {
+  dismissGameToastImpl(app);
+  dismissUnlockToastImpl(app);
 }
 
 export function getPlayModeMeta(mode: PlayMode): {

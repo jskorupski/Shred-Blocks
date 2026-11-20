@@ -214,11 +214,12 @@
   margin-inline: auto;
   width: fit-content;
   max-width: min(calc(100% - 1.1rem), 40rem);
-  background: linear-gradient(180deg var(--in-oklab), rgba(38, 28, 70, 0.95) 0%, rgba(20, 15, 38, 0.97) 100%);
-  border: 1px solid rgba(246, 213, 168, 0.36);
+  /* Calm Astral Slate-Teal Codex Plaque for stage guides & revisited tutorial intros (`BANNER-CLEANUP-01`) */
+  background: linear-gradient(180deg var(--in-oklab), rgba(20, 36, 54, 0.95) 0%, rgba(13, 21, 37, 0.97) 100%);
+  border: 1px solid rgba(132, 214, 218, 0.42);
   border-radius: var(--radius-lg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 248, 234, 0.2),
+    inset 0 1px 0 rgba(202, 246, 248, 0.22),
     0 10px 26px rgba(6, 4, 16, 0.54);
   padding: 0.54rem 1rem;
   font-family: var(--font-ui);
@@ -239,8 +240,7 @@
   height: 1.05rem;
   vertical-align: -0.18em;
   margin-inline-end: 0.36rem;
-  color: #f6d588;
-  filter: drop-shadow(0 0 6px rgba(246, 213, 136, 0.38));
+  color: #96ece6;
 }
 
 #unlock-toast-text {
@@ -252,6 +252,24 @@
   color: #f9dc97;
   font-weight: 700;
   letter-spacing: 0.014em;
+}
+
+.unlock-banner .banner-kicker {
+  color: #a6f2ec;
+}
+
+/* Celebratory Burnished Gold Plaque strictly for first-time Power-Up milestone unlocks (L2/L8/L18/L30) */
+.unlock-banner[data-banner-kind="unlock"] {
+  background: linear-gradient(180deg var(--in-oklab), rgba(56, 37, 22, 0.96) 0%, rgba(28, 19, 14, 0.98) 100%);
+  border-color: rgba(248, 206, 118, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 242, 206, 0.28),
+    0 10px 26px rgba(6, 4, 16, 0.58);
+}
+
+.unlock-banner[data-banner-kind="unlock"] .unlock-svg-icon,
+.unlock-banner[data-banner-kind="unlock"] .banner-kicker {
+  color: #ffe194;
 }
 
 .booster-target-banner {
@@ -362,15 +380,25 @@
 }
 
 body.high-contrast .unlock-banner,
+body.high-contrast .unlock-banner[data-banner-kind="unlock"],
 body.high-contrast .booster-target-banner,
 body.high-contrast .game-toast {
   background: rgba(9, 11, 20, 0.98);
   border: 1.5px solid rgba(255, 250, 235, 0.86);
 }
 
-body.high-contrast .banner-kicker,
-body.high-contrast .unlock-svg-icon,
+body.high-contrast .game-toast .banner-kicker,
 body.high-contrast .target-instruction {
+  color: #ffea00;
+}
+
+body.high-contrast .unlock-banner .banner-kicker,
+body.high-contrast .unlock-banner .unlock-svg-icon {
+  color: #8ef6ff;
+}
+
+body.high-contrast .unlock-banner[data-banner-kind="unlock"] .banner-kicker,
+body.high-contrast .unlock-banner[data-banner-kind="unlock"] .unlock-svg-icon {
   color: #ffea00;
 }
 
@@ -660,19 +688,39 @@ body:not(.high-contrast) #app-shell[data-play-mode="TIMED"] #screen-game .btn-mo
   border-color: rgba(132, 198, 255, 0.32);
 }
 
-body:not(.high-contrast) #app-shell[data-play-mode="CHALLENGE"] #screen-game .unlock-banner {
-  background: rgba(24, 18, 38, 0.93);
-  border-color: rgba(248, 196, 104, 0.42);
+/* Mode-harmonized Stage Guide plaques stay unmistakably calm Astral Slate-Teal while
+   first-time Power-Up unlock celebrations (`data-banner-kind="unlock"`) glow Burnished Gold. */
+body:not(.high-contrast)
+  #app-shell[data-play-mode="CHALLENGE"]
+  #screen-game
+  .unlock-banner:not([data-banner-kind="unlock"]) {
+  background: linear-gradient(180deg var(--in-oklab), rgba(18, 36, 54, 0.95) 0%, rgba(12, 22, 38, 0.97) 100%);
+  border-color: rgba(126, 214, 222, 0.48);
 }
 
-body:not(.high-contrast) #app-shell[data-play-mode="ZEN"] #screen-game .unlock-banner {
-  background: rgba(18, 24, 38, 0.93);
-  border-color: rgba(82, 232, 198, 0.44);
+body:not(.high-contrast)
+  #app-shell[data-play-mode="ZEN"]
+  #screen-game
+  .unlock-banner:not([data-banner-kind="unlock"]) {
+  background: linear-gradient(180deg var(--in-oklab), rgba(16, 40, 50, 0.95) 0%, rgba(11, 24, 34, 0.97) 100%);
+  border-color: rgba(94, 232, 206, 0.48);
 }
 
-body:not(.high-contrast) #app-shell[data-play-mode="TIMED"] #screen-game .unlock-banner {
-  background: rgba(18, 22, 44, 0.93);
-  border-color: rgba(108, 190, 255, 0.46);
+body:not(.high-contrast)
+  #app-shell[data-play-mode="TIMED"]
+  #screen-game
+  .unlock-banner:not([data-banner-kind="unlock"]) {
+  background: linear-gradient(180deg var(--in-oklab), rgba(17, 32, 58, 0.95) 0%, rgba(11, 20, 40, 0.97) 100%);
+  border-color: rgba(118, 198, 255, 0.5);
+}
+
+body:not(.high-contrast) #app-shell #screen-game .unlock-banner[data-banner-kind="unlock"] {
+  background: linear-gradient(180deg var(--in-oklab), rgba(62, 41, 22, 0.96) 0%, rgba(30, 20, 14, 0.98) 100%);
+  border-color: rgba(250, 208, 118, 0.68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 242, 206, 0.3),
+    0 0 18px rgba(248, 204, 108, 0.16),
+    0 10px 26px rgba(6, 4, 16, 0.58);
 }
 
 @media (prefers-reduced-motion: reduce) {

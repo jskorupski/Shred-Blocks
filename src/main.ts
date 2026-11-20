@@ -20,10 +20,13 @@ import { activateBoosterImpl, executeTargetedBoosterImpl } from './ui/boosters-c
 import {
   type AppViewContext,
   type BeforeInstallPromptEvent,
+  clearTransientBannersImpl,
+  dismissUnlockToastImpl,
   MAX_ENDLESS_LEVEL,
   type ModalId,
-  resolveBoosterDebutToastNote,
+  presentStageUnlockBannerImpl,
   type ShredBlocksDebugBridge,
+  type UnlockBannerKind,
 } from './ui/catalog-meta';
 import { ensureDialogsMounted, prewarmDialogsLayout } from './ui/dialogs-template';
 import {
@@ -72,6 +75,7 @@ import {
 } from './ui/modals-and-save-transfer';
 import {
   cancelPendingOutcomeTransition,
+  cancelStuckBoardCheckImpl,
   continueFailedLevelImpl,
   flushPendingOutcomeTransition,
   handleLevelFailureImpl,
@@ -128,6 +132,7 @@ export class ShredBlocksApp implements AppViewContext {
   private lastDragFrameMs = 0;
   private isPointerDownOnCanvas = false;
   public currentLevelHasUnlockNote = false;
+  public boardUnlockNoteShown = false;
   public pendingImportPayload: SavePayloadV1 | null = null;
   public pendingImportRawCode: string | null = null;
   public deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
@@ -339,12 +344,15 @@ export class ShredBlocksApp implements AppViewContext {
     const cleanId = Math.max(1, Math.floor(levelId));
     this.themesEnteredFromGame = false;
     cancelPendingOutcomeTransition();
+    cancelStuckBoardCheckImpl();
     this.inputController.cancelTargeting();
+    clearTransientBannersImpl(this);
     const spec = getLevelSpec(cleanId);
     const save = this.saveManager.getPayload();
     this.board = createBoardState(spec);
     this.boardPlayMode = save.settings.playMode;
     this.currentLevelHasUnlockNote = Boolean(spec.unlockNote);
+    this.boardUnlockNoteShown = false;
     this.lastPointerActivityMs = performance.now();
     this.undoStack = [];
     this.preRestartSnapshot = null;
@@ -356,12 +364,6 @@ export class ShredBlocksApp implements AppViewContext {
     this.board.bombsInert = this.runTouchedZen; // ZEN-CALM-01: bombs never tick or detonate in Zen
     this.bombTickAccumulatorSec = 0;
 
-    if (this.toastTimerId !== null) {
-      clearTimeout(this.toastTimerId);
-      this.toastTimerId = null;
-    }
-    const gameToast = document.getElementById('game-toast');
-    if (gameToast) gameToast.hidden = true;
     this.refreshAutoGuideMove();
 
     const activeLadder = save.modeState[save.settings.playMode];
@@ -373,11 +375,8 @@ export class ShredBlocksApp implements AppViewContext {
       this.blueprintMix = 0;
       this.closeAllModals();
       this.switchScreen('game');
+      presentStageUnlockBannerImpl(this, cleanId, spec.unlockNote);
     }
-
-    this.showUnlockNoteIfPresent(
-      spec.unlockNote ?? resolveBoosterDebutToastNote(this.saveManager.getPayload(), cleanId)
-    );
     this.syncAllUiFromSave();
     this.syncInGameHud();
     this.renderer.resize();
@@ -398,8 +397,10 @@ export class ShredBlocksApp implements AppViewContext {
   public restartCurrentLevel(): void {
     if (this.activeScreen !== 'game' || this.titleOverlayOpen) return;
     cancelPendingOutcomeTransition();
+    cancelStuckBoardCheckImpl();
     this.sound.playButtonTap();
     this.inputController.cancelTargeting();
+    clearTransientBannersImpl(this);
     if (!isBoardWon(this.board) && (this.board.movesCommitted > 0 || this.undoStack.length > 0)) {
       this.preRestartSnapshot = cloneBoardState(this.board);
       this.preRestartUndoStack = this.undoStack.slice();
@@ -411,6 +412,7 @@ export class ShredBlocksApp implements AppViewContext {
     this.board = createBoardState(spec);
     this.boardPlayMode = activeMode;
     this.currentLevelHasUnlockNote = Boolean(spec.unlockNote);
+    this.boardUnlockNoteShown = true;
     this.lastPointerActivityMs = performance.now();
     this.undoStack = [];
     this.freeUndosRemaining = 3;
@@ -527,10 +529,7 @@ export class ShredBlocksApp implements AppViewContext {
     // UX-11: only a real committed move forfeits accidental-restart recovery (rejected bumps keep it)
     this.preRestartSnapshot = null;
     this.preRestartUndoStack = [];
-    const unlockToast = document.getElementById('unlock-toast');
-    if (unlockToast && !unlockToast.hidden) {
-      unlockToast.hidden = true;
-    }
+    dismissUnlockToastImpl(this);
     if (outcome.unlockedBarrierIds && outcome.unlockedBarrierIds.length > 0) {
       const openedVault = this.board.barriers.some(
         (b) => b.isVault && outcome.unlockedBarrierIds.includes(b.id)
@@ -749,8 +748,8 @@ export class ShredBlocksApp implements AppViewContext {
   public showGameToast(message: string, durationMs = 2600): void {
     showGameToastImpl(this, message, durationMs);
   }
-  public showUnlockNoteIfPresent(note?: string): void {
-    showUnlockNoteIfPresentImpl(this, note);
+  public showUnlockNoteIfPresent(note?: string, kind: UnlockBannerKind = 'guide'): void {
+    showUnlockNoteIfPresentImpl(this, note, kind);
   }
 
   public isPwaInstalled(): boolean {

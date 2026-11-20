@@ -13,6 +13,7 @@ import {
   type AppViewContext,
   BOOSTER_DISPLAY_NAMES,
   BOOSTER_TOKENS,
+  clearTransientBannersImpl,
   formatCompactLevelRef,
   getPlayModeMeta,
   setButtonIconLabel,
@@ -248,6 +249,8 @@ export function populateVictoryModalImpl(app: AppViewContext, summary: LevelWinR
 
 export function handleLevelVictoryImpl(app: AppViewContext, frozenTimeSec: number | null): void {
   cancelPendingOutcomeTransition();
+  cancelStuckBoardCheckImpl();
+  clearTransientBannersImpl(app);
   app.inputController.cancelActiveDrag?.();
   app.inputController.cancelTargeting();
 
@@ -318,6 +321,8 @@ export function handleLevelFailureImpl(
   frozenTimeSec: number | null = null
 ): void {
   cancelPendingOutcomeTransition();
+  cancelStuckBoardCheckImpl();
+  clearTransientBannersImpl(app);
   // A timeout/bomb can fire mid-drag in TIMED: drop the held block so release can't "win" behind the modal
   app.inputController.cancelActiveDrag?.();
   app.inputController.cancelTargeting();
@@ -491,6 +496,27 @@ export function notifyFinalTouchImpl(app: AppViewContext, moved: boolean): void 
 }
 
 let stuckCheckToken = 0;
+let stuckCheckHandle: ReturnType<typeof setTimeout> | number | null = null;
+let stuckCheckUsesIdle = false;
+
+/**
+ * Cancels any pending deferred `STUCK-01` idle solver probe so leaving gameplay, restarting,
+ * undoing, or finishing a stage can never surface a late unsolvable-board toast off-screen.
+ */
+export function cancelStuckBoardCheckImpl(): void {
+  stuckCheckToken++;
+  if (stuckCheckHandle === null) return;
+  if (stuckCheckUsesIdle) {
+    const cancelRic = (globalThis as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+    if (cancelRic && typeof stuckCheckHandle === 'number') {
+      cancelRic(stuckCheckHandle);
+    }
+  } else {
+    clearTimeout(stuckCheckHandle as ReturnType<typeof setTimeout>);
+  }
+  stuckCheckHandle = null;
+  stuckCheckUsesIdle = false;
+}
 
 /**
  * `STUCK-01`: after each committed move, an idle-time exhaustive solver probe warns when the board has become
@@ -499,10 +525,21 @@ let stuckCheckToken = 0;
  * budget, clock, or bomb will ever end a stuck run on its own.
  */
 export function scheduleStuckBoardCheckImpl(app: AppViewContext): void {
-  const token = ++stuckCheckToken;
+  cancelStuckBoardCheckImpl();
+  const token = stuckCheckToken;
   const boardAtSchedule = app.board;
   const run = () => {
-    if (token !== stuckCheckToken || app.board !== boardAtSchedule || app.levelOutcomeHandled) return;
+    stuckCheckHandle = null;
+    stuckCheckUsesIdle = false;
+    if (
+      token !== stuckCheckToken ||
+      app.board !== boardAtSchedule ||
+      app.levelOutcomeHandled ||
+      app.activeScreen !== 'game' ||
+      app.titleOverlayOpen
+    ) {
+      return;
+    }
     if (isBoardWon(app.board)) return;
     const stuck =
       isBoardDeadlocked(app.board) ||
@@ -510,7 +547,9 @@ export function scheduleStuckBoardCheckImpl(app: AppViewContext): void {
         const res = solveBoard(app.board, 450);
         return !res.solvable && res.searchExhausted === true;
       })();
-    if (!stuck || token !== stuckCheckToken) return;
+    if (!stuck || token !== stuckCheckToken || app.activeScreen !== 'game' || app.titleOverlayOpen) {
+      return;
+    }
     const zen = app.saveManager.getPayload().settings.playMode === 'ZEN';
     app.showGameToast(
       zen
@@ -521,6 +560,11 @@ export function scheduleStuckBoardCheckImpl(app: AppViewContext): void {
   };
   const ric = (globalThis as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
     .requestIdleCallback;
-  if (ric) ric(run, { timeout: 700 });
-  else setTimeout(run, 60);
+  if (ric) {
+    stuckCheckUsesIdle = true;
+    stuckCheckHandle = ric(run, { timeout: 700 });
+  } else {
+    stuckCheckUsesIdle = false;
+    stuckCheckHandle = setTimeout(run, 60);
+  }
 }

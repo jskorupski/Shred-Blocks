@@ -1,6 +1,12 @@
 import type { SavePayloadV1 } from '../core/types';
 import { createDefaultSavePayload, PRE_IMPORT_BACKUP_KEY } from '../storage/save-manager';
-import { type AppViewContext, PARTICLE_CATALOG, SKIN_CATALOG, TRAY_CATALOG } from './catalog-meta';
+import {
+  type AppViewContext,
+  clearSeenBoosterDebutNotes,
+  PARTICLE_CATALOG,
+  SKIN_CATALOG,
+  TRAY_CATALOG,
+} from './catalog-meta';
 
 const LAN_DEBUG_BACKUP_KEY = 'shredblocks.lan_debug_backup.v1';
 
@@ -128,6 +134,7 @@ function restoreOrResetLanSave(app: AppViewContext): void {
   fresh.writeSeq = cur.writeSeq + 1;
   fresh.settings = { ...cur.settings };
   importSavePreservingUserBackup(app, fresh);
+  clearSeenBoosterDebutNotes();
   app.loadLevel(1, false, false);
   refreshAllViewsAfterLanSaveChange(app);
   syncRestoreButtonLabels();

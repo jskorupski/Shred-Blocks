@@ -19,20 +19,28 @@ import { extractImportCodeFromHash, migrateLegacyEconomy } from '../storage/save
 import {
   type AppHistoryState,
   type AppViewContext,
+  clearTransientBannersImpl,
   type ModalId,
-  renderStructuredBannerText,
-  resolveBoosterDebutToastNote,
+  presentStageUnlockBannerImpl,
   type ShredBlocksDebugBridge,
+  showGameToastImpl,
+  showUnlockNoteIfPresentImpl,
 } from './catalog-meta';
 import {
   cancelPendingOutcomeTransition,
+  cancelStuckBoardCheckImpl,
   continueFailedLevelImpl,
   isOutcomeTransitionPending,
   useZenBlessingContinueImpl,
 } from './outcome-modals-view';
 import { notifyThemesScreenActiveState, syncPauseCosmeticsDrawerImpl } from './themes-studio-view';
 
-export { continueFailedLevelImpl, useZenBlessingContinueImpl };
+export {
+  continueFailedLevelImpl,
+  showGameToastImpl,
+  showUnlockNoteIfPresentImpl,
+  useZenBlessingContinueImpl,
+};
 
 export function getModalElement(id: ModalId): HTMLDialogElement | null {
   return document.getElementById(`dialog-${id}`) as HTMLDialogElement | null;
@@ -555,16 +563,13 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
 
 export function openTitleScreenImpl(app: AppViewContext): void {
   cancelPendingOutcomeTransition();
+  cancelStuckBoardCheckImpl();
+  app.inputController.cancelTargeting();
   app.themesEnteredFromGame = false;
   notifyThemesScreenActiveState(app, false);
   app.titleOverlayOpen = true;
   app.blueprintMix = 1.0;
-  if (app.toastTimerId !== null) {
-    clearTimeout(app.toastTimerId);
-    app.toastTimerId = null;
-  }
-  const gameToast = document.getElementById('game-toast');
-  if (gameToast) gameToast.hidden = true;
+  clearTransientBannersImpl(app);
   const save = app.saveManager.getPayload();
   const ladder = save.modeState[save.settings.playMode];
   const targetLevelId = Math.max(
@@ -633,12 +638,11 @@ export function dismissTitleScreenImpl(
   if (awaken) {
     app.sound.playRelicAwaken();
   }
-  if (targetScreen === 'game' && app.board.movesCommitted === 0) {
-    const spec = getLevelSpec(app.board.levelId);
-    app.showUnlockNoteIfPresent(
-      spec.unlockNote ?? resolveBoosterDebutToastNote(app.saveManager.getPayload(), app.board.levelId)
-    );
+  if (targetScreen === 'game') {
     app.lastPointerActivityMs = performance.now();
+    if (app.board.movesCommitted === 0 && !app.boardUnlockNoteShown) {
+      presentStageUnlockBannerImpl(app, app.board.levelId, getLevelSpec(app.board.levelId).unlockNote);
+    }
   }
 }
 
@@ -648,6 +652,7 @@ export function switchScreenImpl(
   preserveAwakeningBurst = false
 ): void {
   const wasTitleOpen = app.titleOverlayOpen;
+  const prevScreen = app.activeScreen;
   app.activeScreen = screen;
   app.titleOverlayOpen = false;
   const gameEl = document.getElementById('screen-game');
@@ -658,9 +663,13 @@ export function switchScreenImpl(
   }
   if (screen !== 'game') {
     cancelPendingOutcomeTransition();
+    cancelStuckBoardCheckImpl();
     app.inputController.cancelTargeting();
+    clearTransientBannersImpl(app);
     app.blueprintMix = 0;
     app.renderer.resetTransientFx();
+  } else if (prevScreen !== 'game' || wasTitleOpen) {
+    clearTransientBannersImpl(app);
   }
   app.syncTitleOverlayDom();
   app.syncPwaUpdateBanner();
@@ -715,41 +724,6 @@ export function switchScreenImpl(
       history.pushState(nextState, '');
     }
   }
-}
-
-export function showGameToastImpl(app: AppViewContext, message: string, durationMs = 3000): void {
-  const toast = document.getElementById('game-toast');
-  if (!toast) return;
-  renderStructuredBannerText(toast, message);
-  toast.hidden = false;
-  if (app.toastTimerId !== null) {
-    clearTimeout(app.toastTimerId);
-  }
-  app.toastTimerId = setTimeout(() => {
-    toast.hidden = true;
-  }, durationMs);
-}
-
-export function showUnlockNoteIfPresentImpl(app: AppViewContext, note?: string): void {
-  const banner = document.getElementById('unlock-toast');
-  const textEl = document.getElementById('unlock-toast-text');
-  if (!banner || !textEl) return;
-
-  if (app.unlockToastTimerId !== null) {
-    clearTimeout(app.unlockToastTimerId);
-    app.unlockToastTimerId = null;
-  }
-
-  if (!note) {
-    banner.hidden = true;
-    return;
-  }
-
-  renderStructuredBannerText(textEl, note);
-  banner.hidden = false;
-  app.unlockToastTimerId = setTimeout(() => {
-    banner.hidden = true;
-  }, 6400);
 }
 
 export function autoSolveCurrentLevelImpl(app: AppViewContext): boolean {
