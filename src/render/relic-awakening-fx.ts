@@ -12,12 +12,14 @@ import {
   RELIC_EMBER_SCALE_OFFSET,
   type RenderPassContext,
   SMOKE_SCALE_OFFSET,
+  setGlBlendEnabled,
 } from './render-types';
 import type { ParticleInstancedVaoHandle } from './shaders-3d';
 import {
   bindRelicClusterTextureImpl,
   disposeRelicPlateResources,
   spawnRelicVoronoiPlatesImpl,
+  warmUpRelicPlatePipelineImpl,
 } from './voronoi-plates';
 
 /**
@@ -247,6 +249,7 @@ export function renderPass4ParticlesImpl(
   gl.useProgram(h.program);
   gl.uniformMatrix4fv(h.uViewProj, false, rctx.camera.getViewProjectionMatrix(false));
   gl.uniform1i(h.uStyle, styleCode);
+  setGlBlendEnabled(gl, true);
 
   if (solid > 0 && h.vao && h.instanceBuffer) {
     const translucentGameplay =
@@ -304,12 +307,12 @@ export function warmUpWebGLPipelinesImpl(
   gl.enable(gl.SCISSOR_TEST);
   gl.scissor(0, 0, 1, 1);
   gl.colorMask(false, false, false, false);
-  gl.depthMask(false);
+  gl.depthMask(true);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.CULL_FACE);
   gl.cullFace(gl.BACK);
-  gl.enable(gl.BLEND);
+  setGlBlendEnabled(gl, true, true);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
   gl.useProgram(mainProgram);
@@ -323,6 +326,8 @@ export function warmUpWebGLPipelinesImpl(
   }
   bindRelicClusterTextureImpl(rctx, gl, mainProgram);
 
+  // Warm opaque (blend=false, depthMask=true) mainProgram PSOs for Pass 1/3 & Title relic unwrapping
+  setGlBlendEnabled(gl, false);
   for (const mix of [1.0, 0.5, 0.0]) {
     gl.uniform1f(uBlueprintMix, mix);
     rctx.drawMesh(
@@ -343,7 +348,6 @@ export function warmUpWebGLPipelinesImpl(
       0
     );
   }
-  rctx.drawAtlasBadge(gl, 'DIGIT_1', 0, 0, -50, 0.01, 1, 1, 1, 1);
   gl.disable(gl.CULL_FACE);
   gl.uniform1i(rctx.uUseClipPlane, 1);
   rctx.drawMesh(
@@ -364,6 +368,11 @@ export function warmUpWebGLPipelinesImpl(
     0
   );
   gl.uniform1i(rctx.uUseClipPlane, 0);
+
+  // Warm translucent overlay/badge/trace/plasma/shockwave PSOs (blend=true, depthMask=false)
+  setGlBlendEnabled(gl, true);
+  gl.depthMask(false);
+  rctx.drawAtlasBadge(gl, 'DIGIT_1', 0, 0, -50, 0.01, 1, 1, 1, 1);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.uniform1i(rctx.uTraceCount, 2);
   if (rctx.uTracePts) {
@@ -380,6 +389,10 @@ export function warmUpWebGLPipelinesImpl(
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 10);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 11);
   gl.enable(gl.CULL_FACE);
+
+  // Pre-allocate PlateGlHandles VAO/VBOs/IBO & warm u_materialStyle=11 under both solid & fading PSO states
+  warmUpRelicPlatePipelineImpl(gl, mainProgram);
+  setGlBlendEnabled(gl, true);
 
   if (h.program && h.vao && h.instanceBuffer && h.smokeVao && h.smokeInstanceBuffer) {
     gl.useProgram(h.program);
@@ -535,7 +548,7 @@ export function prepareWebGL2FrameStateImpl(
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.CULL_FACE);
   gl.cullFace(gl.BACK);
-  gl.enable(gl.BLEND);
+  setGlBlendEnabled(gl, true, true);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 

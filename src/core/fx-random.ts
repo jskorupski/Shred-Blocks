@@ -9,6 +9,11 @@ export function setFxRandomSeed(seed: number | null): void {
   seededState = seed === null ? null : seed >>> 0 || 1;
 }
 
+/** True while a deterministic golden/test seed is active (`VISUAL-GOLDEN-01`). */
+export function isFxRandomSeeded(): boolean {
+  return seededState !== null;
+}
+
 export function fxRandom(): number {
   if (seededState === null) return Math.random();
   seededState = (seededState + 0x6d2b79f5) >>> 0;

@@ -1,4 +1,4 @@
-import { fxRandom } from '../core/fx-random';
+import { fxRandom, isFxRandomSeeded } from '../core/fx-random';
 import type { BoardState } from '../core/types';
 import {
   RELIC_AWAKEN_DURATION_SEC,
@@ -24,7 +24,7 @@ import {
   type TaggedVec2,
   VORONOI_CRACK_SCALE,
 } from './voronoi-cluster-math';
-import { rotateRelicVec, setRelicClusterTexDataImpl } from './voronoi-plate-renderer';
+import { prebakeRelicPlatesImpl, rotateRelicVec, setRelicClusterTexDataImpl } from './voronoi-plate-renderer';
 
 export {
   hashRelic22,
@@ -36,11 +36,24 @@ export {
 export {
   bindRelicClusterTextureImpl,
   buildRelicPlateGeometryImpl,
+  computePlateRotationMatrix,
   disposeRelicPlateResources,
+  prebakeRelicPlatesImpl,
   renderRelicPlatesCanvas2DImpl,
   renderRelicPlatesWebGL2Impl,
   setRelicClusterTexDataImpl,
+  warmUpRelicPlatePipelineImpl,
 } from './voronoi-plate-renderer';
+
+interface PrewarmedRelicPlates {
+  plates: RelicFracturePlate[];
+  seamPoints: Array<[number, number, number]>;
+  clusterTexData: Uint8Array;
+}
+
+const majorCellsCacheByBoard = new WeakMap<BoardState, Map<string, MajorVoronoiCell>>();
+const prewarmedPlatesByBoard = new WeakMap<BoardState, PrewarmedRelicPlates>();
+let pendingPrewarmTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Exact CPU mirror of baseline Voronoi detach timing formula. */
 export function computePlateDetachT(
@@ -70,23 +83,9 @@ function isNearSolidCell(board: BoardState, wx: number, wy: number): boolean {
   return false;
 }
 
-/**
- * Partitions the Title Screen crust along the exact `0.88` + `2.05` Voronoi crack lattice and
- * fuses dark, un-glowing cells into large uneven multi-cell slabs while breaking already-glowing
- * fissures first (including sharp `vorMinor` wedges in hot glowing core webs).
- */
-export function buildBoardVoronoiPlates(
-  board: BoardState,
-  timeSec = 2.0
-): {
-  plates: RelicFracturePlate[];
-  seamPoints: Array<[number, number, number]>;
-  clusterTexData: Uint8Array;
-} {
-  const rand = fxRandom;
-  const cxBoard = board.cols * 0.5;
-  const cyBoard = board.rows * 0.5;
-  const maxHalfSpan = Math.max(cxBoard, cyBoard);
+function getOrBuildMajorVoronoiCells(board: BoardState): Map<string, MajorVoronoiCell> {
+  const cached = majorCellsCacheByBoard.get(board);
+  if (cached) return cached;
 
   const minWx = -0.44;
   const maxWx = board.cols + 0.44;
@@ -166,10 +165,33 @@ export function buildBoardVoronoiPlates(
         cx: areaMeta.cx,
         cy: areaMeta.cy,
         mask: sampleMajorRegionMask(areaMeta.cx, areaMeta.cy),
-        glow: sampleVisibleCrackGlow(areaMeta.cx, areaMeta.cy, timeSec),
+        glow: 0,
       });
     }
   }
+
+  majorCellsCacheByBoard.set(board, cells);
+  return cells;
+}
+
+/**
+ * Partitions the Title Screen crust along the exact `0.88` + `2.05` Voronoi crack lattice and
+ * fuses dark, un-glowing cells into large uneven multi-cell slabs while breaking already-glowing
+ * fissures first (including sharp `vorMinor` wedges in hot glowing core webs).
+ */
+export function buildBoardVoronoiPlates(
+  board: BoardState,
+  timeSec = 2.0
+): {
+  plates: RelicFracturePlate[];
+  seamPoints: Array<[number, number, number]>;
+  clusterTexData: Uint8Array;
+} {
+  const rand = fxRandom;
+  const cxBoard = board.cols * 0.5;
+  const cyBoard = board.rows * 0.5;
+  const maxHalfSpan = Math.max(cxBoard, cyBoard);
+  const cells = getOrBuildMajorVoronoiCells(board);
 
   // Collect shared candidate seams across neighboring board Voronoi cells, never fusing across glowing cracks.
   const candidateEdges: Array<{ a: string; b: string; score: number }> = [];
@@ -524,6 +546,37 @@ export function buildBoardVoronoiPlates(
   return { plates, seamPoints, clusterTexData };
 }
 
+/**
+ * Pre-computes Voronoi slab partitions and baked local 3D slab geometry during Title Screen idle
+ * (`PERF-TRANSITION-01`) so tapping Play consumes the ready-to-fly slabs in `< 0.1ms` instead of
+ * running cold polygon clipping on the click frame. Skipped while deterministic golden seeds are active.
+ */
+export function prewarmRelicPlatesForBoard(board: BoardState, timeSec = 2.0): boolean {
+  if (isFxRandomSeeded() || prewarmedPlatesByBoard.has(board)) return false;
+  const built = buildBoardVoronoiPlates(board, timeSec);
+  prebakeRelicPlatesImpl(built.plates);
+  prewarmedPlatesByBoard.set(board, built);
+  return true;
+}
+
+/** Schedules non-blocking idle pre-computation of the active Title board's Voronoi plates. */
+export function scheduleRelicPlatePrewarm(getBoard: () => BoardState, isActive: () => boolean): void {
+  if (typeof window === 'undefined' || isFxRandomSeeded()) return;
+  if (pendingPrewarmTimer !== null) clearTimeout(pendingPrewarmTimer);
+  pendingPrewarmTimer = setTimeout(() => {
+    pendingPrewarmTimer = null;
+    const run = () => {
+      if ((typeof document !== 'undefined' && document.hidden) || !isActive()) return;
+      prewarmRelicPlatesForBoard(getBoard());
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(run, { timeout: 500 });
+    } else {
+      run();
+    }
+  }, 160);
+}
+
 /** Spawns crack-matched uneven Voronoi crust plates + stores cluster LUT for GPU upload. */
 export function spawnRelicVoronoiPlatesImpl(
   rctx: RenderPassContext,
@@ -533,7 +586,18 @@ export function spawnRelicVoronoiPlatesImpl(
   rctx.relicPlates.length = 0;
   rctx.activeRelicPlateCount = 0;
   if (rctx.lastOptions.reducedMotion) return [];
-  const { plates, seamPoints, clusterTexData } = buildBoardVoronoiPlates(board, timeSec);
+  let built: PrewarmedRelicPlates | undefined;
+  if (!isFxRandomSeeded()) {
+    built = prewarmedPlatesByBoard.get(board);
+    if (built) {
+      prewarmedPlatesByBoard.delete(board);
+    }
+  }
+  if (!built) {
+    built = buildBoardVoronoiPlates(board, timeSec);
+    prebakeRelicPlatesImpl(built.plates);
+  }
+  const { plates, seamPoints, clusterTexData } = built;
   setRelicClusterTexDataImpl(rctx, clusterTexData);
   for (const plate of plates) {
     rctx.relicPlates.push(plate);

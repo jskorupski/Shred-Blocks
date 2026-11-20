@@ -4,7 +4,11 @@ import type { GLMeshHandle } from './render-types';
 export { MAIN_VERTEX_SHADER } from './shaders-main-vertex';
 
 import { GLSL_STONE_LIB } from './shaders-glsl-lib';
-import { GLSL_RELIC_CRUST_BLOCK, GLSL_RELIC_PLATE_STYLE } from './shaders-relic-crust';
+import {
+  GLSL_RELIC_CRUST_PRECHECK,
+  GLSL_RELIC_CRUST_SHADE,
+  GLSL_RELIC_PLATE_STYLE,
+} from './shaders-relic-crust';
 import { GLSL_TRAY_MATERIALS } from './shaders-tray-materials';
 
 export {
@@ -268,7 +272,12 @@ ${GLSL_RELIC_PLATE_STYLE}
   float diff1 = max(dot(N, L1), 0.0);
   float diff2 = max(dot(N, L2), 0.0) * 0.28;
   float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  float localPxW = fwidth(v_localPos.x);
 
+${GLSL_RELIC_CRUST_PRECHECK}
+
+  vec3 lit = vec3(0.0);
+  if (needGameplayLit) {
   vec3 base = u_color.rgb;
   float specPower = 28.0;
   float specStrength = 0.26;
@@ -349,7 +358,7 @@ ${GLSL_RELIC_PLATE_STYLE}
     diff2 = max(dot(N, L2), 0.0) * 0.28;
     rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
 
-    float pxw = fwidth(bp.x);
+    float pxw = localPxW;
     float pxFade = clamp(1.25 - pxw * 18.0, 0.25, 1.0);
     // Fine salt-and-pepper mineral grit + sparse tiny needle-pores (subtle & smooth, zero crunchy gravel!)
     float grainLow = undX * 0.65 + undY * 0.35;
@@ -369,7 +378,8 @@ ${GLSL_RELIC_PLATE_STYLE}
       cornerProx,
       normalize(-L1.xy),
       grainLow,
-      grainMed
+      grainMed,
+      pxw
     );
     float edgeNick = carve.x;
     float runeGroove = carve.y;
@@ -433,7 +443,7 @@ ${GLSL_RELIC_PLATE_STYLE}
     float outerRim = pow(clamp(v_uv.x, 0.0, 1.0), 2.85) * isTop3 * mix(0.52, 0.40, hc3);
     vec2 gq = lpN.xy * 4.0;
     vec2 gf = fract(gq) - 0.5, gh = hashRelic22(floor(gq) + 9.0);
-    float lineD = mix(abs(gf.x), abs(gf.y), step(0.5, gh.x)), padD = length(gf), traceAA = fwidth(gq.x) * 1.5;
+    float lineD = mix(abs(gf.x), abs(gf.y), step(0.5, gh.x)), padD = length(gf), traceAA = localPxW * 6.0;
     float trace = (1.0 - smoothstep(0.048, 0.048 + traceAA, lineD)) * step(0.35, gh.y);
     float pad = (1.0 - smoothstep(0.115, 0.115 + traceAA, padD)) * step(0.82, gh.y);
     float halo = (exp(-lineD * 13.0) * step(0.35, gh.y) * 0.24 + exp(-padD * 10.0) * step(0.82, gh.y) * 0.22) * isTop3;
@@ -471,7 +481,7 @@ ${GLSL_RELIC_PLATE_STYLE}
   float heightShade = clamp((v_localPos.z - 0.54) * 1.45, -0.08, 0.14);
   float studRim =
     (u_materialStyle != 6 && v_localPos.z > 0.565 && N.z < 0.96 && N.z > 0.05) ? (0.16 * max(dot(N, L1), -0.35)) : 0.0;
-  vec3 lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim) + emissive;
+  lit = base * (ambient + diff1 * 0.49 + diff2 + heightShade) + vec3(spec + studRim) + emissive;
 
   if (u_highContrast == 1 && u_materialStyle != 3) {
     // Crisp high-contrast 3D bevel edge contour (dark bevel on bright pieces, luminous rim on deep jewel pieces)
@@ -481,10 +491,27 @@ ${GLSL_RELIC_PLATE_STYLE}
     vec3 bevelTarget = isDarkPiece ? min(vec3(1.0), base * 0.75 + vec3(0.62)) : lit * 0.34;
     lit = mix(min(vec3(1.0), lit * 1.08), bevelTarget, edgeBevel * (isDarkPiece ? 0.78 : 0.58));
   }
+  } else if (u_materialStyle == 6) {
+    // Preserve exact relic_stone worn-chamfer normal & Fresnel rim under solid Title stone (0% visual drift)
+    vec2 bp6 = v_localPos.xy + vec2(13.0, 7.0) * u_blockSeed;
+    float sAmp6 = u_highContrast == 1 ? 0.42 : 1.0;
+    float faceNz6 = N.z;
+    float cornerProx6 = clamp(v_uv.y, 0.0, 1.0);
+    float wornBand6 = clamp((v_localPos.z - (0.58 - 0.16)) / 0.16, 0.0, 1.0);
+    float undX6 = relicNoise(bp6 * 2.1 + 5.3) - 0.5;
+    float undY6 = relicNoise(bp6 * 2.1 + 19.7) - 0.5;
+    if (faceNz6 < 0.95 && wornBand6 > 0.0) {
+      vec3 sideN6 = normalize(vec3(N.xy, 0.0001));
+      float roundT6 = wornBand6 * wornBand6 * (3.0 - 2.0 * wornBand6);
+      N = normalize(mix(N, normalize(mix(sideN6, vec3(0.0, 0.0, 1.0), roundT6)), 0.55 + cornerProx6 * 0.20));
+    }
+    N = normalize(N + vec3(undX6, undY6, 0.0) * 0.11 * sAmp6);
+    rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  }
 
   float blueprintAlpha = 1.0;
 
-${GLSL_RELIC_CRUST_BLOCK}
+${GLSL_RELIC_CRUST_SHADE}
 
   outColor = vec4(clamp(lit, 0.0, 1.0), u_color.a * blueprintAlpha);
 }

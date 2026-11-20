@@ -65,6 +65,7 @@ import {
   type RelicFracturePlate,
   type RenderPassContext,
   type RenderSceneOptions,
+  setGlBlendEnabled,
   TRAY_PALETTES,
   type TrayPalette,
   type VisualGateBurst,
@@ -220,25 +221,20 @@ export class Renderer3D implements RenderPassContext {
   public getCamera(): Camera3D {
     return this.camera;
   }
-
   public getQualityGovernor(): QualityGovernor {
     return this.qualityGovernor;
   }
-
   public getTelemetry(): PerfTelemetry {
     return this.qualityGovernor.getTelemetry();
   }
-
   public setQualityPreference(tier: QualityTier): void {
     this.qualityGovernor.setPreference(tier);
     if (this.canvasCssW > 1) this.applyCanvasDpr(this.canvasCssW, this.canvasCssH);
   }
-
   public getEffectiveTrayPalette(trayId: TrayId, highContrast = false): TrayPalette {
-    if (highContrast) {
-      return HIGH_CONTRAST_TRAY_PALETTES[trayId] ?? HIGH_CONTRAST_TRAY_PALETTES.industrial_slate;
-    }
-    return TRAY_PALETTES[trayId] ?? TRAY_PALETTES.industrial_slate;
+    return highContrast
+      ? (HIGH_CONTRAST_TRAY_PALETTES[trayId] ?? HIGH_CONTRAST_TRAY_PALETTES.industrial_slate)
+      : (TRAY_PALETTES[trayId] ?? TRAY_PALETTES.industrial_slate);
   }
 
   public async run120HzBenchmark(frames = 120, board?: BoardState): Promise<Benchmark120HzResult> {
@@ -687,6 +683,7 @@ export class Renderer3D implements RenderPassContext {
     uvRegion: AtlasUVRegion | null = null
   ): void {
     const handle = this.getOrCreateMeshHandle(gl, mesh);
+    setGlBlendEnabled(gl, uvRegion !== null || a < 0.999 || materialStyle === 4 || materialStyle >= 8);
     gl.bindVertexArray(handle.vao);
     const shakeAmp =
       this.boardShakeTimer > 0 && !this.lastOptions.reducedMotion

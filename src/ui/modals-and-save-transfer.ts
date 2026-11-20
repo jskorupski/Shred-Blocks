@@ -12,6 +12,7 @@ import type {
 } from '../core/types';
 import { getLevelSpec } from '../levels/catalog';
 import { solveBoard } from '../levels/solver';
+import { scheduleRelicPlatePrewarm } from '../render/voronoi-plates';
 import { generateQrSvg } from '../storage/qr-svg';
 import { decodeSaveCode, validateSavePayloadV1 } from '../storage/save-code';
 import { extractImportCodeFromHash, migrateLegacyEconomy } from '../storage/save-manager';
@@ -585,6 +586,12 @@ export function openTitleScreenImpl(app: AppViewContext): void {
   app.renderer.resetTransientFx();
   app.renderer.resize();
   app.renderNow();
+  if (!save.settings.reducedMotion) {
+    scheduleRelicPlatePrewarm(
+      () => app.board,
+      () => app.titleOverlayOpen && !app.saveManager.getPayload().settings.reducedMotion
+    );
+  }
 
   if (typeof history !== 'undefined') {
     const titleState: AppHistoryState = { __shredblocksNav: true, view: 'title' };

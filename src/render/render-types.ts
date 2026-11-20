@@ -110,6 +110,19 @@ export function allocParticleSlot(rctx: { particlePoolCount: number; particleWri
 export const STONE_SURFACE_STYLE = 5;
 export const TRAY_WALL_STYLE = 7;
 
+const glBlendState = new WeakMap<WebGL2RenderingContext, boolean>();
+
+/**
+ * Tracks `gl.BLEND` per WebGL2 context so opaque `alpha === 1.0` draws disable blending cleanly
+ * (unlocking mobile TBDR Early-Z / LRZ / HSR occlusion culling) without redundant driver calls.
+ */
+export function setGlBlendEnabled(gl: WebGL2RenderingContext, enabled: boolean, force = false): void {
+  if (!force && glBlendState.get(gl) === enabled) return;
+  if (enabled) gl.enable(gl.BLEND);
+  else gl.disable(gl.BLEND);
+  glBlendState.set(gl, enabled);
+}
+
 export function getMaterialStyleCodeForSkin(skin: SkinId = 'classic_studs'): number {
   if (skin === 'relic_stone') return 6;
   if (skin === 'gummy_jelly') return 1;

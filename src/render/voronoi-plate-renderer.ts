@@ -1,4 +1,4 @@
-import type { RelicFracturePlate, RenderPassContext } from './render-types';
+import { type RelicFracturePlate, type RenderPassContext, setGlBlendEnabled } from './render-types';
 import { RELIC_CLUSTER_TEX_SIZE } from './voronoi-cluster-math';
 
 const MAX_PLATE_VERTS = 12288;
@@ -25,17 +25,37 @@ interface PlateUniforms {
   uBlueprintMix: WebGLUniformLocation | null;
 }
 
+/**
+ * Static extruded 3D local-space slab mesh baked once per `RelicFracturePlate` (`PERF-TRANSITION-01`),
+ * eliminating per-frame polygon re-extrusion, `topRing`/`botRing` arrays, and `Math.hypot` wall math.
+ */
+interface BakedPlateLocalMesh {
+  vertCount: number;
+  idxCount: number;
+  localPos: Float32Array;
+  localNorm: Float32Array;
+  rimU: Float32Array;
+  indices: Uint16Array;
+}
+
 const plateGlHandlesByGl = new WeakMap<WebGL2RenderingContext, PlateGlHandles>();
 const plateUniformsByProg = new WeakMap<WebGLProgram, PlateUniforms>();
 const clusterTexByGl = new WeakMap<WebGL2RenderingContext, WebGLTexture>();
 const clusterUniformByProg = new WeakMap<WebGLProgram, WebGLUniformLocation | null>();
 const clusterTexStateByRctx = new WeakMap<RenderPassContext, { data: Uint8Array; dirty: boolean }>();
+const bakedPlateMeshByPlate = new WeakMap<RelicFracturePlate, BakedPlateLocalMesh>();
 
 const sharedPositions = new Float32Array(MAX_PLATE_VERTS * 3);
 const sharedNormals = new Float32Array(MAX_PLATE_VERTS * 3);
 const sharedUvs = new Float32Array(MAX_PLATE_VERTS * 2);
 const sharedSolidIndices = new Uint16Array(MAX_PLATE_INDICES);
 const sharedFadeIndices = new Uint16Array(MAX_PLATE_INDICES);
+const sharedCombinedIndices = new Uint16Array(MAX_PLATE_INDICES * 2);
+const scratchRotMat = new Float32Array(9);
+const WARMUP_PLATE_POS = new Float32Array([0, 0, -50, 0.01, 0, -50, 0, 0.01, -50]);
+const WARMUP_PLATE_NORM = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
+const WARMUP_PLATE_UV = new Float32Array([0, 1, 0.92, 1, 1, 1]);
+const WARMUP_PLATE_IDX = new Uint16Array([0, 1, 2]);
 
 const DEFAULT_CLUSTER_TEX_DATA = (() => {
   const buf = new Uint8Array(RELIC_CLUSTER_TEX_SIZE * RELIC_CLUSTER_TEX_SIZE * 4);
@@ -75,46 +95,184 @@ export function rotateRelicVec(
   return [x2 * cy + z2 * sy, y2, -x2 * sy + z2 * cy];
 }
 
-function rotateAxisAngle(
-  vx: number,
-  vy: number,
-  vz: number,
-  kx: number,
-  ky: number,
-  angle: number
-): [number, number, number] {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  const kDotV = kx * vx + ky * vy;
-  const cxX = -ky * vz;
-  const cxY = kx * vz;
-  const cxZ = kx * vy - ky * vx;
-  return [vx * c + cxX * s + kx * kDotV * (1 - c), vy * c + cxY * s + ky * kDotV * (1 - c), vz * c + cxZ * s];
+/**
+ * Computes the exact 3x3 row-major composite rotation `R_relic(initTiltX, initTiltY, initTwistZ + spinAngle) *
+ * R_hinge(tanX, tanY, peelAngle)` once per plate into `out` (`8` trig calls per plate vs. `8` per vertex).
+ */
+export function computePlateRotationMatrix(
+  p: RelicFracturePlate,
+  peelAngle: number,
+  spinAngle: number,
+  out: Float32Array
+): void {
+  const c = Math.cos(peelAngle);
+  const s = Math.sin(peelAngle);
+  const omc = 1 - c;
+  const kx = p.tanX;
+  const ky = p.tanY;
+
+  const a00 = c + kx * kx * omc;
+  const a01 = kx * ky * omc;
+  const a02 = -ky * s;
+  const a10 = a01;
+  const a11 = c + ky * ky * omc;
+  const a12 = kx * s;
+  const a20 = -ky * s;
+  const a21 = kx * s;
+  const a22 = c;
+
+  const rz = p.initTwistZ + spinAngle;
+  const cz = Math.cos(rz);
+  const sz = Math.sin(rz);
+  const cx = Math.cos(p.initTiltX);
+  const sx = Math.sin(p.initTiltX);
+  const cy = Math.cos(p.initTiltY);
+  const sy = Math.sin(p.initTiltY);
+
+  const b00 = cy * cz + sy * sx * sz;
+  const b01 = -cy * sz + sy * sx * cz;
+  const b02 = sy * cx;
+  const b10 = cx * sz;
+  const b11 = cx * cz;
+  const b12 = -sx;
+  const b20 = -sy * cz + cy * sx * sz;
+  const b21 = sy * sz + cy * sx * cz;
+  const b22 = cy * cx;
+
+  out[0] = b00 * a00 + b01 * a10 + b02 * a20;
+  out[1] = b00 * a01 + b01 * a11 + b02 * a21;
+  out[2] = b00 * a02 + b01 * a12 + b02 * a22;
+  out[3] = b10 * a00 + b11 * a10 + b12 * a20;
+  out[4] = b10 * a01 + b11 * a11 + b12 * a21;
+  out[5] = b10 * a02 + b11 * a12 + b12 * a22;
+  out[6] = b20 * a00 + b21 * a10 + b22 * a20;
+  out[7] = b20 * a01 + b21 * a11 + b22 * a21;
+  out[8] = b20 * a02 + b21 * a12 + b22 * a22;
 }
 
-function transformPlatePoint(
-  p: RelicFracturePlate,
-  lx: number,
-  ly: number,
-  lz: number,
-  peelAngle: number,
-  spinAngle: number
-): [number, number, number] {
-  const [hx, hy, hz] = rotateAxisAngle(lx * p.scale, ly * p.scale, lz * p.scale, p.tanX, p.tanY, peelAngle);
-  const [rx, ry, rz] = rotateRelicVec(hx, hy, hz, p.initTiltX, p.initTiltY, p.initTwistZ + spinAngle);
-  return [p.posX + rx, p.posY + ry, p.posZ + rz];
+function getOrBakePlateLocalMesh(p: RelicFracturePlate): BakedPlateLocalMesh {
+  const cached = bakedPlateMeshByPlate.get(p);
+  if (cached) return cached;
+
+  let totalVerts = 0;
+  let totalIndices = 0;
+  for (let si = 0; si < p.subCells.length; si++) {
+    const sc = p.subCells[si];
+    const polyCount = sc.verts.length / 2;
+    if (polyCount < 3) continue;
+    let wallEdges = 0;
+    for (let i = 0; i < polyCount; i++) {
+      if ((sc.edgeFlags[i] & 1) !== 0) wallEdges++;
+    }
+    totalVerts += 2 + polyCount * 2 + wallEdges * 4;
+    totalIndices += polyCount * 6 + wallEdges * 6;
+  }
+
+  const localPos = new Float32Array(totalVerts * 3);
+  const localNorm = new Float32Array(totalVerts * 3);
+  const rimU = new Float32Array(totalVerts);
+  const indices = new Uint16Array(totalIndices);
+  const halfH = p.thickness * 0.5;
+  let vOut = 0;
+  let iOut = 0;
+
+  const pushLocal = (
+    x: number,
+    y: number,
+    z: number,
+    nx: number,
+    ny: number,
+    nz: number,
+    u: number
+  ): number => {
+    const vi = vOut++;
+    const v3 = vi * 3;
+    localPos[v3] = x;
+    localPos[v3 + 1] = y;
+    localPos[v3 + 2] = z;
+    localNorm[v3] = nx;
+    localNorm[v3 + 1] = ny;
+    localNorm[v3 + 2] = nz;
+    rimU[vi] = u;
+    return vi;
+  };
+
+  for (let si = 0; si < p.subCells.length; si++) {
+    const sc = p.subCells[si];
+    const polyCount = sc.verts.length / 2;
+    if (polyCount < 3) continue;
+
+    const topCenter = pushLocal(sc.centerX, sc.centerY, halfH, 0, 0, 1, 0.0);
+    const topRingStart = vOut;
+    for (let i = 0; i < polyCount; i++) {
+      const incident = sc.edgeFlags[(i + polyCount - 1) % polyCount] | sc.edgeFlags[i];
+      const topU = (incident & 2) !== 0 ? 0.92 : (incident & 1) !== 0 ? 0.7 : 0.0;
+      pushLocal(sc.verts[i * 2], sc.verts[i * 2 + 1], halfH, 0, 0, 1, topU);
+    }
+
+    const botCenter = pushLocal(sc.centerX, sc.centerY, -halfH, 0, 0, -1, 0.2);
+    const botRingStart = vOut;
+    for (let i = 0; i < polyCount; i++) {
+      const incident = sc.edgeFlags[(i + polyCount - 1) % polyCount] | sc.edgeFlags[i];
+      const botU = (incident & 2) !== 0 ? 0.92 : (incident & 1) !== 0 ? 0.7 : 0.2;
+      pushLocal(sc.verts[i * 2], sc.verts[i * 2 + 1], -halfH, 0, 0, -1, botU);
+    }
+
+    for (let i = 0; i < polyCount; i++) {
+      const next = (i + 1) % polyCount;
+      indices[iOut++] = topCenter;
+      indices[iOut++] = topRingStart + i;
+      indices[iOut++] = topRingStart + next;
+
+      indices[iOut++] = botCenter;
+      indices[iOut++] = botRingStart + next;
+      indices[iOut++] = botRingStart + i;
+
+      const flag = sc.edgeFlags[i];
+      if ((flag & 1) === 0) continue;
+
+      const wallU = (flag & 2) !== 0 ? 1.0 : 0.72;
+      const ax = sc.verts[i * 2];
+      const ay = sc.verts[i * 2 + 1];
+      const bx = sc.verts[next * 2];
+      const by = sc.verts[next * 2 + 1];
+      const ex = bx - ax;
+      const ey = by - ay;
+      const eLen = Math.hypot(ex, ey) || 1;
+      const wnx = -ey / eLen;
+      const wny = ex / eLen;
+
+      const st0 = pushLocal(ax, ay, halfH, wnx, wny, 0.14, wallU);
+      const sb0 = pushLocal(ax, ay, -halfH, wnx, wny, 0.14, wallU);
+      const sb1 = pushLocal(bx, by, -halfH, wnx, wny, 0.14, wallU);
+      const st1 = pushLocal(bx, by, halfH, wnx, wny, 0.14, wallU);
+
+      indices[iOut++] = st0;
+      indices[iOut++] = sb0;
+      indices[iOut++] = sb1;
+      indices[iOut++] = st0;
+      indices[iOut++] = sb1;
+      indices[iOut++] = st1;
+    }
+  }
+
+  const baked: BakedPlateLocalMesh = {
+    vertCount: vOut,
+    idxCount: iOut,
+    localPos,
+    localNorm,
+    rimU,
+    indices,
+  };
+  bakedPlateMeshByPlate.set(p, baked);
+  return baked;
 }
 
-function transformPlateNormal(
-  p: RelicFracturePlate,
-  nx: number,
-  ny: number,
-  nz: number,
-  peelAngle: number,
-  spinAngle: number
-): [number, number, number] {
-  const [hx, hy, hz] = rotateAxisAngle(nx, ny, nz, p.tanX, p.tanY, peelAngle);
-  return rotateRelicVec(hx, hy, hz, p.initTiltX, p.initTiltY, p.initTwistZ + spinAngle);
+/** Pre-bakes local 3D slab geometry for all plates during Title idle so active explosion frames allocate zero arrays. */
+export function prebakeRelicPlatesImpl(plates: readonly RelicFracturePlate[]): void {
+  for (let i = 0; i < plates.length; i++) {
+    getOrBakePlateLocalMesh(plates[i]);
+  }
 }
 
 /** Stores per-cell cluster LUT `[clusterId, detachT*255, isSubSplit*255, glowAffinity*255]` for GPU upload. */
@@ -198,8 +356,9 @@ export function bindRelicClusterTextureImpl(
 }
 
 /**
- * Packs extruded 3D polygonal slab buffers for all currently detached `rctx.relicPlates`,
- * keeping fused multi-cell internal seams completely seamless while glowing & extruding external boundaries.
+ * Packs extruded 3D polygonal slab buffers for all currently detached `rctx.relicPlates` with
+ * zero per-frame heap allocations (`PERF-TRANSITION-01`): transforms pre-baked local slab vertices
+ * by a single 3x3 matrix per plate and keeps fused multi-cell internal seams completely seamless.
  */
 export function buildRelicPlateGeometryImpl(plates: readonly RelicFracturePlate[]): {
   vertexCount: number;
@@ -214,128 +373,70 @@ export function buildRelicPlateGeometryImpl(plates: readonly RelicFracturePlate[
     const p = plates[pi];
     if (!p.detached || p.lifeRatio <= 0 || p.subCells.length === 0) continue;
 
-    let plateNeededVerts = 0;
-    let plateNeededIndices = 0;
-    for (let si = 0; si < p.subCells.length; si++) {
-      const n = p.subCells[si].verts.length / 2;
-      plateNeededVerts += 2 + n * 6;
-      plateNeededIndices += n * 12;
-    }
+    const baked = getOrBakePlateLocalMesh(p);
+    if (baked.vertCount === 0 || baked.idxCount === 0) continue;
 
     const isSolid = p.lifeRatio >= SOLID_LIFE_THRESHOLD;
     const curIdxCount = isSolid ? solidIdxCount : fadeIdxCount;
-    if (
-      vertCount + plateNeededVerts > MAX_PLATE_VERTS ||
-      curIdxCount + plateNeededIndices > MAX_PLATE_INDICES
-    ) {
+    if (vertCount + baked.vertCount > MAX_PLATE_VERTS || curIdxCount + baked.idxCount > MAX_PLATE_INDICES) {
       break;
     }
 
     const localT = Math.max(0, p.elapsedSec - p.detachDelaySec);
     const peelAngle = 0.08 + p.peelAngVel * localT;
     const spinAngle = p.spinVel * localT;
-    const halfH = p.thickness * 0.5;
+    computePlateRotationMatrix(p, peelAngle, spinAngle, scratchRotMat);
+
+    const m00 = scratchRotMat[0];
+    const m01 = scratchRotMat[1];
+    const m02 = scratchRotMat[2];
+    const m10 = scratchRotMat[3];
+    const m11 = scratchRotMat[4];
+    const m12 = scratchRotMat[5];
+    const m20 = scratchRotMat[6];
+    const m21 = scratchRotMat[7];
+    const m22 = scratchRotMat[8];
+
+    const sc = p.scale;
+    const px = p.posX;
+    const py = p.posY;
+    const pz = p.posZ;
+    const life = p.lifeRatio;
+    const baseVert = vertCount;
+    const localPos = baked.localPos;
+    const localNorm = baked.localNorm;
+    const rimU = baked.rimU;
+    const vCount = baked.vertCount;
+
+    for (let vi = 0; vi < vCount; vi++) {
+      const k3 = vi * 3;
+      const o3 = (baseVert + vi) * 3;
+      const o2 = (baseVert + vi) * 2;
+      const lx = localPos[k3] * sc;
+      const ly = localPos[k3 + 1] * sc;
+      const lz = localPos[k3 + 2] * sc;
+      sharedPositions[o3] = px + m00 * lx + m01 * ly + m02 * lz;
+      sharedPositions[o3 + 1] = py + m10 * lx + m11 * ly + m12 * lz;
+      sharedPositions[o3 + 2] = pz + m20 * lx + m21 * ly + m22 * lz;
+
+      const nx = localNorm[k3];
+      const ny = localNorm[k3 + 1];
+      const nz = localNorm[k3 + 2];
+      sharedNormals[o3] = m00 * nx + m01 * ny + m02 * nz;
+      sharedNormals[o3 + 1] = m10 * nx + m11 * ny + m12 * nz;
+      sharedNormals[o3 + 2] = m20 * nx + m21 * ny + m22 * nz;
+
+      sharedUvs[o2] = rimU[vi];
+      sharedUvs[o2 + 1] = life;
+    }
+    vertCount += vCount;
+
     const targetIndices = isSolid ? sharedSolidIndices : sharedFadeIndices;
+    const srcIdx = baked.indices;
+    const iCount = baked.idxCount;
     let idxOut = curIdxCount;
-
-    const writeVert = (
-      x: number,
-      y: number,
-      z: number,
-      nx: number,
-      ny: number,
-      nz: number,
-      u: number,
-      v: number
-    ): number => {
-      const vi = vertCount++;
-      sharedPositions[vi * 3] = x;
-      sharedPositions[vi * 3 + 1] = y;
-      sharedPositions[vi * 3 + 2] = z;
-      sharedNormals[vi * 3] = nx;
-      sharedNormals[vi * 3 + 1] = ny;
-      sharedNormals[vi * 3 + 2] = nz;
-      sharedUvs[vi * 2] = u;
-      sharedUvs[vi * 2 + 1] = v;
-      return vi;
-    };
-
-    const [tnx, tny, tnz] = transformPlateNormal(p, 0, 0, 1, peelAngle, spinAngle);
-
-    for (let si = 0; si < p.subCells.length; si++) {
-      const sc = p.subCells[si];
-      const polyCount = sc.verts.length / 2;
-      if (polyCount < 3) continue;
-
-      const [tcx, tcy, tcz] = transformPlatePoint(p, sc.centerX, sc.centerY, halfH, peelAngle, spinAngle);
-      const topCenter = writeVert(tcx, tcy, tcz, tnx, tny, tnz, 0.0, p.lifeRatio);
-      const topRing: number[] = [];
-      const botRing: number[] = [];
-
-      for (let i = 0; i < polyCount; i++) {
-        const prevFlag = sc.edgeFlags[(i + polyCount - 1) % polyCount];
-        const curFlag = sc.edgeFlags[i];
-        const incident = prevFlag | curFlag;
-        const topU = (incident & 2) !== 0 ? 0.92 : (incident & 1) !== 0 ? 0.7 : 0.0;
-        const lx = sc.verts[i * 2];
-        const ly = sc.verts[i * 2 + 1];
-        const [tx, ty, tz] = transformPlatePoint(p, lx, ly, halfH, peelAngle, spinAngle);
-        topRing.push(writeVert(tx, ty, tz, tnx, tny, tnz, topU, p.lifeRatio));
-      }
-
-      const [bcx, bcy, bcz] = transformPlatePoint(p, sc.centerX, sc.centerY, -halfH, peelAngle, spinAngle);
-      const botCenter = writeVert(bcx, bcy, bcz, -tnx, -tny, -tnz, 0.2, p.lifeRatio);
-      for (let i = 0; i < polyCount; i++) {
-        const prevFlag = sc.edgeFlags[(i + polyCount - 1) % polyCount];
-        const curFlag = sc.edgeFlags[i];
-        const incident = prevFlag | curFlag;
-        const botU = (incident & 2) !== 0 ? 0.92 : (incident & 1) !== 0 ? 0.7 : 0.2;
-        const lx = sc.verts[i * 2];
-        const ly = sc.verts[i * 2 + 1];
-        const [bx, by, bz] = transformPlatePoint(p, lx, ly, -halfH, peelAngle, spinAngle);
-        botRing.push(writeVert(bx, by, bz, -tnx, -tny, -tnz, botU, p.lifeRatio));
-      }
-
-      for (let i = 0; i < polyCount; i++) {
-        const next = (i + 1) % polyCount;
-        targetIndices[idxOut++] = topCenter;
-        targetIndices[idxOut++] = topRing[i];
-        targetIndices[idxOut++] = topRing[next];
-
-        targetIndices[idxOut++] = botCenter;
-        targetIndices[idxOut++] = botRing[next];
-        targetIndices[idxOut++] = botRing[i];
-
-        const flag = sc.edgeFlags[i];
-        if ((flag & 1) === 0) continue;
-
-        const wallU = (flag & 2) !== 0 ? 1.0 : 0.72;
-        const ax = sc.verts[i * 2];
-        const ay = sc.verts[i * 2 + 1];
-        const bx = sc.verts[next * 2];
-        const by = sc.verts[next * 2 + 1];
-        const ex = bx - ax;
-        const ey = by - ay;
-        const eLen = Math.hypot(ex, ey) || 1;
-        const [snx, sny, snz] = transformPlateNormal(p, -ey / eLen, ex / eLen, 0.14, peelAngle, spinAngle);
-
-        const [t0x, t0y, t0z] = transformPlatePoint(p, ax, ay, halfH, peelAngle, spinAngle);
-        const [b0x, b0y, b0z] = transformPlatePoint(p, ax, ay, -halfH, peelAngle, spinAngle);
-        const [b1x, b1y, b1z] = transformPlatePoint(p, bx, by, -halfH, peelAngle, spinAngle);
-        const [t1x, t1y, t1z] = transformPlatePoint(p, bx, by, halfH, peelAngle, spinAngle);
-
-        const st0 = writeVert(t0x, t0y, t0z, snx, sny, snz, wallU, p.lifeRatio);
-        const sb0 = writeVert(b0x, b0y, b0z, snx, sny, snz, wallU, p.lifeRatio);
-        const sb1 = writeVert(b1x, b1y, b1z, snx, sny, snz, wallU, p.lifeRatio);
-        const st1 = writeVert(t1x, t1y, t1z, snx, sny, snz, wallU, p.lifeRatio);
-
-        targetIndices[idxOut++] = st0;
-        targetIndices[idxOut++] = sb0;
-        targetIndices[idxOut++] = sb1;
-        targetIndices[idxOut++] = st0;
-        targetIndices[idxOut++] = sb1;
-        targetIndices[idxOut++] = st1;
-      }
+    for (let ji = 0; ji < iCount; ji++) {
+      targetIndices[idxOut++] = srcIdx[ji] + baseVert;
     }
 
     if (isSolid) {
@@ -376,12 +477,63 @@ function getOrCreatePlateHandles(gl: WebGL2RenderingContext): PlateGlHandles | n
   gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sharedSolidIndices.byteLength, gl.DYNAMIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sharedCombinedIndices.byteLength, gl.DYNAMIC_DRAW);
   gl.bindVertexArray(null);
 
   const created = { vao, posBuf, normBuf, uvBuf, idxBuf };
   plateGlHandlesByGl.set(gl, created);
   return created;
+}
+
+/**
+ * Pre-allocates the dynamic Voronoi plate VAO/VBOs/IBO during boot `warmUpWebGLPipelinesImpl()`
+ * and warms `u_materialStyle = 11` under BOTH solid (`blend=false, depthMask=true`) and fading
+ * (`blend=true, depthMask=false`) pipeline states so the first plate detach (`t ~ 108ms`) never
+ * triggers lazy GPU buffer allocation or a synchronous ANGLE-Vulkan `VkGraphicsPipeline` stall.
+ */
+export function warmUpRelicPlatePipelineImpl(gl: WebGL2RenderingContext, mainProgram: WebGLProgram): void {
+  if (
+    typeof gl.createVertexArray !== 'function' ||
+    typeof gl.createBuffer !== 'function' ||
+    typeof gl.bufferData !== 'function' ||
+    typeof gl.drawElements !== 'function'
+  ) {
+    return;
+  }
+  const handles = getOrCreatePlateHandles(gl);
+  if (!handles) return;
+  const u = getPlateUniforms(gl, mainProgram);
+
+  gl.useProgram(mainProgram);
+  gl.uniform3f(u.uTranslate, 0, 0, 0);
+  gl.uniform3f(u.uScale, 1, 1, 1);
+  gl.uniform1f(u.uRotX, 0);
+  gl.uniform1f(u.uRotZ, 0);
+  gl.uniform4f(u.uUvRect, 0, 0, 1, 1);
+  gl.uniform4f(u.uColor, 1, 1, 1, 1);
+  gl.uniform1i(u.uUseTexture, 0);
+  gl.uniform1i(u.uMaterialStyle, 11);
+  gl.uniform1f(u.uBlueprintMix, 0);
+
+  gl.bindVertexArray(handles.vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, handles.posBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, WARMUP_PLATE_POS);
+  gl.bindBuffer(gl.ARRAY_BUFFER, handles.normBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, WARMUP_PLATE_NORM);
+  gl.bindBuffer(gl.ARRAY_BUFFER, handles.uvBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, WARMUP_PLATE_UV);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, handles.idxBuf);
+  gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, WARMUP_PLATE_IDX);
+
+  setGlBlendEnabled(gl, false);
+  gl.depthMask(true);
+  gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+
+  setGlBlendEnabled(gl, true);
+  gl.depthMask(false);
+  gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+  gl.depthMask(true);
+  gl.bindVertexArray(null);
 }
 
 function getPlateUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): PlateUniforms {
@@ -458,14 +610,34 @@ export function renderRelicPlatesWebGL2Impl(
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, sharedUvs.subarray(0, built.vertexCount * 2));
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, handles.idxBuf);
 
-  if (built.solidIndexCount > 0) {
+  // Single contiguous index upload per frame prevents mid-pass ANGLE-Vulkan IBO write stalls
+  // across the ~36-38 frames where both solid and tail-fading slabs are simultaneously active.
+  if (built.solidIndexCount > 0 && built.fadeIndexCount > 0) {
+    sharedCombinedIndices.set(sharedSolidIndices.subarray(0, built.solidIndexCount), 0);
+    sharedCombinedIndices.set(sharedFadeIndices.subarray(0, built.fadeIndexCount), built.solidIndexCount);
+    gl.bufferSubData(
+      gl.ELEMENT_ARRAY_BUFFER,
+      0,
+      sharedCombinedIndices.subarray(0, built.solidIndexCount + built.fadeIndexCount)
+    );
+    setGlBlendEnabled(gl, false);
     gl.depthMask(true);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, sharedSolidIndices.subarray(0, built.solidIndexCount));
     gl.drawElements(gl.TRIANGLES, built.solidIndexCount, gl.UNSIGNED_SHORT, 0);
-  }
-  if (built.fadeIndexCount > 0) {
+
+    setGlBlendEnabled(gl, true);
     gl.depthMask(false);
+    gl.drawElements(gl.TRIANGLES, built.fadeIndexCount, gl.UNSIGNED_SHORT, built.solidIndexCount * 2);
+    gl.depthMask(true);
+  } else if (built.solidIndexCount > 0) {
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, sharedSolidIndices.subarray(0, built.solidIndexCount));
+    setGlBlendEnabled(gl, false);
+    gl.depthMask(true);
+    gl.drawElements(gl.TRIANGLES, built.solidIndexCount, gl.UNSIGNED_SHORT, 0);
+    setGlBlendEnabled(gl, true);
+  } else if (built.fadeIndexCount > 0) {
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, sharedFadeIndices.subarray(0, built.fadeIndexCount));
+    setGlBlendEnabled(gl, true);
+    gl.depthMask(false);
     gl.drawElements(gl.TRIANGLES, built.fadeIndexCount, gl.UNSIGNED_SHORT, 0);
     gl.depthMask(true);
   }
@@ -485,6 +657,17 @@ export function renderRelicPlatesCanvas2DImpl(
     const peelAngle = 0.08 + p.peelAngVel * localT;
     const spinAngle = p.spinVel * localT;
     const alpha = p.lifeRatio < SOLID_LIFE_THRESHOLD ? p.lifeRatio / SOLID_LIFE_THRESHOLD : 1;
+    computePlateRotationMatrix(p, peelAngle, spinAngle, scratchRotMat);
+    const m00 = scratchRotMat[0];
+    const m01 = scratchRotMat[1];
+    const m02 = scratchRotMat[2];
+    const m10 = scratchRotMat[3];
+    const m11 = scratchRotMat[4];
+    const m12 = scratchRotMat[5];
+    const m20 = scratchRotMat[6];
+    const m21 = scratchRotMat[7];
+    const m22 = scratchRotMat[8];
+    const halfH = p.thickness * 0.5 * p.scale;
 
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
@@ -498,14 +681,11 @@ export function renderRelicPlatesCanvas2DImpl(
       const pts: Array<{ x: number; y: number }> = [];
       ctx.beginPath();
       for (let i = 0; i < polyCount; i++) {
-        const [wx, wy, wz] = transformPlatePoint(
-          p,
-          sc.verts[i * 2],
-          sc.verts[i * 2 + 1],
-          p.thickness * 0.5,
-          peelAngle,
-          spinAngle
-        );
+        const lx = sc.verts[i * 2] * p.scale;
+        const ly = sc.verts[i * 2 + 1] * p.scale;
+        const wx = p.posX + m00 * lx + m01 * ly + m02 * halfH;
+        const wy = p.posY + m10 * lx + m11 * ly + m12 * halfH;
+        const wz = p.posZ + m20 * lx + m21 * ly + m22 * halfH;
         const pt = project(wx, wy, wz);
         pts.push(pt);
         if (i === 0) ctx.moveTo(pt.x, pt.y);

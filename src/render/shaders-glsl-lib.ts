@@ -139,6 +139,7 @@ vec4 voronoiRockPlateCluster(vec2 x, out vec4 outClusterData) {
   }
   outClusterData = texelFetch(u_relicClusterTex, clamp(cids[minIdx] + ivec2(2), ivec2(0), ivec2(15)), 0);
   float myClusterId = outClusterData.r;
+  bool hasCluster = myClusterId >= 0.002;
   float mdAll = 8.0;
   float mdCluster = 8.0;
   for (int idx = 0; idx < 9; idx++) {
@@ -149,9 +150,15 @@ vec4 voronoiRockPlateCluster(vec2 x, out vec4 outClusterData) {
       if (d2 > 0.00001) {
         float edgeD = dot(0.5 * (mr + r), diff * inversesqrt(d2));
         mdAll = min(mdAll, edgeD);
-        float nbrClusterId = texelFetch(u_relicClusterTex, clamp(cids[idx] + ivec2(2), ivec2(0), ivec2(15)), 0).r;
-        if (!(abs(nbrClusterId - myClusterId) <= 0.002 && myClusterId >= 0.002)) {
-          mdCluster = min(mdCluster, edgeD);
+        if (edgeD < mdCluster) {
+          if (!hasCluster) {
+            mdCluster = edgeD;
+          } else {
+            float nbrClusterId = texelFetch(u_relicClusterTex, clamp(cids[idx] + ivec2(2), ivec2(0), ivec2(15)), 0).r;
+            if (abs(nbrClusterId - myClusterId) > 0.002) {
+              mdCluster = edgeD;
+            }
+          }
         }
       }
     }
@@ -196,7 +203,8 @@ vec3 stoneRelief(
   float cornerProx,
   vec2 lightDir,
   float grainLow,
-  float grainMed
+  float grainMed,
+  float pxw
 ) {
   float nick = 0.0;
   float raking = 0.0;
@@ -227,7 +235,7 @@ vec3 stoneRelief(
         pL = vec2(-pL.y, pL.x);
       }
       int glyphId = int(floor(cellHash.x * 8.0));
-      float aa = clamp(fwidth(bp.x) * 1.2, 0.006, 0.020);
+      float aa = clamp(pxw * 1.2, 0.006, 0.020);
       // Soft, wide-shouldered profile + uneven wear so markings read as faint, centuries-rubbed stone carvings
       float strokeWear = mix(0.22, 0.92, smoothstep(-0.26, 0.32, grainLow * 0.72 + grainMed * 0.50));
       float cellAge = mix(0.32, 0.84, fract(cellHash.x * 19.3 + cellHash.y * 7.1));

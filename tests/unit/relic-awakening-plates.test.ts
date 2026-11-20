@@ -10,16 +10,24 @@ import {
   PARTICLE_STRIDE,
   type RenderPassContext,
 } from '../../src/render/render-types';
+import { MAIN_FRAGMENT_SHADER } from '../../src/render/shaders-3d';
+import { GLSL_STONE_LIB } from '../../src/render/shaders-glsl-lib';
 import {
   RELIC_CLUSTER_TEX_SIZE,
   sampleMajorRegionMask,
   sampleVisibleCrackGlow,
 } from '../../src/render/voronoi-cluster-math';
+import { rotateRelicVec } from '../../src/render/voronoi-plate-renderer';
 import {
   buildBoardVoronoiPlates,
   buildRelicPlateGeometryImpl,
+  computePlateRotationMatrix,
   hashRelic22,
+  prewarmRelicPlatesForBoard,
+  renderRelicPlatesWebGL2Impl,
+  spawnRelicVoronoiPlatesImpl,
   stepRelicPlatesImpl,
+  warmUpRelicPlatePipelineImpl,
 } from '../../src/render/voronoi-plates';
 
 function polygonSignedArea(verts: Float32Array): number {
@@ -216,5 +224,161 @@ describe('Voronoi Stone-Crust Unwrapping Plates (RELIC-AWAKEN-01)', () => {
     const reducedRctx = createPlateMockRctx(board.rows, board.cols, true);
     spawnRelicAwakeningBurstImpl(reducedRctx, board);
     expect(reducedRctx.activeRelicPlateCount).toBe(0);
+  });
+
+  it('PERF-TRANSITION-01: matches 3x3 plate rotation parity, prewarms idle plates, warms both style-11 PSOs, and issues 1 contiguous IBO upload', () => {
+    // 1. Exact 3x3 composite rotation matrix parity against reference axis-angle + rotateRelicVec
+    setFxRandomSeed(1337);
+    const board = createBoardState(getLevelSpec(25));
+    const built = buildBoardVoronoiPlates(board, 2.0);
+    const samplePlate = built.plates[0];
+    samplePlate.initTiltX = 0.043;
+    samplePlate.initTiltY = -0.051;
+    samplePlate.initTwistZ = 0.037;
+    const peelAngle = 0.78;
+    const spinAngle = -0.44;
+    const mat = new Float32Array(9);
+    computePlateRotationMatrix(samplePlate, peelAngle, spinAngle, mat);
+
+    const refAxisAngle = (vx: number, vy: number, vz: number): [number, number, number] => {
+      const c = Math.cos(peelAngle);
+      const s = Math.sin(peelAngle);
+      const kx = samplePlate.tanX;
+      const ky = samplePlate.tanY;
+      const kDotV = kx * vx + ky * vy;
+      return [
+        vx * c + -ky * vz * s + kx * kDotV * (1 - c),
+        vy * c + kx * vz * s + ky * kDotV * (1 - c),
+        vz * c + (kx * vy - ky * vx) * s,
+      ];
+    };
+    for (const [lx, ly, lz] of [
+      [0.42, -0.31, 0.06],
+      [-0.58, 0.27, -0.06],
+      [0, 0, 1],
+      [-0.6, 0.8, 0.14],
+    ] as const) {
+      const [hx, hy, hz] = refAxisAngle(lx, ly, lz);
+      const [rx, ry, rz] = rotateRelicVec(
+        hx,
+        hy,
+        hz,
+        samplePlate.initTiltX,
+        samplePlate.initTiltY,
+        samplePlate.initTwistZ + spinAngle
+      );
+      expect(mat[0] * lx + mat[1] * ly + mat[2] * lz).toBeCloseTo(rx, 5);
+      expect(mat[3] * lx + mat[4] * ly + mat[5] * lz).toBeCloseTo(ry, 5);
+      expect(mat[6] * lx + mat[7] * ly + mat[8] * lz).toBeCloseTo(rz, 5);
+    }
+
+    // 2. Idle prewarm skips while deterministic golden seed is active, caches & consumes once in live play
+    expect(prewarmRelicPlatesForBoard(board, 2.0)).toBe(false);
+    setFxRandomSeed(null);
+    const liveBoard = createBoardState(getLevelSpec(1));
+    expect(prewarmRelicPlatesForBoard(liveBoard, 2.0)).toBe(true);
+    expect(prewarmRelicPlatesForBoard(liveBoard, 2.0)).toBe(false);
+    const liveRctx = createPlateMockRctx(liveBoard.rows, liveBoard.cols, false);
+    spawnRelicVoronoiPlatesImpl(liveRctx, liveBoard, 2.0);
+    expect(liveRctx.activeRelicPlateCount).toBeGreaterThanOrEqual(24);
+    const firstSpawnPlates = [...liveRctx.relicPlates];
+    // Prewarmed entry was consumed once, so a second spawn builds fresh plates
+    spawnRelicVoronoiPlatesImpl(liveRctx, liveBoard, 2.0);
+    expect(liveRctx.relicPlates[0]).not.toBe(firstSpawnPlates[0]);
+
+    // 3. Boot warmup pre-allocates PlateGlHandles & warms both solid/fade PSOs; mixed solid+fade frame uploads IBO once
+    const ELEMENT_ARRAY_BUFFER = 0x8893;
+    const BLEND = 0x0be2;
+    let vaoCount = 0;
+    let bufCount = 0;
+    let blendState = true;
+    let depthMaskState = true;
+    let iboSubDataCalls = 0;
+    const drawLog: Array<{ count: number; offset: number; blend: boolean; depthMask: boolean }> = [];
+    const noop = () => {};
+    const gl = {
+      ARRAY_BUFFER: 0x8892,
+      ELEMENT_ARRAY_BUFFER,
+      DYNAMIC_DRAW: 0x88e8,
+      FLOAT: 0x1406,
+      TRIANGLES: 4,
+      UNSIGNED_SHORT: 0x1403,
+      BLEND,
+      createVertexArray: () => {
+        vaoCount++;
+        return { id: vaoCount } as unknown as WebGLVertexArrayObject;
+      },
+      createBuffer: () => {
+        bufCount++;
+        return { id: bufCount } as unknown as WebGLBuffer;
+      },
+      getUniformLocation: (_p: WebGLProgram, name: string) => ({ name }) as unknown as WebGLUniformLocation,
+      enable: (cap: number) => {
+        if (cap === BLEND) blendState = true;
+      },
+      disable: (cap: number) => {
+        if (cap === BLEND) blendState = false;
+      },
+      depthMask: (flag: boolean) => {
+        depthMaskState = flag;
+      },
+      bufferSubData: (target: number) => {
+        if (target === ELEMENT_ARRAY_BUFFER) iboSubDataCalls++;
+      },
+      drawElements: (_mode: number, count: number, _type: number, offset: number) => {
+        drawLog.push({ count, offset, blend: blendState, depthMask: depthMaskState });
+      },
+    } as unknown as Record<string, unknown>;
+    for (const m of (
+      'bindVertexArray bindBuffer bufferData enableVertexAttribArray vertexAttribPointer useProgram ' +
+      'uniform1i uniform1f uniform3f uniform4f'
+    ).split(' ')) {
+      gl[m] = noop;
+    }
+
+    const prog = {} as WebGLProgram;
+    warmUpRelicPlatePipelineImpl(gl as unknown as WebGL2RenderingContext, prog);
+    expect(vaoCount).toBe(1);
+    expect(bufCount).toBe(4);
+    expect(drawLog).toEqual([
+      { count: 3, offset: 0, blend: false, depthMask: true },
+      { count: 3, offset: 0, blend: true, depthMask: false },
+    ]);
+
+    // Advance live plates to a mixed solid + fading frame and verify single contiguous IBO upload
+    const mixedRctx = createPlateMockRctx(liveBoard.rows, liveBoard.cols, false);
+    setFxRandomSeed(1337);
+    spawnRelicVoronoiPlatesImpl(mixedRctx, liveBoard, 2.0);
+    let foundMixedFrame = false;
+    for (let f = 0; f < 90; f++) {
+      stepRelicPlatesImpl(mixedRctx, 1 / 120, Math.max(0, 0.995 - f / (120 * 0.68)), 2.0 + f / 120, false);
+      const preview = buildRelicPlateGeometryImpl(mixedRctx.relicPlates);
+      if (preview.solidIndexCount > 0 && preview.fadeIndexCount > 0) {
+        foundMixedFrame = true;
+        iboSubDataCalls = 0;
+        drawLog.length = 0;
+        renderRelicPlatesWebGL2Impl(mixedRctx, gl as unknown as WebGL2RenderingContext, prog);
+        expect(iboSubDataCalls).toBe(1);
+        expect(drawLog).toEqual([
+          { count: preview.solidIndexCount, offset: 0, blend: false, depthMask: true },
+          {
+            count: preview.fadeIndexCount,
+            offset: preview.solidIndexCount * 2,
+            blend: true,
+            depthMask: false,
+          },
+        ]);
+        expect(blendState).toBe(true);
+        expect(depthMaskState).toBe(true);
+        break;
+      }
+    }
+    expect(foundMixedFrame).toBe(true);
+
+    // 4. Shader dead-work & tile-GPU texelFetch guard contracts
+    expect(GLSL_STONE_LIB).toContain('if (edgeD < mdCluster)');
+    expect(MAIN_FRAGMENT_SHADER).toContain('float localPxW = fwidth(v_localPos.x);');
+    expect(MAIN_FRAGMENT_SHADER).toContain('if (needGameplayLit)');
+    expect(MAIN_FRAGMENT_SHADER).toContain('if (needRelicCrust)');
   });
 });
