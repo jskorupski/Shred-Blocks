@@ -511,4 +511,113 @@ test.describe('Booster Jewel Crests & Dynamic Multi-Digit CTA Geometry', () => {
     expect(skipPosted).toBe('1');
     expect(errors).toEqual([]);
   });
+
+  test('HAPTICS-01: fires navigator.vibrate across Title Play, block drag/shred, SFX-Off mode, and Settings toggle OFF/ON persistence', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await page.addInitScript(() => {
+      const w = window as unknown as { __vibrateLog?: Array<number | number[]> };
+      w.__vibrateLog = [];
+      Object.defineProperty(navigator, 'vibrate', {
+        configurable: true,
+        value: (pattern: number | number[]) => {
+          w.__vibrateLog?.push(Array.isArray(pattern) ? [...pattern] : pattern);
+          return true;
+        },
+      });
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#btn-title-play')).toBeVisible();
+    await page.locator('#btn-title-play').click();
+    await expect(page.locator('#title-overlay')).toBeHidden();
+    await expect(page.locator('#screen-game')).toBeVisible();
+
+    const titleVibrations = await page.evaluate(
+      () => (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog
+    );
+    expect(titleVibrations).toContainEqual([26, 28, 18, 34, 16]);
+
+    // Clear and drag Level 1 Block 2 ('2x1' at col 3, rows 2..3) left across cells then right into RIGHT gate
+    await page.evaluate(() => {
+      (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog = [];
+    });
+    const pts = await page.evaluate(() => ({
+      start: window.__SHREDBLOCKS_DEBUG__.boardToScreen(3.5, 3.0),
+      mid: window.__SHREDBLOCKS_DEBUG__.boardToScreen(1.5, 3.0),
+      gate: window.__SHREDBLOCKS_DEBUG__.boardToScreen(5.2, 3.0),
+    }));
+
+    await page.mouse.move(pts.start.x, pts.start.y);
+    await page.mouse.down();
+    await page.waitForTimeout(45);
+    await page.mouse.move(pts.mid.x, pts.mid.y, { steps: 6 });
+    await page.waitForTimeout(45);
+    await page.mouse.move(pts.gate.x, pts.gate.y, { steps: 8 });
+    await page.mouse.up();
+
+    const dragVibrations = await page.evaluate(
+      () => (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog
+    );
+    expect(dragVibrations).toContain(14);
+    expect(dragVibrations).toContain(10);
+    expect(dragVibrations).toContainEqual([14, 18, 14]);
+
+    // Open Settings, verify Haptics defaults ON, mute Sound FX (volume 0), and verify taps still vibrate
+    await page.locator('#btn-pause').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+    await expect(page.locator('#toggle-haptics')).toBeChecked();
+
+    const sfxBtn = page.locator('#btn-volume-sfx');
+    while ((await sfxBtn.getAttribute('data-volume-step')) !== '0') {
+      await sfxBtn.click();
+    }
+
+    await page.evaluate(() => {
+      (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog = [];
+    });
+    await page.locator('#btn-pause-resume').click();
+    await expect(page.locator('#dialog-pause')).toBeHidden();
+    const mutedSfxVibrations = await page.evaluate(
+      () => (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog
+    );
+    expect(mutedSfxVibrations).toContain(12);
+
+    // Disable Haptics -> zero vibrations immediately and across full-page reload
+    await page.locator('#btn-pause').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+    await page.evaluate(() => {
+      (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog = [];
+    });
+    await page.locator('#toggle-haptics').uncheck();
+    await page.locator('#btn-pause-close').click();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog
+      )
+    ).toEqual([]);
+
+    await page.reload();
+    await expect(page.locator('#btn-title-settings')).toBeVisible();
+    await page.locator('#btn-title-settings').click();
+    await expect(page.locator('#dialog-pause')).toBeVisible();
+    await expect(page.locator('#toggle-haptics')).not.toBeChecked();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog
+      )
+    ).toEqual([]);
+
+    // Re-enabling Haptics gives an immediate tactile confirmation pulse
+    await page.locator('#toggle-haptics').check();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __vibrateLog: Array<number | number[]> }).__vibrateLog
+      )
+    ).toEqual([12]);
+    expect(errors).toEqual([]);
+  });
 });

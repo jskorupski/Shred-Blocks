@@ -320,6 +320,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     const el = document.getElementById(id) as HTMLInputElement | null;
     el?.addEventListener('change', () => {
       app.saveManager.updateSettings({ [key]: el.checked });
+      app.sound.playButtonTap();
       app.renderNow();
     });
   };
@@ -339,6 +340,7 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     const tier = qualitySelect.value as QualityTier;
     app.saveManager.updateSettings({ qualityTier: tier });
     app.renderer.setQualityPreference(tier);
+    app.sound.playButtonTap();
     app.renderNow();
   });
 

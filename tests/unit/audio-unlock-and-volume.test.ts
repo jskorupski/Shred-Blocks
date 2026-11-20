@@ -14,6 +14,7 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
   const stateRef = { value: initialState };
   const docState = { hidden: false };
   const audioSession = { type: 'auto' };
+  const vibrateSpy = vi.fn((_pattern: number | number[]) => true);
   let resumeCount = 0;
   let silentBufferCount = 0;
 
@@ -162,7 +163,7 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
       docListeners.get(t)?.delete(cb);
     },
   });
-  vi.stubGlobal('navigator', { audioSession });
+  vi.stubGlobal('navigator', { audioSession, vibrate: vibrateSpy });
 
   return {
     sfxGainNode,
@@ -170,6 +171,7 @@ function createMockSoundDomEnv(initialState: AudioContextState) {
     stateRef,
     docState,
     audioSession,
+    vibrateSpy,
     listeners,
     windowListeners,
     docListeners,
@@ -221,8 +223,17 @@ describe('Audio Unlock Gaps & 4-State Stepped Sanctuary Volume Controls', () => 
     const env = createMockSoundDomEnv('suspended');
     try {
       const sound = new SoundEngine();
-      // Ensures gesture listeners span pointerdown/pointerup/touchend/click/keydown
-      for (const evt of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+      // Ensures gesture & drag-recovery listeners span touch/pointer/keyboard events
+      for (const evt of [
+        'pointerdown',
+        'pointerup',
+        'touchstart',
+        'touchend',
+        'click',
+        'keydown',
+        'pointermove',
+        'touchmove',
+      ]) {
         expect(env.windowListeners.has(evt)).toBe(true);
       }
 
@@ -278,12 +289,14 @@ describe('Audio Unlock Gaps & 4-State Stepped Sanctuary Volume Controls', () => 
 
       // Delayed cascade SFX or fanfare fired while blurred must never wake or vibrate
       const statsWhileBlurred = env.getStats();
+      env.vibrateSpy.mockClear();
       sound.playShred(0);
       sound.playWinFanfare(3);
       expect(env.getStats().resumeCount).toBe(statsWhileBlurred.resumeCount);
+      expect(env.vibrateSpy).not.toHaveBeenCalled();
       expect(ambient.isRunning()).toBe(false);
 
-      // Returning focus restores gains, audioSession, running AudioContext, and music
+      // Returning focus restores gains, audioSession, running AudioContext, music, and haptics
       env.emitWindow('focus');
       await Promise.resolve();
       expect(env.stateRef.value).toBe('running');
@@ -291,6 +304,15 @@ describe('Audio Unlock Gaps & 4-State Stepped Sanctuary Volume Controls', () => 
       expect(env.musicGainNode.gain.value).toBeCloseTo(0.36);
       expect(env.sfxGainNode.gain.value).toBeCloseTo(0.85);
       expect(env.audioSession.type).toBe('playback');
+      sound.playButtonTap();
+      expect(env.vibrateSpy).toHaveBeenCalledTimes(1);
+
+      // Spurious window blur while page stays visible (!document.hidden) self-heals on pointermove drag
+      env.vibrateSpy.mockClear();
+      env.emitWindow('blur');
+      env.emitWindow('pointermove');
+      sound.playSlideTick();
+      expect(env.vibrateSpy).toHaveBeenCalledTimes(1);
 
       // 2. Mobile tab switch (blur + visibilitychange hidden -> visible without focus) cleanly resumes
       env.emitWindow('blur');

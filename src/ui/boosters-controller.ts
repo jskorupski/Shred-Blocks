@@ -89,6 +89,7 @@ export function activateBoosterImpl(app: BoosterAppContext, type: BoosterType): 
 
   // Toggle off if already targeting this booster
   if (app.inputController.getInputMode() === targetMode) {
+    app.sound.playButtonTap();
     app.inputController.cancelTargeting();
     return;
   }

@@ -1,5 +1,13 @@
 import type { AudioVolumeStep, BoosterType, ParticleStyleId } from '../core/types';
 import { AmbientMusicController, type AmbientPresetId, type MusicScene } from './ambient-music';
+import {
+  dispatchHapticFeedback,
+  HAPTIC_MAX_PULSE_MS,
+  HAPTIC_MIN_PULSE_MS,
+  HAPTIC_PATTERNS,
+  type HapticCueId,
+  type HapticCueSpec,
+} from './haptics';
 import { playStyledShredSoundscape } from './shred-style-voices';
 import {
   getOrCreateRelicAwakenNoiseBuffer,
@@ -19,7 +27,15 @@ import {
   prewarmSharedNoiseBuffer,
 } from './synth-voices';
 
-export type { AmbientPresetId, MusicScene };
+export {
+  type AmbientPresetId,
+  HAPTIC_MAX_PULSE_MS,
+  HAPTIC_MIN_PULSE_MS,
+  HAPTIC_PATTERNS,
+  type HapticCueId,
+  type HapticCueSpec,
+  type MusicScene,
+};
 
 export const SFX_MASTER_GAIN = 0.85;
 export const MUSIC_MASTER_GAIN = 0.36;
@@ -38,7 +54,8 @@ export const MUSIC_VOLUME_GAINS: Readonly<Record<AudioVolumeStep, number>> = {
   3: 0.48,
 };
 
-const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown'] as const;
+const MOVE_RECOVERY_EVENTS = ['pointermove', 'touchmove'] as const;
 
 interface NavigatorWithAudioSession extends Navigator {
   audioSession?: {
@@ -72,6 +89,7 @@ export class SoundEngine {
   private isFrozen = false;
 
   private readonly boundUnlock: () => void;
+  private readonly boundMoveUnlock: () => void;
   private readonly boundVisibilityChange: () => void;
   private readonly boundBlur: () => void;
   private readonly boundFocus: () => void;
@@ -105,6 +123,11 @@ export class SoundEngine {
     if (initial?.hapticsEnabled !== undefined) this.hapticsEnabled = initial.hapticsEnabled;
 
     this.boundUnlock = () => this.unlock();
+    this.boundMoveUnlock = () => {
+      if (this.isWindowBlurred && !(typeof document !== 'undefined' && document.hidden)) {
+        this.unlock();
+      }
+    };
     this.boundVisibilityChange = () => this.handleVisibilityChange();
     this.boundBlur = () => {
       this.isWindowBlurred = true;
@@ -147,6 +170,9 @@ export class SoundEngine {
       this.isDocumentHidden = Boolean(document.hidden);
       for (const evt of UNLOCK_EVENTS) {
         window.addEventListener(evt, this.boundUnlock, { capture: true, passive: true });
+      }
+      for (const evt of MOVE_RECOVERY_EVENTS) {
+        window.addEventListener(evt, this.boundMoveUnlock, { capture: true, passive: true });
       }
       window.addEventListener('blur', this.boundBlur);
       window.addEventListener('focus', this.boundFocus);
@@ -245,6 +271,9 @@ export class SoundEngine {
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       for (const evt of UNLOCK_EVENTS) {
         window.removeEventListener(evt, this.boundUnlock, { capture: true });
+      }
+      for (const evt of MOVE_RECOVERY_EVENTS) {
+        window.removeEventListener(evt, this.boundMoveUnlock, { capture: true });
       }
       window.removeEventListener('blur', this.boundBlur);
       window.removeEventListener('focus', this.boundFocus);
@@ -505,48 +534,34 @@ export class SoundEngine {
   }
 
   /**
-   * Triggers Android vibration or iOS sub-bass acoustic-haptic transient.
+   * Triggers Android vibration or WebKit/iOS sub-bass acoustic-haptic transient (`HAPTICS-01`).
    */
-  public triggerHaptic(pattern: number | number[] = 10, subBassFreq = 62): void {
-    if (!this.hapticsEnabled || this.isBackgrounded()) return;
+  public triggerHaptic(pattern: number | number[] = 12, subBassFreq = 62): boolean {
+    return dispatchHapticFeedback({
+      hapticsEnabled: this.hapticsEnabled,
+      backgrounded: this.isBackgrounded(),
+      sfxEnabled: this.sfxEnabled,
+      pattern,
+      subBassFreq,
+      getRunningSfx: () => {
+        const ctx = this.ensureContext();
+        if (!ctx || !this.sfxGain || ctx.state !== 'running') return null;
+        return { ctx, sfxGain: this.sfxGain };
+      },
+    });
+  }
 
-    let vibrated = false;
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      try {
-        vibrated = navigator.vibrate(pattern);
-      } catch {
-        vibrated = false;
-      }
-    }
-
-    // iOS Safari fallback (or tactile enhancement when SFX is active):
-    // Short low-frequency sub-bass transient that couples with mobile speaker enclosure
-    if (!vibrated && this.sfxEnabled) {
-      const ctx = this.ensureContext();
-      if (!ctx || !this.sfxGain || ctx.state !== 'running') return;
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(subBassFreq, now);
-      osc.frequency.exponentialRampToValueAtTime(34, now + 0.028);
-
-      gain.gain.setValueAtTime(0.28, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
-
-      osc.connect(gain);
-      gain.connect(this.sfxGain);
-      osc.start(now);
-      osc.stop(now + 0.032);
-    }
+  private triggerCueHaptic(cue: HapticCueId): void {
+    const spec = HAPTIC_PATTERNS[cue];
+    this.triggerHaptic(spec.pattern, spec.subBassFreq);
   }
 
   /**
    * 1. Block Pickup (`pointerdown` on movable block):
-   * Warm marimba-like wooden pop (`180 Hz -> 420 Hz`, `45 ms` exponential decay) + `8 ms` haptic pulse.
+   * Warm marimba-like wooden pop (`180 Hz -> 420 Hz`, `45 ms` exponential decay) + `14 ms` haptic pulse.
    */
   public playPickup(): void {
-    this.triggerHaptic(8, 68);
+    this.triggerCueHaptic('pickup');
     const ready = this.getReadySfx();
     if (ready) playPickupVoice(ready.ctx, ready.sfxGain);
   }
@@ -560,7 +575,7 @@ export class SoundEngine {
     if (nowMs - this.lastSlideTickMs < 28) return;
     this.lastSlideTickMs = nowMs;
 
-    this.triggerHaptic(4, 75);
+    this.triggerCueHaptic('slideTick');
     const ready = this.getReadySfx();
     if (ready) playSlideTickVoice(ready.ctx, ready.sfxGain);
   }
@@ -574,7 +589,7 @@ export class SoundEngine {
     if (nowMs - this.lastWallClackMs < 60) return;
     this.lastWallClackMs = nowMs;
 
-    this.triggerHaptic([10, 20, 8], 52);
+    this.triggerCueHaptic('wallClack');
     const ready = this.getReadySfx();
     if (ready) playWallClackVoice(ready.ctx, ready.sfxGain);
   }
@@ -584,7 +599,7 @@ export class SoundEngine {
    * Clean magnetic click (`520 Hz -> 260 Hz`, `22 ms`).
    */
   public playSnap(): void {
-    this.triggerHaptic(6, 65);
+    this.triggerCueHaptic('snap');
     const ready = this.getReadySfx();
     if (ready) playSnapVoice(ready.ctx, ready.sfxGain);
   }
@@ -592,14 +607,14 @@ export class SoundEngine {
   /**
    * 5. Shredder Gate Grind + Pop (block Shreds through matching Gate):
    * Crisp rhythmic series of `8` ascending xylophone/marimba micro-grains (`320 Hz .. 960 Hz`)
-   * + filtered white-noise mechanical whirr + staggered haptic buzz (`[12, 18, 12] ms`).
+   * + filtered white-noise mechanical whirr + staggered haptic buzz (`[14, 18, 14] ms`).
    */
   public playShred(
     cascadeIndex = 0,
     style: ParticleStyleId = this.equippedParticle,
     isFinalClear = false
   ): void {
-    this.triggerHaptic(isFinalClear ? [14, 16, 14, 18, 20] : [12, 18, 12], isFinalClear ? 90 : 70);
+    this.triggerCueHaptic(isFinalClear ? 'shredFinalClear' : 'shred');
     const ready = this.getReadySfx();
     if (!ready) return;
     const pitchScale = 2 ** (Math.min(12, Math.max(0, cascadeIndex + (isFinalClear ? 2 : 0))) / 12);
@@ -615,7 +630,7 @@ export class SoundEngine {
   }
 
   public playParticlePreview(style: ParticleStyleId): void {
-    this.triggerHaptic(6, 65);
+    this.triggerCueHaptic('particlePreview');
     const ready = this.getReadySfx();
     if (ready) {
       playStyledShredSoundscape(ready.ctx, ready.sfxGain, ready.ctx.currentTime, 1.0, style, false, true);
@@ -627,7 +642,7 @@ export class SoundEngine {
    * Crisp zipper/pop arpeggio (`440 Hz -> 660 Hz -> 880 Hz`, `90 ms`).
    */
   public playLayerPeel(): void {
-    this.triggerHaptic([8, 14, 10], 74);
+    this.triggerCueHaptic('layerPeel');
     const ready = this.getReadySfx();
     if (ready) playLayerPeelVoice(ready.ctx, ready.sfxGain);
   }
@@ -637,7 +652,7 @@ export class SoundEngine {
    * High-frequency crystalline FM chime (`1800 Hz + 2450 Hz` inharmonic partials, `65 ms`).
    */
   public playIceCrack(): void {
-    this.triggerHaptic(10, 80);
+    this.triggerCueHaptic('iceCrack');
     const ready = this.getReadySfx();
     if (ready) playIceCrackVoice(ready.ctx, ready.sfxGain);
   }
@@ -647,7 +662,7 @@ export class SoundEngine {
    * Metallic tumbler click + warm fifth (`587 Hz -> 880 Hz`, `110 ms`).
    */
   public playLockOpen(): void {
-    this.triggerHaptic([10, 20, 14], 66);
+    this.triggerCueHaptic('lockOpen');
     const ready = this.getReadySfx();
     if (ready) playLockOpenVoice(ready.ctx, ready.sfxGain);
   }
@@ -657,7 +672,7 @@ export class SoundEngine {
    * Distinct procedural sound signature per booster.
    */
   public playBooster(type: BoosterType = 'HAMMER'): void {
-    this.triggerHaptic([15, 25, 18], 58);
+    this.triggerCueHaptic('booster');
     const ready = this.getReadySfx();
     if (!ready) return;
     playBoosterVoice(ready.ctx, ready.sfxGain, type, () => this.playIceCrack());
@@ -671,7 +686,7 @@ export class SoundEngine {
    * - Voice 3: Upbeat bass groove + sparkling star-pop crystalline chimes (`C7 -> E7 -> G7`)
    */
   public playWinFanfare(earnedStars = 3): void {
-    this.triggerHaptic([18, 30, 18, 30, 28, 40, 35], 64);
+    this.triggerCueHaptic('winFanfare');
     if ((!this.sfxEnabled && !this.musicEnabled) || this.isBackgrounded()) return;
     const ctx = this.ensureContext();
     const outGain = this.sfxEnabled ? this.sfxGain : this.musicGain;
@@ -689,7 +704,7 @@ export class SoundEngine {
    * Shimmering Lydian `#11` astral bell cascade layered over the win fanfare when beating Par booster-free.
    */
   public playUnderParOracleChime(): void {
-    this.triggerHaptic([14, 24, 14, 24, 32], 74);
+    this.triggerCueHaptic('underParOracle');
     if ((!this.sfxEnabled && !this.musicEnabled) || this.isBackgrounded()) return;
     const ctx = this.ensureContext();
     const outGain = this.sfxEnabled ? this.sfxGain : this.musicGain;
@@ -707,7 +722,7 @@ export class SoundEngine {
    * Gentle, non-startling descending soft synth chord (`G4 - Eb4 - C4`).
    */
   public playLossBuzzer(): void {
-    this.triggerHaptic([20, 40, 25], 50);
+    this.triggerCueHaptic('lossBuzzer');
     const ready = this.getReadySfx();
     if (!ready) return;
     playLossBuzzerVoice(ready.ctx, ready.sfxGain);
@@ -717,7 +732,7 @@ export class SoundEngine {
    * Convenience UI button tap sound.
    */
   public playButtonTap(): void {
-    this.triggerHaptic(5, 72);
+    this.triggerCueHaptic('buttonTap');
     const ready = this.getReadySfx();
     if (!ready) return;
     playButtonTapVoice(ready.ctx, ready.sfxGain);
@@ -728,14 +743,7 @@ export class SoundEngine {
    * Deep sustained tectonic stone-break rumble + warm swept whoosh/swish (zero bells, dings, or harsh highs).
    */
   public playRelicAwaken(): void {
-    if (this.isBackgrounded()) return;
-    if (this.hapticsEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      try {
-        navigator.vibrate([26, 28, 18, 34, 14]);
-      } catch {
-        // Ignore on unsupported devices
-      }
-    }
+    this.triggerCueHaptic('relicAwaken');
     const ready = this.getReadySfx();
     if (!ready) return;
     playRelicAwakenVoice(ready.ctx, ready.sfxGain);
