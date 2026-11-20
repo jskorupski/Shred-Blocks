@@ -62,6 +62,103 @@ vec2 voronoiRockCrack(vec2 x) {
   return vec2(md, shardHash);
 }
 
+// Same 3x3 Voronoi partition as voronoiRockCrack, also returning the winning seed center in Voronoi space
+// so the awakening crust shader and CPU 3D plate splitter share exact cell IDs & detachment timing.
+vec4 voronoiRockPlate(vec2 x) {
+  vec2 n = floor(x);
+  vec2 f = fract(x);
+  vec2 rv[9];
+  vec2 mr = vec2(0.0);
+  vec2 bestSeed = vec2(0.0);
+  int minIdx = 0;
+  float md = 8.0;
+  float shardHash = 0.0;
+  int k = 0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 cellId = n + g;
+      vec2 o = hashRelic22(cellId);
+      vec2 r = g + (0.14 + 0.72 * o) - f;
+      rv[k] = r;
+      float d = dot(r, r);
+      if (d < md) {
+        md = d;
+        mr = r;
+        bestSeed = cellId + (0.14 + 0.72 * o);
+        minIdx = k;
+        shardHash = o.x;
+      }
+      k++;
+    }
+  }
+  md = 8.0;
+  for (int idx = 0; idx < 9; idx++) {
+    if (idx != minIdx) {
+      vec2 r = rv[idx];
+      vec2 diff = r - mr;
+      float d2 = dot(diff, diff);
+      if (d2 > 0.00001) {
+        md = min(md, dot(0.5 * (mr + r), diff * inversesqrt(d2)));
+      }
+    }
+  }
+  return vec4(md, bestSeed.x, bestSeed.y, shardHash);
+}
+
+// Reads CPU cluster LUT (u_relicClusterTex) so fused multi-cell mega-slabs suppress internal seams
+// and preserve already-glowing Voronoi boundaries cleanly during RELIC-AWAKEN-01.
+vec4 voronoiRockPlateCluster(vec2 x, out vec4 outClusterData) {
+  vec2 n = floor(x);
+  ivec2 baseCell = ivec2(n);
+  vec2 f = fract(x);
+  vec2 rv[9];
+  ivec2 cids[9];
+  vec2 mr = vec2(0.0);
+  int minIdx = 0;
+  float md = 8.0;
+  float shardHash = 0.0;
+  int k = 0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 cellId = n + g;
+      vec2 o = hashRelic22(cellId);
+      vec2 r = g + (0.14 + 0.72 * o) - f;
+      rv[k] = r;
+      cids[k] = baseCell + ivec2(i, j);
+      float d = dot(r, r);
+      if (d < md) {
+        md = d;
+        mr = r;
+        minIdx = k;
+        shardHash = o.x;
+      }
+      k++;
+    }
+  }
+  outClusterData = texelFetch(u_relicClusterTex, clamp(cids[minIdx] + ivec2(2), ivec2(0), ivec2(15)), 0);
+  float myClusterId = outClusterData.r;
+  float mdAll = 8.0;
+  float mdCluster = 8.0;
+  for (int idx = 0; idx < 9; idx++) {
+    if (idx != minIdx) {
+      vec2 r = rv[idx];
+      vec2 diff = r - mr;
+      float d2 = dot(diff, diff);
+      if (d2 > 0.00001) {
+        float edgeD = dot(0.5 * (mr + r), diff * inversesqrt(d2));
+        mdAll = min(mdAll, edgeD);
+        float nbrClusterId = texelFetch(u_relicClusterTex, clamp(cids[idx] + ivec2(2), ivec2(0), ivec2(15)), 0).r;
+        if (!(abs(nbrClusterId - myClusterId) <= 0.002 && myClusterId >= 0.002)) {
+          mdCluster = min(mdCluster, edgeD);
+        }
+      }
+    }
+  }
+  return vec4(mdAll, mdCluster, shardHash, 0.0);
+}
+
 float sdSeg(vec2 p, vec2 a, vec2 b) {
   vec2 pa = p - a;
   vec2 ba = b - a;

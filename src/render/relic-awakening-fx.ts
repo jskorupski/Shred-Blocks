@@ -14,12 +14,17 @@ import {
   SMOKE_SCALE_OFFSET,
 } from './render-types';
 import type { ParticleInstancedVaoHandle } from './shaders-3d';
+import {
+  bindRelicClusterTextureImpl,
+  disposeRelicPlateResources,
+  spawnRelicVoronoiPlatesImpl,
+} from './voronoi-plates';
 
 /**
  * Relic Awakening Transformation (`RELIC-AWAKEN-01`):
- * When the player taps Play on the Title Screen, the levitating stone relic bursts apart —
- * tumbling 3D theme-tinted stone shards fly off, ancient dust/smoke billows upward, warm amethyst & gold embers rise,
- * and concentric glow shockwaves sweep the board as vibrant gameplay colors emerge underneath.
+ * When the player taps Play on the Title Screen, the levitating stone relic's Voronoi fissures widen and surge
+ * with glowing inner light before the actual polygonal Voronoi crust plates cleave off, lift outward, and unwrap
+ * the vivid gameplay board underneath—accented by crack-seam chips, vapor, embers, and floor shockwaves.
  * Never spawns when `reducedMotion === true`.
  */
 
@@ -73,18 +78,19 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
   const cy = board.rows * 0.5;
   const span = Math.max(board.cols, board.rows);
 
-  // 1. Glow shockwaves in the relic crack-glow palette: bright orchid flash above the blocks,
-  //    amethyst wave sweeping the floor, and a trailing sanctuary-gold ring
-  rctx.spawnShockwave(cx, cy, 0.66, 0.98, 0.62, 1.0, 0.16, span * 0.42, 0.52);
-  rctx.spawnShockwave(cx, cy, 0.04, 0.8, 0.38, 1.0, 0.34, span * 0.66, 0.78);
-  rctx.spawnShockwave(cx, cy, 0.36, 1.0, 0.78, 0.42, 0.24, span * 0.54, 0.4);
+  // 1. Spawn exact Voronoi fracture plates matching the shader crack lattice + collect seam midpoints
+  const seamPoints = spawnRelicVoronoiPlatesImpl(rctx, board, rctx.lastOptions.timeSec ?? 2.0);
 
-  // 2. Tactile board micro-recoil + staggered block awakening bounces
+  // 2. Refined shockwaves: amethyst floor pulse + crisp sanctuary-gold sweep (avoids washing out the unwrapping board)
+  rctx.spawnShockwave(cx, cy, 0.04, 0.82, 0.42, 1.0, 0.28, span * 0.66, 0.72);
+  rctx.spawnShockwave(cx, cy, 0.32, 1.0, 0.78, 0.44, 0.2, span * 0.54, 0.42);
+
+  // 3. Tactile board micro-recoil + staggered block awakening bounces
   rctx.boardShakeTimer = 0.16;
   rctx.boardShakeDirX = 0.7;
   rctx.boardShakeDirY = 0.7;
 
-  // Collect stone-relic source cells (active block cells + perimeter rim)
+  // Collect block anchor cells & perimeter rim fallback, keeping Voronoi crack seams as primary chip/vapor emitters
   const cells: Array<[number, number, number]> = [];
   for (const blk of board.blocks) {
     if (blk.status !== 'ACTIVE') continue;
@@ -93,11 +99,13 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
       cells.push([blk.x + c + 0.5, blk.y + r + 0.5, 0.6]);
     }
   }
-  const rimCount = Math.round(18 * density);
   const { cols, rows } = board;
+  const emitters = seamPoints.length > 0 ? seamPoints : cells;
+  if (emitters.length === 0) emitters.push([cx, cy, 0.4]);
+  const rimFallbackCount = Math.round(10 * density);
   const perim = 2 * (cols + rows);
-  for (let i = 0; i < rimCount; i++) {
-    const d = (i / rimCount) * perim;
+  for (let i = 0; i < rimFallbackCount && seamPoints.length === 0; i++) {
+    const d = (i / Math.max(1, rimFallbackCount)) * perim;
     let px: number;
     let py: number;
     if (d < cols) {
@@ -113,24 +121,23 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
       px = -0.35;
       py = perim - d;
     }
-    cells.push([px, py, 0.5]);
+    emitters.push([px, py, 0.5]);
   }
-  if (cells.length === 0) cells.push([cx, cy, 0.4]);
 
-  // 3. Tumbling 3D fractured stone shards flying outward & upward (tinted to active theme stone)
+  // 4. Fine crack-seam stone splinters so the large uneven Voronoi crust slabs own the silhouette
   const stoneTint = getStoneThemeMineralTint(rctx.lastOptions.equippedTray, rctx.lastOptions.equippedSkin);
-  const shardCount = Math.round(68 * density);
-  for (let i = 0; i < shardCount; i++) {
-    const [sx, sy, sz] = cells[i % cells.length];
-    const jx = sx + (rand() - 0.5) * 0.7;
-    const jy = sy + (rand() - 0.5) * 0.7;
+  const splinterCount = Math.round(14 * density);
+  for (let i = 0; i < splinterCount; i++) {
+    const [sx, sy, sz] = emitters[(i * 5) % emitters.length];
+    const jx = sx + (rand() - 0.5) * 0.28;
+    const jy = sy + (rand() - 0.5) * 0.28;
     let dx = jx - cx;
     let dy = jy - cy;
     const len = Math.hypot(dx, dy) || 1;
     dx /= len;
     dy /= len;
-    const speed = 1.4 + rand() * 2.8;
-    const ang = (rand() - 0.5) * 0.9;
+    const speed = 1.2 + rand() * 2.2;
+    const ang = (rand() - 0.5) * 0.85;
     const vx = (dx * Math.cos(ang) - dy * Math.sin(ang)) * speed;
     const vy = (dx * Math.sin(ang) + dy * Math.cos(ang)) * speed;
     const baseTone = ASTROLABE_SHARD_TONES[i % ASTROLABE_SHARD_TONES.length];
@@ -143,26 +150,25 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
       rctx,
       jx,
       jy,
-      sz + rand() * 0.1,
+      sz + rand() * 0.08,
       vx,
       vy,
-      2.6 + rand() * 2.8,
+      2.0 + rand() * 2.1,
       shardRgb,
-      -(0.14 + rand() * 0.12),
-      0.85 + rand() * 0.4,
+      -(0.038 + rand() * 0.042),
+      0.72 + rand() * 0.35,
       rand() * 6.283,
       (rand() < 0.5 ? -1 : 1) * (9 + rand() * 7)
     );
   }
 
-  // 4. Billowing twilight-slate vapor & warm amethyst-champagne glowing mist puffs
-  //    Scaled to active source cell count so compact 5x5 boards avoid excessive alpha overdraw.
-  const baseSmoke = Math.min(44, Math.max(28, Math.round(cells.length * 0.9)));
+  // 5. Light twilight-slate & amethyst-champagne vapor puffs venting cleanly along widened fracture seams
+  const baseSmoke = Math.min(28, Math.max(18, Math.round(emitters.length * 0.5)));
   const smokeCount = Math.round(baseSmoke * density);
   for (let i = 0; i < smokeCount; i++) {
-    const [sx, sy] = cells[(i * 7) % cells.length];
+    const [sx, sy, sz] = emitters[(i * 7) % emitters.length];
     const glowTint = i % 5 === 0 ? [0.84, 0.52, 0.98] : i % 4 === 0 ? [0.98, 0.8, 0.54] : null;
-    const mist = 0.46 + rand() * 0.14;
+    const mist = 0.42 + rand() * 0.14;
     const rgb: [number, number, number] = glowTint
       ? [glowTint[0], glowTint[1], glowTint[2]]
       : [
@@ -171,40 +177,40 @@ export function spawnRelicAwakeningBurstImpl(rctx: RenderPassContext, board: Boa
           Math.min(1, mist * 1.18 * stoneTint[2]),
         ];
     const ang = rand() * 6.283;
-    const drift = 0.4 + rand() * 1.1;
+    const drift = 0.35 + rand() * 0.95;
     writeParticle(
       rctx,
-      sx + (rand() - 0.5) * 0.6,
-      sy + (rand() - 0.5) * 0.6,
-      0.5 + rand() * 0.3,
+      sx + (rand() - 0.5) * 0.35,
+      sy + (rand() - 0.5) * 0.35,
+      sz + rand() * 0.2,
       Math.cos(ang) * drift,
       Math.sin(ang) * drift,
-      0.6 + rand() * 0.9,
+      0.55 + rand() * 0.8,
       rgb,
-      -(SMOKE_SCALE_OFFSET + 0.5 + rand() * 0.36),
-      0.92 + rand() * 0.52,
+      -(SMOKE_SCALE_OFFSET + 0.38 + rand() * 0.28),
+      0.85 + rand() * 0.45,
       0,
       0
     );
   }
 
-  // 5. Incandescent warm amethyst, orchid & golden embers rising through the smoke
-  const emberCount = Math.round(38 * density);
+  // 6. Incandescent warm amethyst, orchid & golden embers rising out of the glowing fissures
+  const emberCount = Math.round(36 * density);
   for (let i = 0; i < emberCount; i++) {
-    const [sx, sy] = cells[(i * 3) % cells.length];
+    const [sx, sy, sz] = emitters[(i * 3) % emitters.length];
     const rgb: [number, number, number] =
       i % 3 === 0 ? [0.88, 0.46, 1.0] : i % 3 === 1 ? [0.98, 0.56, 0.86] : [1.0, 0.8, 0.38];
     writeParticle(
       rctx,
-      sx,
-      sy,
-      0.62,
-      (rand() - 0.5) * 1.6,
-      (rand() - 0.5) * 1.6,
-      3.2 + rand() * 2.2,
+      sx + (rand() - 0.5) * 0.22,
+      sy + (rand() - 0.5) * 0.22,
+      sz + 0.04,
+      (rand() - 0.5) * 1.35,
+      (rand() - 0.5) * 1.35,
+      2.8 + rand() * 2.1,
       rgb,
-      -(RELIC_EMBER_SCALE_OFFSET + 0.045 + rand() * 0.035),
-      0.6 + rand() * 0.4,
+      -(RELIC_EMBER_SCALE_OFFSET + 0.045 + rand() * 0.03),
+      0.62 + rand() * 0.4,
       rand() * 6.283,
       (rand() < 0.5 ? -1 : 1) * 6
     );
@@ -315,6 +321,7 @@ export function warmUpWebGLPipelinesImpl(
     gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
     gl.uniform1i(uAtlas, 0);
   }
+  bindRelicClusterTextureImpl(rctx, gl, mainProgram);
 
   for (const mix of [1.0, 0.5, 0.0]) {
     gl.uniform1f(uBlueprintMix, mix);
@@ -371,6 +378,7 @@ export function warmUpWebGLPipelinesImpl(
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 4);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 7);
   rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 10);
+  rctx.drawMesh(gl, ENVIRONMENT_MESHES.overlayQuad, 0, 0, -50, 0.01, 0.01, 1, 0.3, 0.9, 1.0, 0.5, 0, 0, 11);
   gl.enable(gl.CULL_FACE);
 
   if (h.program && h.vao && h.instanceBuffer && h.smokeVao && h.smokeInstanceBuffer) {
@@ -434,6 +442,7 @@ export function disposeWebGLResourcesImpl(
     if (mainProgram) gl.deleteProgram(mainProgram);
     if (particleProgram) gl.deleteProgram(particleProgram);
   }
+  disposeRelicPlateResources(gl);
   meshHandles.clear();
 }
 
@@ -487,6 +496,8 @@ export function resetTransientFxImpl(rctx: RenderPassContext): void {
   rctx.activeParticleCount = 0;
   rctx.activeSmokeCount = 0;
   rctx.hasGameplayParticles = false;
+  if (rctx.relicPlates) rctx.relicPlates.length = 0;
+  rctx.activeRelicPlateCount = 0;
   rctx.particlePoolCount = 0;
   rctx.particleWriteCursor = 0;
   rctx.activeShockwaves.length = 0;
@@ -545,4 +556,5 @@ export function prepareWebGL2FrameStateImpl(
     gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
     gl.uniform1i(uAtlas, 0);
   }
+  bindRelicClusterTextureImpl(rctx, gl, mainProgram);
 }

@@ -5,7 +5,7 @@ import { canGroupOccupyOffset, getMovedGroupBlocks, isBlockInLockedRoom } from '
 import type { AudioVolumeStep, BoosterType, SavePayloadV1 } from '../core/types';
 import type { HoverState } from '../input/pointer-controller';
 import { getLevelSpec } from '../levels/catalog';
-import type { RenderSceneOptions } from '../render/renderer-3d';
+import { RELIC_AWAKEN_DURATION_SEC, type RenderSceneOptions } from '../render/renderer-3d';
 import {
   BOOSTER_RARITY,
   BOOSTER_UNLOCK_LEVEL,
@@ -675,7 +675,7 @@ export function buildRenderOptionsImpl(
     highContrast: save.settings.highContrast,
     reducedMotion: save.settings.reducedMotion,
     qualityTier: save.settings.qualityTier,
-    blueprintMix: app.titleOverlayOpen ? 1.0 : app.blueprintMix ** 1.5,
+    blueprintMix: app.titleOverlayOpen ? 1.0 : app.blueprintMix,
     fxDecayMul: outcomeModalOpen ? 1.4 : 1.0,
     dtSec,
     timeSec,
@@ -689,7 +689,7 @@ export function stepSimulationImpl(app: AppViewContext, dtSec: number): void {
     if (app.saveManager.getPayload().settings.reducedMotion) {
       app.blueprintMix = 0;
     } else {
-      app.blueprintMix = Math.max(0, app.blueprintMix - dtSec / 0.58);
+      app.blueprintMix = Math.max(0, app.blueprintMix - dtSec / RELIC_AWAKEN_DURATION_SEC);
     }
     if (app.blueprintMix === 0) {
       document.getElementById('screen-game')?.classList.remove('relic-awakening-burst');

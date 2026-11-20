@@ -62,6 +62,7 @@ import {
   MAX_SMOKE_PUFFS,
   PARTICLE_STRIDE,
   QualityGovernor,
+  type RelicFracturePlate,
   type RenderPassContext,
   type RenderSceneOptions,
   TRAY_PALETTES,
@@ -82,6 +83,7 @@ import {
   PARTICLE_VERTEX_SHADER,
   type ParticleInstancedVaoHandle,
 } from './shaders-3d';
+import { renderRelicPlatesWebGL2Impl } from './voronoi-plates';
 
 export * from './render-types';
 
@@ -136,6 +138,8 @@ export class Renderer3D implements RenderPassContext {
   public readonly smokeInstanceData = new Float32Array(MAX_SMOKE_PUFFS * INSTANCE_STRIDE);
   public activeParticleCount = 0;
   public activeSmokeCount = 0;
+  public readonly relicPlates: RelicFracturePlate[] = [];
+  public activeRelicPlateCount = 0;
   public hasGameplayParticles = false;
   public particlePoolCount = 0;
   public particleWriteCursor = 0;
@@ -765,6 +769,9 @@ export class Renderer3D implements RenderPassContext {
     renderPass1PortcullisBarriers(this, gl, board, palette, timeSec);
     renderPass2ReticleAndPromptsImpl(this, gl, board, options, highContrast, pulse);
     renderPass3BlocksImpl(this, gl, board, options, skinId, highContrast, colorblind, pulse, timeSec, dtSec);
+    if (blueprintMix < 0.999 && this.activeRelicPlateCount > 0) {
+      renderRelicPlatesWebGL2Impl(this, gl, this.mainProgram);
+    }
     if (blueprintMix < 0.999 && this.activeParticleCount + this.activeSmokeCount > 0) {
       renderPass4ParticlesImpl(
         this,

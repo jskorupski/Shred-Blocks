@@ -11,6 +11,7 @@ import {
   type RenderSceneOptions,
 } from './render-types';
 import { renderGateBurstsCanvas2D } from './shred-style-fx';
+import { renderRelicPlatesCanvas2DImpl } from './voronoi-plates';
 
 /**
  * Complete `Canvas2D` fallback renderer (`R3D-05`) using `Camera3D.boardToScreen` so all 18 obstacles,
@@ -745,4 +746,5 @@ export function renderCanvas2DFallbackImpl(
     ctx.fillRect(pt.x - rad * 0.5, pt.y - rad * 0.5, rad, rad);
   }
   renderGateBurstsCanvas2D(rctx, ctx, project);
+  renderRelicPlatesCanvas2DImpl(rctx, ctx, project);
 }

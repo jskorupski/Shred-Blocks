@@ -36,6 +36,57 @@ export const INSTANCE_STRIDE = 8; // x, y, z, scale, r, g, b, rotAngle
 export const MAX_SMOKE_PUFFS = 256;
 export const RELIC_EMBER_SCALE_OFFSET = 5;
 export const SMOKE_SCALE_OFFSET = 10;
+export const RELIC_AWAKEN_DURATION_SEC = 0.68;
+
+/**
+ * One convex Voronoi constituent polygon inside a `RelicFracturePlate` (multi-cell mega-slabs
+ * compose 2+ watertight `RelicSubCell` polygons whose internal shared seams omit side walls).
+ */
+export interface RelicSubCell {
+  centerX: number;
+  centerY: number;
+  /** Screen-CCW perimeter coordinates relative to parent `(centroidX, centroidY)` (`[x0, y0, ...]`) */
+  verts: Float32Array;
+  /** Edge bitmask: bit 0 (`1`) = external boundary wall, bit 1 (`2`) = freshly torn glowing crack, `0` = fused interior seam */
+  edgeFlags: Uint8Array;
+}
+
+export interface RelicFracturePlate {
+  id: number;
+  seedWx: number;
+  seedWy: number;
+  centroidX: number;
+  centroidY: number;
+  baseZ: number;
+  thickness: number;
+  area: number;
+  glowAffinity: number;
+  subCells: RelicSubCell[];
+  detachT: number;
+  detachDelaySec: number;
+  flightDurationSec: number;
+  elapsedSec: number;
+  detached: boolean;
+  spawnOriginX: number;
+  spawnOriginY: number;
+  spawnOriginZ: number;
+  initTiltX: number;
+  initTiltY: number;
+  initTwistZ: number;
+  posX: number;
+  posY: number;
+  posZ: number;
+  radX: number;
+  radY: number;
+  tanX: number;
+  tanY: number;
+  outSpeed: number;
+  vz0: number;
+  peelAngVel: number;
+  spinVel: number;
+  scale: number;
+  lifeRatio: number;
+}
 
 /**
  * Allocates the next compacted particle slot (`0 .. particlePoolCount - 1`, capped at `MAX_PARTICLES`)
@@ -295,6 +346,8 @@ export interface RenderPassContext {
   /** Translucent relic-awakening smoke puffs (`RELIC-AWAKEN-01`), drawn in a 2nd depth-write-off pass. */
   readonly smokeInstanceData: Float32Array;
   activeSmokeCount: number;
+  readonly relicPlates: RelicFracturePlate[];
+  activeRelicPlateCount: number;
   particlePoolCount: number;
   particleWriteCursor: number;
   lastBoardLevelId: number;

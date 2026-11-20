@@ -107,6 +107,18 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     for (const scene of PROBE_SCENES) {
       expect(helpText).toContain(scene);
     }
+    const relicParsed = parseProbeCliArgs([
+      '--scene',
+      'relic-unwrap',
+      '--level',
+      '25',
+      '--viewports',
+      'mobile,desktop',
+    ]);
+    expect(relicParsed.scenes).toEqual(['relic-unwrap']);
+    expect(relicParsed.levelId).toBe(25);
+    expect(relicParsed.viewports.map((v) => v.width)).toEqual([390, 1280]);
+    expect(helpText).toContain('relic-unwrap');
     expect(DEFAULT_PROBE_PORT).toBe(4180);
     expect(CHROME_WEBGL_LAUNCH_ARGS).toContain('--use-angle=metal');
 

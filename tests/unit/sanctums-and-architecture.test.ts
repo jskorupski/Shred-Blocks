@@ -482,6 +482,7 @@ describe('Multi-Room Portcullis Sanctums & Architectural Topologies', () => {
       fs.readFileSync(path.join(repoRoot, 'src/render/shaders-3d.ts'), 'utf8') +
       fs.readFileSync(path.join(repoRoot, 'src/render/shaders-main-vertex.ts'), 'utf8') +
       fs.readFileSync(path.join(repoRoot, 'src/render/shaders-glsl-lib.ts'), 'utf8') +
+      fs.readFileSync(path.join(repoRoot, 'src/render/shaders-relic-crust.ts'), 'utf8') +
       fs.readFileSync(path.join(repoRoot, 'src/render/shaders-tray-materials.ts'), 'utf8');
     expect(shadersTs).toContain('stoneRelief');
     expect(shadersTs).toContain('runeDist');

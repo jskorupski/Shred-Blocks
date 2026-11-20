@@ -22,6 +22,7 @@ import {
   stepGateBurstsImpl,
   stepStyledParticleSlot,
 } from './shred-style-fx';
+import { stepRelicPlatesImpl } from './voronoi-plates';
 
 /**
  * Spawns a burst of 3D shredder particles into the pre-allocated 2,048-particle ring buffer.
@@ -159,6 +160,8 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
     rctx.particleWriteCursor = 0;
     rctx.activeParticleCount = 0;
     rctx.activeSmokeCount = 0;
+    if (rctx.relicPlates) rctx.relicPlates.length = 0;
+    rctx.activeRelicPlateCount = 0;
     rctx.hasGameplayParticles = false;
     rctx.activeShockwaves.length = 0;
     rctx.activePathTraces.length = 0;
@@ -298,11 +301,18 @@ export function stepParticlesImpl(rctx: RenderPassContext, dtSec: number): void 
     active++;
   }
 
+  stepRelicPlatesImpl(
+    rctx,
+    dt,
+    rctx.lastOptions.blueprintMix ?? 0,
+    rctx.lastOptions.timeSec ?? (performance.now() - rctx.startTimeMs) * 0.001,
+    Boolean(rctx.lastOptions.reducedMotion)
+  );
   rctx.particlePoolCount = writeSlot;
   rctx.activeParticleCount = active;
   rctx.activeSmokeCount = activeSmoke;
   rctx.hasGameplayParticles = hasGameplay;
-  rctx.qualityGovernor.setActiveParticles(active + activeSmoke);
+  rctx.qualityGovernor.setActiveParticles(active + activeSmoke + rctx.activeRelicPlateCount);
 }
 
 export function getRoomVisualStateImpl(
@@ -720,6 +730,7 @@ export function hasActiveVisualFxImpl(rctx: RenderPassContext, blueprintMix = 0)
     blueprintMix > 0.001 ||
     rctx.activeParticleCount > 0 ||
     rctx.activeSmokeCount > 0 ||
+    rctx.activeRelicPlateCount > 0 ||
     rctx.activeVisualShreds.length > 0 ||
     rctx.activeShockwaves.length > 0 ||
     rctx.activeGateBursts.length > 0 ||

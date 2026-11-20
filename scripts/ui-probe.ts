@@ -39,6 +39,7 @@ export const PROBE_SCENES = [
   'failure',
   'save-transfer',
   'install',
+  'relic-unwrap',
 ] as const;
 
 export type ProbeScene = (typeof PROBE_SCENES)[number];
@@ -391,6 +392,93 @@ interface SceneAuditEntry extends ViewportAuditReport {
   screenshotPath: string;
 }
 
+const RELIC_UNWRAP_FRAMES = [
+  { frame: 0, slug: '00-0ms' },
+  { frame: 5, slug: '01-83ms' },
+  { frame: 9, slug: '02-150ms' },
+  { frame: 16, slug: '03-267ms' },
+  { frame: 26, slug: '04-433ms' },
+  { frame: 42, slug: '05-700ms' },
+] as const;
+
+/**
+ * Captures the deterministic 6-frame `RELIC-AWAKEN-01` stone-crust unwrapping progression
+ * (`0ms -> 700ms`) at `ULTRA_120`, auditing viewport geometry on idle Title (`0ms`) and settled (`700ms`).
+ */
+async function runRelicUnwrapProbe(
+  page: Page,
+  session: { saveScreenshot: (p: Page, name: string) => Promise<string> },
+  vp: ViewportPreset,
+  opts: ProbeCliOptions,
+  entries: SceneAuditEntry[]
+): Promise<void> {
+  await seedPlayerSave(page, {
+    highestLevelUnlocked: Math.max(opts.levelId, 80),
+    currentLevelId: opts.levelId,
+    coins: 450,
+    totalStars: 48,
+  });
+  await applyBaseFlags(page, opts);
+  await page.evaluate(async (lvl) => {
+    await document.fonts.ready;
+    const dbg = window.__SHREDBLOCKS_DEBUG__;
+    dbg.setQualityTier('ULTRA_120');
+    dbg.loadLevel(lvl);
+    dbg.openTitleScreen();
+    dbg.setFxRandomSeed(1337);
+    dbg.freezeTime(2.0);
+  }, opts.levelId);
+  await page.addStyleTag({
+    content: '#game-toast, #unlock-toast, #pwa-update-toast { visibility: hidden !important; }',
+  });
+
+  let prevFrame = 0;
+  let started = false;
+  for (const entry of RELIC_UNWRAP_FRAMES) {
+    if (entry.frame > 0) {
+      await page.evaluate(
+        ({ doStart, stepFrames }) => {
+          const dbg = window.__SHREDBLOCKS_DEBUG__;
+          if (doStart) {
+            dbg.setFxRandomSeed(1337);
+            dbg.dismissTitleScreen('game', true);
+          }
+          if (stepFrames > 0) {
+            dbg.advanceFrozenFrames(stepFrames, 1 / 60);
+          }
+        },
+        { doStart: !started, stepFrames: entry.frame - prevFrame }
+      );
+      started = true;
+      prevFrame = entry.frame;
+    }
+    await page.evaluate(
+      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+    );
+    const filename = `${opts.prefix}-relic-unwrap-${entry.slug}-${vp.name}.png`;
+    const screenshotPath = await session.saveScreenshot(page, filename);
+    if (entry.frame === 0 || entry.frame === 42) {
+      const report = await auditViewportGeometry(page, `${vp.name}:${entry.slug}`);
+      entries.push({
+        ...report,
+        scene: 'relic-unwrap',
+        screenshotPath,
+      });
+      const statusIcon = report.passed ? 'PASS' : 'FAIL';
+      process.stdout.write(
+        `[${statusIcon}] relic-unwrap:${entry.slug} @ ${vp.width}x${vp.height} -> ${screenshotPath}\n`
+      );
+      if (!report.passed) {
+        process.stderr.write(`       Audit details: ${JSON.stringify(report)}\n`);
+      }
+    } else {
+      process.stdout.write(
+        `[CAPT] relic-unwrap:${entry.slug} @ ${vp.width}x${vp.height} -> ${screenshotPath}\n`
+      );
+    }
+  }
+}
+
 export async function runUiProbe(opts: ProbeCliOptions): Promise<{
   entries: SceneAuditEntry[];
   runtimeErrors: string[];
@@ -409,6 +497,10 @@ export async function runUiProbe(opts: ProbeCliOptions): Promise<{
         for (const vp of opts.viewports) {
           const { context, page } = await session.openViewportPage(vp);
           try {
+            if (scene === 'relic-unwrap') {
+              await runRelicUnwrapProbe(page, session, vp, opts, entries);
+              continue;
+            }
             await navigateToScene(page, scene, opts);
             const filename = `${opts.prefix}-${scene}-${vp.name}.png`;
             const screenshotPath = await session.saveScreenshot(page, filename);

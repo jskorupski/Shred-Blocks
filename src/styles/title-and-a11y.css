@@ -113,7 +113,7 @@ body.high-contrast #screen-game .astrolabe-backlight-halo {
     rgba(196, 90, 248, 0.22) 82%,
     rgba(160, 70, 224, 0) 100%
   );
-  animation: relicAwakeningBloom 0.58s ease-out forwards;
+  animation: relicAwakeningBloom 0.68s ease-out forwards;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
