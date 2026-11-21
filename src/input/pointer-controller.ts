@@ -492,15 +492,20 @@ export class BoardInputController {
     else this.callbacks.onBoardChanged?.();
   }
 
+  private releaseCanvasCapture(pointerId: number | null): void {
+    if (pointerId === null) return;
+    try {
+      this.canvas.releasePointerCapture?.(pointerId);
+    } catch {
+      // Ignore synthetic pointer events or already-released captures
+    }
+  }
+
   private handlePointerUp(e: PointerEvent): void {
     if (this.targetingPointerId !== null) {
       if (e.pointerId !== this.targetingPointerId) return;
       this.targetingPointerId = null;
-      try {
-        this.canvas.releasePointerCapture?.(e.pointerId);
-      } catch {
-        // Ignore
-      }
+      this.releaseCanvasCapture(e.pointerId);
       const pt = this.clientToBoardCoords(e.clientX, e.clientY);
       const board = this.callbacks.getBoard();
       if (!pt) {
@@ -526,12 +531,7 @@ export class BoardInputController {
     }
     const blockId = this.activeBlockId;
     this.activePointerId = null;
-
-    try {
-      this.canvas.releasePointerCapture?.(e.pointerId);
-    } catch {
-      // Ignore
-    }
+    this.releaseCanvasCapture(e.pointerId);
 
     if (blockId !== null) {
       this.finalizeDragMove(board, blockId, false);
@@ -543,6 +543,7 @@ export class BoardInputController {
   private handlePointerCancel(e: PointerEvent): void {
     if (this.targetingPointerId !== null && e.pointerId === this.targetingPointerId) {
       this.targetingPointerId = null;
+      this.releaseCanvasCapture(e.pointerId);
       this.hoverRow = -1;
       this.hoverCol = -1;
       this.emitHoverState();
@@ -557,6 +558,10 @@ export class BoardInputController {
    * if the block changed cells or was captured by an exit gate.
    */
   private finalizeDragMove(board: BoardState, blockId: number, capturedMidDrag: boolean): void {
+    // OUTCOME-SKIP-01: release canvas pointer capture immediately on mid-drag gate capture
+    // so Top-Layer Victory/Failure CTA taps are never stalled behind a captured inert canvas.
+    const capturedPtrId = this.activePointerId;
+    this.releaseCanvasCapture(capturedPtrId);
     const group = getMovedGroupBlocks(board, blockId);
     const lead = group.find((b) => b.id === blockId) ?? group[0];
 
@@ -705,14 +710,7 @@ export class BoardInputController {
   }
 
   public cancelActiveDrag(): void {
-    const ptrToRelease = this.activePointerId ?? this.targetingPointerId;
-    if (ptrToRelease !== null) {
-      try {
-        this.canvas.releasePointerCapture?.(ptrToRelease);
-      } catch {
-        // Ignore synthetic pointer events
-      }
-    }
+    this.releaseCanvasCapture(this.activePointerId ?? this.targetingPointerId);
     if (this.activeBlockId !== null) {
       const board = this.callbacks.getBoard();
       if (board === this.dragBoardRef) {

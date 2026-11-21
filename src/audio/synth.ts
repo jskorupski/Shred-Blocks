@@ -11,6 +11,7 @@ import {
 import { playStyledShredSoundscape } from './shred-style-voices';
 import {
   getOrCreateRelicAwakenNoiseBuffer,
+  OutcomeAudioBus,
   playBoosterVoice,
   playButtonTapVoice,
   playIceCrackVoice,
@@ -97,6 +98,7 @@ export class SoundEngine {
 
   // Mode-attuned drumless warm analog synthwave ambient music controller
   private readonly ambientMusic = new AmbientMusicController();
+  private readonly outcomeBus = new OutcomeAudioBus();
   private prewarmTimerId: ReturnType<typeof setTimeout> | null = null;
   private prewarmIdleId: number | null = null;
   private isDocumentHidden = false;
@@ -267,6 +269,7 @@ export class SoundEngine {
   }
 
   public destroy(): void {
+    this.outcomeBus.stop(0);
     this.ambientMusic.destroy();
     if (this.prewarmTimerId !== null) {
       clearTimeout(this.prewarmTimerId);
@@ -414,6 +417,7 @@ export class SoundEngine {
   }
 
   private enterBackground(): void {
+    this.outcomeBus.stop(0);
     this.ambientMusic.stopImmediate();
     this.muteMasterGainsImmediate();
     this.syncAudioSessionType();
@@ -697,6 +701,14 @@ export class SoundEngine {
    * - Voice 2: Lush twilight sanctuary harmonic chord progression (`Fmaj9 -> G13 -> Cmaj9`)
    * - Voice 3: Upbeat bass groove + sparkling star-pop crystalline chimes (`C7 -> E7 -> G7`)
    */
+  /**
+   * Smoothly fades out and stops any in-flight Victory fanfare, Under-Par Oracle chime, or Loss buzzer
+   * when a player fast-skips past an outcome modal (`OUTCOME-SKIP-01`), without affecting UI tap SFX.
+   */
+  public stopOutcomeCue(fadeSec = 0.045): void {
+    this.outcomeBus.stop(fadeSec);
+  }
+
   public playWinFanfare(earnedStars = 3): void {
     this.triggerCueHaptic('winFanfare');
     if ((!this.sfxEnabled && !this.musicEnabled) || this.isBackgrounded()) return;
@@ -708,7 +720,8 @@ export class SoundEngine {
       if (ctx.currentTime === 0) return;
     }
 
-    playWinFanfareVoices(ctx, outGain, earnedStars);
+    const bus = this.outcomeBus.acquire(ctx, outGain, false);
+    playWinFanfareVoices(ctx, bus, earnedStars);
   }
 
   /**
@@ -726,7 +739,8 @@ export class SoundEngine {
       if (ctx.currentTime === 0) return;
     }
 
-    playUnderParOracleVoice(ctx, outGain);
+    const bus = this.outcomeBus.acquire(ctx, outGain, true);
+    playUnderParOracleVoice(ctx, bus);
   }
 
   /**
@@ -737,7 +751,8 @@ export class SoundEngine {
     this.triggerCueHaptic('lossBuzzer');
     const ready = this.getReadySfx();
     if (!ready) return;
-    playLossBuzzerVoice(ready.ctx, ready.sfxGain);
+    const bus = this.outcomeBus.acquire(ready.ctx, ready.sfxGain, false);
+    playLossBuzzerVoice(ready.ctx, bus);
   }
 
   /**

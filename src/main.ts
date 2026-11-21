@@ -345,8 +345,11 @@ export class ShredBlocksApp implements AppViewContext {
     this.themesEnteredFromGame = false;
     cancelPendingOutcomeTransition();
     cancelStuckBoardCheckImpl();
+    this.sound.stopOutcomeCue();
+    this.isPointerDownOnCanvas = false;
     this.inputController.cancelTargeting();
     clearTransientBannersImpl(this);
+    if (switchToGameScreen || !this.titleOverlayOpen) this.renderer.resetTransientFx();
     const spec = getLevelSpec(cleanId);
     const save = this.saveManager.getPayload();
     this.board = createBoardState(spec);
@@ -732,8 +735,9 @@ export class ShredBlocksApp implements AppViewContext {
   public closeAllModals(): void {
     stopVictoryModalFx();
     this.modalSettleFrames = 0;
+    this.isPointerDownOnCanvas = false;
     this.renderer.getQualityGovernor().resetPendingRenderDt();
-    closeAllModalsImpl();
+    if (closeAllModalsImpl()) this.sound.stopOutcomeCue();
   }
   public previewSaveImport(rawInput: string): boolean {
     return previewSaveImportImpl(this, rawInput);

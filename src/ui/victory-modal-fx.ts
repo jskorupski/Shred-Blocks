@@ -189,13 +189,15 @@ export function startVictoryModalFx(options: {
 
   const isBalancedTier = options.activeTier === 'BALANCED_60';
   const cardRect = card.getBoundingClientRect();
-  // Normalize against unscaled layout box (`clientWidth`) so frame-0 `scale: 0.96` entrance never shrinks canvas
-  const layoutW = card.clientWidth || cardRect.width || 360;
-  const layoutH = card.clientHeight || cardRect.height || 420;
-  const scaleInvX = cardRect.width > 0 ? layoutW / cardRect.width : 1;
-  const scaleInvY = cardRect.height > 0 ? layoutH / cardRect.height : 1;
+  const fxRect = typeof canvas.getBoundingClientRect === 'function' ? canvas.getBoundingClientRect() : null;
+  const originRect = fxRect && fxRect.width > 0 ? fxRect : cardRect;
+  // Measure `#victory-fx-canvas`'s own layout box (which terminates cleanly above `.dialog-actions`)
+  const layoutW = canvas.clientWidth || fxRect?.width || card.clientWidth || cardRect.width || 360;
+  const layoutH = canvas.clientHeight || fxRect?.height || card.clientHeight || cardRect.height || 420;
+  const scaleInvX = originRect.width > 0 ? layoutW / originRect.width : 1;
+  const scaleInvY = originRect.height > 0 ? layoutH / originRect.height : 1;
   const w = Math.max(240, Math.round(layoutW));
-  const h = Math.max(220, Math.round(layoutH));
+  const h = Math.max(160, Math.round(layoutH));
   const dpr = Math.min(isBalancedTier ? 1.75 : 2, Math.max(1, window.devicePixelRatio || 1));
   const targetW = Math.round(w * dpr);
   const targetH = Math.round(h * dpr);
@@ -207,20 +209,20 @@ export function startVictoryModalFx(options: {
   const crestRect = document.getElementById('victory-crest-ornament')?.getBoundingClientRect();
   const cx =
     crestRect && crestRect.width > 0
-      ? (crestRect.left - cardRect.left + crestRect.width * 0.5) * scaleInvX
+      ? (crestRect.left - originRect.left + crestRect.width * 0.5) * scaleInvX
       : w * 0.5;
   const cy =
     crestRect && crestRect.height > 0
-      ? (crestRect.top - cardRect.top + crestRect.height * 0.5) * scaleInvY
+      ? (crestRect.top - originRect.top + crestRect.height * 0.5) * scaleInvY
       : 42;
 
   const bannerEl = document.getElementById('victory-under-par-banner');
   const bannerRect = bannerEl && !bannerEl.hidden ? bannerEl.getBoundingClientRect() : null;
-  const bx = bannerRect && bannerRect.width > 0 ? (bannerRect.left - cardRect.left) * scaleInvX : w * 0.14;
+  const bx = bannerRect && bannerRect.width > 0 ? (bannerRect.left - originRect.left) * scaleInvX : w * 0.14;
   const bw = bannerRect && bannerRect.width > 0 ? bannerRect.width * scaleInvX : w * 0.72;
   const by =
     bannerRect && bannerRect.height > 0
-      ? (bannerRect.top - cardRect.top + bannerRect.height * 0.5) * scaleInvY
+      ? (bannerRect.top - originRect.top + bannerRect.height * 0.5) * scaleInvY
       : 156;
 
   const highContrast = document.body.classList.contains('high-contrast');
@@ -488,8 +490,8 @@ export function startVictoryModalFx(options: {
       }
     }
 
-    // 4. Particles (clipped cleanly above the bottom action button row, zero CanvasGradient or save/restore)
-    const bottomSafeY = h - 56;
+    // 4. Particles (feathered smoothly above the canvas bottom edge above `.dialog-actions`)
+    const bottomSafeY = Math.max(0, h - 24);
     const dampMul = Math.exp(-2.3 * dt);
     const twinkleBase = elapsed * 18;
     for (let pi = 0; pi < particles.length; pi++) {
@@ -506,8 +508,8 @@ export function startVictoryModalFx(options: {
       p.y += p.vy * dt;
       p.rot += p.vRot * dt;
 
-      if (p.x < -16 || p.x > w + 16 || p.y < -16 || p.y > h - 10) continue;
-      const bottomMask = p.y > bottomSafeY ? Math.max(0, (h - 14 - p.y) / 42) : 1;
+      if (p.x < -16 || p.x > w + 16 || p.y < -16 || p.y > h - 2) continue;
+      const bottomMask = p.y > bottomSafeY ? Math.max(0, (h - 2 - p.y) / 22) : 1;
       const twinkle = 0.78 + 0.22 * Math.sin(twinkleBase + p.twinklePhase);
       const alpha = (1 - u * u) * bottomMask * twinkle;
       if (alpha <= 0.02) continue;

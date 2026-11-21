@@ -27,12 +27,12 @@ import { startVictoryModalFx } from './victory-modal-fx';
  * `hud-and-title-view.ts` (`ARCH-ERGONOMICS-01`); imported directly by `main.ts`.
  */
 
-/** `OUTCOME-TRANSITION-01`: 220ms gate-roller shred + 70ms celebratory bloom before overlapped 360ms Victory dissolve */
-export const VICTORY_MODAL_BEAT_MS = 290;
-/** `OUTCOME-TRANSITION-01`: brief board settle beat on Out of Moves / Time's Up before 360ms Failure dissolve */
-export const FAILURE_SETTLE_BEAT_MS = 220;
-/** `OUTCOME-TRANSITION-01`: 3D crimson-amber shockwave + radial burst beat on Bomb Exploded before Failure dissolve */
-export const BOMB_DETONATION_BEAT_MS = 350;
+/** `OUTCOME-TRANSITION-01` / `OUTCOME-SKIP-01`: crisp 120ms gate-shred beat (skippable via tap/Enter) before zero-drift 90ms Victory dissolve */
+export const VICTORY_MODAL_BEAT_MS = 120;
+/** `OUTCOME-TRANSITION-01` / `OUTCOME-SKIP-01`: crisp 110ms board settle beat on Out of Moves / Time's Up before zero-drift Failure dissolve */
+export const FAILURE_SETTLE_BEAT_MS = 110;
+/** `OUTCOME-TRANSITION-01` / `OUTCOME-SKIP-01`: 220ms 3D crimson-amber shockwave + radial burst beat on Bomb Exploded before Failure dissolve */
+export const BOMB_DETONATION_BEAT_MS = 220;
 
 let pendingOutcomeTimerId: ReturnType<typeof setTimeout> | null = null;
 let pendingOutcomeAction: (() => void) | null = null;
@@ -287,11 +287,11 @@ export function handleLevelVictoryImpl(app: AppViewContext, frozenTimeSec: numbe
       return;
     }
     const latestSave = app.saveManager.getPayload();
+    app.openModal('victory');
     app.sound.playWinFanfare(earnedStars);
     if (summary.underPar) {
       app.sound.playUnderParOracleChime();
     }
-    app.openModal('victory');
     startVictoryModalFx({
       isUnderPar: Boolean(summary.underPar),
       earnedStars,
@@ -413,10 +413,10 @@ export function handleLevelFailureImpl(
     ) {
       return;
     }
+    app.openModal('failure');
     if (reason !== 'BOMB_EXPLODED') {
       app.sound.playLossBuzzer();
     }
-    app.openModal('failure');
   };
 
   if (shouldSkipOutcomeBeat(frozenTimeSec, save.settings.reducedMotion)) {
@@ -449,6 +449,7 @@ function applyContinueRescueToBoard(app: AppViewContext, playMode: PlayMode): vo
   app.levelOutcomeHandled = false;
   app.board.timerRunning = true;
   app.closeAllModals();
+  app.renderer.resetTransientFx();
   app.sound.playBooster('HINT');
   app.syncAllUiFromSave();
   app.renderNow();

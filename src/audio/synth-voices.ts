@@ -138,8 +138,93 @@ export function playBoosterVoice(
   }
 }
 
-export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earnedStars: number): void {
+/**
+ * Short-lived sub-bus for multi-second outcome fanfares (`playWinFanfare`, `playUnderParOracleChime`,
+ * `playLossBuzzer`) so fast-clicking Next Level / Retry / Map can smoothly fade out and disconnect the
+ * outcome audio subgraph (`OUTCOME-SKIP-01`) without clipping UI button taps or throwing `InvalidStateError`.
+ */
+export class OutcomeAudioBus {
+  private gain: GainNode | null = null;
+  private ctx: AudioContext | null = null;
+  private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
+  public acquire(ctx: AudioContext, parentGain: GainNode, keepExisting = false): GainNode {
+    if (keepExisting && this.gain && this.ctx === ctx) {
+      return this.gain;
+    }
+    this.stop(0.015);
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime?.(1, ctx.currentTime);
+    bus.gain.value = 1;
+    bus.connect(parentGain);
+    this.gain = bus;
+    this.ctx = ctx;
+    return bus;
+  }
+
+  public isActive(): boolean {
+    return this.gain !== null;
+  }
+
+  public stop(fadeSec = 0.045): void {
+    if (this.cleanupTimer !== null) {
+      clearTimeout(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    const bus = this.gain;
+    const ctx = this.ctx;
+    this.gain = null;
+    this.ctx = null;
+    if (!bus || !ctx) return;
+
+    const now = ctx.currentTime;
+    const fade = Math.max(0, fadeSec);
+    try {
+      const param = bus.gain as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam };
+      if (typeof param.cancelAndHoldAtTime === 'function') {
+        param.cancelAndHoldAtTime(now);
+      } else {
+        bus.gain.cancelScheduledValues?.(now);
+        bus.gain.setValueAtTime?.(bus.gain.value, now);
+      }
+      if (fade > 0 && typeof bus.gain.linearRampToValueAtTime === 'function') {
+        bus.gain.linearRampToValueAtTime(0, now + fade);
+      } else {
+        bus.gain.setValueAtTime?.(0, now);
+        bus.gain.value = 0;
+      }
+    } catch {
+      // Ignore closed/mock AudioContext errors
+    }
+
+    const disconnectBus = () => {
+      try {
+        bus.disconnect();
+      } catch {
+        // Ignore
+      }
+    };
+    if (fade > 0) {
+      this.cleanupTimer = setTimeout(
+        () => {
+          this.cleanupTimer = null;
+          disconnectBus();
+        },
+        Math.ceil((fade + 0.025) * 1000)
+      );
+    } else {
+      disconnectBus();
+    }
+  }
+}
+
+export function playWinFanfareVoices(
+  ctx: AudioContext,
+  outGain: GainNode,
+  earnedStars: number
+): OscillatorNode[] {
   const now = ctx.currentTime;
+  const oscs: OscillatorNode[] = [];
   // Voice 1: Upbeat syncopated lead melody
   const melody: Array<{ t: number; f: number; dur: number; amp: number }> = [
     { t: 0.0, f: 523.25, dur: 0.22, amp: 0.22 }, // C5
@@ -171,6 +256,7 @@ export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earne
       gain.connect(outGain);
       osc.start(t);
       osc.stop(t + note.dur + 0.02);
+      oscs.push(osc);
     }
   }
 
@@ -194,6 +280,7 @@ export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earne
       gain.connect(outGain);
       osc.start(t);
       osc.stop(t + chord.dur + 0.02);
+      oscs.push(osc);
     }
   }
 
@@ -218,6 +305,7 @@ export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earne
     gain.connect(outGain);
     osc.start(t);
     osc.stop(t + b.dur + 0.02);
+    oscs.push(osc);
   }
 
   const starChimes = [2093.0, 2637.02, 3135.96].slice(0, Math.max(1, Math.min(3, earnedStars)));
@@ -233,7 +321,9 @@ export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earne
     gain.connect(outGain);
     osc.start(t);
     osc.stop(t + 0.34);
+    oscs.push(osc);
   });
+  return oscs;
 }
 
 /**
@@ -241,8 +331,9 @@ export function playWinFanfareVoices(ctx: AudioContext, outGain: GainNode, earne
  * Crystalline Lydian `#11` astral bell cascade (`F#6 -> G6 -> B6 -> D7 -> F#7 -> G7`)
  * layered right after the victory fanfare peak to celebrate outsmarting the Sanctuary solver.
  */
-export function playUnderParOracleVoice(ctx: AudioContext, outGain: GainNode): void {
+export function playUnderParOracleVoice(ctx: AudioContext, outGain: GainNode): OscillatorNode[] {
   const now = ctx.currentTime;
+  const oscs: OscillatorNode[] = [];
   const bells: ReadonlyArray<{ t: number; f: number; dur: number; amp: number }> = [
     { t: 0.34, f: 1479.98, dur: 0.44, amp: 0.14 }, // F#6 (Lydian #11 sparkle)
     { t: 0.44, f: 1567.98, dur: 0.46, amp: 0.15 }, // G6
@@ -266,12 +357,15 @@ export function playUnderParOracleVoice(ctx: AudioContext, outGain: GainNode): v
       gain.connect(outGain);
       osc.start(t);
       osc.stop(t + bell.dur + 0.02);
+      oscs.push(osc);
     }
   }
+  return oscs;
 }
 
-export function playLossBuzzerVoice(ctx: AudioContext, sfxGain: GainNode): void {
+export function playLossBuzzerVoice(ctx: AudioContext, sfxGain: GainNode): OscillatorNode[] {
   const now = ctx.currentTime;
+  const oscs: OscillatorNode[] = [];
   const notes = [392.0, 311.13, 261.63];
   notes.forEach((freq, idx) => {
     const t = now + idx * 0.14;
@@ -288,7 +382,9 @@ export function playLossBuzzerVoice(ctx: AudioContext, sfxGain: GainNode): void 
     gain.connect(sfxGain);
     osc.start(t);
     osc.stop(t + 0.28);
+    oscs.push(osc);
   });
+  return oscs;
 }
 
 export function playButtonTapVoice(ctx: AudioContext, sfxGain: GainNode): void {

@@ -473,6 +473,18 @@ export async function auditViewportGeometry(
         outOfBoundsControls.push('doc-vertical-scroll');
       }
 
+      // BANNER-CLEANUP-01: in-game banners must never remain unhidden on Title, Home Map, or Themes Studio
+      const gameScreenEl = document.getElementById('screen-game');
+      const isOffGame = Boolean(titleOpen) || !gameScreenEl || gameScreenEl.hidden;
+      if (isOffGame) {
+        for (const bannerId of ['unlock-toast', 'booster-target-banner']) {
+          const el = document.getElementById(bannerId);
+          if (el && !el.hidden) {
+            outOfBoundsControls.push(`leaked-banner:#${bannerId}`);
+          }
+        }
+      }
+
       if (titleOpen) {
         for (const ch of Array.from(titleOpen.children)) {
           if (ch.hasAttribute('hidden')) continue;

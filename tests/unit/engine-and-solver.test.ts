@@ -26,6 +26,7 @@ import {
 } from '../../src/core/physics';
 import { getActiveColor, getLayersRemaining, getShape, POLYOMINO_SHAPES } from '../../src/core/polyomino';
 import type { LevelSpec } from '../../src/core/types';
+import { BoardInputController } from '../../src/input/pointer-controller';
 import { buildCommittedMoveTrace } from '../../src/input/targeting-and-keyboard';
 import { getLevelSpec } from '../../src/levels/catalog';
 import { findNextHintMove } from '../../src/levels/solver';
@@ -748,5 +749,47 @@ describe('All 5 Boosters & Zero-Softlock Law', () => {
       0
     );
     expect(activePathTraces).toHaveLength(0);
+  });
+
+  it('OUTCOME-SKIP-01: BoardInputController releases canvas pointer capture immediately on mid-drag gate capture and targeting cancel', () => {
+    const board = createBoardState({
+      id: 992,
+      name: 'Mid-Drag Capture Release Test',
+      rows: 4,
+      cols: 4,
+      difficulty: 'NORMAL',
+      parMoves: 1,
+      moveLimit: 5,
+      timeLimitSec: 60,
+      blocks: [{ id: 1, shapeId: '1x1', row: 1, col: 1, colorStack: [1] }],
+      gates: [{ edge: 'LEFT', spanStart: 1, spanLength: 1, colorQueue: [1] }],
+    });
+    const listeners = new Map<string, Array<(e: unknown) => void>>();
+    const events: string[] = [];
+    const fakeCanvas = {
+      addEventListener: (t: string, fn: (e: unknown) => void) =>
+        listeners.set(t, [...(listeners.get(t) ?? []), fn]),
+      removeEventListener: () => {},
+      setPointerCapture: (id: number) => events.push(`set:${id}`),
+      releasePointerCapture: (id: number) => events.push(`rel:${id}`),
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 400 }),
+    } as unknown as HTMLElement;
+    const ctrl = new BoardInputController(fakeCanvas, {
+      getBoard: () => board,
+      getPlayMode: () => 'CHALLENGE',
+      screenToBoard: (x, y) => ({ x, y }),
+      onMoveCommitted: () => events.push('commit'),
+    });
+    const fire = (t: string, ev: Record<string, unknown>) => {
+      for (const fn of listeners.get(t) ?? []) fn(ev);
+    };
+    fire('pointerdown', { clientX: 1.5, clientY: 1.5, button: 0, pointerId: 7, pointerType: 'touch' });
+    fire('pointermove', { clientX: -0.6, clientY: 1.5, pointerId: 7, pointerType: 'touch' });
+    expect([isBoardWon(board), events]).toEqual([true, ['set:7', 'rel:7', 'commit']]);
+    ctrl.setInputMode('TARGET_ROCKET');
+    fire('pointerdown', { clientX: 1.5, clientY: 1.5, button: 0, pointerId: 9, pointerType: 'touch' });
+    fire('pointercancel', { pointerId: 9 });
+    expect(events.slice(-2)).toEqual(['set:9', 'rel:9']);
+    ctrl.destroy();
   });
 });

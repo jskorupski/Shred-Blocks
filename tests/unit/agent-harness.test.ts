@@ -109,13 +109,13 @@ describe('Agent Verification Harness, UI Probe & Node Type Hygiene (AGENT-HARNES
     }
     const relicParsed = parseProbeCliArgs([
       '--scene',
-      'relic-unwrap',
+      'relic-unwrap,banners',
       '--level',
       '25',
       '--viewports',
       'mobile,desktop',
     ]);
-    expect(relicParsed.scenes).toEqual(['relic-unwrap']);
+    expect(relicParsed.scenes).toEqual(['relic-unwrap', 'banners']);
     expect(relicParsed.levelId).toBe(25);
     expect(relicParsed.viewports.map((v) => v.width)).toEqual([390, 1280]);
     expect(helpText).toContain('relic-unwrap');

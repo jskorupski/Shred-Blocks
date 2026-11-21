@@ -34,6 +34,7 @@ import {
   useZenBlessingContinueImpl,
 } from './outcome-modals-view';
 import { notifyThemesScreenActiveState, syncPauseCosmeticsDrawerImpl } from './themes-studio-view';
+import { stopVictoryModalFx } from './victory-modal-fx';
 
 export {
   continueFailedLevelImpl,
@@ -87,16 +88,21 @@ export function openModalImpl(app: AppViewContext, id: ModalId): void {
   }
 }
 
-export function closeAllModalsImpl(): void {
+export function closeAllModalsImpl(): boolean {
   cancelPendingOutcomeTransition();
+  let closedOutcomeModal = false;
   const ids: ModalId[] = ['victory', 'failure', 'pause', 'save-transfer', 'install'];
   for (const id of ids) {
     const dlg = getModalElement(id);
     if (dlg?.open) {
+      if (id === 'victory' || id === 'failure') {
+        closedOutcomeModal = true;
+      }
       dlg.close();
       dlg.returnValue = '';
     }
   }
+  return closedOutcomeModal;
 }
 
 export function setupDialogLightDismissImpl(): void {
@@ -106,6 +112,9 @@ export function setupDialogLightDismissImpl(): void {
 
     dialog.addEventListener('close', () => {
       dialog.returnValue = '';
+      if (dialog.id === 'dialog-victory') {
+        stopVictoryModalFx();
+      }
     });
 
     if (isTerminalOutcomeModal) {
@@ -564,6 +573,7 @@ export function handlePopstateNavigationImpl(app: AppViewContext, event: PopStat
 export function openTitleScreenImpl(app: AppViewContext): void {
   cancelPendingOutcomeTransition();
   cancelStuckBoardCheckImpl();
+  app.sound?.stopOutcomeCue?.();
   app.inputController.cancelTargeting();
   app.themesEnteredFromGame = false;
   notifyThemesScreenActiveState(app, false);
@@ -664,6 +674,7 @@ export function switchScreenImpl(
   if (screen !== 'game') {
     cancelPendingOutcomeTransition();
     cancelStuckBoardCheckImpl();
+    app.sound?.stopOutcomeCue?.();
     app.inputController.cancelTargeting();
     clearTransientBannersImpl(app);
     app.blueprintMix = 0;

@@ -1,8 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { playFilteredNoiseBurstVoice, prewarmSharedNoiseBuffer } from '../../src/audio/synth-voices';
+import {
+  OutcomeAudioBus,
+  playFilteredNoiseBurstVoice,
+  prewarmSharedNoiseBuffer,
+} from '../../src/audio/synth-voices';
 import { createBoardState } from '../../src/core/board';
 import { getLevelSpec } from '../../src/levels/catalog';
 import { Camera3D } from '../../src/render/camera-3d';
@@ -12,6 +16,7 @@ import {
   stepParticlesImpl,
 } from '../../src/render/particle-fx';
 import { QualityGovernor } from '../../src/render/quality-governor';
+import { resetTransientFxImpl } from '../../src/render/relic-awakening-fx';
 import {
   INSTANCE_STRIDE,
   MAX_PARTICLES,
@@ -511,9 +516,9 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
   });
 
   it('OUTCOME-TRANSITION-01: accelerates particle age decay 1.8x at 1.0x velocity, spawns 3D bomb bursts, and keeps #victory-fx-canvas layout sizing at 1.0x', () => {
-    expect(VICTORY_MODAL_BEAT_MS).toBe(290);
-    expect(FAILURE_SETTLE_BEAT_MS).toBe(220);
-    expect(BOMB_DETONATION_BEAT_MS).toBe(350);
+    expect(VICTORY_MODAL_BEAT_MS).toBe(120);
+    expect(FAILURE_SETTLE_BEAT_MS).toBe(110);
+    expect(BOMB_DETONATION_BEAT_MS).toBe(220);
     expect(isOutcomeTransitionPending()).toBe(false);
     cancelPendingOutcomeTransition();
     flushPendingOutcomeTransition();
@@ -684,6 +689,91 @@ describe('Idle Pre-Warming & Zero-Copy 120Hz Contracts', () => {
       else (globalThis as { document?: unknown }).document = prevDocument;
       globalThis.requestAnimationFrame = prevRaf;
       globalThis.cancelAnimationFrame = prevCancelRaf;
+    }
+  });
+
+  it('OUTCOME-SKIP-01: fades out and disconnects OutcomeAudioBus cleanly and purges all WebGL transient FX + roomAwakenMap on fast skip', () => {
+    vi.useFakeTimers();
+    try {
+      const bus = new OutcomeAudioBus();
+      const createdGains: Array<{
+        gain: {
+          value: number;
+          setValueAtTime: ReturnType<typeof vi.fn>;
+          cancelAndHoldAtTime: ReturnType<typeof vi.fn>;
+          linearRampToValueAtTime: ReturnType<typeof vi.fn>;
+        };
+        connect: ReturnType<typeof vi.fn>;
+        disconnect: ReturnType<typeof vi.fn>;
+      }> = [];
+      const mockCtx = {
+        currentTime: 2.0,
+        createGain: () => {
+          const g = {
+            gain: {
+              value: 1,
+              setValueAtTime: vi.fn(),
+              cancelAndHoldAtTime: vi.fn(),
+              linearRampToValueAtTime: vi.fn(),
+            },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+          createdGains.push(g);
+          return g;
+        },
+      } as unknown as AudioContext;
+      const parentGain = {} as GainNode;
+
+      // Win fanfare acquires a fresh outcome sub-bus; Under-Par Oracle shares it (`keepExisting = true`)
+      const g1 = bus.acquire(mockCtx, parentGain, false);
+      const g2 = bus.acquire(mockCtx, parentGain, true);
+      expect(g1).toBe(g2);
+      expect(createdGains).toHaveLength(1);
+      expect(bus.isActive()).toBe(true);
+
+      // Fast-skipping Next Level ramps outcome gain to 0 over 45ms and disconnects cleanly afterward
+      bus.stop(0.045);
+      expect(bus.isActive()).toBe(false);
+      expect(createdGains[0].gain.cancelAndHoldAtTime).toHaveBeenCalledWith(2.0);
+      expect(createdGains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 2.045);
+      expect(createdGains[0].disconnect).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(80);
+      expect(createdGains[0].disconnect).toHaveBeenCalledTimes(1);
+
+      // WebGL transient FX reset purges particles, shreds, shockwaves, gate bursts, traces, roomAwakenMap & governor count
+      const gov = new QualityGovernor();
+      gov.setActiveParticles(96);
+      const mockRctx = {
+        activeParticleCount: 48,
+        activeSmokeCount: 12,
+        hasGameplayParticles: true,
+        relicPlates: [{}],
+        activeRelicPlateCount: 1,
+        particlePoolCount: 48,
+        particleWriteCursor: 48,
+        roomAwakenMap: new Map([[1, 0.5]]),
+        activeShockwaves: [{}],
+        activeGateBursts: [{}],
+        activePathTraces: [{}],
+        activeVisualShreds: [{}],
+        blockBounceMap: new Map([[1, 0.2]]),
+        boardShakeTimer: 0.14,
+        ambientMoteAccumSec: 0.5,
+        qualityGovernor: gov,
+      } as unknown as RenderPassContext;
+      resetTransientFxImpl(mockRctx);
+      expect(mockRctx.activeParticleCount).toBe(0);
+      expect(mockRctx.particlePoolCount).toBe(0);
+      expect(mockRctx.roomAwakenMap.size).toBe(0);
+      expect(mockRctx.activeShockwaves).toHaveLength(0);
+      expect(mockRctx.activeGateBursts).toHaveLength(0);
+      expect(mockRctx.activePathTraces).toHaveLength(0);
+      expect(mockRctx.activeVisualShreds).toHaveLength(0);
+      expect(mockRctx.boardShakeTimer).toBe(0);
+      expect(gov.getTelemetry().activeParticles).toBe(0);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

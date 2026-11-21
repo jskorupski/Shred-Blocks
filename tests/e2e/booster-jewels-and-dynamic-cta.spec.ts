@@ -715,4 +715,84 @@ test.describe('Booster Jewel Crests & Dynamic Multi-Digit CTA Geometry', () => {
     await expect(page.locator('#unlock-toast')).toBeHidden();
     expect(errors).toEqual([]);
   });
+
+  test('OUTCOME-SKIP-01: pre-modal beat flushes on tap/Enter, all Victory CTAs sit above FX with touch-action none, and Replay/Next fast-skip cleanly', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(`PAGEERROR: ${err.message}`));
+    await seedAndOpenGame(page, 1);
+
+    const tapFlush = await page.evaluate(() => {
+      const dlg = document.getElementById('dialog-victory') as HTMLDialogElement;
+      const fx = document.getElementById('victory-fx-canvas') as HTMLCanvasElement;
+      const actions = dlg.querySelector<HTMLElement>('.dialog-actions') as HTMLElement;
+      window.__SHREDBLOCKS_DEBUG__.autoSolveCurrentLevel();
+      const openBeforeTap = dlg.open;
+      document
+        .getElementById('screen-game')
+        ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      const fxRect = fx.getBoundingClientRect();
+      const ctas = (['btn-victory-home', 'btn-victory-replay', 'btn-next-level'] as const).map((id) => {
+        const el = document.getElementById(id) as HTMLButtonElement;
+        const r = el.getBoundingClientRect();
+        const label = el.querySelector<HTMLElement>('.btn-label-text');
+        return {
+          id,
+          top: Math.round(r.top),
+          hitId: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.id ?? '',
+          ta: getComputedStyle(el).touchAction,
+          labelTa: label ? getComputedStyle(label).touchAction : 'none',
+          fxAbove: fxRect.bottom <= r.top + 1,
+        };
+      });
+      return {
+        openBeforeTap,
+        openAfterTap: dlg.open,
+        topAtOpen: ctas[2].top,
+        actionsZ: Number(getComputedStyle(actions).zIndex),
+        fxZ: Number(getComputedStyle(fx).zIndex),
+        ctas,
+      };
+    });
+    expect(tapFlush.openBeforeTap).toBe(false);
+    expect(tapFlush.openAfterTap).toBe(true);
+    expect(tapFlush.actionsZ).toBeGreaterThan(tapFlush.fxZ);
+    for (const c of tapFlush.ctas) {
+      expect([c.hitId, c.ta, c.labelTa, c.fxAbove]).toEqual([c.id, 'none', 'none', true]);
+    }
+
+    await page.waitForTimeout(160);
+    const topSettled = await page
+      .locator('#btn-next-level')
+      .evaluate((el) => Math.round(el.getBoundingClientRect().top));
+    expect(Math.abs(topSettled - tapFlush.topAtOpen)).toBeLessThanOrEqual(1);
+    const fastSkip = await page.evaluate(() => {
+      const btn = document.getElementById('btn-next-level') as HTMLButtonElement;
+      const r = btn.getBoundingClientRect();
+      const opts = { bubbles: true, isPrimary: true, pointerId: 41, clientX: r.left + 8, clientY: r.top + 8 };
+      btn.dispatchEvent(new PointerEvent('pointerdown', opts));
+      btn.dispatchEvent(new PointerEvent('pointerup', opts)); // Activates immediately without waiting for `click`
+      btn.click(); // Trailing synthesized click must be deduplicated
+      return {
+        open: (document.getElementById('dialog-victory') as HTMLDialogElement).open,
+        fx: document.getElementById('victory-fx-canvas')?.dataset.fxRunning,
+        lvl: window.__SHREDBLOCKS_DEBUG__.getBoard().levelId,
+      };
+    });
+    expect(fastSkip).toEqual({ open: false, fx: 'false', lvl: 2 });
+
+    const keyFlush = await page.evaluate(() => {
+      const dlg = document.getElementById('dialog-victory') as HTMLDialogElement;
+      window.__SHREDBLOCKS_DEBUG__.autoSolveCurrentLevel();
+      const openBeforeKey = dlg.open;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      return { openBeforeKey, openAfterKey: dlg.open, activeId: document.activeElement?.id ?? '' };
+    });
+    expect(keyFlush).toEqual({ openBeforeKey: false, openAfterKey: true, activeId: 'btn-next-level' });
+    await page.locator('#btn-victory-replay').click();
+    await expect(page.locator('#dialog-victory')).toBeHidden();
+    expect(await page.evaluate(() => window.__SHREDBLOCKS_DEBUG__.getBoard().levelId)).toBe(2);
+    expect(errors).toEqual([]);
+  });
 });

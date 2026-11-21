@@ -8,6 +8,8 @@ import {
 } from './catalog-meta';
 import { refreshThemesPreviewIfActive } from './themes-studio-view';
 
+declare const __SHREDBLOCKS_LAN_DEVTOOLS__: boolean | undefined;
+
 export const SW_UPDATE_THROTTLE_MS = 60_000;
 export const SW_COLD_BOOT_AUTO_UPDATE_WINDOW_MS = 1_600;
 export const SW_LONG_IDLE_AUTO_UPDATE_MS = 30 * 60 * 1000;
@@ -469,6 +471,20 @@ export function setupPwaAndServiceWorkerImpl(app: AppViewContext, options: PwaLi
   };
 
   if ('serviceWorker' in navigator) {
+    if (typeof __SHREDBLOCKS_LAN_DEVTOOLS__ !== 'undefined' && __SHREDBLOCKS_LAN_DEVTOOLS__) {
+      // Never cache shell/assets behind a Service Worker on the `:8443` LAN Vite dev server
+      void navigator.serviceWorker
+        .getRegistrations?.()
+        .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+        .catch(() => {});
+      if (typeof caches !== 'undefined') {
+        void caches
+          .keys()
+          .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+          .catch(() => {});
+      }
+      return;
+    }
     let swRegistered = false;
     let lastKnownController: ServiceWorker | null = navigator.serviceWorker.controller ?? null;
 

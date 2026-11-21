@@ -40,6 +40,7 @@ export const PROBE_SCENES = [
   'save-transfer',
   'install',
   'relic-unwrap',
+  'banners',
 ] as const;
 
 export type ProbeScene = (typeof PROBE_SCENES)[number];
@@ -479,6 +480,81 @@ async function runRelicUnwrapProbe(
   }
 }
 
+/**
+ * Captures the two `BANNER-CLEANUP-01` `#unlock-toast` visual states on Level 8 (`unlock` Burnished Gold
+ * first-time arrival vs. `guide` Astral Slate-Teal revisit paired with a live `#game-toast`) and verifies
+ * viewport geometry across both states.
+ */
+async function runBannerStatesProbe(
+  page: Page,
+  session: { saveScreenshot: (p: Page, filename: string) => Promise<string> },
+  vp: ViewportPreset,
+  opts: ProbeCliOptions,
+  entries: SceneAuditEntry[]
+): Promise<void> {
+  const records: Record<number, { stars: number; bestMoves: number; bestTimeSec: number }> = {};
+  for (let lvl = 1; lvl <= 7; lvl++) {
+    records[lvl] = { stars: 3, bestMoves: 3, bestTimeSec: 12 };
+  }
+  await seedPlayerSave(page, {
+    coins: 500,
+    currentLevelId: 8,
+    highestLevelUnlocked: 8,
+    levelRecords: records,
+    modeState: {
+      CHALLENGE: { currentLevelId: 8, highestUnlocked: 8 },
+      ZEN: { currentLevelId: 1, highestUnlocked: 1 },
+      TIMED: { currentLevelId: 1, highestUnlocked: 1 },
+    },
+    boosters: { UNDO: 3, HINT: 3, HAMMER: 3, ROCKET: 1, VACUUM: 1 },
+  });
+  await page.evaluate(() => {
+    try {
+      localStorage.removeItem('shredblocks.seen_booster_debuts.v1');
+    } catch {
+      // Ignore storage restrictions
+    }
+  });
+  await applyBaseFlags(page, opts);
+
+  const states = [
+    { slug: 'unlock', withHintToast: false },
+    { slug: 'guide-toast', withHintToast: true },
+  ] as const;
+  for (const state of states) {
+    await page.evaluate(
+      ({ withHint }) => {
+        const dbg = window.__SHREDBLOCKS_DEBUG__;
+        if (!withHint) {
+          dbg.dismissTitleScreen('game', false);
+        } else {
+          dbg.loadLevel(8);
+          (document.getElementById('btn-booster-hint') as HTMLButtonElement | null)?.click();
+        }
+      },
+      { withHint: state.withHintToast }
+    );
+    await page.waitForSelector('#unlock-toast:not([hidden])', { timeout: 5_000 });
+    if (state.withHintToast) {
+      await page.waitForSelector('#game-toast:not([hidden])', { timeout: 5_000 });
+    }
+    await page.evaluate(
+      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+    );
+    const filename = `${opts.prefix}-banners-${state.slug}-${vp.name}.png`;
+    const screenshotPath = await session.saveScreenshot(page, filename);
+    const report = await auditViewportGeometry(page, `${vp.name}:${state.slug}`);
+    entries.push({ ...report, scene: 'banners', screenshotPath });
+    const statusIcon = report.passed ? 'PASS' : 'FAIL';
+    process.stdout.write(
+      `[${statusIcon}] banners:${state.slug} @ ${vp.width}x${vp.height} -> ${screenshotPath}\n`
+    );
+    if (!report.passed) {
+      process.stderr.write(`       Audit details: ${JSON.stringify(report)}\n`);
+    }
+  }
+}
+
 export async function runUiProbe(opts: ProbeCliOptions): Promise<{
   entries: SceneAuditEntry[];
   runtimeErrors: string[];
@@ -499,6 +575,10 @@ export async function runUiProbe(opts: ProbeCliOptions): Promise<{
           try {
             if (scene === 'relic-unwrap') {
               await runRelicUnwrapProbe(page, session, vp, opts, entries);
+              continue;
+            }
+            if (scene === 'banners') {
+              await runBannerStatesProbe(page, session, vp, opts, entries);
               continue;
             }
             await navigateToScene(page, scene, opts);

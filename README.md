@@ -40,7 +40,7 @@
 | Input | Action |
 | :--- | :--- |
 | **Touch / Mouse** | Drag any movable block along open lanes; pull into a matching perimeter gate to shred, or tap locked blocks, obstacles, and colored floor paths to inspect their rules. |
-| **Keyboard** | `Tab` / `Shift+Tab` to cycle blocks · `Arrow Keys` or `WASD` to slide · `Escape` to cancel or close dialogs. |
+| **Keyboard** | `Tab` / `Shift+Tab` to cycle blocks · `Arrow Keys` or `WASD` to slide · `Enter` / `Space` to fast-skip stage-clear beat · `Escape` to cancel or close dialogs. |
 | **Sanctuary Map & Stage Rules** | Tap the in-game **Level Title / Difficulty Crest** (or `‹ Map`) to jump back to that stage; tap the Keystone metrics plaque anytime to inspect exact `1–3★` cutoffs and mode rules. |
 | **Audio & Accessibility** | Cycle **Sound FX** and **Music** levels (`Off`, `1`, `2` Default, `3`) or toggle **Haptics**, **Colorblind Symbols**, **High Contrast**, and **Low Motion** anytime in **Settings**. |
 

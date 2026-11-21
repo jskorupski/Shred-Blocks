@@ -163,16 +163,19 @@ export function syncTitleOverlayDomImpl(app: AppViewContext): void {
 
   if (titleEl) titleEl.hidden = true;
   if (homeEl) {
-    homeEl.hidden = app.activeScreen !== 'home';
-    homeEl.inert = false;
+    const hideHome = app.activeScreen !== 'home';
+    homeEl.hidden = hideHome;
+    homeEl.inert = hideHome;
   }
   if (themesEl) {
-    themesEl.hidden = app.activeScreen !== 'themes';
-    themesEl.inert = false;
+    const hideThemes = app.activeScreen !== 'themes';
+    themesEl.hidden = hideThemes;
+    themesEl.inert = hideThemes;
   }
   if (tabBarEl) {
-    tabBarEl.hidden = app.activeScreen === 'game';
-    tabBarEl.inert = false;
+    const hideTabs = app.activeScreen === 'game';
+    tabBarEl.hidden = hideTabs;
+    tabBarEl.inert = hideTabs;
   }
   if (gameEl) {
     gameEl.hidden = app.activeScreen !== 'game';

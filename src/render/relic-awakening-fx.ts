@@ -542,6 +542,7 @@ export function resetTransientFxImpl(rctx: RenderPassContext): void {
   rctx.activeRelicPlateCount = 0;
   rctx.particlePoolCount = 0;
   rctx.particleWriteCursor = 0;
+  rctx.roomAwakenMap.clear();
   rctx.activeShockwaves.length = 0;
   rctx.activeGateBursts.length = 0;
   rctx.activePathTraces.length = 0;
@@ -549,6 +550,7 @@ export function resetTransientFxImpl(rctx: RenderPassContext): void {
   rctx.blockBounceMap.clear();
   rctx.boardShakeTimer = 0;
   rctx.ambientMoteAccumSec = 0;
+  rctx.qualityGovernor.setActiveParticles(0);
 }
 
 export function prepareWebGL2FrameStateImpl(

@@ -2,9 +2,10 @@
    ShredBlocks: Color Jam — Offline-First Service Worker (STOR-03)
    ========================================================================== */
 
-const CACHE_VERSION = 'shredblocks-v1.2.2';
+const CACHE_VERSION = 'shredblocks-v1.2.3';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+const IS_LAN_DEV = self.location.port === '8443';
 
 const APP_SHELL_URLS = [
   '/',
@@ -44,6 +45,10 @@ async function stripRedirectFlag(response) {
 }
 
 self.addEventListener('install', (event) => {
+  if (IS_LAN_DEV) {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   event.waitUntil(
     (async () => {
       const cache = await caches.open(SHELL_CACHE);
@@ -90,7 +95,7 @@ self.addEventListener('activate', (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys.map((key) => {
-          if (key !== SHELL_CACHE && key !== RUNTIME_CACHE) {
+          if (IS_LAN_DEV || (key !== SHELL_CACHE && key !== RUNTIME_CACHE)) {
             return caches.delete(key);
           }
           return Promise.resolve(false);
@@ -108,6 +113,7 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (IS_LAN_DEV) return;
   const { request } = event;
   if (request.method !== 'GET') return;
 

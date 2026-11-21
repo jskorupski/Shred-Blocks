@@ -3,7 +3,12 @@ import type { PlayMode, QualityTier, SavePayloadV1 } from '../core/types';
 import { type AppViewContext, MAX_ENDLESS_LEVEL } from './catalog-meta';
 import { cycleAudioVolumeSettingImpl } from './hud-and-title-view';
 import { showKeystoneRuleToastImpl } from './hud-keystone';
-import { handlePopstateNavigationImpl, refreshSaveTransferModalImpl } from './modals-and-save-transfer';
+import {
+  getModalElement,
+  handlePopstateNavigationImpl,
+  refreshSaveTransferModalImpl,
+} from './modals-and-save-transfer';
+import { flushPendingOutcomeTransition, isOutcomeTransitionPending } from './outcome-modals-view';
 import { promptNativeInstall } from './pwa-update-lifecycle';
 import { bindThemesAndCosmeticsEventsImpl } from './themes-studio-view';
 
@@ -241,17 +246,63 @@ export function bindDomEventsImpl(app: AppViewContext): void {
     app.activateBooster('VACUUM');
   });
 
+  // Outcome Modal CTAs (`OUTCOME-SKIP-01`): activate immediately on primary `pointerup` inside the button
+  // so Android Chrome's post-swipe `TapSuppressionController` / `double_tap_timeout` / thumb-roll slop never
+  // swallows or delays fast `Map` / `Replay` / `Next Level` taps, while deduplicating any trailing `click`
+  // and keeping keyboard Enter/Space, screen readers, and `.click()` fully working.
+  const bindOutcomeModalCta = (id: string, modalId: 'victory' | 'failure', onActivate: () => void) => {
+    const btn = document.getElementById(id) as HTMLButtonElement | null;
+    if (!btn) return;
+    let armedPointerId: number | null = null;
+    let suppressClickUntil = 0;
+
+    btn.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (!getModalElement(modalId)?.open || btn.disabled) return;
+      if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      armedPointerId = e.pointerId;
+    });
+
+    const disarm = (e: PointerEvent) => {
+      if (armedPointerId === e.pointerId) armedPointerId = null;
+    };
+    btn.addEventListener('pointercancel', disarm);
+    btn.addEventListener('lostpointercapture', disarm);
+
+    btn.addEventListener('pointerup', (e: PointerEvent) => {
+      if (armedPointerId !== e.pointerId) return;
+      armedPointerId = null;
+      if (!getModalElement(modalId)?.open || btn.disabled) return;
+      const r = btn.getBoundingClientRect();
+      const slop = 12;
+      const inside =
+        (r.width === 0 && r.height === 0) ||
+        (e.clientX >= r.left - slop &&
+          e.clientX <= r.right + slop &&
+          e.clientY >= r.top - slop &&
+          e.clientY <= r.bottom + slop);
+      if (!inside) return;
+      suppressClickUntil = performance.now() + 500;
+      onActivate();
+    });
+
+    btn.addEventListener('click', () => {
+      if (performance.now() < suppressClickUntil) return;
+      if (!getModalElement(modalId)?.open || btn.disabled) return;
+      onActivate();
+    });
+  };
+
   // Victory Modal Buttons
-  document.getElementById('btn-victory-home')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-victory-home', 'victory', () => {
     app.sound.playButtonTap();
     app.closeAllModals();
     app.switchScreen('home');
   });
-  document.getElementById('btn-victory-replay')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-victory-replay', 'victory', () => {
     app.sound.playButtonTap();
     app.loadLevel(app.board.levelId, true);
   });
-  document.getElementById('btn-next-level')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-next-level', 'victory', () => {
     app.sound.playButtonTap();
     const save = app.saveManager.getPayload();
     const ladder = save.modeState[save.settings.playMode];
@@ -260,24 +311,41 @@ export function bindDomEventsImpl(app: AppViewContext): void {
   });
 
   // Failure Modal Buttons
-  document.getElementById('btn-failure-home')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-failure-home', 'failure', () => {
     app.sound.playButtonTap();
     app.closeAllModals();
     app.switchScreen('home');
   });
-  document.getElementById('btn-use-zen-blessing')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-use-zen-blessing', 'failure', () => {
     app.useZenBlessingContinue();
   });
-  document.getElementById('btn-continue-level')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-continue-level', 'failure', () => {
     app.continueFailedLevel();
   });
-  document.getElementById('btn-failure-zen')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-failure-zen', 'failure', () => {
     app.sound.playButtonTap();
     app.switchPlayMode('ZEN');
   });
-  document.getElementById('btn-retry-level')?.addEventListener('click', () => {
+  bindOutcomeModalCta('btn-retry-level', 'failure', () => {
     app.sound.playButtonTap();
     app.loadLevel(app.board.levelId, true);
+  });
+
+  // OUTCOME-SKIP-01: allow fast players to skip the pre-modal celebration/settle beat with a fresh tap
+  // or Enter/Space (never triggered by releasing the winning mid-drag finger, preserving `PLAY-02`)
+  document.getElementById('screen-game')?.addEventListener(
+    'pointerdown',
+    () => {
+      if (app.activeScreen !== 'game' || app.titleOverlayOpen || !isOutcomeTransitionPending()) return;
+      flushPendingOutcomeTransition();
+    },
+    { capture: true }
+  );
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.repeat || (e.key !== 'Enter' && e.key !== ' ')) return;
+    if (app.activeScreen !== 'game' || app.titleOverlayOpen || !isOutcomeTransitionPending()) return;
+    e.preventDefault();
+    flushPendingOutcomeTransition();
   });
 
   // Pause & Settings Modal Controls

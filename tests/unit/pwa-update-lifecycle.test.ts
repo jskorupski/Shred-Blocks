@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBoardState } from '../../src/core/board';
 import { getLevelSpec } from '../../src/levels/catalog';
@@ -34,6 +36,7 @@ class MockRegistration extends EventTarget {
   public waiting: MockWorker | null = null;
   public active: MockWorker | null = null;
   public update = vi.fn(() => Promise.resolve());
+  public unregister = vi.fn(() => Promise.resolve(true));
 }
 
 class MockButton extends EventTarget {
@@ -51,6 +54,7 @@ interface PwaTestHarness {
   swContainer: EventTarget & {
     controller: MockWorker | null;
     register: ReturnType<typeof vi.fn>;
+    getRegistrations: ReturnType<typeof vi.fn>;
   };
   registration: MockRegistration;
   updateBtn: MockButton;
@@ -76,6 +80,7 @@ function createPwaTestHarness(initialController: MockWorker | null = null): PwaT
     register: vi.fn((_url: string, _opts?: RegistrationOptions) =>
       Promise.resolve(registration as unknown as ServiceWorkerRegistration)
     ),
+    getRegistrations: vi.fn(() => Promise.resolve([registration as unknown as ServiceWorkerRegistration])),
   });
 
   const navigatorState = { onLine: true };
@@ -341,5 +346,42 @@ describe('PWA Update Lifecycle Across Installation Environments (PWA-UPDATE-01)'
     expect(env.reloadSpy).not.toHaveBeenCalled();
     expect(env.updateBtn.disabled).toBe(false);
     expect(env.toastMessages[0]).toContain('Offline');
+  });
+
+  it('LAN-SW-BYPASS-01: unregisters Service Workers and purges CacheStorage on :8443 LAN dev builds while public/sw.js bypasses port 8443', async () => {
+    const swJs = fs.readFileSync(path.join(process.cwd(), 'public', 'sw.js'), 'utf8');
+    expect(swJs).toContain("const IS_LAN_DEV = self.location.port === '8443';");
+    expect(swJs).toContain('if (IS_LAN_DEV) return;');
+
+    const prevLanFlag = (globalThis as Record<string, unknown>).__SHREDBLOCKS_LAN_DEVTOOLS__;
+    const prevCaches = (globalThis as Record<string, unknown>).caches;
+    const deleteCacheSpy = vi.fn(() => Promise.resolve(true));
+    (globalThis as Record<string, unknown>).__SHREDBLOCKS_LAN_DEVTOOLS__ = true;
+    (globalThis as Record<string, unknown>).caches = {
+      keys: vi.fn(() => Promise.resolve(['shredblocks-v1.2.2-shell', 'shredblocks-v1.2.2-runtime'])),
+      delete: deleteCacheSpy,
+    };
+
+    try {
+      const env = createPwaTestHarness(null);
+      await env.flushMicrotasks();
+      await Promise.resolve();
+
+      expect(env.swContainer.register).not.toHaveBeenCalled();
+      expect(env.registration.unregister).toHaveBeenCalledTimes(1);
+      expect(deleteCacheSpy).toHaveBeenCalledWith('shredblocks-v1.2.2-shell');
+      expect(deleteCacheSpy).toHaveBeenCalledWith('shredblocks-v1.2.2-runtime');
+    } finally {
+      if (prevLanFlag === undefined) {
+        delete (globalThis as Record<string, unknown>).__SHREDBLOCKS_LAN_DEVTOOLS__;
+      } else {
+        (globalThis as Record<string, unknown>).__SHREDBLOCKS_LAN_DEVTOOLS__ = prevLanFlag;
+      }
+      if (prevCaches === undefined) {
+        delete (globalThis as Record<string, unknown>).caches;
+      } else {
+        (globalThis as Record<string, unknown>).caches = prevCaches;
+      }
+    }
   });
 });
