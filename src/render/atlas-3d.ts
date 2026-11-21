@@ -15,6 +15,7 @@ export interface AtlasUVRegion {
 
 export interface AtlasTextureData {
   canvas: HTMLCanvasElement;
+  pixels: Uint8Array | null;
   width: number;
   height: number;
   regions: Record<string, AtlasUVRegion>;
@@ -575,7 +576,7 @@ export function createAtlasTextureData(): AtlasTextureData {
   canvas.width = ATLAS_SIZE;
   canvas.height = ATLAS_SIZE;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true }) ?? canvas.getContext('2d');
   const regions: Record<string, AtlasUVRegion> = {};
 
   if (ctx) {
@@ -629,8 +630,15 @@ export function createAtlasTextureData(): AtlasTextureData {
     }
   }
 
+  let pixels: Uint8Array | null = null;
+  if (ctx && typeof ctx.getImageData === 'function') {
+    const img = ctx.getImageData(0, 0, ATLAS_SIZE, ATLAS_SIZE);
+    pixels = new Uint8Array(img.data.buffer.slice(0));
+  }
+
   cachedAtlasData = {
     canvas,
+    pixels,
     width: ATLAS_SIZE,
     height: ATLAS_SIZE,
     regions,

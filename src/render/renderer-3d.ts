@@ -450,8 +450,12 @@ export class Renderer3D implements RenderPassContext {
     this.uPartViewProj = gl.getUniformLocation(partProg, 'u_viewProj');
     this.uPartStyle = gl.getUniformLocation(partProg, 'u_particleStyle');
 
-    this.atlasTexture = uploadAtlasAndStaticMeshesImpl(gl, this.atlasData.canvas, (g, m) =>
-      this.getOrCreateMeshHandle(g, m)
+    this.atlasTexture = uploadAtlasAndStaticMeshesImpl(
+      gl,
+      this.atlasData.canvas,
+      (g, m) => this.getOrCreateMeshHandle(g, m),
+      this.atlasData.pixels,
+      this.atlasData.width
     );
 
     // Setup GPU-instanced particle & smoke quad VAOs + pre-warm Vulkan/Adreno PSOs

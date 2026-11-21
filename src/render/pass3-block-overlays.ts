@@ -1,45 +1,41 @@
-import { getBlockRoomId, isBlockInSealedVault } from '../core/physics';
-import { getActiveColor, getShape, type PolyominoShape } from '../core/polyomino';
-import type { BlockState, BoardState, ColorId, SkinId } from '../core/types';
-import { BLOCK_LIFT_DELTA_Z } from './camera-3d';
-import { ENVIRONMENT_MESHES, getPolyominoMeshPair } from './mesh-generator';
+import type { PolyominoShape } from '../core/polyomino';
+import type { BlockState, ColorId } from '../core/types';
 import {
-  drawToneOnToneSigil3D,
-  getToneOnToneGlyphRgb,
-  type RenderPassContext,
-  type RenderSceneOptions,
-} from './render-types';
+  type AnimatedBlockPose,
+  type BlockSurfaceClearanceLocalZ,
+  blockLocalXToWorld,
+  blockLocalYToWorld,
+  blockLocalZToWorld,
+} from './block-pose-and-clearance';
+import { ENVIRONMENT_MESHES } from './mesh-generator';
+import { drawToneOnToneSigil3D, getToneOnToneGlyphRgb, type RenderPassContext } from './render-types';
 
 export function renderBlockSurfaceOverlays3D(
   rctx: RenderPassContext,
   gl: WebGL2RenderingContext,
   block: BlockState,
   shape: PolyominoShape,
-  drawX: number,
-  drawY: number,
-  zLift: number,
-  scaleZ: number,
+  pose: AnimatedBlockPose,
+  layers: BlockSurfaceClearanceLocalZ,
   r: number,
   g: number,
   b: number,
-  roomLum: number,
   activeColor: ColorId,
   layersLeft: number,
-  zCbSymbol: number,
-  zMedallionBase: number,
   highContrast: boolean,
   colorblind: boolean,
   pulse: number,
   timeSec: number,
   live3DMix: number,
-  reducedMotion: boolean,
-  isLockedRoom: boolean,
-  bombHeartbeat: number
+  reducedMotion: boolean
 ): void {
-  // 3F. 3-Zone Sculpted Architectural Surface Overlays (`UX-10`, `AX-01`, `R3D-07`)
+  // 3F. 3-Zone Sculpted Architectural Surface Overlays (`UX-10`, `AX-01`, `R3D-07`, `Z-CLEARANCE-01`)
+  const roomLum = pose.roomLum;
+  const sxy = pose.scaleXY;
+  const sz = pose.scaleZ;
   const anchor = shape.cells[shape.anchorCellIndex] ?? shape.cells[0];
-  const anchorCx = drawX + anchor[1] + 0.5;
-  const anchorCy = drawY + anchor[0] + 0.5;
+  const anchorLocalX = anchor[1] + 0.5;
+  const anchorLocalY = anchor[0] + 0.5;
   const hasImmobilizer = block.iceCount > 0 || block.chained;
   const hasPayload =
     (block.bombMax > 0 && block.bombCount > 0) ||
@@ -47,8 +43,8 @@ export function renderBlockSurfaceOverlays3D(
     block.scissorColor > 0 ||
     block.shutterGemColor > 0 ||
     block.isStar;
-  let lockBadgeCx = -999;
-  let lockBadgeCy = -999;
+  let lockBadgeLocalX = -999;
+  let lockBadgeLocalY = -999;
 
   // Zone A: Integrated 3D Axis-Lock Side-Flange Rails + Sculpted Tone-on-Tone Medallion (`UX-10`, `R3D-07`)
   // Circular studs occupy [0.34, 0.66]; placing 3D side rails at 0.13 and 0.87 leaves the 3D studs 100% uncovered!
@@ -69,9 +65,9 @@ export function renderBlockSurfaceOverlays3D(
       }
     }
     const spanW = maxCol - minCol + 1;
-    const railCenterX = drawX + minCol + spanW * 0.5;
+    const railCenterLocalX = minCol + spanW * 0.5;
     const railLen = spanW - 0.12;
-    const zRail = zLift + 0.592 * scaleZ;
+    const zRail = blockLocalZToWorld(pose, layers.railCenter);
     const flangeR = Math.min(1, r * 0.42 + 0.58);
     const flangeG = Math.min(1, g * 0.42 + 0.55);
     const flangeB = Math.min(1, b * 0.42 + 0.48);
@@ -80,12 +76,12 @@ export function renderBlockSurfaceOverlays3D(
     rctx.drawMesh(
       gl,
       ENVIRONMENT_MESHES.unitParticleCube,
-      railCenterX,
-      drawY + anchor[0] + 0.13,
+      blockLocalXToWorld(pose, railCenterLocalX),
+      blockLocalYToWorld(pose, anchor[0] + 0.13),
       zRail,
-      railLen,
-      0.092,
-      0.058 * scaleZ,
+      railLen * sxy,
+      0.092 * sxy,
+      layers.railSizeZ * sz,
       flangeR,
       flangeG,
       flangeB,
@@ -97,12 +93,12 @@ export function renderBlockSurfaceOverlays3D(
     rctx.drawMesh(
       gl,
       ENVIRONMENT_MESHES.unitParticleCube,
-      railCenterX,
-      drawY + anchor[0] + 0.87,
+      blockLocalXToWorld(pose, railCenterLocalX),
+      blockLocalYToWorld(pose, anchor[0] + 0.87),
       zRail,
-      railLen,
-      0.092,
-      0.058 * scaleZ,
+      railLen * sxy,
+      0.092 * sxy,
+      layers.railSizeZ * sz,
       flangeR,
       flangeG,
       flangeB,
@@ -113,33 +109,53 @@ export function renderBlockSurfaceOverlays3D(
     );
 
     // Sculpted 3D tone-on-tone medallion + pill-free architectural double-chevron (`LOCK_H`)
-    let arrowCx = railCenterX;
-    let arrowCy = anchorCy;
+    let arrowLocalX = railCenterLocalX;
+    let arrowLocalY = anchorLocalY;
     let medW = spanW >= 2 ? 0.58 : 0.48;
     let medH = 0.36;
     let iconSize = spanW >= 2 ? 0.5 : 0.42;
+    let usesStackedFallback = false;
 
     if (hasImmobilizer || hasPayload) {
       const freeCell = freeRowCell ?? freeAnyCell;
       if (freeCell) {
-        arrowCx = drawX + freeCell[1] + 0.5;
-        arrowCy = drawY + freeCell[0] + 0.5;
+        arrowLocalX = freeCell[1] + 0.5;
+        arrowLocalY = freeCell[0] + 0.5;
         medW = 0.5;
         medH = 0.36;
         iconSize = 0.44;
       } else {
-        arrowCx = anchorCx;
-        arrowCy = drawY + anchor[0] + 0.8;
+        arrowLocalX = anchorLocalX;
+        arrowLocalY = anchor[0] + 0.8;
         medW = 0.42;
         medH = 0.28;
         iconSize = 0.34;
+        usesStackedFallback = true;
       }
     }
-    lockBadgeCx = arrowCx;
-    lockBadgeCy = arrowCy;
+    lockBadgeLocalX = arrowLocalX;
+    lockBadgeLocalY = arrowLocalY;
 
-    const lockBadgeZ = rctx.drawBadgeMedallion3D(gl, arrowCx, arrowCy, zMedallionBase, medW, medH, r, g, b);
-    rctx.drawAtlasBadge(gl, 'LOCK_H', arrowCx, arrowCy, lockBadgeZ, iconSize, 1.0, 0.99, 0.94, 1.0);
+    const arrowWx = blockLocalXToWorld(pose, arrowLocalX);
+    const arrowWy = blockLocalYToWorld(pose, arrowLocalY);
+    const lockMedLocalZ = layers.medallionBase + (usesStackedFallback ? 0.02 : 0);
+    const lockBadgeZ = rctx.drawBadgeMedallion3D(
+      gl,
+      arrowWx,
+      arrowWy,
+      blockLocalZToWorld(pose, lockMedLocalZ),
+      medW,
+      medH,
+      r,
+      g,
+      b,
+      0.92,
+      0.8,
+      0.52,
+      sxy,
+      sz
+    );
+    rctx.drawAtlasBadge(gl, 'LOCK_H', arrowWx, arrowWy, lockBadgeZ, iconSize * sxy, 1.0, 0.99, 0.94, 1.0);
   } else if (block.axisLock === 'V') {
     let minRow = anchor[0];
     let maxRow = anchor[0];
@@ -157,9 +173,9 @@ export function renderBlockSurfaceOverlays3D(
       }
     }
     const spanH = maxRow - minRow + 1;
-    const railCenterY = drawY + minRow + spanH * 0.5;
+    const railCenterLocalY = minRow + spanH * 0.5;
     const railLen = spanH - 0.12;
-    const zRail = zLift + 0.592 * scaleZ;
+    const zRail = blockLocalZToWorld(pose, layers.railCenter);
     const flangeR = Math.min(1, r * 0.42 + 0.58);
     const flangeG = Math.min(1, g * 0.42 + 0.55);
     const flangeB = Math.min(1, b * 0.42 + 0.48);
@@ -168,12 +184,12 @@ export function renderBlockSurfaceOverlays3D(
     rctx.drawMesh(
       gl,
       ENVIRONMENT_MESHES.unitParticleCube,
-      drawX + anchor[1] + 0.13,
-      railCenterY,
+      blockLocalXToWorld(pose, anchor[1] + 0.13),
+      blockLocalYToWorld(pose, railCenterLocalY),
       zRail,
-      0.092,
-      railLen,
-      0.058 * scaleZ,
+      0.092 * sxy,
+      railLen * sxy,
+      layers.railSizeZ * sz,
       flangeR,
       flangeG,
       flangeB,
@@ -185,12 +201,12 @@ export function renderBlockSurfaceOverlays3D(
     rctx.drawMesh(
       gl,
       ENVIRONMENT_MESHES.unitParticleCube,
-      drawX + anchor[1] + 0.87,
-      railCenterY,
+      blockLocalXToWorld(pose, anchor[1] + 0.87),
+      blockLocalYToWorld(pose, railCenterLocalY),
       zRail,
-      0.092,
-      railLen,
-      0.058 * scaleZ,
+      0.092 * sxy,
+      railLen * sxy,
+      layers.railSizeZ * sz,
       flangeR,
       flangeG,
       flangeB,
@@ -201,65 +217,85 @@ export function renderBlockSurfaceOverlays3D(
     );
 
     // Sculpted 3D tone-on-tone medallion + pill-free architectural double-chevron (`LOCK_V`)
-    let arrowCx = anchorCx;
-    let arrowCy = railCenterY;
+    let arrowLocalX = anchorLocalX;
+    let arrowLocalY = railCenterLocalY;
     let medW = 0.36;
     let medH = spanH >= 2 ? 0.58 : 0.48;
     let iconSize = spanH >= 2 ? 0.5 : 0.42;
+    let usesStackedFallback = false;
 
     if (hasImmobilizer || hasPayload) {
       const freeCell = freeColCell ?? freeAnyCell;
       if (freeCell) {
-        arrowCx = drawX + freeCell[1] + 0.5;
-        arrowCy = drawY + freeCell[0] + 0.5;
+        arrowLocalX = freeCell[1] + 0.5;
+        arrowLocalY = freeCell[0] + 0.5;
         medW = 0.36;
         medH = 0.5;
         iconSize = 0.44;
       } else {
-        arrowCx = drawX + anchor[1] + 0.8;
-        arrowCy = anchorCy;
+        arrowLocalX = anchor[1] + 0.8;
+        arrowLocalY = anchorLocalY;
         medW = 0.28;
         medH = 0.42;
         iconSize = 0.34;
+        usesStackedFallback = true;
       }
     }
-    lockBadgeCx = arrowCx;
-    lockBadgeCy = arrowCy;
+    lockBadgeLocalX = arrowLocalX;
+    lockBadgeLocalY = arrowLocalY;
 
-    const lockBadgeZ = rctx.drawBadgeMedallion3D(gl, arrowCx, arrowCy, zMedallionBase, medW, medH, r, g, b);
-    rctx.drawAtlasBadge(gl, 'LOCK_V', arrowCx, arrowCy, lockBadgeZ, iconSize, 1.0, 0.99, 0.94, 1.0);
+    const arrowWx = blockLocalXToWorld(pose, arrowLocalX);
+    const arrowWy = blockLocalYToWorld(pose, arrowLocalY);
+    const lockMedLocalZ = layers.medallionBase + (usesStackedFallback ? 0.02 : 0);
+    const lockBadgeZ = rctx.drawBadgeMedallion3D(
+      gl,
+      arrowWx,
+      arrowWy,
+      blockLocalZToWorld(pose, lockMedLocalZ),
+      medW,
+      medH,
+      r,
+      g,
+      b,
+      0.92,
+      0.8,
+      0.52,
+      sxy,
+      sz
+    );
+    rctx.drawAtlasBadge(gl, 'LOCK_V', arrowWx, arrowWy, lockBadgeZ, iconSize * sxy, 1.0, 0.99, 0.94, 1.0);
   }
 
   // Zone B: Decoupled Immobilizer Badge vs Payload / Modifier Badge (`R3D-03`, `UX-10`)
-  let immCx = anchorCx;
-  let immCy = anchorCy;
+  let immLocalX = anchorLocalX;
+  let immLocalY = anchorLocalY;
   let immScale = layersLeft > 1 && shape.cells.length === 1 ? 0.86 : 1.0;
-  let payCx = anchorCx;
-  let payCy = anchorCy;
+  let payLocalX = anchorLocalX;
+  let payLocalY = anchorLocalY;
   let payScale = layersLeft > 1 && shape.cells.length === 1 ? 0.86 : 1.0;
 
   if (hasImmobilizer && hasPayload) {
     if (shape.cells.length >= 2) {
       const secCell = shape.cells[(shape.anchorCellIndex + 1) % shape.cells.length];
-      payCx = drawX + secCell[1] + 0.5;
-      payCy = drawY + secCell[0] + 0.5;
+      payLocalX = secCell[1] + 0.5;
+      payLocalY = secCell[0] + 0.5;
     } else {
-      immCx = anchorCx - 0.16;
-      immCy = anchorCy - 0.14;
+      immLocalX = anchorLocalX - 0.16;
+      immLocalY = anchorLocalY - 0.14;
       immScale = 0.76;
-      payCx = anchorCx + 0.16;
-      payCy = anchorCy + 0.14;
+      payLocalX = anchorLocalX + 0.16;
+      payLocalY = anchorLocalY + 0.14;
       payScale = 0.76;
     }
   }
 
   const isCellCenterBusy = (cellR: number, cellC: number, ci: number): boolean => {
-    const cellCx = drawX + cellC + 0.5;
-    const cellCy = drawY + cellR + 0.5;
+    const cellCx = cellC + 0.5;
+    const cellCy = cellR + 0.5;
     return (
-      (hasImmobilizer && Math.hypot(cellCx - immCx, cellCy - immCy) < 0.36) ||
-      (hasPayload && Math.hypot(cellCx - payCx, cellCy - payCy) < 0.36) ||
-      (block.axisLock !== 'NONE' && Math.hypot(cellCx - lockBadgeCx, cellCy - lockBadgeCy) < 0.38) ||
+      (hasImmobilizer && Math.hypot(cellCx - immLocalX, cellCy - immLocalY) < 0.36) ||
+      (hasPayload && Math.hypot(cellCx - payLocalX, cellCy - payLocalY) < 0.36) ||
+      (block.axisLock !== 'NONE' && Math.hypot(cellCx - lockBadgeLocalX, cellCy - lockBadgeLocalY) < 0.38) ||
       (block.ropeColor > 0 && ci === shape.anchorCellIndex) ||
       (block.chained && (cellR === anchor[0] || cellC === anchor[1]))
     );
@@ -273,12 +309,12 @@ export function renderBlockSurfaceOverlays3D(
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
-        drawX + cell[1] + 0.5,
-        drawY + cell[0] + 0.5,
-        zLift + 0.602 * scaleZ,
-        0.44,
-        0.44,
-        0.046 * scaleZ,
+        blockLocalXToWorld(pose, cell[1] + 0.5),
+        blockLocalYToWorld(pose, cell[0] + 0.5),
+        blockLocalZToWorld(pose, 0.604),
+        0.44 * sxy,
+        0.44 * sxy,
+        0.046 * sz,
         Math.min(1, r * 0.78 + 0.18),
         Math.min(1, g * 0.78 + 0.18),
         Math.min(1, b * 0.78 + 0.18),
@@ -296,17 +332,17 @@ export function renderBlockSurfaceOverlays3D(
     const matStyle =
       activeColor === 0 ? 6 : rctx.getMaterialStyleCode(rctx.lastOptions.equippedSkin ?? 'classic_studs');
     const hasCenterBadgeOnCell = (cellR: number, cellC: number, ci: number): boolean => {
-      const cellCx = drawX + cellC + 0.5;
-      const cellCy = drawY + cellR + 0.5;
+      const cellCx = cellC + 0.5;
+      const cellCy = cellR + 0.5;
       return (
-        (hasImmobilizer && Math.hypot(cellCx - immCx, cellCy - immCy) < 0.42) ||
-        (hasPayload && Math.hypot(cellCx - payCx, cellCy - payCy) < 0.42) ||
+        (hasImmobilizer && Math.hypot(cellCx - immLocalX, cellCy - immLocalY) < 0.42) ||
+        (hasPayload && Math.hypot(cellCx - payLocalX, cellCy - payLocalY) < 0.42) ||
         (block.axisLock === 'H' &&
-          Math.abs(cellCx - lockBadgeCx) < 0.58 &&
-          Math.abs(cellCy - lockBadgeCy) < 0.42) ||
+          Math.abs(cellCx - lockBadgeLocalX) < 0.58 &&
+          Math.abs(cellCy - lockBadgeLocalY) < 0.42) ||
         (block.axisLock === 'V' &&
-          Math.abs(cellCx - lockBadgeCx) < 0.42 &&
-          Math.abs(cellCy - lockBadgeCy) < 0.58) ||
+          Math.abs(cellCx - lockBadgeLocalX) < 0.42 &&
+          Math.abs(cellCy - lockBadgeLocalY) < 0.58) ||
         (block.ropeColor > 0 && ci === shape.anchorCellIndex)
       );
     };
@@ -337,24 +373,26 @@ export function renderBlockSurfaceOverlays3D(
     strapOnlyCellIndices.sort(byAnchorThenCenter);
 
     const drawCapPad = (
-      px: number,
-      py: number,
-      sz: number,
-      h = 0.064,
+      lx: number,
+      ly: number,
+      padLocalSize: number,
+      busyCorner = false,
       cr = r,
       cg = g,
       cb = b,
       mStyle = matStyle
     ): void => {
+      const centerZ = busyCorner ? layers.busyCornerCapPadCenter : layers.capPadCenter;
+      const sizeZ = busyCorner ? layers.busyCornerCapPadSizeZ : layers.capPadSizeZ;
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
-        px,
-        py,
-        zLift + 0.608 * scaleZ,
-        sz,
-        sz,
-        h * scaleZ,
+        blockLocalXToWorld(pose, lx),
+        blockLocalYToWorld(pose, ly),
+        blockLocalZToWorld(pose, centerZ),
+        padLocalSize * sxy,
+        padLocalSize * sxy,
+        sizeZ * sz,
         cr,
         cg,
         cb,
@@ -364,52 +402,62 @@ export function renderBlockSurfaceOverlays3D(
         mStyle
       );
     };
-    const drawSigil = (col: ColorId, sx: number, sy: number, z: number, sz: number): void => {
-      drawToneOnToneSigil3D(rctx, gl, col, sx, sy, z, sz, roomLum, highContrast, isNeonCyber);
+    const drawSigil = (col: ColorId, lx: number, ly: number, localZ: number, sigilSize: number): void => {
+      drawToneOnToneSigil3D(
+        rctx,
+        gl,
+        col,
+        blockLocalXToWorld(pose, lx),
+        blockLocalYToWorld(pose, ly),
+        blockLocalZToWorld(pose, localZ),
+        sigilSize * sxy,
+        roomLum,
+        highContrast,
+        isNeonCyber
+      );
     };
 
     if (layersLeft === 1) {
       if (freeCellIndices.length > 0) {
         const primaryCell = shape.cells[freeCellIndices[0]];
-        const px = drawX + primaryCell[1] + 0.5;
-        const py = drawY + primaryCell[0] + 0.5;
+        const px = primaryCell[1] + 0.5;
+        const py = primaryCell[0] + 0.5;
         if (block.iceCount > 0) drawCapPad(px, py, 0.52);
-        drawSigil(activeColor, px, py, zCbSymbol, block.iceCount > 0 ? 0.46 : 0.5);
+        drawSigil(activeColor, px, py, layers.cbSymbol, block.iceCount > 0 ? 0.46 : 0.5);
       } else if (strapOnlyCellIndices.length > 0) {
         const strapCell = shape.cells[strapOnlyCellIndices[0]];
-        const sx = drawX + strapCell[1] + 0.5;
-        const sy = drawY + strapCell[0] + 0.5;
+        const sx = strapCell[1] + 0.5;
+        const sy = strapCell[0] + 0.5;
         drawCapPad(sx, sy, 0.52);
-        drawSigil(activeColor, sx, sy, zCbSymbol, 0.46);
+        drawSigil(activeColor, sx, sy, layers.cbSymbol, 0.46);
       } else if (shape.cells.length >= 2 && block.axisLock !== 'NONE') {
         const endCell =
           shape.cells.find((c, ci) => {
-            const cx = drawX + c[1] + 0.5;
-            const cy = drawY + c[0] + 0.5;
+            const cx = c[1] + 0.5;
+            const cy = c[0] + 0.5;
             return (
-              !(hasImmobilizer && Math.hypot(cx - immCx, cy - immCy) < 0.42) &&
-              !(hasPayload && Math.hypot(cx - payCx, cy - payCy) < 0.42) &&
+              !(hasImmobilizer && Math.hypot(cx - immLocalX, cy - immLocalY) < 0.42) &&
+              !(hasPayload && Math.hypot(cx - payLocalX, cy - payLocalY) < 0.42) &&
               !(block.ropeColor > 0 && ci === shape.anchorCellIndex)
             );
           }) ?? shape.cells[0];
         const ex =
-          drawX +
           endCell[1] +
           0.5 +
-          (block.axisLock === 'H' ? (drawX + endCell[1] + 0.5 <= lockBadgeCx ? -0.14 : 0.14) : 0);
+          (block.axisLock === 'H' ? (endCell[1] + 0.5 <= lockBadgeLocalX ? -0.14 : 0.14) : 0);
         const ey =
-          drawY +
           endCell[0] +
           0.5 +
-          (block.axisLock === 'V' ? (drawY + endCell[0] + 0.5 <= lockBadgeCy ? -0.14 : 0.14) : 0);
-        if (block.iceCount > 0) drawCapPad(ex, ey, 0.44);
-        drawSigil(activeColor, ex, ey, zCbSymbol, 0.4);
+          (block.axisLock === 'V' ? (endCell[0] + 0.5 <= lockBadgeLocalY ? -0.14 : 0.14) : 0);
+        const overlapsAxisMedallion = Math.hypot(ex - lockBadgeLocalX, ey - lockBadgeLocalY) < 0.56;
+        if (block.iceCount > 0 || overlapsAxisMedallion) drawCapPad(ex, ey, 0.44, overlapsAxisMedallion);
+        drawSigil(activeColor, ex, ey, overlapsAxisMedallion ? layers.busyCornerSigil : layers.cbSymbol, 0.4);
       } else {
         const fallbackCell = shape.cells[0];
-        const fx = drawX + fallbackCell[1] + 0.24;
-        const fy = drawY + fallbackCell[0] + 0.24;
-        drawCapPad(fx, fy, 0.34, 0.062);
-        drawSigil(activeColor, fx, fy, zCbSymbol + 0.004, 0.28);
+        const fx = fallbackCell[1] + 0.24;
+        const fy = fallbackCell[0] + 0.24;
+        drawCapPad(fx, fy, 0.34, true);
+        drawSigil(activeColor, fx, fy, layers.busyCornerSigil, 0.28);
       }
     } else {
       // Multi-layer block: seamless outer-color bridge pad + tone-on-tone outer & inner silhouettes
@@ -421,51 +469,61 @@ export function renderBlockSurfaceOverlays3D(
       if (shape.cells.length >= 2 && usableCells.length >= 2) {
         const outerCell = shape.cells[usableCells[0]];
         const innerCell = shape.cells[usableCells[1]];
-        const ox = drawX + outerCell[1] + 0.5;
-        const oy = drawY + outerCell[0] + 0.5;
-        const ix = drawX + innerCell[1] + 0.5;
-        const iy = drawY + innerCell[0] + 0.5;
-        drawCapPad(ox, oy, 0.58, 0.068);
-        drawSigil(activeColor, ox, oy, zCbSymbol, 0.46);
+        const ox = outerCell[1] + 0.5;
+        const oy = outerCell[0] + 0.5;
+        const ix = innerCell[1] + 0.5;
+        const iy = innerCell[0] + 0.5;
+        drawCapPad(ox, oy, 0.58);
+        drawSigil(activeColor, ox, oy, layers.cbSymbol, 0.46);
         if (block.iceCount > 0) {
-          drawCapPad(ix, iy, 0.5, 0.064, ir * roomLum, ig * roomLum, ib * roomLum, innerMatStyle);
+          drawCapPad(ix, iy, 0.5, false, ir * roomLum, ig * roomLum, ib * roomLum, innerMatStyle);
         }
-        drawSigil(innerColor, ix, iy, zCbSymbol + 0.002, 0.44);
+        drawSigil(innerColor, ix, iy, layers.cbSymbol + 0.002, 0.44);
       } else {
         const targetCell = shape.cells[usableCells[0] ?? 0];
         const cellBusy = usableCells.length === 0;
-        const tx = drawX + targetCell[1] + 0.24;
-        const ty = drawY + targetCell[0] + 0.24;
-        const ix = drawX + targetCell[1] + (cellBusy ? 0.76 : 0.58);
-        const iy = drawY + targetCell[0] + (cellBusy ? 0.76 : 0.58);
-        drawCapPad(tx, ty, 0.34, 0.068);
-        drawSigil(activeColor, tx, ty, zCbSymbol + 0.002, 0.31);
-        drawCapPad(ix, iy, 0.34, 0.068, ir * roomLum, ig * roomLum, ib * roomLum, innerMatStyle);
-        drawSigil(innerColor, ix, iy, zCbSymbol + 0.005, cellBusy ? 0.29 : 0.33);
+        const tx = targetCell[1] + 0.24;
+        const ty = targetCell[0] + 0.24;
+        const ix = targetCell[1] + (cellBusy ? 0.76 : 0.58);
+        const iy = targetCell[0] + (cellBusy ? 0.76 : 0.58);
+        const sigZ = cellBusy ? layers.busyCornerSigil : layers.cbSymbol;
+        drawCapPad(tx, ty, 0.34, cellBusy);
+        drawSigil(activeColor, tx, ty, sigZ, 0.31);
+        drawCapPad(ix, iy, 0.34, cellBusy, ir * roomLum, ig * roomLum, ib * roomLum, innerMatStyle);
+        drawSigil(innerColor, ix, iy, sigZ + 0.003, cellBusy ? 0.29 : 0.33);
       }
     }
   }
+
+  const immWx = blockLocalXToWorld(pose, immLocalX);
+  const immWy = blockLocalYToWorld(pose, immLocalY);
+  const immBaseZ = blockLocalZToWorld(pose, layers.medallionBase);
 
   // 1) Immobilizer Badge (`iceCount > 0` or `chained`) via Sculpted 3D Medallion
   if (block.iceCount > 0) {
     const iceBadgeZ = rctx.drawBadgeMedallion3D(
       gl,
-      immCx,
-      immCy,
-      zMedallionBase,
+      immWx,
+      immWy,
+      immBaseZ,
       0.66 * immScale,
       0.44 * immScale,
       0.38 * roomLum,
       0.74 * roomLum,
-      0.96 * roomLum
+      0.96 * roomLum,
+      0.92,
+      0.8,
+      0.52,
+      sxy,
+      sz
     );
     rctx.drawAtlasBadge(
       gl,
       'BADGE_ICE',
-      immCx - 0.14 * immScale,
-      immCy,
+      immWx - 0.14 * immScale * sxy,
+      immWy,
       iceBadgeZ,
-      0.35 * immScale,
+      0.35 * immScale * sxy,
       0.88 * roomLum,
       0.98 * roomLum,
       1.0 * roomLum,
@@ -474,10 +532,10 @@ export function renderBlockSurfaceOverlays3D(
     rctx.drawNumberBadges(
       gl,
       block.iceCount,
-      immCx + 0.15 * immScale,
-      immCy,
-      iceBadgeZ + 0.002,
-      0.35 * immScale,
+      immWx + 0.15 * immScale * sxy,
+      immWy,
+      iceBadgeZ + 0.002 * sz,
+      0.35 * immScale * sxy,
       roomLum,
       roomLum,
       roomLum
@@ -485,22 +543,27 @@ export function renderBlockSurfaceOverlays3D(
   } else if (block.chained) {
     const lockBadgeZ = rctx.drawBadgeMedallion3D(
       gl,
-      immCx,
-      immCy,
-      zMedallionBase,
+      immWx,
+      immWy,
+      immBaseZ,
       0.52 * immScale,
       0.52 * immScale,
       0.36 * roomLum,
       0.4 * roomLum,
-      0.48 * roomLum
+      0.48 * roomLum,
+      0.92,
+      0.8,
+      0.52,
+      sxy,
+      sz
     );
     rctx.drawAtlasBadge(
       gl,
       'BADGE_LOCK',
-      immCx,
-      immCy,
+      immWx,
+      immWy,
       lockBadgeZ,
-      0.48 * immScale,
+      0.48 * immScale * sxy,
       1.0 * roomLum,
       0.9 * roomLum,
       0.42 * roomLum,
@@ -509,36 +572,47 @@ export function renderBlockSurfaceOverlays3D(
   }
 
   // 2) Payload / Modifier Badge (`bomb`, `hasKey`, `scissorColor`, `shutterGemColor`, `isStar`) via Sculpted 3D Medallion (`IDLE-05`)
-  const payBobZ =
-    !reducedMotion && !isLockedRoom ? Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.011 * live3DMix : 0;
+  const payHoverLocalZ =
+    !reducedMotion && !pose.isLockedRoom
+      ? (0.5 + 0.5 * Math.sin(timeSec * 2.2 + pose.poseSeed * 0.9)) * 0.016 * live3DMix
+      : 0;
   const payPulseScale =
-    !reducedMotion && !isLockedRoom
-      ? payScale * (1.0 + Math.sin(timeSec * 2.2 + block.id * 0.9) * 0.028 * live3DMix)
+    !reducedMotion && !pose.isLockedRoom
+      ? payScale * (1.0 + Math.sin(timeSec * 2.2 + pose.poseSeed * 0.9) * 0.028 * live3DMix)
       : payScale;
+  const payWx = blockLocalXToWorld(pose, payLocalX);
+  const payWy = blockLocalYToWorld(pose, payLocalY);
 
   if (block.bombMax > 0 && block.bombCount > 0) {
-    const urgent = block.bombCount <= 3 && !isLockedRoom ? 0.65 + 0.35 * pulse : 1.0;
+    const urgent = block.bombCount <= 3 && !pose.isLockedRoom ? 0.65 + 0.35 * pulse : 1.0;
     const bombMedScale =
-      !reducedMotion && !isLockedRoom ? payScale * (1.0 + bombHeartbeat * 1.2 * live3DMix) : payScale;
+      !reducedMotion && !pose.isLockedRoom
+        ? payScale * (1.0 + pose.bombHeartbeat * 1.2 * live3DMix)
+        : payScale;
     const twoDigit = block.bombCount >= 10;
     const bombBadgeZ = rctx.drawBadgeMedallion3D(
       gl,
-      payCx,
-      payCy,
-      zMedallionBase + payBobZ * 0.6,
+      payWx,
+      payWy,
+      blockLocalZToWorld(pose, layers.medallionBase + payHoverLocalZ * 0.6),
       0.74 * bombMedScale,
       0.46 * bombMedScale,
       r,
       g,
-      b
+      b,
+      0.92,
+      0.8,
+      0.52,
+      sxy,
+      sz
     );
     rctx.drawAtlasBadge(
       gl,
       'BADGE_BOMB',
-      payCx - (twoDigit ? 0.2 : 0.15) * bombMedScale,
-      payCy,
+      payWx - (twoDigit ? 0.2 : 0.15) * bombMedScale * sxy,
+      payWy,
       bombBadgeZ,
-      (twoDigit ? 0.32 : 0.35) * bombMedScale,
+      (twoDigit ? 0.32 : 0.35) * bombMedScale * sxy,
       1.0 * roomLum,
       0.86 * urgent * roomLum,
       0.3 * urgent * roomLum,
@@ -547,10 +621,10 @@ export function renderBlockSurfaceOverlays3D(
     rctx.drawNumberBadges(
       gl,
       block.bombCount,
-      payCx + (twoDigit ? 0.16 : 0.15) * bombMedScale,
-      payCy,
-      bombBadgeZ + 0.002,
-      (twoDigit ? 0.3 : 0.35) * bombMedScale,
+      payWx + (twoDigit ? 0.16 : 0.15) * bombMedScale * sxy,
+      payWy,
+      bombBadgeZ + 0.002 * sz,
+      (twoDigit ? 0.3 : 0.35) * bombMedScale * sxy,
       1.0 * roomLum,
       0.97 * roomLum,
       0.48 * roomLum
@@ -558,22 +632,27 @@ export function renderBlockSurfaceOverlays3D(
   } else if (block.hasKey > 0) {
     const keyBadgeZ = rctx.drawBadgeMedallion3D(
       gl,
-      payCx,
-      payCy,
-      zMedallionBase + payBobZ,
+      payWx,
+      payWy,
+      blockLocalZToWorld(pose, layers.medallionBase + payHoverLocalZ),
       0.52 * payPulseScale,
       0.52 * payPulseScale,
       r,
       g,
-      b
+      b,
+      0.92,
+      0.8,
+      0.52,
+      sxy,
+      sz
     );
     rctx.drawAtlasBadge(
       gl,
       'BADGE_KEY',
-      payCx,
-      payCy,
+      payWx,
+      payWy,
       keyBadgeZ,
-      0.48 * payPulseScale,
+      0.48 * payPulseScale * sxy,
       1.0 * roomLum,
       0.9 * roomLum,
       0.32 * roomLum,
@@ -588,22 +667,27 @@ export function renderBlockSurfaceOverlays3D(
       const [pfgR, pfgG, pfgB] = getToneOnToneGlyphRgb(payloadColor, highContrast, false);
       const payBadgeZ = rctx.drawBadgeMedallion3D(
         gl,
-        payCx,
-        payCy,
-        zMedallionBase + payBobZ,
+        payWx,
+        payWy,
+        blockLocalZToWorld(pose, layers.medallionBase + payHoverLocalZ),
         0.68 * payPulseScale,
         0.46 * payPulseScale,
         pr * roomLum,
         pg * roomLum,
-        pb * roomLum
+        pb * roomLum,
+        0.92,
+        0.8,
+        0.52,
+        sxy,
+        sz
       );
       rctx.drawAtlasBadge(
         gl,
         payloadKey,
-        payCx - 0.14 * payPulseScale,
-        payCy,
+        payWx - 0.14 * payPulseScale * sxy,
+        payWy,
         payBadgeZ,
-        0.34 * payPulseScale,
+        0.34 * payPulseScale * sxy,
         pfgR * roomLum,
         pfgG * roomLum,
         pfgB * roomLum,
@@ -613,10 +697,10 @@ export function renderBlockSurfaceOverlays3D(
         rctx,
         gl,
         payloadColor,
-        payCx + 0.15 * payPulseScale,
-        payCy,
-        payBadgeZ + 0.002,
-        0.33 * payPulseScale,
+        payWx + 0.15 * payPulseScale * sxy,
+        payWy,
+        payBadgeZ + 0.003 * sz,
+        0.33 * payPulseScale * sxy,
         roomLum,
         highContrast,
         false
@@ -624,22 +708,27 @@ export function renderBlockSurfaceOverlays3D(
     } else {
       const payBadgeZ = rctx.drawBadgeMedallion3D(
         gl,
-        payCx,
-        payCy,
-        zMedallionBase + payBobZ,
+        payWx,
+        payWy,
+        blockLocalZToWorld(pose, layers.medallionBase + payHoverLocalZ),
         0.52 * payPulseScale,
         0.52 * payPulseScale,
         r,
         g,
-        b
+        b,
+        0.92,
+        0.8,
+        0.52,
+        sxy,
+        sz
       );
       rctx.drawAtlasBadge(
         gl,
         payloadKey,
-        payCx,
-        payCy,
+        payWx,
+        payWy,
         payBadgeZ,
-        0.48 * payPulseScale,
+        0.48 * payPulseScale * sxy,
         pr * roomLum,
         pg * roomLum,
         pb * roomLum,
@@ -649,121 +738,31 @@ export function renderBlockSurfaceOverlays3D(
   } else if (block.isStar) {
     const starBadgeZ = rctx.drawBadgeMedallion3D(
       gl,
-      payCx,
-      payCy,
-      zMedallionBase + payBobZ,
+      payWx,
+      payWy,
+      blockLocalZToWorld(pose, layers.medallionBase + payHoverLocalZ),
       0.5 * payPulseScale,
       0.5 * payPulseScale,
       r,
       g,
-      b
+      b,
+      0.92,
+      0.8,
+      0.52,
+      sxy,
+      sz
     );
     rctx.drawAtlasBadge(
       gl,
       'BADGE_STAR',
-      payCx,
-      payCy,
+      payWx,
+      payWy,
       starBadgeZ,
-      0.46 * payPulseScale,
+      0.46 * payPulseScale * sxy,
       1.0 * roomLum,
       0.92 * roomLum,
       0.32 * roomLum,
       1.0
     );
-  }
-}
-
-export function renderGhostAndWeldClamps3D(
-  rctx: RenderPassContext,
-  gl: WebGL2RenderingContext,
-  board: BoardState,
-  options: RenderSceneOptions,
-  skinId: SkinId,
-  highContrast: boolean,
-  timeSec: number,
-  anyDragActive: boolean,
-  reducedMotion: boolean
-): void {
-  // 3F.2 Early-Stage & Hint 3D Sliding Ghost Polyomino (`UX-10`)
-  const guideMove = board.hintMove ?? (!anyDragActive ? options.autoGuideMove : null) ?? null;
-  if (guideMove && !anyDragActive && !reducedMotion) {
-    const ghostBlock = board.blocks.find((b) => b.id === guideMove.blockId && b.status === 'ACTIVE');
-    if (ghostBlock) {
-      const meshPair = getPolyominoMeshPair(ghostBlock.shapeId, skinId);
-      const activeColor: ColorId = getActiveColor(ghostBlock.colorStack, ghostBlock.colorCursor);
-      const [gr, gg, gb] = rctx.getColorRgb(activeColor, highContrast);
-      const rawPhase = (timeSec * 0.72) % 1.0;
-      const moveT = rawPhase < 0.78 ? (1.0 - Math.cos((rawPhase / 0.78) * Math.PI)) * 0.5 : 1.0;
-      const ghostAlpha = Math.sin(rawPhase * Math.PI) * 0.38;
-      if (ghostAlpha > 0.03 && moveT > 0.06) {
-        const gx = ghostBlock.col + (guideMove.targetCol - ghostBlock.col) * moveT;
-        const gy = ghostBlock.row + (guideMove.targetRow - ghostBlock.row) * moveT;
-        gl.depthMask(false);
-        rctx.drawMesh(
-          gl,
-          meshPair.meshOuter,
-          gx,
-          gy,
-          0.09,
-          1.0,
-          1.0,
-          1.0,
-          Math.min(1, gr * 0.7 + 0.3),
-          Math.min(1, gg * 0.7 + 0.28),
-          Math.min(1, gb * 0.7 + 0.15),
-          ghostAlpha,
-          0,
-          0,
-          1
-        );
-        gl.depthMask(true);
-      }
-    }
-  }
-
-  // 3G. 3D Metallic Weld Clamps bridging adjacent blocks that share `groupId > 0`
-  for (let i = 0; i < board.blocks.length; i++) {
-    const a = board.blocks[i];
-    if (a.status !== 'ACTIVE' || a.groupId <= 0 || isBlockInSealedVault(board, a)) continue;
-    const shapeA = getShape(a.shapeId);
-
-    for (let j = i + 1; j < board.blocks.length; j++) {
-      const b = board.blocks[j];
-      if (b.status !== 'ACTIVE' || b.groupId !== a.groupId) continue;
-      const shapeB = getShape(b.shapeId);
-
-      let clamped = false;
-      for (const [ar, ac] of shapeA.cells) {
-        if (clamped) break;
-        const ax = a.x + ac;
-        const ay = a.y + ar;
-        for (const [br, bc] of shapeB.cells) {
-          const bx = b.x + bc;
-          const by = b.y + br;
-          if (Math.abs(ax - bx) + Math.abs(ay - by) < 1.05) {
-            const mx = (ax + bx) * 0.5 + 0.5;
-            const my = (ay + by) * 0.5 + 0.5;
-            const clampRoomVis = rctx.getRoomVisualState(board, getBlockRoomId(board, a));
-            const mz = clampRoomVis.zOffset + Math.max(a.liftAlpha, b.liftAlpha) * BLOCK_LIFT_DELTA_Z;
-            rctx.drawMesh(
-              gl,
-              ENVIRONMENT_MESHES.weldClampMesh,
-              mx,
-              my,
-              mz,
-              1.0,
-              1.0,
-              1.0,
-              0.78 * clampRoomVis.luminanceMul,
-              0.84 * clampRoomVis.luminanceMul,
-              0.92 * clampRoomVis.luminanceMul,
-              1.0
-            );
-            clamped = true;
-            break;
-          }
-        }
-      }
-    }
   }
 }

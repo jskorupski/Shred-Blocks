@@ -1,19 +1,22 @@
 import { getGateOutwardNormal } from '../core/gate-clearance';
-import {
-  getBlockRoomId,
-  getMovedGroupBlocks,
-  isBlockInLockedRoom,
-  isBlockInSealedVault,
-} from '../core/physics';
+import { getBlockRoomId, getMovedGroupBlocks, isBlockInSealedVault } from '../core/physics';
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import type { BoardState, ColorId, SkinId } from '../core/types';
+import {
+  type AnimatedBlockPose,
+  blockLocalXToWorld,
+  blockLocalYToWorld,
+  blockLocalZToWorld,
+  computeBlockSurfaceClearanceLocalZ,
+  computeBoardAnimatedBlockPoses,
+  getCellFloorTopZ,
+} from './block-pose-and-clearance';
 import { ENVIRONMENT_MESHES, getPolyominoMeshPair, POLYOMINO_MESH_CATALOG } from './mesh-generator';
-import { renderBlockSurfaceOverlays3D, renderGhostAndWeldClamps3D } from './pass3-block-overlays';
+import { renderBlockSurfaceOverlays3D } from './pass3-block-overlays';
 import { drawToneOnToneSigil3D, type RenderPassContext, type RenderSceneOptions } from './render-types';
 import { renderGateBursts3D } from './shred-style-fx';
 
 const DRAGGED_GROUP_SCRATCH = new Set<number>();
-const IDLE_MOVABLE_SCRATCH: number[] = [];
 
 export function renderPass3BlocksImpl(
   rctx: RenderPassContext,
@@ -129,134 +132,38 @@ export function renderPass3BlocksImpl(
     gl.enable(gl.CULL_FACE);
   }
 
-  // Identify all idle movable blocks so we can cycle the Staggered Spotlight Double-Bounce Hop (`IDLE-02`)
-  IDLE_MOVABLE_SCRATCH.length = 0;
-  const idleMovableBlockIds = IDLE_MOVABLE_SCRATCH;
-  for (const blk of board.blocks) {
-    if (
-      blk.status === 'ACTIVE' &&
-      blk.iceCount === 0 &&
-      !blk.chained &&
-      blk.ropeColor === 0 &&
-      !isBlockInLockedRoom(board, blk) &&
-      !draggedGroupIds.has(blk.id) &&
-      blk.liftAlpha <= 0.05
-    ) {
-      idleMovableBlockIds.push(blk.id);
-    }
-  }
-  const spotlightCycleSec = 3.2;
-  const spotlightHopWindowSec = 0.72;
-  const spotlightCycleIndex = Math.floor(timeSec / spotlightCycleSec);
-  const spotlightPhaseSec = timeSec - spotlightCycleIndex * spotlightCycleSec;
-  const spotlightBlockId =
-    !reducedMotion &&
-    !anyDragActive &&
-    idleMovableBlockIds.length > 0 &&
-    spotlightPhaseSec < spotlightHopWindowSec
-      ? idleMovableBlockIds[spotlightCycleIndex % idleMovableBlockIds.length]
-      : -1;
-  const spotlightHopT = spotlightBlockId >= 0 ? spotlightPhaseSec / spotlightHopWindowSec : 0;
-  const spotlightHopEnv =
-    spotlightBlockId >= 0
-      ? Math.sin(spotlightHopT * Math.PI) * Math.abs(Math.sin(spotlightHopT * Math.PI * 2.0))
-      : 0;
+  // Unified rigid per-block & glued-group animation poses (`Z-CLEARANCE-01`, `IDLE-01`, `IDLE-02`)
+  const poses = computeBoardAnimatedBlockPoses(
+    rctx,
+    board,
+    draggedGroupIds,
+    anyDragActive,
+    options,
+    timeSec,
+    dtMs
+  );
 
   for (const block of board.blocks) {
     if (block.status === 'CLEARED') continue;
     if (isBlockInSealedVault(board, block)) continue;
+    const pose = poses.get(block.id);
+    if (!pose) continue;
 
     const shape = getShape(block.shapeId);
     const meshPair = getPolyominoMeshPair(block.shapeId, skinId);
     const activeColor: ColorId = getActiveColor(block.colorStack, block.colorCursor);
     const [rawR, rawG, rawB] = rctx.getColorRgb(activeColor, highContrast);
     const layersLeft = getLayersRemaining(block.colorStack, block.colorCursor);
+    const layers = computeBlockSurfaceClearanceLocalZ(
+      skinId,
+      layersLeft,
+      activeColor,
+      block.chained || block.ropeColor > 0
+    );
 
-    const blockRoomId = getBlockRoomId(board, block);
-    const blockRoomVis = rctx.getRoomVisualState(board, blockRoomId);
-    const roomLum = blockRoomVis.luminanceMul;
-
-    const isGrabbed = draggedGroupIds.has(block.id) || block.liftAlpha > 0.05;
-    const isIdleMovable =
-      !reducedMotion &&
-      !isGrabbed &&
-      !blockRoomVis.isLocked &&
-      block.iceCount === 0 &&
-      !block.chained &&
-      block.ropeColor === 0;
-    const isSpotlightHopping = isIdleMovable && block.id === spotlightBlockId;
-    const blockHopEnv = isSpotlightHopping ? spotlightHopEnv : 0;
-
-    // Diagonal harmonic wave across the courtyard (`IDLE-01`)
-    const wavePhase = timeSec * 2.1 - (block.col * 0.68 + block.row * 0.54) + block.id * 0.55;
-    const wave01 = isIdleMovable ? 0.5 + 0.5 * Math.sin(wavePhase) : 0;
-
-    // Bomb blocks also throb with an urgent rhythmic heartbeat (`IDLE-05`)
-    const isBombBlock = !reducedMotion && !blockRoomVis.isLocked && block.bombMax > 0 && block.bombCount > 0;
-    const bombHeartbeat = isBombBlock
-      ? (0.5 + 0.5 * Math.sin(timeSec * (block.bombCount <= 4 ? 7.6 : 4.2) + block.id)) *
-        (block.bombCount <= 4 ? 0.036 : 0.018)
-      : 0;
-
-    const idleColorBoost = isIdleMovable ? wave01 * 0.048 + blockHopEnv * 0.075 : bombHeartbeat * 1.2;
-    // Preserve `pieceChroma >= 0.48` (`MYSTIC-RELIC-01`) on locked-room blocks during Satin Astrolabe Title rendering in Colorblind Mode
-    const effectiveRoomLum = colorblind ? roomLum + (1 - roomLum) * (1 - live3DMix) * 0.85 : roomLum;
-    const colorMul = (isGrabbed ? 1.14 : anyDragActive ? 0.88 : 1.0 + idleColorBoost) * effectiveRoomLum;
-    const r = Math.min(1, rawR * colorMul + (1 - effectiveRoomLum) * 0.03);
-    const g = Math.min(1, rawG * colorMul + (1 - effectiveRoomLum) * 0.04);
-    const b = Math.min(1, rawB * colorMul + (1 - effectiveRoomLum) * 0.09);
-
-    // Gentle 3D vertical buoyancy + Spotlight Double-Bounce Hop (`IDLE-01`, `IDLE-02`)
-    // Scaled by `live3DMix` so blocks lie still as an etched scroll diagram on the Title Screen
-    const idleBreathZ =
-      (isIdleMovable ? wave01 * 0.038 + blockHopEnv * 0.052 : bombHeartbeat * 0.5) * live3DMix;
-    const grabHoverZ =
-      !reducedMotion && isGrabbed ? Math.sin(timeSec * 7.2) * 0.022 * Math.min(1, block.liftAlpha) : 0;
-    const zLift =
-      blockRoomVis.zOffset + Math.max(0, Math.min(1, block.liftAlpha)) * 0.46 + grabHoverZ + idleBreathZ;
-
-    // Knock-on scale bounce + grabbed scale pop + idle breathing scale (`IDLE-01`, `IDLE-02`)
-    const bounceRem = rctx.blockBounceMap.get(block.id) ?? 0;
-    const bouncePop =
-      bounceRem > 0 && !reducedMotion ? Math.sin((1.0 - bounceRem / 0.34) * Math.PI) * 0.14 : 0;
-    const idleScaleXY =
-      (isIdleMovable ? Math.sin(wavePhase) * 0.01 + blockHopEnv * 0.018 : bombHeartbeat) * live3DMix;
-    const idleScaleZ =
-      (isIdleMovable ? Math.sin(wavePhase) * 0.015 + blockHopEnv * 0.025 : bombHeartbeat) * live3DMix;
-    const scaleXY = 1.0 + 0.05 * Math.min(1, block.liftAlpha) + bouncePop + idleScaleXY;
-    const scaleZ = 1.0 + 0.06 * Math.min(1, block.liftAlpha) + bouncePop * 0.8 + idleScaleZ;
-
-    // Subtle axis-advertising micro-drift along free movement lanes (`IDLE-01`)
-    let idleDriftX = 0;
-    let idleDriftY = 0;
-    if (isIdleMovable && live3DMix > 0.1) {
-      const hopWiggle = isSpotlightHopping ? Math.sin(spotlightHopT * Math.PI * 4.0) * 0.014 : 0;
-      if (block.axisLock === 'H') {
-        idleDriftX = (Math.sin(timeSec * 2.0 + block.id * 1.3) * 0.008 + hopWiggle) * live3DMix;
-      } else if (block.axisLock === 'V') {
-        idleDriftY = (Math.sin(timeSec * 2.0 + block.id * 1.3) * 0.008 + hopWiggle) * live3DMix;
-      }
-    }
-
-    let drawX = block.x + idleDriftX;
-    let drawY = block.y + idleDriftY;
-
-    // Damped spring rebound / immobile block tap shake (`R3D-01`)
-    if (block.reboundTimerMs > 0) {
-      block.reboundTimerMs = Math.max(0, block.reboundTimerMs - dtMs);
-      const reboundT = block.reboundTimerMs / 200;
-      if (block.shredGateIndex >= 0 && board.gates[block.shredGateIndex]) {
-        const [nx, ny] = getGateOutwardNormal(board.gates[block.shredGateIndex].edge);
-        const bounce = Math.sin(reboundT * Math.PI) * 0.14;
-        drawX -= nx * bounce;
-        drawY -= ny * bounce;
-      } else {
-        drawX += Math.sin(block.reboundTimerMs * 0.08) * 0.09 * reboundT;
-      }
-    }
-
-    const meshTx = drawX - (scaleXY - 1.0) * shape.cols * 0.5;
-    const meshTy = drawY - (scaleXY - 1.0) * shape.rows * 0.5;
+    const r = Math.min(1, rawR * pose.colorMul + (1 - pose.effectiveRoomLum) * 0.03);
+    const g = Math.min(1, rawG * pose.colorMul + (1 - pose.effectiveRoomLum) * 0.04);
+    const b = Math.min(1, rawB * pose.colorMul + (1 - pose.effectiveRoomLum) * 0.09);
 
     // Clip-plane shredding (`ENG-03`, `R3D-02`, `R3D-14`) when block is actively shredding through a gate
     let useClip = false;
@@ -267,12 +174,6 @@ export function renderPass3BlocksImpl(
     ) {
       const gate = board.gates[block.shredGateIndex];
       const [nx, ny] = getGateOutwardNormal(gate.edge);
-      const span = nx !== 0 ? shape.cols : shape.rows;
-      const feedDist = block.shredProgress * (span + 0.45);
-      drawX += nx * feedDist;
-      drawY += ny * feedDist;
-
-      // Clip plane aligned with spinning roller centerline (`±0.21`, `R3D-14`)
       const planeNx = -nx;
       const planeNy = -ny;
       let planeD = 0.21;
@@ -297,16 +198,16 @@ export function renderPass3BlocksImpl(
     }
 
     // Dynamic floor drop shadow when lifted or spotlight-hopping (`IDLE-02`)
-    const shadowAlpha = Math.max(block.liftAlpha, blockHopEnv * 0.28);
+    const shadowAlpha = Math.max(pose.liftAlpha, pose.blockHopEnv * 0.28);
     if (shadowAlpha > 0.02) {
       for (const [dr, dc] of shape.cells) {
-        // Crisp offset drop shadow on floor
+        const floorZ = getCellFloorTopZ(board, rctx, block.row + dr, block.col + dc);
         rctx.drawMesh(
           gl,
           ENVIRONMENT_MESHES.overlayQuad,
-          drawX + dc + 0.12 * shadowAlpha,
-          drawY + dr + 0.14 * shadowAlpha,
-          blockRoomVis.zOffset + 0.008,
+          pose.drawX + dc + 0.12 * shadowAlpha,
+          pose.drawY + dr + 0.14 * shadowAlpha,
+          floorZ + 0.008,
           0.92,
           0.92,
           1.0,
@@ -318,21 +219,20 @@ export function renderPass3BlocksImpl(
           0,
           4
         );
-        // Energized pulsing block-tinted selection rim halo around actively grabbed/lifted block
-        if (block.liftAlpha > 0.02) {
+        if (pose.liftAlpha > 0.02) {
           rctx.drawMesh(
             gl,
             ENVIRONMENT_MESHES.overlayQuad,
-            drawX + dc - 0.05,
-            drawY + dr - 0.05,
-            Math.max(0.02, zLift - 0.015),
-            1.1,
-            1.1,
+            pose.meshTx + (dc - 0.05) * pose.scaleXY,
+            pose.meshTy + (dr - 0.05) * pose.scaleXY,
+            Math.max(floorZ + 0.02, pose.zLift - 0.015),
+            1.1 * pose.scaleXY,
+            1.1 * pose.scaleXY,
             1.0,
             Math.min(1, rawR * 0.65 + 0.35),
             Math.min(1, rawG * 0.65 + 0.35),
             Math.min(1, rawB * 0.65 + 0.35),
-            (0.42 + 0.22 * pulse) * block.liftAlpha,
+            (0.42 + 0.22 * pulse) * pose.liftAlpha,
             0,
             0,
             4
@@ -357,12 +257,12 @@ export function renderPass3BlocksImpl(
     rctx.drawMesh(
       gl,
       outerMesh,
-      useClip ? drawX : meshTx,
-      useClip ? drawY : meshTy,
-      zLift,
-      scaleXY,
-      scaleXY,
-      scaleZ,
+      pose.meshTx,
+      pose.meshTy,
+      pose.zLift,
+      pose.scaleXY,
+      pose.scaleXY,
+      pose.scaleZ,
       r,
       g,
       b,
@@ -396,15 +296,15 @@ export function renderPass3BlocksImpl(
       rctx.drawMesh(
         gl,
         meshPair.meshInnerCore,
-        useClip ? drawX : meshTx,
-        useClip ? drawY : meshTy,
-        zLift,
-        scaleXY,
-        scaleXY,
-        scaleZ,
-        Math.min(1, ir * colorMul),
-        Math.min(1, ig * colorMul),
-        Math.min(1, ib * colorMul),
+        pose.meshTx,
+        pose.meshTy,
+        pose.zLift,
+        pose.scaleXY,
+        pose.scaleXY,
+        pose.scaleZ,
+        Math.min(1, ir * pose.colorMul),
+        Math.min(1, ig * pose.colorMul),
+        Math.min(1, ib * pose.colorMul),
         1.0,
         0,
         0,
@@ -412,9 +312,7 @@ export function renderPass3BlocksImpl(
       );
     }
 
-    const zCbSymbol = zLift + 0.692 * scaleZ;
-    const zMedallionBase = zLift + 0.562 * scaleZ;
-    const zStrapCenter = zLift + 0.588 * scaleZ;
+    const roomLum = pose.roomLum;
 
     // 3C. 3D Colored Rope Straps (`block.ropeColor > 0` — sculpted 3D wrapping straps)
     if (block.ropeColor > 0) {
@@ -423,17 +321,17 @@ export function renderPass3BlocksImpl(
       const rg = rawRg * roomLum;
       const rb = rawRb * roomLum;
       const anchorCell = shape.cells[shape.anchorCellIndex] ?? shape.cells[0];
-      const rCx = drawX + anchorCell[1] + 0.5;
-      const rCy = drawY + anchorCell[0] + 0.5;
+      const rCx = blockLocalXToWorld(pose, anchorCell[1] + 0.5);
+      const rCy = blockLocalYToWorld(pose, anchorCell[0] + 0.5);
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
         rCx,
         rCy,
-        zStrapCenter,
-        0.94,
-        0.24,
-        0.068 * scaleZ,
+        blockLocalZToWorld(pose, layers.strapHorizCenter),
+        0.94 * pose.scaleXY,
+        0.24 * pose.scaleXY,
+        layers.strapHorizSizeZ * pose.scaleZ,
         rr,
         rg,
         rb,
@@ -447,10 +345,10 @@ export function renderPass3BlocksImpl(
         ENVIRONMENT_MESHES.unitParticleCube,
         rCx,
         rCy,
-        zStrapCenter + 0.004,
-        0.24,
-        0.94,
-        0.068 * scaleZ,
+        blockLocalZToWorld(pose, layers.strapVertCenter),
+        0.24 * pose.scaleXY,
+        0.94 * pose.scaleXY,
+        layers.strapVertSizeZ * pose.scaleZ,
         rr * 0.92,
         rg * 0.92,
         rb * 0.92,
@@ -468,17 +366,21 @@ export function renderPass3BlocksImpl(
           block.scissorColor > 0 ||
           block.shutterGemColor > 0 ||
           block.isStar;
-        const knotX = anchorBusy ? drawX + anchorCell[1] + 0.8 : rCx;
-        const knotSize = anchorBusy ? 0.34 : 0.44;
+        const knotLocalX = anchorCell[1] + (anchorBusy ? 0.8 : 0.5);
+        const knotLocalY = anchorCell[0] + 0.5;
+        const knotSize = (anchorBusy ? 0.34 : 0.44) * pose.scaleXY;
+        const knotCenterZ = anchorBusy ? layers.busyCornerCapPadCenter : layers.ropeKnotCenter;
+        const knotSizeZ = anchorBusy ? layers.busyCornerCapPadSizeZ : layers.ropeKnotSizeZ;
+        const knotSigilZ = anchorBusy ? layers.busyCornerSigil : layers.ropeKnotSigil;
         rctx.drawMesh(
           gl,
           ENVIRONMENT_MESHES.unitParticleCube,
-          knotX,
-          rCy,
-          zStrapCenter + 0.012,
+          blockLocalXToWorld(pose, knotLocalX),
+          blockLocalYToWorld(pose, knotLocalY),
+          blockLocalZToWorld(pose, knotCenterZ),
           knotSize,
           knotSize,
-          0.072 * scaleZ,
+          knotSizeZ * pose.scaleZ,
           rr,
           rg,
           rb,
@@ -491,10 +393,10 @@ export function renderPass3BlocksImpl(
           rctx,
           gl,
           block.ropeColor,
-          knotX,
-          rCy,
-          zCbSymbol + 0.006,
-          anchorBusy ? 0.28 : 0.36,
+          blockLocalXToWorld(pose, knotLocalX),
+          blockLocalYToWorld(pose, knotLocalY),
+          blockLocalZToWorld(pose, knotSigilZ),
+          (anchorBusy ? 0.28 : 0.36) * pose.scaleXY,
           roomLum,
           highContrast,
           false
@@ -508,12 +410,12 @@ export function renderPass3BlocksImpl(
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
-        drawX + shape.cols * 0.5,
-        drawY + anchorCell[0] + 0.5,
-        zStrapCenter,
-        Math.max(0.92, shape.cols - 0.08),
-        0.22,
-        0.066 * scaleZ,
+        blockLocalXToWorld(pose, shape.cols * 0.5),
+        blockLocalYToWorld(pose, anchorCell[0] + 0.5),
+        blockLocalZToWorld(pose, layers.strapHorizCenter),
+        Math.max(0.92, shape.cols - 0.08) * pose.scaleXY,
+        0.22 * pose.scaleXY,
+        layers.strapHorizSizeZ * pose.scaleZ,
         0.28 * roomLum,
         0.32 * roomLum,
         0.4 * roomLum,
@@ -525,12 +427,12 @@ export function renderPass3BlocksImpl(
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
-        drawX + anchorCell[1] + 0.5,
-        drawY + shape.rows * 0.5,
-        zStrapCenter + 0.004,
-        0.22,
-        Math.max(0.92, shape.rows - 0.08),
-        0.066 * scaleZ,
+        blockLocalXToWorld(pose, anchorCell[1] + 0.5),
+        blockLocalYToWorld(pose, shape.rows * 0.5),
+        blockLocalZToWorld(pose, layers.strapVertCenter),
+        0.22 * pose.scaleXY,
+        Math.max(0.92, shape.rows - 0.08) * pose.scaleXY,
+        layers.strapVertSizeZ * pose.scaleZ,
         0.32 * roomLum,
         0.36 * roomLum,
         0.44 * roomLum,
@@ -543,16 +445,18 @@ export function renderPass3BlocksImpl(
 
     // 3E. Translucent Ice Casing (`block.iceCount > 0`, `R3D-11`)
     if (block.iceCount > 0) {
+      const iceZLift = pose.zLift + (layersLeft > 1 ? 0.018 : 0.01) * pose.scaleZ;
+      const iceScaleZ = pose.scaleZ * (layersLeft > 1 ? 1.028 : 1.02);
       gl.depthMask(false);
       rctx.drawMesh(
         gl,
         outerMesh,
-        meshTx - shape.cols * 0.008,
-        meshTy - shape.rows * 0.008,
-        zLift + 0.01,
-        scaleXY * 1.016,
-        scaleXY * 1.016,
-        scaleZ * 1.02,
+        pose.meshTx - shape.cols * 0.008 * pose.scaleXY,
+        pose.meshTy - shape.rows * 0.008 * pose.scaleXY,
+        iceZLift,
+        pose.scaleXY * 1.016,
+        pose.scaleXY * 1.016,
+        iceScaleZ,
         0.62 * roomLum,
         0.92 * roomLum,
         1.0 * roomLum,
@@ -569,26 +473,19 @@ export function renderPass3BlocksImpl(
       gl,
       block,
       shape,
-      drawX,
-      drawY,
-      zLift,
-      scaleZ,
+      pose,
+      layers,
       r,
       g,
       b,
-      roomLum,
       activeColor,
       layersLeft,
-      zCbSymbol,
-      zMedallionBase,
       highContrast,
       colorblind,
       pulse,
       timeSec,
       live3DMix,
-      reducedMotion,
-      blockRoomVis.isLocked,
-      bombHeartbeat
+      reducedMotion
     );
 
     if (useClip) {
@@ -611,6 +508,7 @@ export function renderPass3BlocksImpl(
       rctx,
       gl,
       board,
+      poses,
       options,
       skinId,
       highContrast,
@@ -619,5 +517,108 @@ export function renderPass3BlocksImpl(
       reducedMotion
     );
     renderGateBursts3D(rctx, gl);
+  }
+}
+
+export function renderGhostAndWeldClamps3D(
+  rctx: RenderPassContext,
+  gl: WebGL2RenderingContext,
+  board: BoardState,
+  poses: ReadonlyMap<number, AnimatedBlockPose>,
+  options: RenderSceneOptions,
+  skinId: SkinId,
+  highContrast: boolean,
+  timeSec: number,
+  anyDragActive: boolean,
+  reducedMotion: boolean
+): void {
+  // 3F.2 Early-Stage & Hint 3D Sliding Ghost Polyomino (`UX-10`)
+  const guideMove = board.hintMove ?? (!anyDragActive ? options.autoGuideMove : null) ?? null;
+  if (guideMove && !anyDragActive && !reducedMotion) {
+    const ghostBlock = board.blocks.find((b) => b.id === guideMove.blockId && b.status === 'ACTIVE');
+    if (ghostBlock) {
+      const meshPair = getPolyominoMeshPair(ghostBlock.shapeId, skinId);
+      const activeColor: ColorId = getActiveColor(ghostBlock.colorStack, ghostBlock.colorCursor);
+      const [gr, gg, gb] = rctx.getColorRgb(activeColor, highContrast);
+      const ghostRoomVis = rctx.getRoomVisualState(board, getBlockRoomId(board, ghostBlock));
+      const rawPhase = (timeSec * 0.72) % 1.0;
+      const moveT = rawPhase < 0.78 ? (1.0 - Math.cos((rawPhase / 0.78) * Math.PI)) * 0.5 : 1.0;
+      const ghostAlpha = Math.sin(rawPhase * Math.PI) * 0.38;
+      if (ghostAlpha > 0.03 && moveT > 0.06) {
+        const gx = ghostBlock.col + (guideMove.targetCol - ghostBlock.col) * moveT;
+        const gy = ghostBlock.row + (guideMove.targetRow - ghostBlock.row) * moveT;
+        gl.depthMask(false);
+        rctx.drawMesh(
+          gl,
+          meshPair.meshOuter,
+          gx,
+          gy,
+          ghostRoomVis.zOffset + 0.09,
+          1.0,
+          1.0,
+          1.0,
+          Math.min(1, gr * 0.7 + 0.3),
+          Math.min(1, gg * 0.7 + 0.28),
+          Math.min(1, gb * 0.7 + 0.15),
+          ghostAlpha,
+          0,
+          0,
+          1
+        );
+        gl.depthMask(true);
+      }
+    }
+  }
+
+  // 3G. 3D Metallic Weld Clamps bridging adjacent blocks that share `groupId > 0`
+  for (let i = 0; i < board.blocks.length; i++) {
+    const a = board.blocks[i];
+    if (a.status !== 'ACTIVE' || a.groupId <= 0 || isBlockInSealedVault(board, a)) continue;
+    const poseA = poses.get(a.id);
+    if (!poseA) continue;
+    const shapeA = getShape(a.shapeId);
+
+    for (let j = i + 1; j < board.blocks.length; j++) {
+      const b = board.blocks[j];
+      if (b.status !== 'ACTIVE' || b.groupId !== a.groupId) continue;
+      const poseB = poses.get(b.id);
+      if (!poseB) continue;
+      const shapeB = getShape(b.shapeId);
+
+      let clamped = false;
+      for (const [ar, ac] of shapeA.cells) {
+        if (clamped) break;
+        for (const [br, bc] of shapeB.cells) {
+          if (Math.abs(a.x + ac - (b.x + bc)) + Math.abs(a.y + ar - (b.y + br)) < 1.05) {
+            const ax = blockLocalXToWorld(poseA, ac + 0.5);
+            const ay = blockLocalYToWorld(poseA, ar + 0.5);
+            const bx = blockLocalXToWorld(poseB, bc + 0.5);
+            const by = blockLocalYToWorld(poseB, br + 0.5);
+            const mx = (ax + bx) * 0.5;
+            const my = (ay + by) * 0.5;
+            const mz = Math.max(poseA.zLift, poseB.zLift);
+            const sxy = Math.max(poseA.scaleXY, poseB.scaleXY);
+            const sz = Math.max(poseA.scaleZ, poseB.scaleZ);
+            const lum = Math.max(poseA.roomLum, poseB.roomLum);
+            rctx.drawMesh(
+              gl,
+              ENVIRONMENT_MESHES.weldClampMesh,
+              mx,
+              my,
+              mz,
+              sxy,
+              sxy,
+              sz,
+              0.78 * lum,
+              0.84 * lum,
+              0.92 * lum,
+              1.0
+            );
+            clamped = true;
+            break;
+          }
+        }
+      }
+    }
   }
 }

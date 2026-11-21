@@ -2,6 +2,7 @@ import { findEligibleGateForBlockAt, getGateOutwardNormal } from '../core/gate-c
 import { canGroupOccupyOffset, getMovedGroupBlocks } from '../core/physics';
 import { getActiveColor, getShape, type PolyominoShape } from '../core/polyomino';
 import type { Benchmark120HzResult, BoardState, ColorId } from '../core/types';
+import { getCellFloorTopZ } from './block-pose-and-clearance';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
 import {
   buildTraceSegments,
@@ -192,11 +193,21 @@ export function renderActiveDragReticleAndOriginFootprint(
     const roomVis = rctx.getRoomVisualState(board, board.roomMap[b.row * board.cols + b.col] ?? 0);
     const snapRow = b.row + dRow;
     const snapCol = b.col + dCol;
+    let origFloorZ = -Infinity;
+    let snapFloorZ = -Infinity;
+    for (const [dr, dc] of shape.cells) {
+      const ofz = getCellFloorTopZ(board, rctx, b.row + dr, b.col + dc);
+      if (ofz > origFloorZ) origFloorZ = ofz;
+      const sfz = getCellFloorTopZ(board, rctx, snapRow + dr, snapCol + dc);
+      if (sfz > snapFloorZ) snapFloorZ = sfz;
+    }
+    if (!Number.isFinite(origFloorZ)) origFloorZ = roomVis.zOffset;
+    if (!Number.isFinite(snapFloorZ)) snapFloorZ = roomVis.zOffset;
 
     // Origin Ghost Footprint when dragged >= 1 cell away from starting spot
     if (isDisplacedFromOrigin) {
       const ghostStyle = resolveOriginGhostStyle(trayId, trayPalette, [cr, cg, cb], highContrast, effPulse);
-      const origZ = roomVis.zOffset + 0.015;
+      const origZ = origFloorZ + 0.015;
 
       for (const [dr, dc] of shape.cells) {
         drawFlatPad(
@@ -259,7 +270,7 @@ export function renderActiveDragReticleAndOriginFootprint(
     // Live Snapped Landing Reticle (shifts to calm cancel frame when returned home!)
     if (isReturnedHomeConfirm) {
       const homeStyle = resolveReturnHomeStyle(trayId, trayPalette, highContrast, effPulse);
-      const homeZ = roomVis.zOffset + 0.015;
+      const homeZ = origFloorZ + 0.015;
       for (const [dr, dc] of shape.cells) {
         drawFlatPad(
           snapCol + dc + 0.06,
@@ -301,7 +312,6 @@ export function renderActiveDragReticleAndOriginFootprint(
         homeStyle.bracketInset
       );
     } else {
-      const snapRoomVis = rctx.getRoomVisualState(board, board.roomMap[snapRow * board.cols + snapCol] ?? 0);
       const blockLum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
       const shade = isLightTray ? (blockLum > 0.55 ? 0.78 : 0.88) : 1.0;
       const padAlpha = (isLightTray ? 0.32 : 0.28) + 0.16 * effPulse;
@@ -309,7 +319,7 @@ export function renderActiveDragReticleAndOriginFootprint(
         drawFlatPad(
           snapCol + dc + 0.05,
           snapRow + dr + 0.05,
-          snapRoomVis.zOffset + 0.015,
+          snapFloorZ + 0.015,
           0.9,
           0.9,
           cr * shade,
@@ -337,7 +347,7 @@ export function renderActiveDragReticleAndOriginFootprint(
       drawFlatPad(
         beamCx - beamW * 0.5,
         beamCy - beamH * 0.5,
-        0.02,
+        Math.max(snapFloorZ, 0) + 0.02,
         beamW,
         beamH,
         Math.min(1, cr + 0.25),

@@ -521,7 +521,9 @@ export interface RenderPassContext {
     faceB: number,
     rimR?: number,
     rimG?: number,
-    rimB?: number
+    rimB?: number,
+    scaleXY?: number,
+    scaleZ?: number
   ): number;
 }
 
@@ -660,17 +662,19 @@ export function drawBadgeMedallion3DImpl(
   faceB: number,
   rimR = 0.92,
   rimG = 0.8,
-  rimB = 0.52
+  rimB = 0.52,
+  scaleXY = 1.0,
+  scaleZ = 1.0
 ): number {
   rctx.drawMesh(
     gl,
     ENVIRONMENT_MESHES.unitParticleCube,
     cx,
     cy,
-    zBase + 0.036,
-    width + 0.055,
-    height + 0.055,
-    0.072,
+    zBase + 0.036 * scaleZ,
+    (width + 0.055) * scaleXY,
+    (height + 0.055) * scaleXY,
+    0.072 * scaleZ,
     rimR,
     rimG,
     rimB,
@@ -684,10 +688,10 @@ export function drawBadgeMedallion3DImpl(
     ENVIRONMENT_MESHES.unitParticleCube,
     cx,
     cy,
-    zBase + 0.041,
-    width,
-    height,
-    0.082,
+    zBase + 0.041 * scaleZ,
+    width * scaleXY,
+    height * scaleXY,
+    0.082 * scaleZ,
     faceR,
     faceG,
     faceB,
@@ -696,5 +700,5 @@ export function drawBadgeMedallion3DImpl(
     0,
     0
   );
-  return zBase + 0.086;
+  return zBase + 0.086 * scaleZ;
 }

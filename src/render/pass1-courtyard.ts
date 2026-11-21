@@ -289,7 +289,7 @@ export function renderPass1Courtyard(
           fp.colorId,
           fp.c + 0.5,
           fp.r + 0.5,
-          zOff + 0.0115,
+          zOff + 0.0128,
           0.46,
           lum,
           highContrast,
@@ -372,8 +372,10 @@ export function renderPass1Courtyard(
       TRAY_WALL_STYLE
     );
     if (!isStoneRuin) {
-      const pillarBobZ =
-        !reducedMotion && !roomVis.isLocked ? Math.sin(timeSec * 2.8 + pil.r * 0.9 + pil.c * 1.1) * 0.024 : 0;
+      const pillarHoverZ =
+        !reducedMotion && !roomVis.isLocked
+          ? (0.5 + 0.5 * Math.sin(timeSec * 2.8 + pil.r * 0.9 + pil.c * 1.1)) * 0.032
+          : 0.012;
       const pillarSpinZ =
         !reducedMotion && !roomVis.isLocked ? Math.PI * 0.25 + timeSec * 0.95 : Math.PI * 0.25;
       rctx.drawMesh(
@@ -381,10 +383,10 @@ export function renderPass1Courtyard(
         ENVIRONMENT_MESHES.unitParticleCube,
         pil.c + 0.5,
         pil.r + 0.5,
-        zOff + 0.652 + pillarBobZ,
+        zOff + 0.694 + pillarHoverZ,
         0.38,
         0.38,
-        0.056,
+        0.052,
         Math.min(1, pr * 0.85 + 0.22 * lum),
         Math.min(1, pg * 0.82 + 0.18 * lum),
         Math.min(1, pb * 0.78 + 0.12 * lum),
@@ -398,7 +400,7 @@ export function renderPass1Courtyard(
         'DIAMOND',
         pil.c + 0.5,
         pil.r + 0.5,
-        zOff + 0.686 + pillarBobZ,
+        zOff + 0.726 + pillarHoverZ,
         0.36,
         0.98 * lum,
         0.86 * lum,
@@ -511,23 +513,44 @@ export function renderPass1Courtyard(
     );
     if (!isStoneRuin) {
       const chevronKey = isHorizTrack ? 'LOCK_H' : 'LOCK_V';
-      const elevBadgeZ = rctx.drawBadgeMedallion3D(
+      const elevCx = elev.col + elev.width * 0.5;
+      const elevCy = elev.row + elev.height * 0.5;
+      const plaqueW = isHorizTrack ? 0.52 : 0.38;
+      const plaqueH = isHorizTrack ? 0.38 : 0.52;
+      rctx.drawMesh(
         gl,
-        elev.col + elev.width * 0.5,
-        elev.row + elev.height * 0.5,
-        zOff + 0.032,
-        isHorizTrack ? 0.52 : 0.38,
-        isHorizTrack ? 0.38 : 0.52,
-        0.32 * lum,
-        0.58 * lum,
-        0.78 * lum
+        ENVIRONMENT_MESHES.unitParticleCube,
+        elevCx,
+        elevCy,
+        zOff + 0.054,
+        plaqueW + 0.05,
+        plaqueH + 0.05,
+        0.008,
+        0.92 * lum,
+        0.8 * lum,
+        0.52 * lum,
+        1.0
+      );
+      rctx.drawMesh(
+        gl,
+        ENVIRONMENT_MESHES.unitParticleCube,
+        elevCx,
+        elevCy,
+        zOff + 0.056,
+        plaqueW,
+        plaqueH,
+        0.01,
+        0.24 * lum,
+        0.46 * lum,
+        0.66 * lum,
+        1.0
       );
       rctx.drawAtlasBadge(
         gl,
         chevronKey,
-        elev.col + elev.width * 0.5,
-        elev.row + elev.height * 0.5,
-        elevBadgeZ,
+        elevCx,
+        elevCy,
+        zOff + 0.063,
         0.42,
         0.92 * lum,
         0.98 * lum,
@@ -570,7 +593,7 @@ export function renderPass1Courtyard(
         gl,
         crate.col + 0.5,
         crate.row + 0.5,
-        zOff + 0.585,
+        zOff + 0.602,
         0.46,
         0.42,
         cr,
@@ -654,17 +677,19 @@ export function renderPass1Courtyard(
           }
         }
 
-        const previewBobZ =
-          !rctx.lastOptions.reducedMotion && !genVis.isLocked ? Math.sin(timeSec * 3.8 + gen.col) * 0.034 : 0;
+        const previewHoverZ =
+          !rctx.lastOptions.reducedMotion && !genVis.isLocked
+            ? (0.5 + 0.5 * Math.sin(timeSec * 3.8 + gen.col)) * 0.036
+            : 0.018;
         rctx.drawMesh(
           gl,
           ENVIRONMENT_MESHES.unitParticleCube,
           gen.col + 0.5,
-          gen.row + 0.34,
-          zOff + 0.735 + previewBobZ,
+          gen.row + 0.31,
+          zOff + 0.762 + previewHoverZ,
           0.62,
-          0.36,
-          0.065,
+          0.34,
+          0.064,
           nr,
           ng,
           nb,
@@ -679,8 +704,8 @@ export function renderPass1Courtyard(
             gl,
             nextColor,
             gen.col + 0.5,
-            gen.row + 0.34,
-            zOff + 0.774 + previewBobZ,
+            gen.row + 0.31,
+            zOff + 0.801 + previewHoverZ,
             0.29,
             lum,
             highContrast,
@@ -691,10 +716,10 @@ export function renderPass1Courtyard(
       const genBadgeZ = rctx.drawBadgeMedallion3D(
         gl,
         gen.col + 0.5,
-        gen.row + 0.68,
-        zOff + 0.705,
+        gen.row + 0.71,
+        zOff + 0.722,
         0.68,
-        0.32,
+        0.3,
         gr,
         gg,
         gb
@@ -703,7 +728,7 @@ export function renderPass1Courtyard(
         gl,
         'BADGE_GENERATOR',
         gen.col + 0.34,
-        gen.row + 0.68,
+        gen.row + 0.71,
         genBadgeZ,
         0.3,
         1.0 * lum,
@@ -715,7 +740,7 @@ export function renderPass1Courtyard(
         gl,
         gen.cooldown,
         gen.col + 0.66,
-        gen.row + 0.68,
+        gen.row + 0.71,
         genBadgeZ + 0.002,
         0.3,
         lum,

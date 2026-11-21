@@ -208,7 +208,7 @@ export function renderPass1WallsAndGates(
         isHorizEdge ? 'LOCK_H' : 'LOCK_V',
         rollerX + spanAxisX * (gate.spanLength * 0.5 - 0.16),
         rollerY + spanAxisY * (gate.spanLength * 0.5 - 0.16),
-        zOff + 0.72,
+        zOff + 0.736,
         0.24,
         0.9 * lum,
         0.96 * lum,
@@ -370,7 +370,7 @@ export function renderPass1WallsAndGates(
             'BADGE_GEM',
             rollerX - spanAxisX * 0.16,
             rollerY - spanAxisY * 0.16,
-            zOff + 0.72,
+            zOff + 0.736,
             0.3,
             lfgR * lum,
             lfgG * lum,
@@ -383,7 +383,7 @@ export function renderPass1WallsAndGates(
             gate.shutterLockColor,
             rollerX + spanAxisX * 0.17,
             rollerY + spanAxisY * 0.17,
-            zOff + 0.725,
+            zOff + 0.74,
             0.3,
             lum,
             highContrast,
@@ -395,7 +395,7 @@ export function renderPass1WallsAndGates(
             'BADGE_GEM',
             rollerX,
             rollerY,
-            zOff + 0.72,
+            zOff + 0.736,
             0.32,
             lockRgb[0] * lum,
             lockRgb[1] * lum,
@@ -472,7 +472,7 @@ export function renderPass1WallsAndGates(
       );
     }
 
-    // Star Gate Emblem (`R3D-04`: separated along span axis and elevated to z = 0.72)
+    // Star Gate Emblem (`R3D-04`: separated along span axis and elevated to z = 0.736 above frost medallion)
     if (gate.isStar) {
       const starOffset =
         gate.iceCount > 0 ? (gate.iceCount >= 10 ? 0.52 : 0.46) : gate.shutterLockColor > 0 ? 0.28 : 0.0;
@@ -481,7 +481,7 @@ export function renderPass1WallsAndGates(
         'BADGE_STAR',
         rollerX + spanAxisX * starOffset,
         rollerY + spanAxisY * starOffset,
-        zOff + 0.72,
+        zOff + 0.736,
         0.32,
         1.0 * lum,
         0.9 * lum,
@@ -509,10 +509,10 @@ export function renderPass1WallsAndGates(
         ENVIRONMENT_MESHES.unitParticleCube,
         gSymX,
         gSymY,
-        zOff + 0.65,
+        zOff + 0.696,
         capSize,
         capSize,
-        0.088,
+        0.084,
         gr,
         gg,
         gb,
@@ -527,7 +527,7 @@ export function renderPass1WallsAndGates(
         activeColor,
         gSymX,
         gSymY,
-        zOff + 0.755,
+        zOff + 0.744,
         hasCenterGateBadge ? 0.34 : 0.38,
         lum,
         highContrast,
@@ -552,20 +552,20 @@ export function renderPass1WallsAndGates(
       const barThick = colorblind ? 0.24 : 0.16;
       const barW = isHorizEdge ? 0.5 : barThick;
       const barH = !isHorizEdge ? 0.5 : barThick;
-      const pipBobZ =
+      const pipHoverZ =
         !rctx.lastOptions.reducedMotion && !gateVis.isLocked
-          ? Math.sin(timeSec * 3.4 + q * 1.1 + gate.index * 0.8) * 0.025
-          : 0;
+          ? (0.5 + 0.5 * Math.sin(timeSec * 3.4 + q * 1.1 + gate.index * 0.8)) * 0.028
+          : 0.014;
 
       rctx.drawMesh(
         gl,
         ENVIRONMENT_MESHES.unitParticleCube,
         px,
         py,
-        zOff + 0.62 + pipBobZ,
+        zOff + 0.712 + pipHoverZ,
         barW + 0.08,
         barH + 0.08,
-        0.11,
+        0.052,
         0.08 * lum,
         0.11 * lum,
         0.18 * lum,
@@ -576,10 +576,10 @@ export function renderPass1WallsAndGates(
         ENVIRONMENT_MESHES.unitParticleCube,
         px,
         py,
-        zOff + 0.65 + pipBobZ,
+        zOff + 0.724 + pipHoverZ,
         barW,
         barH,
-        0.12,
+        0.058,
         qr * lum,
         qg * lum,
         qb * lum,
@@ -592,7 +592,7 @@ export function renderPass1WallsAndGates(
           nextCol,
           px,
           py,
-          zOff + 0.725 + pipBobZ,
+          zOff + 0.76 + pipHoverZ,
           0.22,
           lum,
           highContrast,

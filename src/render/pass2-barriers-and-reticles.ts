@@ -1,6 +1,7 @@
 import { isBlockInLockedRoom, isRoomUnlocked } from '../core/physics';
 import { getActiveColor, getShape } from '../core/polyomino';
 import type { BoardState, ColorId } from '../core/types';
+import { getCellFloorTopZ } from './block-pose-and-clearance';
 import { ENVIRONMENT_MESHES } from './mesh-generator';
 import { renderActiveDragReticleAndOriginFootprint, renderMysticPathTraces3D } from './pass2-drag-fx';
 import type { RenderPassContext, RenderSceneOptions, TrayPalette } from './render-types';
@@ -134,14 +135,15 @@ export function renderPass1PortcullisBarriers(
         continue;
       }
       const isKeyOnly = Boolean(bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0);
-      const medBobZ = !rctx.lastOptions.reducedMotion
-        ? Math.sin(timeSec * 2.6 + bar.id) * 0.014 * live3DMix
-        : 0;
+      const medHoverZ =
+        (!rctx.lastOptions.reducedMotion ? 0.5 + 0.5 * Math.sin(timeSec * 2.6 + bar.id) : 0.5) *
+        0.024 *
+        live3DMix;
       const medZ = rctx.drawBadgeMedallion3D(
         gl,
         bcx,
         bcy,
-        0.635 + medBobZ,
+        0.632 + medHoverZ,
         isKeyOnly ? 0.58 : 0.84,
         0.52,
         0.36,
@@ -172,7 +174,7 @@ export function renderPass1PortcullisBarriers(
           bar.shredsRemaining,
           bcx + (twoDigit ? 0.14 : 0.16),
           bcy,
-          medZ,
+          medZ + 0.002,
           twoDigit ? 0.29 : 0.35,
           1.0,
           0.98,
@@ -352,14 +354,16 @@ export function renderPass1PortcullisBarriers(
       continue;
     }
     const isKeyOnly = Boolean(bar.lockId && bar.lockId > 0 && bar.shredsRemaining <= 0);
-    const medBobZ = !rctx.lastOptions.reducedMotion
-      ? Math.sin(timeSec * 2.6 + bar.id) * 0.015 * live3DMix
-      : 0;
+    const medHoverZ =
+      (!rctx.lastOptions.reducedMotion ? 0.5 + 0.5 * Math.sin(timeSec * 2.6 + bar.id) : 0.5) *
+      0.024 *
+      live3DMix;
+    const basePortZ = barLen <= 1 ? 0.684 : 0.622;
     const medZ = rctx.drawBadgeMedallion3D(
       gl,
       bcx,
       bcy,
-      0.615 + medBobZ,
+      basePortZ + medHoverZ,
       isKeyOnly ? 0.54 : 0.78,
       0.48,
       0.32,
@@ -563,6 +567,17 @@ export function renderPass2ReticleAndPromptsImpl(
       const frameAlpha = 0.62 + 0.26 * pulse;
 
       // Render hollow 3D beveled perimeter frame around target footprint (tinted in block's own color, never a solid yellow fill)
+      let startFloorZ = -Infinity;
+      let targetFloorZ = -Infinity;
+      for (const [dr, dc] of shape.cells) {
+        const sfz = getCellFloorTopZ(board, rctx, hintBlock.row + dr, hintBlock.col + dc);
+        if (sfz > startFloorZ) startFloorZ = sfz;
+        const tfz = getCellFloorTopZ(board, rctx, targetRow + dr, targetCol + dc);
+        if (tfz > targetFloorZ) targetFloorZ = tfz;
+      }
+      if (!Number.isFinite(startFloorZ)) startFloorZ = 0;
+      if (!Number.isFinite(targetFloorZ)) targetFloorZ = 0;
+
       const minC = targetCol + 0.05;
       const maxC = targetCol + shape.cols - 0.05;
       const minR = targetRow + 0.05;
@@ -570,7 +585,7 @@ export function renderPass2ReticleAndPromptsImpl(
       const spanW = Math.max(0.2, maxC - minC);
       const spanH = Math.max(0.2, maxR - minR);
       const barThick = 0.075;
-      const barZ = 0.022;
+      const barZ = targetFloorZ + 0.02;
       // Top & bottom frame bars
       rctx.drawMesh(
         gl,
@@ -580,7 +595,7 @@ export function renderPass2ReticleAndPromptsImpl(
         barZ,
         spanW,
         barThick,
-        0.028,
+        0.024,
         frameR,
         frameG,
         frameB,
@@ -597,7 +612,7 @@ export function renderPass2ReticleAndPromptsImpl(
         barZ,
         spanW,
         barThick,
-        0.028,
+        0.024,
         frameR,
         frameG,
         frameB,
@@ -615,7 +630,7 @@ export function renderPass2ReticleAndPromptsImpl(
         barZ,
         barThick,
         spanH,
-        0.028,
+        0.024,
         frameR,
         frameG,
         frameB,
@@ -632,7 +647,7 @@ export function renderPass2ReticleAndPromptsImpl(
         barZ,
         barThick,
         spanH,
-        0.028,
+        0.024,
         frameR,
         frameG,
         frameB,
@@ -652,6 +667,7 @@ export function renderPass2ReticleAndPromptsImpl(
       const dist = Math.hypot(dx, dy);
       if (dist > 0.25) {
         const chevronKey = Math.abs(dx) >= Math.abs(dy) ? 'LOCK_H' : 'LOCK_V';
+        const chevronZ = Math.max(startFloorZ, targetFloorZ) + 0.038;
         const steps = 3;
         const timeSec = options.timeSec ?? (performance.now() - rctx.startTimeMs) * 0.001;
         for (let s = 0; s < steps; s++) {
@@ -659,7 +675,7 @@ export function renderPass2ReticleAndPromptsImpl(
           const px = startCx + dx * rawT;
           const py = startCy + dy * rawT;
           const alpha = Math.sin(rawT * Math.PI) * 0.78;
-          rctx.drawAtlasBadge(gl, chevronKey, px, py, 0.028, 0.36, frameR, frameG, frameB, alpha);
+          rctx.drawAtlasBadge(gl, chevronKey, px, py, chevronZ, 0.36, frameR, frameG, frameB, alpha);
         }
       }
     }

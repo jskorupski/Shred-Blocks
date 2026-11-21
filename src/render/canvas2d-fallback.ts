@@ -1,8 +1,13 @@
 import { getGateActiveColor, getGateOutwardNormal } from '../core/gate-clearance';
-import { getBlockRoomId, isBlockInSealedVault } from '../core/physics';
+import { getMovedGroupBlocks, isBlockInSealedVault } from '../core/physics';
 import { getActiveColor, getLayersRemaining, getShape } from '../core/polyomino';
 import { type BoardState, COLOR_PALETTE, type ColorId } from '../core/types';
-import { BLOCK_LIFT_DELTA_Z, BLOCK_TOP_Z } from './camera-3d';
+import {
+  blockLocalXToWorld,
+  blockLocalYToWorld,
+  computeBoardAnimatedBlockPoses,
+} from './block-pose-and-clearance';
+import { BLOCK_TOP_Z } from './camera-3d';
 import { renderCanvas2DDragAndTrailFx } from './pass2-drag-fx';
 import {
   INSTANCE_STRIDE,
@@ -452,49 +457,33 @@ export function renderCanvas2DFallbackImpl(
 
   // 8. Draw Blocks, Multi-Layer Inner Cores, Ropes, Chains, Ice & All Badges
   const fallbackTimeSec = options.timeSec ?? (performance.now() - rctx.startTimeMs) * 0.001;
-  const fallbackReducedMotion = Boolean(options.reducedMotion);
+  const fallbackDraggedIds = new Set<number>();
+  const liftedFallback = board.blocks.find((b) => b.status === 'ACTIVE' && b.liftAlpha > 0.05);
+  if (liftedFallback) {
+    for (const gb of getMovedGroupBlocks(board, liftedFallback.id)) {
+      fallbackDraggedIds.add(gb.id);
+    }
+  }
+  const fallbackPoses = computeBoardAnimatedBlockPoses(
+    rctx,
+    board,
+    fallbackDraggedIds,
+    fallbackDraggedIds.size > 0,
+    options,
+    fallbackTimeSec,
+    dtMs
+  );
   for (const block of board.blocks) {
     if (block.status === 'CLEARED' || isBlockInSealedVault(board, block)) continue;
+    const pose = fallbackPoses.get(block.id);
+    if (!pose) continue;
     const shape = getShape(block.shapeId);
     const cId: ColorId = getActiveColor(block.colorStack, block.colorCursor);
     const entry = COLOR_PALETTE[cId] ?? COLOR_PALETTE[1];
     const layersLeft = getLayersRemaining(block.colorStack, block.colorCursor);
-    const blockRoomId = getBlockRoomId(board, block);
-    const blockRoomVis = rctx.getRoomVisualState(board, blockRoomId);
-    const isIdleMovable =
-      !fallbackReducedMotion &&
-      !blockRoomVis.isLocked &&
-      block.liftAlpha <= 0.05 &&
-      block.iceCount === 0 &&
-      !block.chained &&
-      block.ropeColor === 0;
-    const wave01 = isIdleMovable
-      ? 0.5 + 0.5 * Math.sin(fallbackTimeSec * 2.1 - (block.col * 0.68 + block.row * 0.54) + block.id * 0.55)
-      : 0;
-    const z = BLOCK_TOP_Z + blockRoomVis.zOffset + block.liftAlpha * BLOCK_LIFT_DELTA_Z + wave01 * 0.038;
-
-    let drawX =
-      block.x +
-      (isIdleMovable && block.axisLock === 'H'
-        ? Math.sin(fallbackTimeSec * 2.0 + block.id * 1.3) * 0.008
-        : 0);
-    let drawY =
-      block.y +
-      (isIdleMovable && block.axisLock === 'V'
-        ? Math.sin(fallbackTimeSec * 2.0 + block.id * 1.3) * 0.008
-        : 0);
-    if (block.reboundTimerMs > 0) {
-      block.reboundTimerMs = Math.max(0, block.reboundTimerMs - dtMs);
-      const reboundT = block.reboundTimerMs / 200;
-      if (block.shredGateIndex >= 0 && board.gates[block.shredGateIndex]) {
-        const [nx, ny] = getGateOutwardNormal(board.gates[block.shredGateIndex].edge);
-        const bounce = Math.sin(reboundT * Math.PI) * 0.14;
-        drawX -= nx * bounce;
-        drawY -= ny * bounce;
-      } else {
-        drawX += Math.sin(block.reboundTimerMs * 0.08) * 0.09 * reboundT;
-      }
-    }
+    const z = BLOCK_TOP_Z + pose.zLift;
+    const drawX = pose.drawX;
+    const drawY = pose.drawY;
 
     for (const [dr, dc] of shape.cells) {
       fillCellPad(drawX + dc, drawY + dr, 0.04, z, pickPrimaryHex(entry), pickLipHex(entry), 2);
@@ -689,32 +678,28 @@ export function renderCanvas2DFallbackImpl(
   for (let i = 0; i < board.blocks.length; i++) {
     const a = board.blocks[i];
     if (a.status !== 'ACTIVE' || a.groupId <= 0 || isBlockInSealedVault(board, a)) continue;
+    const poseA = fallbackPoses.get(a.id);
+    if (!poseA) continue;
     const shapeA = getShape(a.shapeId);
     for (let j = i + 1; j < board.blocks.length; j++) {
       const b = board.blocks[j];
       if (b.status !== 'ACTIVE' || b.groupId !== a.groupId) continue;
+      const poseB = fallbackPoses.get(b.id);
+      if (!poseB) continue;
       const shapeB = getShape(b.shapeId);
       let clamped = false;
       for (const [ar, ac] of shapeA.cells) {
         if (clamped) break;
-        const ax = a.x + ac;
-        const ay = a.y + ar;
         for (const [br, bc] of shapeB.cells) {
-          const bx = b.x + bc;
-          const by = b.y + br;
-          if (Math.abs(ax - bx) + Math.abs(ay - by) < 1.05) {
-            const mx = (ax + bx) * 0.5 + 0.5;
-            const my = (ay + by) * 0.5 + 0.5;
-            fillProjectedQuad(
-              mx - 0.16,
-              my - 0.16,
-              mx + 0.16,
-              my + 0.16,
-              BLOCK_TOP_Z + 0.03,
-              '#CBD5E1',
-              '#475569',
-              1.5
-            );
+          if (Math.abs(a.x + ac - (b.x + bc)) + Math.abs(a.y + ar - (b.y + br)) < 1.05) {
+            const ax = blockLocalXToWorld(poseA, ac + 0.5);
+            const ay = blockLocalYToWorld(poseA, ar + 0.5);
+            const bx = blockLocalXToWorld(poseB, bc + 0.5);
+            const by = blockLocalYToWorld(poseB, br + 0.5);
+            const mx = (ax + bx) * 0.5;
+            const my = (ay + by) * 0.5;
+            const clampZ = BLOCK_TOP_Z + Math.max(poseA.zLift, poseB.zLift) + 0.03;
+            fillProjectedQuad(mx - 0.16, my - 0.16, mx + 0.16, my + 0.16, clampZ, '#CBD5E1', '#475569', 1.5);
             clamped = true;
             break;
           }
